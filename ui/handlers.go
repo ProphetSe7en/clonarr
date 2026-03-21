@@ -287,8 +287,7 @@ func (app *App) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		writeError(w, 400, "url must start with http:// or https://")
-		return
+		req.URL = "http://" + req.URL
 	}
 	if isBlockedHost(req.URL) {
 		writeError(w, 400, "URL resolves to a blocked address")

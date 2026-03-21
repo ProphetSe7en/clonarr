@@ -24,3 +24,10 @@ mockups/
 # OS
 .DS_Store
 Thumbs.db
+export/
+ekstra_info/
+*.yml
+!docker-compose.yml
+DESIGN_NOTES.md
+PROJECT.md
+docs/UNIFIED-CF-GROUPING-PLAN.md

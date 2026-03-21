@@ -4194,11 +4194,15 @@ function clonarr() {
       this.loadAutoSyncRules();
       this.loadSandboxResults('radarr');
       this.loadSandboxResults('sonarr');
+      // Test all instances on load
+      this.testAllInstances();
       // Tick every 30s: update timeAgo() and refresh TRaSH status
       setInterval(() => {
         this._nowTick = Date.now();
         this.loadTrashStatus();
       }, 30000);
+      // Re-test instances every 5 minutes
+      setInterval(() => this.testAllInstances(), 300000);
     },
 
     async loadConfig() {
@@ -6831,6 +6835,12 @@ function clonarr() {
       }
     },
 
+    async testAllInstances() {
+      for (const inst of this.instances) {
+        this.testInstance(inst);
+      }
+    },
+
     async testInstance(inst) {
       this.instanceStatus = { ...this.instanceStatus, [inst.id]: 'testing' };
       try {
@@ -6857,7 +6867,12 @@ function clonarr() {
             body: JSON.stringify({ url: this.instanceForm.url, apiKey: this.instanceForm.apiKey })
           });
         }
-        this.modalTestResult = await r.json();
+        const data = await r.json();
+        if (!r.ok) {
+          this.modalTestResult = { connected: false, error: data.error || 'Request failed' };
+        } else {
+          this.modalTestResult = data;
+        }
       } catch (e) {
         this.modalTestResult = { connected: false, error: 'Request failed' };
       }
