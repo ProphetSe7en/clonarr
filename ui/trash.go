@@ -662,12 +662,15 @@ type CategorizedCF struct {
 	TrashScores map[string]int `json:"trashScores"`
 	Description string         `json:"description,omitempty"`
 	IsCustom    bool           `json:"isCustom,omitempty"`
+	Required    bool           `json:"required,omitempty"`    // from CF group: required=true means must-include
+	CFDefault   *bool          `json:"cfDefault,omitempty"`   // from CF group: per-CF default override
 }
 
 // CFPickerGroup is a CF group within a picker category, carrying group metadata + all score contexts.
 type CFPickerGroup struct {
 	Name             string          `json:"name"`
 	ShortName        string          `json:"shortName"`
+	GroupTrashID     string          `json:"groupTrashId"`
 	TrashDescription string          `json:"trashDescription,omitempty"`
 	DefaultEnabled   bool            `json:"defaultEnabled"`
 	Exclusive        bool            `json:"exclusive"`
@@ -729,6 +732,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 		pg := CFPickerGroup{
 			Name:             group.Name,
 			ShortName:        shortName,
+			GroupTrashID:     group.TrashID,
 			TrashDescription: group.TrashDescription,
 			DefaultEnabled:   defaultEnabled,
 			Exclusive:        exclusive,
@@ -740,12 +744,17 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 			if !ok {
 				continue
 			}
-			pg.CFs = append(pg.CFs, CategorizedCF{
+			ccf := CategorizedCF{
 				TrashID:     cfEntry.TrashID,
 				Name:        cfEntry.Name,
 				TrashScores: cf.TrashScores,
 				Description: cf.Description,
-			})
+				Required:    cfEntry.Required,
+			}
+			if cfEntry.Default != nil {
+				ccf.CFDefault = cfEntry.Default
+			}
+			pg.CFs = append(pg.CFs, ccf)
 			groupedCFs[cfEntry.TrashID] = true
 		}
 

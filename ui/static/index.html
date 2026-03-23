@@ -56,21 +56,28 @@
   .instance-body { border-top: 1px solid #30363d; }
 
   /* Profile group headers (collapsible) */
-  .profile-group-header { display: flex; align-items: center; padding: 8px 20px; font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #21262d; cursor: pointer; user-select: none; }
+  .profile-group-header { display: flex; align-items: center; padding: 10px 16px; font-size: 13px; color: #e1e4e8; font-weight: 500; border-bottom: 1px solid #21262d; cursor: pointer; user-select: none; gap: 8px; }
   .profile-group-header:hover { background: #1c2129; }
-  .profile-group-chevron { font-size: 10px; margin-right: 8px; transition: transform 0.2s; color: #484f58; }
+  .profile-group-chevron { font-size: 10px; transition: transform 0.2s; color: #484f58; }
   .profile-group-chevron.open { transform: rotate(90deg); }
-  .profile-group-count { margin-left: 6px; font-size: 10px; color: #484f58; }
+  .profile-group-count { font-size: 11px; color: #8b949e; background: #21262d; padding: 1px 8px; border-radius: 3px; }
+  .grp-sqp > .profile-group-header { border-left: 3px solid #58a6ff; }
+  .grp-standard > .profile-group-header { border-left: 3px solid #3fb950; }
+  .grp-anime > .profile-group-header { border-left: 3px solid #d2a8ff; }
+  .grp-french > .profile-group-header { border-left: 3px solid #d29922; }
+  .grp-german > .profile-group-header { border-left: 3px solid #f0883e; }
+  .grp-imported > .profile-group-header { border-left: 3px solid #8b949e; }
+  .grp-other > .profile-group-header { border-left: 3px solid #484f58; }
 
   /* Profile rows */
-  .profile-row { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid #21262d; }
+  .profile-row { display: flex; align-items: center; padding: 10px 20px; border-bottom: 1px solid #161b22; }
   .profile-row:last-child { border-bottom: none; }
   .profile-row:hover { background: #1c2129; }
   .profile-name { flex: 1; font-size: 14px; font-weight: 500; }
   .profile-name-link { color: #58a6ff; cursor: pointer; text-decoration: none; }
   .profile-name-link:hover { text-decoration: underline; }
   .sqp-badge { background: #1f3a5f; color: #58a6ff; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
-  .profile-cfs { font-size: 13px; color: #8b949e; width: 100px; text-align: right; }
+  .profile-cfs { font-size: 10px; color: #8b949e; }
   .profile-actions { display: flex; gap: 8px; margin-left: 16px; }
 
   /* Buttons */
@@ -113,30 +120,22 @@
   .cf-section-title:hover { background: #1c2129; }
   .cf-section-title .group-count { font-size: 10px; color: #484f58; margin-left: auto; }
 
-  /* Category border colors */
-  .cat-golden-rule .detail-section-header { border-left: 3px solid #d2a8ff; }
-  .cat-audio .detail-section-header { border-left: 3px solid #d29922; }
-  .cat-hdr .detail-section-header { border-left: 3px solid #a371f7; }
-  .cat-streaming .detail-section-header { border-left: 3px solid #58a6ff; }
-  .cat-optional .detail-section-header { border-left: 3px solid #58a6ff; }
-  /* cat-sqp removed — SQP CFs remapped to Miscellaneous */
-  .cat-unwanted .detail-section-header { border-left: 3px solid #f85149; }
-  .cat-hq-release-groups .detail-section-header { border-left: 3px solid #d29922; }
-  .cat-resolution .detail-section-header { border-left: 3px solid #58a6ff; }
-  .cat-miscellaneous .detail-section-header { border-left: 3px solid #484f58; }
-  .cat-other .detail-section-header { border-left: 3px solid #484f58; }
+  /* Category border colors (detail view + profile builder) */
+  .cat-golden-rule .detail-section-header, .cat-golden-rule .pb-cat-header { border-left: 3px solid #d2a8ff; }
+  .cat-audio .detail-section-header, .cat-audio .pb-cat-header { border-left: 3px solid #d29922; }
+  .cat-hdr .detail-section-header, .cat-hdr .pb-cat-header { border-left: 3px solid #a371f7; }
+  .cat-streaming .detail-section-header, .cat-streaming .pb-cat-header { border-left: 3px solid #58a6ff; }
+  .cat-optional .detail-section-header, .cat-optional .pb-cat-header { border-left: 3px solid #58a6ff; }
+  .cat-unwanted .detail-section-header, .cat-unwanted .pb-cat-header { border-left: 3px solid #f85149; }
+  .cat-hq-release-groups .detail-section-header, .cat-hq-release-groups .pb-cat-header { border-left: 3px solid #d29922; }
+  .cat-resolution .detail-section-header, .cat-resolution .pb-cat-header { border-left: 3px solid #58a6ff; }
+  .cat-anime .detail-section-header, .cat-anime .pb-cat-header { border-left: 3px solid #f778ba; }
+  .cat-french .detail-section-header, .cat-french .pb-cat-header { border-left: 3px solid #39d2e0; }
+  .cat-language .detail-section-header, .cat-language .pb-cat-header { border-left: 3px solid #3fb950; }
+  .cat-german .detail-section-header, .cat-german .pb-cat-header { border-left: 3px solid #f0883e; }
+  .cat-miscellaneous .detail-section-header, .cat-miscellaneous .pb-cat-header { border-left: 3px solid #484f58; }
+  .cat-other .detail-section-header, .cat-other .pb-cat-header { border-left: 3px solid #484f58; }
   .cat-required-core .detail-section-header { border-left: 3px solid #484f58; }
-  /* Profile builder category colors (same as detail view) */
-  .cat-golden-rule .pb-cat-header { border-left: 3px solid #d2a8ff; }
-  .cat-audio .pb-cat-header { border-left: 3px solid #d29922; }
-  .cat-hdr .pb-cat-header { border-left: 3px solid #a371f7; }
-  .cat-streaming .pb-cat-header { border-left: 3px solid #58a6ff; }
-  .cat-optional .pb-cat-header { border-left: 3px solid #58a6ff; }
-  .cat-unwanted .pb-cat-header { border-left: 3px solid #f85149; }
-  .cat-hq-release-groups .pb-cat-header { border-left: 3px solid #d29922; }
-  .cat-resolution .pb-cat-header { border-left: 3px solid #58a6ff; }
-  .cat-miscellaneous .pb-cat-header { border-left: 3px solid #484f58; }
-  .cat-other .pb-cat-header { border-left: 3px solid #484f58; }
   .cf-info { display: inline-block; cursor: default; color: #484f58; font-size: 11px; margin-left: 4px; }
   .cf-info:hover { color: #8b949e; }
   #cf-tooltip-portal { position: fixed; width: 340px; max-width: 90vw; padding: 10px 12px; background: #1c2129; border: 1px solid #30363d; border-radius: 6px; font-size: 12px; color: #c9d1d9; line-height: 1.5; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.4); pointer-events: none; display: none; word-wrap: break-word; }
@@ -333,9 +332,9 @@
   .pb-lbl { font-size: 11px; color: #8b949e; white-space: nowrap; width: 90px; flex-shrink: 0; text-align: right; }
   .pb-item { display: flex; align-items: center; gap: 5px; }
   .pb-item label { font-size: 11px; color: #8b949e; white-space: nowrap; }
-  .pb-input { background: #0d1117; border: 1px solid #30363d; color: #e1e4e8; border-radius: 4px; font-size: 11px; padding: 3px 6px; }
+  .pb-input { background: #0d1117; border: 1px solid #30363d; color: #e1e4e8; border-radius: 4px; font-size: 12px; padding: 4px 7px; }
   .pb-input:focus { border-color: #58a6ff; outline: none; }
-  select.pb-input { cursor: pointer; padding: 3px 4px; }
+  select.pb-input { cursor: pointer; }
   input[type="number"].pb-input { width: 70px; text-align: right; font-family: monospace; }
   .pb-item .toggle { width: 26px; height: 14px; }
   .pb-item .toggle .slider { border-radius: 7px; }
@@ -356,15 +355,18 @@
   .pb-group-header .badge-exclusive { color: #d29922; background: #3d2e0a; border: 1px solid #d29922; }
   .pb-group-header .badge-default { color: #3fb950; background: #1a3a1a; border: 1px solid #3fb950; }
   .pb-cat-header:hover { background: #1c2129; }
-  .pb-cat-count { font-size: 11px; color: #484f58; margin-right: auto; }
+  .pb-cat-count { font-size: 11px; color: #8b949e; margin-right: auto; }
   .pb-cf-row { display: flex; align-items: center; padding: 6px 16px 6px 36px; border-bottom: 1px solid #161b22; gap: 8px; }
   .pb-cf-row:hover { background: #1c2129; }
   .pb-cf-row .toggle { flex-shrink: 0; }
   .pb-cf-name { flex: 1; font-size: 13px; display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .pb-req-pill { font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer; user-select: none; border: 1px solid #30363d; font-weight: 600; }
-  .pb-req-pill.req { background: #2d1f4e; color: #d2a8ff; border-color: #6e40c9; }
-  .pb-req-pill.default-on { background: #0d2847; color: #58a6ff; border-color: #1f6feb; }
-  .pb-req-pill.opt { background: #3d2800; color: #d29922; border-color: #9e6a03; }
+  /* pb-req-pill removed — replaced by pb-state-pill (Req/Opt/Fmt three-state) */
+  /* Three-state CF pills (group CFs) */
+  .pb-state-pill { font-size: 10px; padding: 2px 8px; border-radius: 10px; cursor: pointer; user-select: none; border: 1px solid #30363d; font-weight: 600; color: #6e7681; background: #161b22; }
+  .pb-state-pill:hover { border-color: #484f58; color: #8b949e; }
+  .pb-state-pill.active-req { background: #0d2f1a; color: #3fb950; border-color: #238636; }
+  .pb-state-pill.active-opt { background: #3d2800; color: #d29922; border-color: #9e6a03; }
+  .pb-state-pill.active-fmt { background: #0d2847; color: #58a6ff; border-color: #1f6feb; }
   .pb-score-input { width: 70px; background: #0d1117; border: 1px solid #30363d; color: #e1e4e8; padding: 3px 6px; border-radius: 4px; font-size: 12px; font-family: monospace; text-align: right; }
   .pb-score-input.overridden { border-color: #d29922; color: #d29922; }
   .pb-select-all { font-size: 11px; color: #58a6ff; cursor: pointer; margin-left: auto; padding: 2px 8px; }
@@ -496,11 +498,11 @@
         <template x-if="trashProfiles[tab.type] && trashProfiles[tab.type].length > 0">
           <div>
             <template x-for="group in groupedProfiles(tab.type)" :key="group.name">
-              <div class="card">
+              <div class="card" :class="'grp-' + group.name.toLowerCase().replace(/[^a-z]/g, '')">
                 <div class="profile-group-header" @click="toggleProfileGroup(tab.type, group.name)">
                   <span class="profile-group-chevron" :class="{ open: isProfileGroupExpanded(tab.type, group.name) }">&#9654;</span>
                   <span x-text="group.name"></span>
-                  <span class="profile-group-count" x-text="'(' + group.profiles.length + ')'"></span>
+                  <span class="profile-group-count" x-text="group.profiles.length + (group.profiles.length === 1 ? ' profile' : ' profiles')"></span>
                 </div>
                 <div x-show="isProfileGroupExpanded(tab.type, group.name)">
                   <template x-for="p in group.profiles" :key="p.trashId">
@@ -512,7 +514,9 @@
                               @mouseenter="showCFTooltip($event, p.trashDescription)"
                               @mouseleave="hideCFTooltip()">&#9432;</span>
                       </div>
-                      <div class="profile-cfs" x-text="p.cfCount + ' CFs'"></div>
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-size:10px;background:#21262d;color:#8b949e;padding:2px 8px;border-radius:3px" x-text="p.cfCount + ' CFs'"></span>
+                      </div>
                     </div>
                   </template>
                 </div>
@@ -527,11 +531,11 @@
         </template>
 
         <!-- Imported Profiles -->
-        <div class="card" style="margin-top:12px">
+        <div class="card grp-imported" style="margin-top:12px">
           <div class="profile-group-header" @click="toggleProfileGroup(tab.type, '__imported__')">
             <span class="profile-group-chevron" :class="{ open: isProfileGroupExpanded(tab.type, '__imported__') }">&#9654;</span>
             <span>Imported / Custom Profiles</span>
-            <span class="profile-group-count" x-text="'(' + (importedProfiles[tab.type]?.length || 0) + ')'"></span>
+            <span class="profile-group-count" x-text="(importedProfiles[tab.type]?.length || 0) + ((importedProfiles[tab.type]?.length || 0) === 1 ? ' profile' : ' profiles')"></span>
           </div>
           <div x-show="isProfileGroupExpanded(tab.type, '__imported__')">
             <template x-if="!importedProfiles[tab.type] || importedProfiles[tab.type].length === 0">
@@ -671,14 +675,15 @@
       <div class="page" x-show="getSubTab(tab.type) === 'quality-size'">
         <template x-if="getQualitySizes(tab.type).length > 0">
           <div>
-            <div style="padding:12px 20px;font-size:12px;color:#8b949e;border-bottom:1px solid #21262d">
-              TRaSH recommended file sizes (MB per minute of video). Select an instance to compare and sync values.
+            <div style="padding:12px 20px;font-size:12px;color:#8b949e;border-bottom:1px solid #21262d;line-height:1.5">
+              TRaSH recommended file sizes (MB per minute of video). These limits help Radarr/Sonarr choose the right quality when multiple releases are available.
+              Select an instance to compare current values and sync.
             </div>
             <!-- Instance selector + quality size type -->
-            <div class="card" style="padding:16px 20px">
-              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-                <span style="font-size:13px;color:#8b949e">Instance:</span>
-                <select class="input" style="width:250px"
+            <div class="card" style="padding:0;margin:12px 16px 12px;overflow:visible">
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #21262d">
+                <span style="font-size:11px;color:#484f58">Instance:</span>
+                <select class="input" style="width:200px;font-size:12px;padding:4px 8px"
                         :value="qsInstanceId[tab.type] || ''"
                         @change="qsInstanceId = { ...qsInstanceId, [tab.type]: $event.target.value }; if ($event.target.value) loadInstanceQS(tab.type, $event.target.value)">
                   <option value="">TRaSH only</option>
@@ -687,14 +692,14 @@
                   </template>
                 </select>
                 <template x-if="qsInstanceId[tab.type]">
-                  <span style="font-size:12px;color:#3fb950;display:flex;align-items:center;gap:6px">
-                    <img style="width:16px;height:16px;border-radius:3px" :src="instanceIconUrl(instancesOfType(tab.type).find(i => i.id === qsInstanceId[tab.type]))" :alt="tab.type">
-                    <span x-text="(instancesOfType(tab.type).find(i => i.id === qsInstanceId[tab.type]) || {}).name"></span>
-                  </span>
+                  <span style="font-size:11px;color:#3fb950">Connected</span>
+                </template>
+                <template x-if="!qsInstanceId[tab.type]">
+                  <span style="font-size:11px;color:#484f58">Select an instance to compare and sync</span>
                 </template>
               </div>
-              <div style="display:flex;gap:8px;align-items:center">
-                <span style="font-size:13px;color:#8b949e">Type:</span>
+              <div style="display:flex;gap:8px;align-items:center;padding:10px 16px">
+                <span style="font-size:11px;color:#484f58">Type:</span>
                 <template x-for="(qsType, idx) in getQualitySizes(tab.type)" :key="qsType.trash_id">
                   <button class="btn btn-sm"
                           :class="{ 'btn-primary': (selectedQSType[tab.type] || 0) === idx }"
@@ -845,15 +850,31 @@
       <!-- ===== File Naming sub-tab ===== -->
       <div class="page" x-show="getSubTab(tab.type) === 'naming'">
         <div style="padding:12px 20px;font-size:12px;color:#8b949e;border-bottom:1px solid #21262d;line-height:1.5">
-          TRaSH recommended naming schemes for folders and files. Select an instance to compare current naming and apply the recommended format.
+          TRaSH recommended naming schemes for folders and files. Select a media server tab and an instance to compare and apply.
+        </div>
+        <!-- Shared info cards -->
+        <div class="card" style="padding:14px 16px;margin:12px 16px 0">
+          <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px">Why use a naming scheme?</div>
+          <div style="font-size:12px;color:#8b949e;line-height:1.6">
+            Adding non-recoverable information (quality, release group, edition, repack status) to filenames prevents duplicate downloads,
+            stops download loops on re-import, and ensures Radarr/Sonarr always knows what you have.
+            Media servers display titles — not filenames — so longer names don't affect your viewing experience.
+          </div>
+        </div>
+        <div class="card" style="padding:14px 16px;margin:12px 16px 0">
+          <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px" x-text="tab.type === 'radarr' ? 'IMDb vs TMDb' : 'IMDb vs TVDb'"></div>
+          <div style="font-size:12px;color:#8b949e;line-height:1.6" x-text="tab.type === 'radarr'
+            ? 'Both IDs are unique. TMDb can occasionally remove IDs and re-add with a new one, but is more aligned with Radarr since it uses TMDb as metadata source. IMDb IDs, once present, are very accurate and rarely change. TMDb is usually better as it guarantees a match — IMDb only works if the TMDb entry has the correct association.'
+            : 'Both IDs are unique. TVDb can occasionally remove IDs and re-add with a new one, but is more aligned with Sonarr since it uses TVDb as metadata source. IMDb IDs, once present, are very accurate and rarely change.'"></div>
         </div>
         <template x-if="getNaming(tab.type)">
           <div>
-            <!-- Instance selector + current naming -->
-            <div class="card" style="padding:16px;margin-bottom:12px">
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
-                <span style="font-size:13px;color:#8b949e">Instance:</span>
-                <select class="input" style="width:250px"
+            <!-- Naming card: instance + tabs + content -->
+            <div class="card" style="margin:16px 16px 0;overflow:visible">
+              <!-- Instance selector -->
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #21262d">
+                <span style="font-size:11px;color:#484f58">Instance:</span>
+                <select class="input" style="width:200px;font-size:12px;padding:4px 8px"
                   x-model="namingSelectedInstance[tab.type]"
                   @change="loadInstanceNaming(tab.type)">
                   <option value="">Select instance...</option>
@@ -862,87 +883,101 @@
                   </template>
                 </select>
                 <template x-if="namingSelectedInstance[tab.type] && namingInstanceData[tab.type]">
-                  <span style="font-size:12px;color:#3fb950;display:flex;align-items:center;gap:6px">
-                    <img style="width:16px;height:16px;border-radius:3px" :src="instanceIconUrl(instancesOfType(tab.type).find(i => i.id === namingSelectedInstance[tab.type]))" :alt="tab.type">
-                    <span x-text="getInstanceName(tab.type, namingSelectedInstance[tab.type])"></span>
-                  </span>
+                  <span style="font-size:11px;color:#3fb950">Connected</span>
+                </template>
+                <template x-if="!namingSelectedInstance[tab.type]">
+                  <span style="font-size:11px;color:#484f58">Select an instance to enable sync</span>
                 </template>
               </div>
+              <!-- Media server tabs -->
+              <div style="display:flex;align-items:center;border-bottom:1px solid #21262d;padding:0 16px">
+                <div class="subtab" :class="{ active: (namingMediaServer[tab.type] || 'standard') === 'standard' }" @click="namingMediaServer = {...namingMediaServer, [tab.type]: 'standard'}">Standard</div>
+                <div class="subtab" :class="{ active: namingMediaServer[tab.type] === 'plex' }" @click="namingMediaServer = {...namingMediaServer, [tab.type]: 'plex'}">Plex</div>
+                <div class="subtab" :class="{ active: namingMediaServer[tab.type] === 'emby' }" @click="namingMediaServer = {...namingMediaServer, [tab.type]: 'emby'}">Emby</div>
+                <div class="subtab" :class="{ active: namingMediaServer[tab.type] === 'jellyfin' }" @click="namingMediaServer = {...namingMediaServer, [tab.type]: 'jellyfin'}">Jellyfin</div>
+              </div>
 
-              <!-- Current naming from instance -->
+              <!-- Current naming from instance (compact) -->
               <template x-if="namingInstanceData[tab.type]">
-                <div style="background:#161b22;border:1px solid #21262d;border-radius:4px;padding:10px">
-                  <div style="font-size:11px;font-weight:600;color:#8b949e;margin-bottom:6px">Current naming on instance:</div>
+                <div style="padding:8px 16px;background:#0d1117;border-bottom:1px solid #21262d;font-size:11px;display:flex;gap:16px;flex-wrap:wrap">
                   <template x-if="tab.type === 'radarr'">
-                    <div style="font-size:11px;line-height:1.8">
-                      <div><span style="color:#8b949e">Folder:</span> <span style="font-family:monospace;color:#d2a8ff" x-text="namingInstanceData[tab.type].movieFolderFormat || '(not set)'"></span></div>
-                      <div><span style="color:#8b949e">File:</span> <span style="font-family:monospace;color:#d2a8ff" x-text="namingInstanceData[tab.type].standardMovieFormat || '(not set)'"></span></div>
-                      <div><span style="color:#8b949e">Rename:</span> <span :style="namingInstanceData[tab.type].renameMovies ? 'color:#3fb950' : 'color:#f85149'" x-text="namingInstanceData[tab.type].renameMovies ? 'Enabled' : 'Disabled'"></span></div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap">
+                      <div><span style="color:#484f58">File:</span> <span style="font-family:monospace;color:#8b949e" x-text="namingInstanceData[tab.type].standardMovieFormat || '(not set)'"></span></div>
+                      <div><span style="color:#484f58">Folder:</span> <span style="font-family:monospace;color:#8b949e" x-text="namingInstanceData[tab.type].movieFolderFormat || '(not set)'"></span></div>
+                      <div><span style="color:#484f58">Rename:</span> <span :style="namingInstanceData[tab.type].renameMovies ? 'color:#3fb950' : 'color:#f85149'" x-text="namingInstanceData[tab.type].renameMovies ? 'On' : 'Off'"></span></div>
                     </div>
                   </template>
                   <template x-if="tab.type === 'sonarr'">
-                    <div style="font-size:11px;line-height:1.8">
-                      <div><span style="color:#8b949e">Series Folder:</span> <span style="font-family:monospace;color:#d2a8ff" x-text="namingInstanceData[tab.type].seriesFolderFormat || '(not set)'"></span></div>
-                      <div><span style="color:#8b949e">Season Folder:</span> <span style="font-family:monospace;color:#d2a8ff" x-text="namingInstanceData[tab.type].seasonFolderFormat || '(not set)'"></span></div>
-                      <div><span style="color:#8b949e">Episode:</span> <span style="font-family:monospace;color:#d2a8ff" x-text="namingInstanceData[tab.type].standardEpisodeFormat || '(not set)'"></span></div>
-                      <div><span style="color:#8b949e">Rename:</span> <span :style="namingInstanceData[tab.type].renameEpisodes ? 'color:#3fb950' : 'color:#f85149'" x-text="namingInstanceData[tab.type].renameEpisodes ? 'Enabled' : 'Disabled'"></span></div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap">
+                      <div><span style="color:#484f58">Episode:</span> <span style="font-family:monospace;color:#8b949e" x-text="namingInstanceData[tab.type].standardEpisodeFormat || '(not set)'"></span></div>
+                      <div><span style="color:#484f58">Series:</span> <span style="font-family:monospace;color:#8b949e" x-text="namingInstanceData[tab.type].seriesFolderFormat || '(not set)'"></span></div>
+                      <div><span style="color:#484f58">Rename:</span> <span :style="namingInstanceData[tab.type].renameEpisodes ? 'color:#3fb950' : 'color:#f85149'" x-text="namingInstanceData[tab.type].renameEpisodes ? 'On' : 'Off'"></span></div>
                     </div>
                   </template>
                 </div>
               </template>
-              <template x-if="!namingSelectedInstance[tab.type]">
-                <div style="font-size:12px;color:#8b949e">Select an instance to see current naming and apply TRaSH schemes.</div>
-              </template>
-            </div>
 
-            <!-- Why rename? intro -->
-            <div class="card" style="padding:16px;margin-bottom:12px">
-              <div style="font-weight:600;margin-bottom:8px;color:#e1e4e8">Why use a naming scheme?</div>
-              <div style="font-size:12px;color:#8b949e;line-height:1.6">
-                Adding non-recoverable information (quality source, release group, edition, repack status) to filenames is strongly recommended.
-                It prevents duplicate downloads, stops download loops on re-import, and ensures Radarr/Sonarr always knows what you already have.
-                Media servers like Plex/Emby/Jellyfin display titles — not filenames — so longer names don't affect your viewing experience.
-              </div>
-            </div>
-
-            <template x-for="section in getNamingSections(tab.type)" :key="section.key">
-              <div class="card" style="padding:16px;margin-bottom:12px">
-                <div style="font-weight:600;margin-bottom:4px;color:#e1e4e8" x-text="section.label"></div>
-                <div x-show="section.description" style="font-size:12px;color:#8b949e;margin-bottom:12px;line-height:1.5" x-html="section.description"></div>
-                <template x-for="scheme in section.schemes" :key="scheme.key">
-                  <div style="margin-bottom:10px;padding:8px;background:#0d1117;border-radius:4px;border:1px solid #21262d">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                      <span style="font-size:12px;font-weight:600;color:#c9d1d9" x-text="scheme.label"></span>
-                      <span x-show="scheme.recommended" style="font-size:10px;background:#238636;color:#fff;padding:1px 6px;border-radius:3px">Recommended</span>
-                      <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
-                        <span style="font-size:10px;color:#58a6ff;cursor:pointer" @click="copyToClipboard(scheme.pattern)">Copy</span>
-                        <template x-if="namingSelectedInstance[tab.type]">
-                          <span style="font-size:10px;color:#d29922;cursor:pointer"
-                            @click="applyNamingScheme(tab.type, section.key, scheme)">Apply</span>
-                        </template>
-                      </span>
-                    </div>
-                    <div x-show="scheme.description" style="font-size:11px;color:#8b949e;margin-bottom:6px;line-height:1.4" x-text="scheme.description"></div>
-                    <div style="font-family:monospace;font-size:11px;color:#7ee787;background:#161b22;border:1px solid #30363d;border-radius:4px;padding:6px 8px;word-break:break-all" x-text="scheme.pattern"></div>
-                    <div x-show="scheme.example" style="font-family:monospace;font-size:10px;color:#6e7681;margin-top:4px;word-break:break-all" x-text="scheme.example"></div>
+              <div style="padding:16px">
+                <!-- Naming apply result -->
+                <template x-if="namingApplyResult[tab.type]">
+                  <div style="padding:8px 12px;margin-bottom:12px;border-left:3px solid #3fb950;background:#0d1117;border-radius:4px">
+                    <div style="font-size:12px;color:#3fb950" x-text="namingApplyResult[tab.type]"></div>
                   </div>
                 </template>
-              </div>
-            </template>
 
-            <!-- Naming apply result -->
-            <template x-if="namingApplyResult[tab.type]">
-              <div class="card" style="padding:12px;margin-bottom:12px;border-left:3px solid #3fb950">
-                <div style="font-size:12px;color:#3fb950" x-text="namingApplyResult[tab.type]"></div>
-              </div>
-            </template>
+              <!-- Naming sections rendered by media server tab -->
+              <template x-for="section in getNamingSections(tab.type, namingMediaServer[tab.type] || 'standard', namingPlexSingleEntry[tab.type])" :key="section.key">
+                <div style="margin-bottom:16px">
+                  <!-- Edition Tags box (only for Plex file sections) -->
+                  <template x-if="section.showEditionToggle">
+                    <div style="border:1px solid #21262d;border-left:3px solid #d29922;border-radius:6px;padding:14px 16px;margin-bottom:12px">
+                      <div style="display:flex;align-items:flex-start;gap:12px">
+                        <div style="flex:1">
+                          <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px">Edition Tags</div>
+                          <div style="font-size:12px;color:#8b949e;line-height:1.6">
+                            Plex uses <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> to recognize editions (Director's Cut, Theatrical) in the UI.
+                            If you keep multiple copies with different editions in a <strong style="color:#c9d1d9">merged library</strong> (e.g. 1080p Director's Cut + 2160p Theatrical),
+                            Plex will show them as <strong style="color:#f85149">separate items</strong>.
+                          </div>
+                          <div style="font-size:12px;color:#8b949e;line-height:1.6;margin-top:6px">
+                            Enable <strong style="color:#c9d1d9">single-entry mode</strong> to replace <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> with <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{Edition Tags}</code> —
+                            editions still appear in the filename but Plex treats all copies as one library entry.
+                          </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px;flex-shrink:0">
+                          <label class="toggle"><input type="checkbox" :checked="namingPlexSingleEntry[tab.type]" @change="namingPlexSingleEntry = {...namingPlexSingleEntry, [tab.type]: $event.target.checked}"><span class="slider"></span></label>
+                          <span style="font-size:10px;white-space:nowrap" :style="namingPlexSingleEntry[tab.type] ? 'color:#3fb950' : 'color:#8b949e'" x-text="namingPlexSingleEntry[tab.type] ? 'Single entry' : 'Per edition'"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
 
-            <!-- ID info box -->
-            <div class="card" style="padding:16px;margin-bottom:12px">
-              <div style="font-weight:600;margin-bottom:8px;color:#e1e4e8" x-text="tab.type === 'radarr' ? 'IMDb vs TMDb' : 'IMDb vs TVDb'"></div>
-              <div style="font-size:12px;color:#8b949e;line-height:1.6" x-text="tab.type === 'radarr'
-                ? 'Both IMDb and TMDb IDs are unique. TMDb can occasionally remove IDs entirely, sometimes re-adding them with a new ID. However, TMDb is more aligned with Radarr since it uses TMDb as its metadata source. IMDb IDs, once present, are very accurate and rarely change.'
-                : 'Both IMDb and TVDb IDs are unique. TVDb can occasionally remove IDs entirely, sometimes re-adding them with a new ID. However, TVDb is more aligned with Sonarr since it uses TVDb as its metadata source. IMDb IDs, once present, are very accurate and rarely change.'"></div>
+                  <div style="font-weight:600;margin-bottom:4px;color:#e1e4e8" x-text="section.label"></div>
+                  <div x-show="section.description" style="font-size:11px;color:#8b949e;margin-bottom:10px;line-height:1.5" x-text="section.description"></div>
+
+                  <template x-for="scheme in section.schemes" :key="scheme.key">
+                    <div style="margin-bottom:10px;padding:8px;background:#0d1117;border-radius:4px;border:1px solid #21262d">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <span style="font-size:12px;font-weight:600;color:#c9d1d9" x-text="scheme.label"></span>
+                        <span x-show="scheme.recommended" style="font-size:10px;background:#238636;color:#fff;padding:1px 6px;border-radius:3px">Recommended</span>
+                        <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                          <span style="font-size:10px;color:#58a6ff;cursor:pointer" @click="copyToClipboard(scheme.pattern)">Copy</span>
+                          <template x-if="namingSelectedInstance[tab.type]">
+                            <span style="font-size:10px;color:#d29922;cursor:pointer"
+                              @click="applyNamingScheme(tab.type, section.key, scheme)">Sync</span>
+                          </template>
+                        </span>
+                      </div>
+                      <div x-show="scheme.description" style="font-size:11px;color:#8b949e;margin-bottom:6px;line-height:1.4" x-text="scheme.description"></div>
+                      <div style="font-family:monospace;font-size:11px;color:#9ecbaa;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px 8px;word-break:break-all" x-text="scheme.pattern"></div>
+                      <div x-show="scheme.example" style="font-family:monospace;font-size:10px;color:#6e7681;margin-top:4px;word-break:break-all">
+                        <strong style="color:#8b949e;font-weight:600">Movie:</strong> <span x-text="scheme.example"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              </div>
             </div>
           </div>
         </template>
@@ -1802,20 +1837,19 @@
     <div class="page">
       <a class="back-link" @click="cancelProfileBuilder()">&larr; Back to Profiles</a>
 
-      <!-- Header: Profile Name -->
-      <div class="pb-header" style="margin-top:16px">
-        <input type="text" x-model="pb.name" placeholder="Profile name..." :style="pb.name ? '' : 'border-bottom-color:#f85149'">
-        <span style="font-size:12px;color:#8b949e" x-text="pbSelectedCount() + ' CFs selected'"></span>
-      </div>
-
       <!-- Settings Card -->
-      <div class="card" style="overflow:visible">
+      <div class="card" style="overflow:visible;margin-top:16px">
         <div class="profile-group-header" @click="pbSettingsOpen = !pbSettingsOpen">
           <span class="profile-group-chevron" :class="{ open: pbSettingsOpen }">&#9654;</span>
           <span>Profile Settings</span>
+          <span style="font-size:12px;color:#8b949e;margin-left:auto" x-text="pbSelectedCount() + ' CFs selected'"></span>
         </div>
         <div x-show="pbSettingsOpen">
           <div style="padding:14px 20px;display:flex;flex-direction:column;gap:14px">
+            <!-- Profile Name -->
+            <div class="pb-header" style="margin-bottom:0">
+              <input type="text" x-model="pb.name" placeholder="Profile name..." :style="pb.name ? '' : 'border-bottom-color:#f85149'">
+            </div>
             <!-- Import row (first — choosing template sets everything below) -->
             <div style="font-size:10px;color:#484f58;margin-bottom:6px">Start from a template or import from an instance — scores and settings will be applied</div>
             <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:10px 14px;display:flex;gap:8px;align-items:center">
@@ -1868,7 +1902,7 @@
                   <div>
                     <div style="font-size:11px;color:#8b949e;margin-bottom:4px">Score Set</div>
                     <select class="pb-input" x-model="pb.scoreSet" @change="pbScoreSetChanged(); _pbSaveDefaults()" style="width:100%">
-                      <option value="default">default</option>
+                      <option value="default">Default</option>
                       <template x-for="ss in sortedScoreSets()" :key="ss">
                         <option :value="ss" x-text="ss"></option>
                       </template>
@@ -2053,7 +2087,7 @@
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
                 <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:14px" x-show="pbGroupVariant('Golden Rule')">
                   <div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:600">Golden Rule</div>
-                  <select class="pb-input" x-model="pb.variantGoldenRule" @change="pbApplyGoldenRule(); _pbSaveDefaults()" style="width:100%;font-size:13px;padding:5px 8px">
+                  <select class="pb-input" x-model="pb.variantGoldenRule" @change="pbApplyGoldenRule(); _pbSaveDefaults()" style="width:100%">
                     <option value="" disabled>Select variant...</option>
                     <option value="HD">HD</option>
                     <option value="UHD">UHD</option>
@@ -2062,7 +2096,7 @@
                 </div>
                 <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:14px" x-show="pbGroupVariant('Miscellaneous')">
                   <div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:600">Miscellaneous</div>
-                  <select class="pb-input" x-model="pb.variantMisc" @change="_pbSaveDefaults()" style="width:100%;font-size:13px;padding:5px 8px">
+                  <select class="pb-input" x-model="pb.variantMisc" @change="pbApplyMisc(); _pbSaveDefaults()" style="width:100%">
                     <option value="" disabled>Select variant...</option>
                     <option value="Standard">Standard</option>
                     <option value="SQP">SQP</option>
@@ -2105,116 +2139,147 @@
         </div>
       </div>
 
-      <!-- CF Picker (grouped) -->
+      <!-- ===== SECTION 1: Required CFs (formatItems) ===== -->
       <template x-if="!pbLoading && pbCategories.length > 0">
         <div>
-          <template x-for="cat in pbFilteredCategories" :key="cat.category">
-            <div class="card" :class="getCategoryClass(cat.category)" style="margin-bottom:8px">
-              <div class="pb-cat-header" @click="pbExpandedCats[cat.category] = !pbExpandedCats[cat.category]">
-                <span class="profile-group-chevron" :class="{ open: pbExpandedCats[cat.category] }">&#9654;</span>
-                <span style="font-size:13px;font-weight:500" x-text="cat.category"></span>
-                <span class="pb-cat-count" x-text="pbCatSelectedCount(cat) + '/' + pbCatTotalCount(cat)"></span>
-                <span class="pb-req-pill" @click.stop
-                      x-show="cat.category !== 'Golden Rule'"
-                      :class="pbIsCatAllRequired(cat) ? 'req' : 'opt'"
-                      @click="pbToggleCatRequired(cat)"
-                      :title="pbIsCatAllRequired(cat) ? 'Click to set all to Optional' : 'Click to select all and set to Required'"
-                      x-text="pbIsCatAllRequired(cat) ? 'Req' : 'Opt'"
-                      style="margin-left:4px;cursor:pointer"></span>
-                <label class="toggle toggle-sm" @click.stop x-show="cat.category !== 'Golden Rule'">
-                  <input type="checkbox" :checked="pbIsCatAllSelected(cat)" @change="pbToggleCategory(cat)">
+          <div class="card" style="margin-bottom:12px">
+            <div class="pb-cat-header" @click="pbExpandedCats['__formatItems__'] = !(pbExpandedCats['__formatItems__'] ?? true)">
+              <span class="profile-group-chevron" :class="{ open: pbExpandedCats['__formatItems__'] ?? true }">&#9654;</span>
+              <span style="font-size:13px;font-weight:500">Required CFs</span>
+              <span class="pb-cat-count" x-text="pbFormatItemCount() + ' in formatItems'"></span>
+            </div>
+            <div x-show="pbExpandedCats['__formatItems__'] ?? true">
+              <div style="padding:8px 16px;font-size:12px;color:#8b949e;border-bottom:1px solid #161b22;line-height:1.5">
+                These CFs are added to the profile's <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#c9d1d9;font-size:11px">formatItems</code> — they are mandatory and always synced. End users cannot disable them.
+              </div>
+              <!-- Selected formatItem CFs (shown first) -->
+              <template x-for="cf in pbFormatItemCFList()" :key="'fis-'+cf.trashId">
+                <div class="pb-cf-row">
+                  <label class="toggle toggle-sm">
+                    <input type="checkbox" checked
+                           @change="pbToggleFormatItem(cf.trashId); const s = {...pb.selectedCFs}; delete s[cf.trashId]; pb.selectedCFs = s">
+                    <span class="slider"></span>
+                  </label>
+                  <div class="pb-cf-name">
+                    <span x-text="cf.name"></span>
+                    <span class="cf-info" x-show="cf.description"
+                          @mouseenter="showCFTooltip($event, cf.description)"
+                          @mouseleave="hideCFTooltip()">ⓘ</span>
+                    <template x-if="config.devMode">
+                      <span style="font-size:10px;color:#484f58;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
+                    </template>
+                  </div>
+                  <input type="number" class="pb-score-input"
+                         :class="{ overridden: pbIsScoreOverridden(cf) }"
+                         :value="pbGetScore(cf)"
+                         @input="pbSetScore(cf.trashId, $event.target.value)"
+                         @blur="pbCleanScore(cf.trashId)">
+                </div>
+              </template>
+              <!-- Add more CFs (collapsed) -->
+              <div style="padding:6px 16px;border-top:1px solid #161b22">
+                <span style="font-size:11px;color:#58a6ff;cursor:pointer"
+                      @click="pbExpandedCats['__addMore__'] = !pbExpandedCats['__addMore__']"
+                      x-text="pbExpandedCats['__addMore__'] ? '▾ Hide available CFs' : '▸ Add more CFs...'"></span>
+              </div>
+              <div x-show="pbExpandedCats['__addMore__']" x-cloak>
+                <template x-for="cf in pbAvailableFormatItemCFs()" :key="'fia-'+cf.trashId">
+                  <div class="pb-cf-row" style="opacity:0.6">
+                    <label class="toggle toggle-sm">
+                      <input type="checkbox"
+                             @change="pbToggleFormatItem(cf.trashId); pb.selectedCFs = {...pb.selectedCFs, [cf.trashId]: true}">
+                      <span class="slider"></span>
+                    </label>
+                    <div class="pb-cf-name">
+                      <span x-text="cf.name"></span>
+                      <span class="cf-info" x-show="cf.description"
+                            @mouseenter="showCFTooltip($event, cf.description)"
+                            @mouseleave="hideCFTooltip()">ⓘ</span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== SECTION 2: CF Groups ===== -->
+          <div style="font-size:13px;font-weight:500;color:#e1e4e8;margin:16px 0 8px">CF Groups</div>
+          <div style="font-size:12px;color:#8b949e;margin-bottom:12px;line-height:1.5">
+            Each group is an independent set of CFs. Use the toggle to include a group for this profile.
+            Use <span class="pb-state-pill active-req" style="cursor:default;font-size:9px">Req</span>
+            <span class="pb-state-pill active-opt" style="cursor:default;font-size:9px">Opt</span>
+            <span class="pb-state-pill active-fmt" style="cursor:default;font-size:9px">Fmt</span>
+            to set each CF as Required, Optional, or move it to formatItems.
+          </div>
+
+          <template x-for="group in pbSortedGroups()" :key="'grp-'+group.groupTrashId">
+            <div class="card" :class="getCategoryClass(group._category || '')" style="margin-bottom:8px">
+              <div class="pb-cat-header" @click="pbExpandedGroups[group.groupTrashId] = !(pbExpandedGroups[group.groupTrashId] ?? false)">
+                <span class="profile-group-chevron" :class="{ open: pbExpandedGroups[group.groupTrashId] }">&#9654;</span>
+                <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                <span x-show="group.exclusive" class="group-badge badge-exclusive">pick one</span>
+                <span x-show="group.defaultEnabled" class="group-badge badge-default">default</span>
+                <span class="pb-cat-count" x-text="group.cfs.length + ' CFs'"></span>
+                <!-- Group-level state pills -->
+                <div style="display:flex;gap:4px;margin-left:auto" @click.stop>
+                  <span class="pb-state-pill" :class="{ 'active-req': true }" x-show="false"></span>
+                  <span class="pb-state-pill"
+                        :class="{ 'active-req': !pbGroupHasAnyState(group, 'optional') && !pbGroupHasAnyState(group, 'formatItems') }"
+                        @click="pbSetGroupState(group, 'required')" title="Set all CFs to Required">Req</span>
+                  <span class="pb-state-pill"
+                        :class="{ 'active-opt': pbGroupHasAllState(group, 'optional') }"
+                        @click="pbSetGroupState(group, 'optional')" title="Set all CFs to Optional">Opt</span>
+                  <span class="pb-state-pill"
+                        :class="{ 'active-fmt': pbGroupHasAllState(group, 'formatItems') }"
+                        @click="pbSetGroupState(group, 'formatItems')" title="Move all CFs to formatItems">Fmt</span>
+                </div>
+                <label class="toggle toggle-sm" @click.stop>
+                  <input type="checkbox" :checked="pbIsGroupEnabled(group)"
+                         @change="pbToggleGroupInclude(group)">
                   <span class="slider"></span>
                 </label>
               </div>
-              <div x-show="pbExpandedCats[cat.category]">
-                <template x-for="group in cat.groups" :key="group.name">
-                  <div :style="pbIsGroupDisabled(group) ? 'opacity:0.35;pointer-events:none' : ''"
-                       :title="pbIsGroupDisabled(group) ? 'Disabled — another group with shared CFs is active' : ''">
-                    <!-- Group sub-header (only if multiple groups AND group has >1 CF) -->
-                    <template x-if="cat.groups.length > 1 && group.cfs.length > 1">
-                      <div class="pb-group-header" @click="pbExpandedGroups[cat.category+'/'+group.name] = !(pbExpandedGroups[cat.category+'/'+group.name] ?? true)">
-                        <span class="profile-group-chevron" style="font-size:9px" :class="{ open: pbExpandedGroups[cat.category+'/'+group.name] ?? true }">&#9654;</span>
-                        <span class="group-name" x-text="group.shortName"></span>
-                        <span x-show="group.exclusive" class="group-badge badge-exclusive">pick one</span>
-                        <span x-show="group.defaultEnabled" class="group-badge badge-default">default</span>
-                        <span class="group-count" x-text="pbGroupSelectedCount(group) + '/' + group.cfs.length"></span>
-                        <label class="toggle toggle-sm" @click.stop x-show="!group.exclusive">
-                          <input type="checkbox" :checked="pbIsGroupAllSelected(group)" @change="pbToggleGroup(group)">
-                          <span class="slider"></span>
-                        </label>
-                      </div>
-                    </template>
-                    <!-- Single-CF group in multi-group category: show inline with badges -->
-                    <template x-if="cat.groups.length > 1 && group.cfs.length === 1">
-                      <div class="pb-cf-row" style="padding-left:24px;border-top:1px solid #161b22">
-                        <label class="toggle toggle-sm" :style="pbIsGoldenRuleCF(group.cfs[0].trashId) && pb.variantGoldenRule ? 'opacity:0.3;pointer-events:none' : ''">
-                          <input type="checkbox" :checked="pb.selectedCFs[group.cfs[0].trashId]"
-                                 @change="pbToggleCF(group.cfs[0].trashId, group.exclusive ? group : null)">
-                          <span class="slider"></span>
-                        </label>
-                        <div class="pb-cf-name">
-                          <span x-text="group.cfs[0].name"></span>
-                          <span x-show="group.shortName !== group.cfs[0].name" style="font-size:10px;color:#484f58;margin-left:2px" x-text="'(' + group.shortName + ')'"></span>
-                          <span x-show="group.defaultEnabled" class="group-badge badge-default" style="font-size:9px">default</span>
-                          <span x-show="pbIsGoldenRuleCF(group.cfs[0].trashId) && pb.variantGoldenRule" style="font-size:9px;color:#d2a8ff;margin-left:4px">managed by dropdown</span>
-                          <span class="cf-info" x-show="group.cfs[0].description"
-                                @mouseenter="showCFTooltip($event, group.cfs[0].description)"
-                                @mouseleave="hideCFTooltip()">ⓘ</span>
-                        </div>
-                        <span class="pb-req-pill"
-                              x-show="pb.selectedCFs[group.cfs[0].trashId] && !pbIsGoldenRuleCF(group.cfs[0].trashId)"
-                              :class="pb.requiredCFs[group.cfs[0].trashId] ? 'req' : pb.defaultOnCFs?.[group.cfs[0].trashId] ? 'default-on' : 'opt'"
-                              @click="pbCycleCFMode(group.cfs[0].trashId)"
-                              :title="pb.requiredCFs[group.cfs[0].trashId] ? 'Required — always included, locked at sync' : pb.defaultOnCFs?.[group.cfs[0].trashId] ? 'Optional (recommended) — on by default, user can disable' : 'Optional — off by default, user can enable'"
-                              x-text="pb.requiredCFs[group.cfs[0].trashId] ? 'Req' : pb.defaultOnCFs?.[group.cfs[0].trashId] ? 'Opt ★' : 'Opt'"></span>
-                        <input type="number" class="pb-score-input"
-                               x-show="pb.selectedCFs[group.cfs[0].trashId]"
-                               :class="{ overridden: pbIsScoreOverridden(group.cfs[0]) }"
-                               :value="pbGetScore(group.cfs[0])"
-                               @input="pbSetScore(group.cfs[0].trashId, $event.target.value)"
-                               @blur="pbCleanScore(group.cfs[0].trashId)">
-                      </div>
-                    </template>
-                    <!-- Exclusive warning for multi-CF groups -->
-                    <div x-show="group.exclusive && group.cfs.length > 1 && (cat.groups.length === 1 || (pbExpandedGroups[cat.category+'/'+group.name] ?? true))"
-                         style="padding:4px 16px 4px 44px;font-size:11px;color:#d29922">
-                      Please ensure you only score or enable one of them in your Quality Profile!
-                    </div>
-                    <!-- CF rows for multi-CF groups -->
-                    <div x-show="(cat.groups.length === 1 || group.cfs.length > 1) && (cat.groups.length === 1 || (pbExpandedGroups[cat.category+'/'+group.name] ?? true))">
-                      <template x-for="cf in group.cfs" :key="cf.trashId">
-                        <div class="pb-cf-row" :style="cat.groups.length > 1 ? 'padding-left:44px' : ''">
-                          <label class="toggle toggle-sm" :style="pbIsGoldenRuleCF(cf.trashId) && pb.variantGoldenRule ? 'opacity:0.3;pointer-events:none' : ''">
-                            <input type="checkbox" :checked="pb.selectedCFs[cf.trashId]"
-                                   @change="pbToggleCF(cf.trashId, group.exclusive ? group : null)">
-                            <span class="slider"></span>
-                          </label>
-                          <div class="pb-cf-name">
-                            <span x-text="cf.name"></span>
-                            <span x-show="cf.isCustom" style="font-size:10px;color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 4px;margin-left:4px">Custom</span>
-                            <span x-show="pbIsGoldenRuleCF(cf.trashId) && pb.variantGoldenRule" style="font-size:9px;color:#d2a8ff;margin-left:4px">managed by dropdown</span>
-                            <span class="cf-info" x-show="cf.description"
-                                  @mouseenter="showCFTooltip($event, cf.description)"
-                                  @mouseleave="hideCFTooltip()">ⓘ</span>
-                            <template x-if="config.devMode">
-                              <span style="font-size:10px;color:#484f58;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
-                            </template>
-                          </div>
-                          <span class="pb-req-pill"
-                                x-show="pb.selectedCFs[cf.trashId] && !pbIsGoldenRuleCF(cf.trashId)"
-                                :class="pb.requiredCFs[cf.trashId] ? 'req' : pb.defaultOnCFs?.[cf.trashId] ? 'default-on' : 'opt'"
-                                @click="pbCycleCFMode(cf.trashId)"
-                                :title="pb.requiredCFs[cf.trashId] ? 'Required — always included, locked at sync' : pb.defaultOnCFs?.[cf.trashId] ? 'Optional (recommended) — on by default, user can disable' : 'Optional — off by default, user can enable'"
-                                x-text="pb.requiredCFs[cf.trashId] ? 'Req' : pb.defaultOnCFs?.[cf.trashId] ? 'Opt ★' : 'Opt'"></span>
-                          <input type="number" class="pb-score-input"
-                                 x-show="pb.selectedCFs[cf.trashId]"
-                                 :class="{ overridden: pbIsScoreOverridden(cf) }"
-                                 :value="pbGetScore(cf)"
-                                 @input="pbSetScore(cf.trashId, $event.target.value)"
-                                 @blur="pbCleanScore(cf.trashId)">
-                        </div>
+              <!-- Group description -->
+              <div x-show="pbExpandedGroups[group.groupTrashId] && group.trashDescription"
+                   style="padding:8px 16px;font-size:12px;color:#8b949e;border-bottom:1px solid #161b22;line-height:1.6"
+                   x-html="group.trashDescription"></div>
+              <!-- Exclusive warning -->
+              <div x-show="pbExpandedGroups[group.groupTrashId] && group.exclusive"
+                   style="padding:8px 16px;font-size:12px;color:#d29922;line-height:1.5">
+                Please ensure you only score or enable one of them in your Quality Profile!
+              </div>
+              <!-- CFs in this group -->
+              <div x-show="pbExpandedGroups[group.groupTrashId]">
+                <template x-for="cf in group.cfs" :key="'gcf-'+cf.trashId">
+                  <div class="pb-cf-row" :style="!pbIsGroupEnabled(group) && !pb.formatItemCFs[cf.trashId] ? 'opacity:0.35' : ''">
+                    <div style="width:36px;flex-shrink:0"></div>
+                    <div class="pb-cf-name">
+                      <span x-text="cf.name"></span>
+                      <span class="cf-info" x-show="cf.description"
+                            @mouseenter="showCFTooltip($event, cf.description)"
+                            @mouseleave="hideCFTooltip()">ⓘ</span>
+                      <template x-if="config.devMode">
+                        <span style="font-size:10px;color:#484f58;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
                       </template>
                     </div>
+                    <!-- Three-state pills: Req / Opt / Fmt -->
+                    <div style="display:flex;gap:4px;flex-shrink:0">
+                      <span class="pb-state-pill" :class="{ 'active-req': pbGetCFState(cf) === 'required' }"
+                            @click="pbSetCFState(cf.trashId, 'required')"
+                            title="Required — mandatory when group is active">Req</span>
+                      <span class="pb-state-pill" :class="{ 'active-opt': pbGetCFState(cf) === 'optional' }"
+                            @click="pbSetCFState(cf.trashId, 'optional')"
+                            title="Optional — user chooses within group">Opt</span>
+                      <span class="pb-state-pill" :class="{ 'active-fmt': pbGetCFState(cf) === 'formatItems' }"
+                            @click="pbSetCFState(cf.trashId, 'formatItems')"
+                            title="formatItems — always mandatory in profile">Fmt</span>
+                    </div>
+                    <input type="number" class="pb-score-input"
+                           x-show="pbIsGroupEnabled(group) || pb.formatItemCFs[cf.trashId]"
+                           :class="{ overridden: pbIsScoreOverridden(cf) }"
+                           :value="pbGetScore(cf)"
+                           @input="pbSetScore(cf.trashId, $event.target.value)"
+                           @blur="pbCleanScore(cf.trashId)">
                   </div>
                 </template>
               </div>
@@ -2234,9 +2299,9 @@
       <!-- Save Bar -->
       <div class="pb-save-bar">
         <div class="pb-stats">
-          <span x-text="pbSelectedCount() + ' CFs'"></span> &middot;
-          <span x-text="pbRequiredCount() + ' required'"></span> &middot;
-          <span x-text="(pbSelectedCount() - pbRequiredCount()) + ' optional'"></span>
+          <span x-text="pbFormatItemCount() + ' formatItems'"></span> &middot;
+          <span x-text="pbEnabledGroupCount() + ' groups'"></span> &middot;
+          <span x-text="pbSelectedCount() + ' total CFs'"></span>
         </div>
         <button class="btn" @click="cancelProfileBuilder()">Cancel</button>
         <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving">
@@ -3411,6 +3476,32 @@
         </button>
       </div>
 
+      <!-- Group Includes (only for TRaSH JSON when groups are enabled) -->
+      <template x-if="exportTab === 'trash' && exportGroupIncludes?.length > 0">
+        <div style="margin-top:16px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;margin-bottom:8px">
+            <input type="checkbox" x-model="showExportGroupIncludes" style="accent-color:#58a6ff">
+            <span style="font-size:12px;color:#8b949e">Show group includes</span>
+            <span style="font-size:10px;color:#484f58" x-text="'(' + exportGroupIncludes.length + ' groups)'"></span>
+          </label>
+          <div x-show="showExportGroupIncludes" x-cloak>
+            <div style="font-size:11px;color:#484f58;margin-bottom:8px;line-height:1.5">
+              Add these entries to each group's <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#8b949e;font-size:10px">quality_profiles.include</code> section to link this profile.
+            </div>
+            <template x-for="gi in exportGroupIncludes" :key="gi.groupTrashId">
+              <div style="margin-bottom:8px">
+                <div style="font-size:11px;font-weight:500;color:#8b949e;margin-bottom:4px" x-text="gi.groupName"></div>
+                <div style="position:relative">
+                  <pre style="background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px 10px;font-size:11px;font-family:monospace;color:#9ecbaa;margin:0"><code x-text="gi.snippet"></code></pre>
+                  <button class="btn btn-sm" style="position:absolute;top:4px;right:4px;font-size:10px;padding:1px 6px"
+                          @click="copyToClipboard(gi.snippet)">Copy</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
       <div class="modal-actions" style="margin-top:16px">
         <button class="btn" @click="closeExportModal()">Close</button>
       </div>
@@ -3933,7 +4024,7 @@
               <template x-for="(ts, tsIdx) in cfEditorForm.trashScores" :key="ts._key || tsIdx">
                 <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
                   <select class="input" x-model="ts.context" style="flex:1;font-size:12px;padding:3px 6px">
-                    <option value="default">default</option>
+                    <option value="default">Default</option>
                     <option value="sqp-1-1080p">sqp-1-1080p</option>
                     <option value="sqp-1-2160p">sqp-1-2160p</option>
                     <option value="sqp-1-web-1080p">sqp-1-web-1080p</option>
@@ -4289,6 +4380,8 @@ function clonarr() {
     namingSelectedInstance: {},  // { radarr: 'instance-id', sonarr: 'instance-id' }
     namingInstanceData: {},      // { radarr: { renameMovies: true, ... }, sonarr: { ... } }
     namingApplyResult: {},       // { radarr: 'Success message', sonarr: '' }
+    namingMediaServer: {},       // { radarr: 'standard', sonarr: 'standard' }
+    namingPlexSingleEntry: {},   // { radarr: false, sonarr: false }
 
     // Import
     importedProfiles: { radarr: [], sonarr: [] },
@@ -4308,6 +4401,8 @@ function clonarr() {
     exportTab: 'yaml', // 'yaml', 'json', 'trash'
     exportContent: '',
     exportCopied: false,
+    exportGroupIncludes: [],
+    showExportGroupIncludes: false,
 
     // Profile Builder
     profileBuilder: false,
@@ -4347,6 +4442,9 @@ function clonarr() {
       selectedCFs: {},
       requiredCFs: {},
       defaultOnCFs: {},
+      formatItemCFs: {},    // CFs that go into formatItems (required/mandatory)
+      enabledGroups: {},    // { groupTrashId: true } — which CF groups are included
+      cfStateOverrides: {}, // { trashId: 'required'|'optional' } — overrides TRaSH default per CF
       scoreOverrides: {},
       // Dev mode
       trashProfileId: '',
@@ -4538,46 +4636,79 @@ function clonarr() {
       return this.namingData[appType] || null;
     },
 
-    getNamingSections(appType) {
+    getNamingSections(appType, mediaServer, plexSingleEntry) {
       const n = this.getNaming(appType);
       if (!n) return [];
+      const ms = mediaServer || 'standard';
 
       const schemeDesc = {
         'standard': { label: 'Standard', recommended: true, desc: 'The recommended naming scheme. Includes all non-recoverable information in brackets.' },
         'default': { label: 'Default', recommended: true, desc: 'The recommended format.' },
         'original': { label: 'Original Title', desc: 'Uses the release title as-is. Prevents download loops from title/content mismatches, but gives less control over naming.' },
         'p2p-scene': { label: 'P2P / Scene', desc: 'Dots instead of spaces/brackets. Closest to P2P/scene naming, but uses exact audio/HDR formats from the media file.' },
-        'plex-imdb': { label: 'Plex (IMDb)', desc: 'For the Plex agent. IMDb IDs are very stable and rarely change.' },
-        'plex-tmdb': { label: 'Plex (TMDb)', desc: 'For the Plex agent. TMDb is more aligned with Radarr but IDs can occasionally change.' },
-        'plex-tvdb': { label: 'Plex (TVDb)', desc: 'For the Plex TV Series Scanner. TVDb is aligned with Sonarr.' },
-        'plex-anime-imdb': { label: 'Plex Anime (IMDb)', desc: 'Plex agent with anime-specific fields (audio languages, bit depth).' },
-        'plex-anime-tmdb': { label: 'Plex Anime (TMDb)', desc: 'Plex agent with anime-specific fields (audio languages, bit depth).' },
-        'emby-imdb': { label: 'Emby (IMDb)', desc: 'For Emby media server. Uses square brackets for IDs.' },
-        'emby-tmdb': { label: 'Emby (TMDb)', desc: 'For Emby media server. Uses square brackets for IDs.' },
-        'emby-tvdb': { label: 'Emby (TVDb)', desc: 'For Emby media server. Uses square brackets for IDs.' },
-        'emby-anime-imdb': { label: 'Emby Anime (IMDb)', desc: 'Emby with anime-specific fields.' },
-        'emby-anime-tmdb': { label: 'Emby Anime (TMDb)', desc: 'Emby with anime-specific fields.' },
-        'jellyfin-imdb': { label: 'Jellyfin (IMDb)', desc: 'For Jellyfin media server.' },
-        'jellyfin-tmdb': { label: 'Jellyfin (TMDb)', desc: 'For Jellyfin media server.' },
-        'jellyfin-tvdb': { label: 'Jellyfin (TVDb)', desc: 'For Jellyfin. Note: Jellyfin does not support IMDb IDs for shows.' },
-        'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)', desc: 'Jellyfin with anime-specific fields.' },
-        'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)', desc: 'Jellyfin with anime-specific fields.' },
+        'plex-imdb': { label: 'Plex (IMDb)', recommended: true },
+        'plex-tmdb': { label: 'Plex (TMDb)' },
+        'plex-tvdb': { label: 'Plex (TVDb)' },
+        'plex-anime-imdb': { label: 'Plex Anime (IMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'plex-anime-tmdb': { label: 'Plex Anime (TMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'emby-imdb': { label: 'Emby (IMDb)', recommended: true },
+        'emby-tmdb': { label: 'Emby (TMDb)' },
+        'emby-tvdb': { label: 'Emby (TVDb)' },
+        'emby-anime-imdb': { label: 'Emby Anime (IMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'emby-anime-tmdb': { label: 'Emby Anime (TMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'jellyfin-imdb': { label: 'Jellyfin (IMDb)', recommended: true },
+        'jellyfin-tmdb': { label: 'Jellyfin (TMDb)' },
+        'jellyfin-tvdb': { label: 'Jellyfin (TVDb)' },
+        'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+      };
+
+      // Media server key filters
+      const msFilters = {
+        standard: k => !k.includes('-'),  // standard, default, original, p2p-scene have no media server prefix
+        plex: k => k.startsWith('plex-'),
+        emby: k => k.startsWith('emby-'),
+        jellyfin: k => k.startsWith('jellyfin-'),
+      };
+      const standardKeys = new Set(['standard', 'default', 'original', 'p2p-scene']);
+      const filterFn = ms === 'standard'
+        ? k => standardKeys.has(k)
+        : (msFilters[ms] || (() => true));
+
+      const applyEditionToggle = (pattern, example) => {
+        if (!plexSingleEntry || ms !== 'plex') return { pattern, example };
+        return {
+          pattern: pattern.replace(/\{edition-\{Edition Tags\}\}/g, '{Edition Tags}'),
+          example: example ? example.replace(/\{edition-([^}]+)\}/g, '$1') : example,
+        };
       };
 
       const radarrExamples = {
         folder: {
           'default': 'The Movie Title (2010)',
           'plex-imdb': 'The Movie Title (2010) {imdb-tt1520211}',
-          'plex-tmdb': 'The Movie Title (2010) {tmdb-1520211}',
+          'plex-tmdb': 'The Movie Title (2010) {tmdb-345691}',
           'emby-imdb': 'The Movie Title (2010) [imdb-tt1520211]',
-          'emby-tmdb': 'The Movie Title (2010) [tmdb-1520211]',
+          'emby-tmdb': 'The Movie Title (2010) [tmdb-345691]',
           'jellyfin-imdb': 'The Movie Title (2010) [imdbid-tt1520211]',
-          'jellyfin-tmdb': 'The Movie Title (2010) [tmdbid-1520211]',
+          'jellyfin-tmdb': 'The Movie Title (2010) [tmdbid-345691]',
         },
         file: {
           'standard': 'The Movie Title (2010) {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
           'original': 'The.Movie.Title.2010.REMASTERED.1080p.BluRay.x264-RlsGrp',
           'p2p-scene': 'The.Movie.Title.2010.Ultimate.Extended.Edition.3D.Hybrid.Remux-2160p.TrueHD.Atmos.7.1.DV.HDR10Plus.HEVC-RlsGrp',
+          'plex-imdb': 'The Movie Title (2010) {imdb-tt1520211} - {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
+          'plex-tmdb': 'The Movie Title (2010) {tmdb-345691} - {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
+          'plex-anime-imdb': 'The Movie Title (2010) {imdb-tt1520211} - {edition-Ultimate Extended Edition} [Surround Sound x264][Bluray-1080p Proper][3D][DTS 5.1][DE][10bit][AVC]-RlsGrp',
+          'plex-anime-tmdb': 'The Movie Title (2010) {tmdb-345691} - {edition-Ultimate Extended Edition} [Surround Sound x264][Bluray-1080p Proper][3D][DTS 5.1][DE][10bit][AVC]-RlsGrp',
+          'emby-imdb': 'The Movie Title (2010) [imdb-tt0066921] - {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
+          'emby-tmdb': 'The Movie Title (2010) [tmdb-345691] - {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
+          'emby-anime-imdb': 'The Movie Title (2010) [imdb-tt0066921] - {edition-Ultimate Extended Edition} [Surround Sound x264][Bluray-1080p Proper][3D][DTS 5.1][DE][10bit][AVC]-RlsGrp',
+          'emby-anime-tmdb': 'The Movie Title (2010) [tmdb-345691] - {edition-Ultimate Extended Edition} [Surround Sound x264][Bluray-1080p Proper][3D][DTS 5.1][DE][10bit][AVC]-RlsGrp',
+          'jellyfin-imdb': 'The Movie Title (2010) [imdbid-tt0106145] - {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
+          'jellyfin-tmdb': 'The Movie Title (2010) [tmdbid-345691] - {edition-Ultimate Extended Edition} [IMAX HYBRID][Bluray-1080p Proper][3D][DV HDR10][DTS 5.1][x264]-RlsGrp',
+          'jellyfin-anime-imdb': 'The Movie Title (2010) [imdbid-tt0106145] - {edition-Ultimate Extended Edition} [Surround Sound x264][Bluray-1080p Proper][3D][DTS 5.1][DE][10bit][AVC]-RlsGrp',
+          'jellyfin-anime-tmdb': 'The Movie Title (2010) [tmdbid-345691] - {edition-Ultimate Extended Edition} [Surround Sound x264][Bluray-1080p Proper][3D][DTS 5.1][DE][10bit][AVC]-RlsGrp',
         }
       };
 
@@ -4586,6 +4717,10 @@ function clonarr() {
           'default': 'The Series Title! (2010)',
           'plex-imdb': 'The Series Title! (2010) {imdb-tt1520211}',
           'plex-tvdb': 'The Series Title! (2010) {tvdb-1520211}',
+          'emby-imdb': 'The Series Title! (2010) [imdb-tt1520211]',
+          'emby-tvdb': 'The Series Title! (2010) [tvdb-1520211]',
+          'jellyfin-imdb': 'The Series Title! (2010) [imdbid-tt1520211]',
+          'jellyfin-tvdb': 'The Series Title! (2010) [tvdbid-1520211]',
         },
         episodes: {
           standard: { 'default': 'The Series Title! (2010) - S01E01 - Episode Title 1 [AMZN WEBDL-1080p Proper][DV HDR10][DTS 5.1][x264]-RlsGrp' },
@@ -4594,16 +4729,28 @@ function clonarr() {
         }
       };
 
+      // Enforce consistent ordering
+      const keyOrder = ['standard', 'default', 'plex-imdb', 'plex-tmdb', 'plex-anime-imdb', 'plex-anime-tmdb', 'plex-tvdb',
+        'emby-imdb', 'emby-tmdb', 'emby-anime-imdb', 'emby-anime-tmdb', 'emby-tvdb',
+        'jellyfin-imdb', 'jellyfin-tmdb', 'jellyfin-anime-imdb', 'jellyfin-anime-tmdb', 'jellyfin-tvdb',
+        'original', 'p2p-scene'];
+
       const makeSchemes = (map, sectionKey, examplesMap) => {
-        return Object.entries(map || {}).map(([key, pattern]) => {
+        const entries = Object.entries(map || {}).filter(([key]) => filterFn(key));
+        entries.sort((a, b) => {
+          const ai = keyOrder.indexOf(a[0]), bi = keyOrder.indexOf(b[0]);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
+        return entries.map(([key, pattern]) => {
           const meta = schemeDesc[key] || { label: key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) };
+          const ed = applyEditionToggle(pattern, examplesMap?.[key] || '');
           return {
             key,
             label: meta.label || key,
             recommended: meta.recommended || false,
             description: meta.desc || '',
-            pattern,
-            example: examplesMap?.[key] || '',
+            pattern: ed.pattern,
+            example: ed.example,
           };
         });
       };
@@ -4611,18 +4758,30 @@ function clonarr() {
       const sections = [];
 
       if (appType === 'radarr') {
-        sections.push({
-          key: 'folder',
-          label: 'Movie Folder Format',
-          description: 'How movie folders are named. Note: folder names are set when the movie is added — the ID may be missing at that time. Adding the ID to the filename instead ensures it is always fresh.',
-          schemes: makeSchemes(n.folder, 'folder', radarrExamples.folder),
-        });
-        sections.push({
-          key: 'file',
-          label: 'Movie File Format',
-          description: 'How movie files are named. Includes quality, audio, HDR, and release group info. Plex/Emby/Jellyfin variants add media server IDs for better matching.',
-          schemes: makeSchemes(n.file, 'file', radarrExamples.file),
-        });
+        // File format first, folder second
+        const fileSchemes = makeSchemes(n.file, 'file', radarrExamples.file);
+        if (fileSchemes.length > 0) {
+          sections.push({
+            key: 'file',
+            label: 'Movie File Format',
+            description: ms === 'standard'
+              ? 'Includes quality, audio, HDR, and release group info.'
+              : ms.charAt(0).toUpperCase() + ms.slice(1) + ' file naming with media server IDs.',
+            schemes: fileSchemes,
+            showEditionToggle: ms === 'plex',
+          });
+        }
+        const folderSchemes = makeSchemes(n.folder, 'folder', radarrExamples.folder);
+        if (folderSchemes.length > 0) {
+          sections.push({
+            key: 'folder',
+            label: 'Movie Folder Format',
+            description: ms === 'standard'
+              ? 'The minimum needed and recommended format.'
+              : 'Adding anything after the release year can help with duplicate names but may give issues during fresh import.',
+            schemes: folderSchemes,
+          });
+        }
       } else {
         // Episodes first (most important)
         for (const [epType, schemes] of Object.entries(n.episodes || {})) {
@@ -4632,24 +4791,30 @@ function clonarr() {
             daily: 'Date-based episodes for daily shows (talk shows, news).',
             anime: 'Anime episodes with absolute episode numbers and audio language info.',
           };
-          sections.push({
-            key: 'episodes-' + epType,
-            label: 'Episode File Format — ' + epLabel,
-            description: epDescs[epType] || '',
-            schemes: makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType]),
-          });
+          const epSchemes = makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType]);
+          if (epSchemes.length > 0) {
+            sections.push({
+              key: 'episodes-' + epType,
+              label: 'Episode File Format — ' + epLabel,
+              description: epDescs[epType] || '',
+              schemes: epSchemes,
+            });
+          }
         }
-        sections.push({
+        const seriesSchemes = makeSchemes(n.series, 'series', sonarrExamples.series);
+        if (seriesSchemes.length > 0) sections.push({
           key: 'series',
           label: 'Series Folder Format',
-          description: 'How series root folders are named. Plex/Emby/Jellyfin variants add media server IDs.',
-          schemes: makeSchemes(n.series, 'series', sonarrExamples.series),
+          description: ms === 'standard'
+            ? 'The minimum needed and recommended format.'
+            : 'Adding media server IDs helps with matching.',
+          schemes: seriesSchemes,
         });
-        if (n.season) {
+        if (n.season && ms === 'standard') {
           sections.push({
             key: 'season',
             label: 'Season Folder Format',
-            description: 'How season sub-folders are named. Only one real option recommended by TRaSH.',
+            description: 'How season sub-folders are named.',
             schemes: makeSchemes(n.season, 'season', { 'default': 'Season 01' }),
           });
         }
@@ -4876,6 +5041,9 @@ function clonarr() {
         selectedCFs: {},
         requiredCFs: {},
         defaultOnCFs: {},
+        formatItemCFs: {},
+        enabledGroups: {},
+        cfStateOverrides: {},
         scoreOverrides: {},
         trashProfileId: existing?.trashProfileId || '',
         trashProfileName: '',
@@ -4903,6 +5071,16 @@ function clonarr() {
           this.pb.defaultOnCFs[tid] = true;
         }
       }
+      // Restore new group-based state
+      if (existing?.formatItemCFs) {
+        this.pb.formatItemCFs = { ...existing.formatItemCFs };
+      }
+      if (existing?.enabledGroups) {
+        this.pb.enabledGroups = { ...existing.enabledGroups };
+      }
+      if (existing?.cfStateOverrides) {
+        this.pb.cfStateOverrides = { ...existing.cfStateOverrides };
+      }
       this.pbExpandedCats = {};
       this.pbSettingsOpen = !existing; // collapse settings when editing
       this.pbInstanceImportId = '';
@@ -4910,6 +5088,10 @@ function clonarr() {
       this.pbInstanceImportProfileId = '';
       this.profileBuilder = true;
       await this.loadCFPicker(appType);
+      // Apply remembered Golden Rule variant (localStorage defaults)
+      if (!existing && this.pb.variantGoldenRule) {
+        this.pbApplyGoldenRule();
+      }
       // After presets loaded, restore quality preset display
       if (existing?.qualityPresetId) {
         // Use saved preset ID
@@ -5267,64 +5449,251 @@ function clonarr() {
       return selected.length > 0 && selected.every(cf => this.pb.requiredCFs[cf.trashId]);
     },
 
+    // Toggle a CF group on/off by groupTrashId
+    pbToggleGroupInclude(group) {
+      const gid = group.groupTrashId;
+      const newEnabled = { ...this.pb.enabledGroups };
+      const newSelected = { ...this.pb.selectedCFs };
+      const newFormatItems = { ...this.pb.formatItemCFs };
+      if (newEnabled[gid]) {
+        // Disable group — remove its CFs from selectedCFs and formatItemCFs
+        delete newEnabled[gid];
+        for (const cf of group.cfs) {
+          delete newSelected[cf.trashId];
+          delete newFormatItems[cf.trashId];
+        }
+      } else {
+        // Enable group — add its CFs to selectedCFs (group CFs don't go in formatItems)
+        newEnabled[gid] = true;
+        for (const cf of group.cfs) {
+          newSelected[cf.trashId] = true;
+        }
+      }
+      this.pb.enabledGroups = newEnabled;
+      this.pb.selectedCFs = newSelected;
+      this.pb.formatItemCFs = newFormatItems;
+    },
+
+    // Check if a group is enabled
+    pbIsGroupEnabled(group) {
+      return !!this.pb.enabledGroups[group.groupTrashId];
+    },
+
+    // Get CF state: 'formatItems', 'required', or 'optional'
+    pbGetCFState(cf) {
+      if (this.pb.formatItemCFs[cf.trashId]) return 'formatItems';
+      if (this.pb.cfStateOverrides?.[cf.trashId] === 'required') return 'required';
+      if (this.pb.cfStateOverrides?.[cf.trashId] === 'optional') return 'optional';
+      // Default from TRaSH group data
+      return cf.required ? 'required' : 'optional';
+    },
+
+    // Set CF state: 'required', 'optional', or 'formatItems'
+    pbSetCFState(trashId, state) {
+      const newFI = { ...this.pb.formatItemCFs };
+      const newOverrides = { ...(this.pb.cfStateOverrides || {}) };
+
+      if (state === 'formatItems') {
+        newFI[trashId] = true;
+        delete newOverrides[trashId];
+        this.pb.selectedCFs = { ...this.pb.selectedCFs, [trashId]: true };
+      } else {
+        delete newFI[trashId];
+        newOverrides[trashId] = state;
+      }
+      this.pb.formatItemCFs = newFI;
+      this.pb.cfStateOverrides = newOverrides;
+    },
+
+    // Toggle a CF into/out of formatItemCFs (required/mandatory)
+    pbToggleFormatItem(trashId) {
+      const newFI = { ...this.pb.formatItemCFs };
+      if (newFI[trashId]) {
+        delete newFI[trashId];
+      } else {
+        newFI[trashId] = true;
+      }
+      this.pb.formatItemCFs = newFI;
+    },
+
+    // Get selected formatItem CFs as a list with CF data
+    pbFormatItemCFList() {
+      const result = [];
+      const fiSet = this.pb.formatItemCFs || {};
+      for (const cat of this.pbCategories) {
+        for (const g of cat.groups) {
+          if (g.groupTrashId) continue; // skip grouped CFs
+          for (const cf of g.cfs) {
+            if (fiSet[cf.trashId]) result.push(cf);
+          }
+        }
+      }
+      return result;
+    },
+
+    // Get ungrouped CFs NOT in formatItems (for "Add more" section)
+    pbAvailableFormatItemCFs() {
+      const result = [];
+      const fiSet = this.pb.formatItemCFs || {};
+      for (const cat of this.pbCategories) {
+        for (const g of cat.groups) {
+          if (g.groupTrashId) continue;
+          for (const cf of g.cfs) {
+            if (!fiSet[cf.trashId]) result.push(cf);
+          }
+        }
+      }
+      return result;
+    },
+
+    // Get all groups as a flat sorted list (not nested under categories)
+    pbSortedGroups() {
+      const groupOrder = [
+        'Golden Rule', 'Audio', 'HDR Formats', 'HQ Release Groups', 'Resolution',
+        'Streaming Services', 'Miscellaneous', 'Optional', 'SQP',
+        'Release Groups', 'Unwanted', 'Movie Versions', 'Anime',
+        'French Audio Version', 'French HQ Source Groups',
+        'German Source Groups', 'German Miscellaneous', 'Language Profiles', 'Other'
+      ];
+      const groups = [];
+      for (const cat of this.pbFilteredCategories) {
+        for (const g of cat.groups) {
+          if (!g.groupTrashId) continue;
+          groups.push({ ...g, _category: cat.category });
+        }
+      }
+      groups.sort((a, b) => {
+        const ai = groupOrder.indexOf(a._category);
+        const bi = groupOrder.indexOf(b._category);
+        const ao = ai === -1 ? 999 : ai;
+        const bo = bi === -1 ? 999 : bi;
+        if (ao !== bo) return ao - bo;
+        // Within same category: default-enabled first, then alphabetical
+        if (a.defaultEnabled !== b.defaultEnabled) return a.defaultEnabled ? -1 : 1;
+        return a.shortName.localeCompare(b.shortName);
+      });
+      return groups;
+    },
+
+    // Check if any CF in group has a specific state
+    pbGroupHasAnyState(group, state) {
+      return group.cfs.some(cf => this.pbGetCFState(cf) === state);
+    },
+
+    // Check if ALL CFs in group have a specific state
+    pbGroupHasAllState(group, state) {
+      return group.cfs.length > 0 && group.cfs.every(cf => this.pbGetCFState(cf) === state);
+    },
+
+    // Set all CFs in a group to a state
+    pbSetGroupState(group, state) {
+      for (const cf of group.cfs) {
+        this.pbSetCFState(cf.trashId, state);
+      }
+      // If all CFs moved to formatItems, disable the group (no longer needed as group)
+      if (state === 'formatItems' && group.groupTrashId) {
+        const newEnabled = { ...this.pb.enabledGroups };
+        delete newEnabled[group.groupTrashId];
+        this.pb.enabledGroups = newEnabled;
+      }
+      // If moving back from formatItems to group state, re-enable the group
+      if (state !== 'formatItems' && group.groupTrashId && !this.pb.enabledGroups[group.groupTrashId]) {
+        this.pb.enabledGroups = { ...this.pb.enabledGroups, [group.groupTrashId]: true };
+      }
+    },
+
+    // Count formatItem CFs
+    pbFormatItemCount() {
+      return Object.keys(this.pb.formatItemCFs || {}).length;
+    },
+
+    // Count enabled groups
+    pbEnabledGroupCount() {
+      return Object.keys(this.pb.enabledGroups || {}).length;
+    },
+
     // Golden Rule: auto-set both CFs when variant is selected
     pbIsGoldenRuleCF(trashId) {
       return trashId === 'dc98083864ea246d05a42df0d05f81cc' || trashId === '839bea857ed2c0a8e084f3cbdbd65ecb';
     },
 
     pbApplyGoldenRule() {
-      const grHD = 'dc98083864ea246d05a42df0d05f81cc';   // x265 (HD)
-      const grUHD = '839bea857ed2c0a8e084f3cbdbd65ecb';  // x265 (no HDR/DV)
+      const grHDcf1 = 'dc98083864ea246d05a42df0d05f81cc';   // x265 (HD)
+      const grUHDcf1 = '839bea857ed2c0a8e084f3cbdbd65ecb';  // x265 (no HDR/DV)
+      const grHDGroup = 'f8bf8eab4617f12dfdbd16303d8da245';  // [Required] Golden Rule HD group
+      const grUHDGroup = 'ff204bbcecdd487d1cefcefdbf0c278d'; // [Required] Golden Rule UHD group
       const newSelected = {...this.pb.selectedCFs};
+      const newEnabled = {...this.pb.enabledGroups};
       const variant = this.pb.variantGoldenRule;
-      const newDefaultOn = {...(this.pb.defaultOnCFs || {})};
+
+      // Find all CFs in each Golden Rule group from pbCategories
+      const grHDCFs = [];
+      const grUHDCFs = [];
+      for (const cat of this.pbCategories) {
+        for (const g of cat.groups) {
+          if (g.groupTrashId === grHDGroup) grHDCFs.push(...g.cfs.map(cf => cf.trashId));
+          if (g.groupTrashId === grUHDGroup) grUHDCFs.push(...g.cfs.map(cf => cf.trashId));
+        }
+      }
+
       if (variant === 'HD') {
-        newSelected[grHD] = true;
-        newSelected[grUHD] = true;
-        newDefaultOn[grHD] = true;
-        delete newDefaultOn[grUHD];
-        this.pb.goldenRuleDefault = grHD;
+        newEnabled[grHDGroup] = true;
+        delete newEnabled[grUHDGroup];
+        for (const tid of grHDCFs) newSelected[tid] = true;
+        for (const tid of grUHDCFs) delete newSelected[tid];
+        this.pb.goldenRuleDefault = grHDcf1;
       } else if (variant === 'UHD') {
-        newSelected[grHD] = true;
-        newSelected[grUHD] = true;
-        delete newDefaultOn[grHD];
-        newDefaultOn[grUHD] = true;
-        this.pb.goldenRuleDefault = grUHD;
+        delete newEnabled[grHDGroup];
+        newEnabled[grUHDGroup] = true;
+        for (const tid of grUHDCFs) newSelected[tid] = true;
+        for (const tid of grHDCFs) delete newSelected[tid];
+        this.pb.goldenRuleDefault = grUHDcf1;
       } else {
-        delete newSelected[grHD];
-        delete newSelected[grUHD];
-        delete newDefaultOn[grHD];
-        delete newDefaultOn[grUHD];
+        delete newEnabled[grHDGroup];
+        delete newEnabled[grUHDGroup];
+        for (const tid of grHDCFs) delete newSelected[tid];
+        for (const tid of grUHDCFs) delete newSelected[tid];
         this.pb.goldenRuleDefault = '';
       }
       this.pb.selectedCFs = newSelected;
-      this.pb.defaultOnCFs = newDefaultOn;
+      this.pb.enabledGroups = newEnabled;
     },
 
-    // Cycle CF mode: Req → Opt ★ → Opt → Req
-    // Req = always included, locked at sync
-    // Opt ★ = optional, default on (recommended)
-    // Opt = optional, default off
-    pbCycleCFMode(trashId) {
-      const isReq = this.pb.requiredCFs[trashId];
-      const isDefaultOn = this.pb.defaultOnCFs?.[trashId];
-      const newReq = {...this.pb.requiredCFs};
-      const newDefaultOn = {...(this.pb.defaultOnCFs || {})};
+    pbApplyMisc() {
+      const miscStdGroup = '9337080378236ce4c0b183e35790d2a7';  // [Optional] Miscellaneous
+      const miscSqpGroup = 'c4492eebd0c2ddc14c2c91623aa7f95d';  // [Optional] Miscellaneous SQP
+      const newEnabled = { ...this.pb.enabledGroups };
+      const newSelected = { ...this.pb.selectedCFs };
+      const variant = this.pb.variantMisc;
 
-      if (isReq) {
-        // Req → Opt ★
-        delete newReq[trashId];
-        newDefaultOn[trashId] = true;
-      } else if (isDefaultOn) {
-        // Opt ★ → Opt
-        delete newDefaultOn[trashId];
-      } else {
-        // Opt → Req
-        newReq[trashId] = true;
-        delete newDefaultOn[trashId];
+      // Find CFs in each Misc group
+      const stdCFs = [];
+      const sqpCFs = [];
+      for (const cat of this.pbCategories) {
+        for (const g of cat.groups) {
+          if (g.groupTrashId === miscStdGroup) stdCFs.push(...g.cfs.map(cf => cf.trashId));
+          if (g.groupTrashId === miscSqpGroup) sqpCFs.push(...g.cfs.map(cf => cf.trashId));
+        }
       }
-      this.pb.requiredCFs = newReq;
-      this.pb.defaultOnCFs = newDefaultOn;
+
+      if (variant === 'Standard') {
+        newEnabled[miscStdGroup] = true;
+        delete newEnabled[miscSqpGroup];
+        for (const tid of stdCFs) newSelected[tid] = true;
+        for (const tid of sqpCFs) delete newSelected[tid];
+      } else if (variant === 'SQP') {
+        delete newEnabled[miscStdGroup];
+        newEnabled[miscSqpGroup] = true;
+        for (const tid of sqpCFs) newSelected[tid] = true;
+        for (const tid of stdCFs) delete newSelected[tid];
+      } else {
+        delete newEnabled[miscStdGroup];
+        delete newEnabled[miscSqpGroup];
+        for (const tid of stdCFs) delete newSelected[tid];
+        for (const tid of sqpCFs) delete newSelected[tid];
+      }
+      this.pb.selectedCFs = newSelected;
+      this.pb.enabledGroups = newEnabled;
     },
 
     pbToggleCatRequired(cat) {
@@ -5453,37 +5822,38 @@ function clonarr() {
           if (prof.minFormatScore != null) this.pb.minFormatScore = prof.minFormatScore;
           if (prof.minUpgradeFormatScore != null) this.pb.minUpgradeFormatScore = prof.minUpgradeFormatScore;
           if (prof.upgradeAllowed != null) this.pb.upgradeAllowed = prof.upgradeAllowed;
-          // Apply required CFs (core profile definition)
+          // Apply required CFs (core profile definition → formatItems)
           this.pb.selectedCFs = {};
           this.pb.scoreOverrides = {};
           this.pb.requiredCFs = {};
+          this.pb.formatItemCFs = {};
+          this.pb.enabledGroups = {};
+          this.pb.cfStateOverrides = {};
           const baselineCFs = new Set();
           const coreCFIds = [];
           for (const cf of (detail.coreCFs || [])) {
             this.pb.selectedCFs[cf.trashId] = true;
+            this.pb.formatItemCFs[cf.trashId] = true;
             baselineCFs.add(cf.trashId);
             coreCFIds.push(cf.trashId);
             if (cf.score != null) this.pb.scoreOverrides[cf.trashId] = cf.score;
           }
-          // Apply CFs from groups:
-          // - Default-enabled groups: if any CF has default flag, use those; otherwise all
-          // - Optional groups: only individually default CFs
-          for (const cat of (detail.cfCategories || [])) {
+          // Apply CFs from groups — only enable groups that include this profile
+          // Only default-enabled groups are auto-enabled; non-default remain available but off
+          for (const cat of this.pbCategories) {
             for (const g of cat.groups) {
+              // Check if this group includes the current profile
+              const includesProfile = g.includeProfiles?.includes(this.pb.trashProfileName);
+              if (!includesProfile) continue;
+              // Only auto-enable default groups
+              if (g.groupTrashId && g.defaultEnabled) {
+                this.pb.enabledGroups[g.groupTrashId] = true;
+              }
+              // Select CFs from default-enabled groups only
               if (g.defaultEnabled) {
-                const hasDefaults = g.cfs.some(cf => cf.default);
                 for (const cf of g.cfs) {
-                  if (!hasDefaults || cf.default) {
-                    this.pb.selectedCFs[cf.trashId] = true;
-                    baselineCFs.add(cf.trashId);
-                  }
-                }
-              } else {
-                for (const cf of g.cfs) {
-                  if (cf.default) {
-                    this.pb.selectedCFs[cf.trashId] = true;
-                    baselineCFs.add(cf.trashId);
-                  }
+                  this.pb.selectedCFs[cf.trashId] = true;
+                  baselineCFs.add(cf.trashId);
                 }
               }
             }
@@ -5515,16 +5885,34 @@ function clonarr() {
           this.pb.selectedCFs = {};
           this.pb.scoreOverrides = {};
           this.pb.requiredCFs = {};
+          this.pb.formatItemCFs = {};
+          this.pb.enabledGroups = {};
+          this.pb.cfStateOverrides = {};
           for (const [trashId, score] of Object.entries(prof.formatItems || {})) {
             this.pb.selectedCFs[trashId] = true;
             this.pb.scoreOverrides[trashId] = score;
           }
+          // Restore new model state if available
+          if (prof.formatItemCFs) {
+            this.pb.formatItemCFs = { ...prof.formatItemCFs };
+          }
+          if (prof.enabledGroups) {
+            this.pb.enabledGroups = { ...prof.enabledGroups };
+          }
+          if (prof.cfStateOverrides) {
+            this.pb.cfStateOverrides = { ...prof.cfStateOverrides };
+          }
+          // Fallback: old model
           for (const tid of (prof.requiredCFs || [])) {
             this.pb.requiredCFs[tid] = true;
+            // If no new model, use old requiredCFs as formatItemCFs
+            if (!prof.formatItemCFs) this.pb.formatItemCFs[tid] = true;
           }
         }
         // Clean overrides that match score set defaults
         this.pbScoreSetChanged();
+        // Force Alpine reactivity on pb object (needed for x-model on nested selects)
+        this.pb = { ...this.pb };
       } catch (e) {
         alert('Error loading template: ' + e.message);
       } finally {
@@ -5650,14 +6038,24 @@ function clonarr() {
             }
           }
         }
-        for (const trashId of Object.keys(this.pb.selectedCFs)) {
-          if (!this.pb.selectedCFs[trashId]) continue;
+        // Build set of CFs that should be in FormatItems for sync:
+        // 1. All formatItemCFs (mandatory)
+        // 2. CFs from enabled groups
+        const syncSet = new Set(Object.keys(this.pb.formatItemCFs || {}));
+        const enabledGroupIds = new Set(Object.keys(this.pb.enabledGroups || {}));
+        for (const cat of this.pbCategories) {
+          for (const g of cat.groups) {
+            if (g.groupTrashId && enabledGroupIds.has(g.groupTrashId)) {
+              for (const cf of g.cfs) syncSet.add(cf.trashId);
+            }
+          }
+        }
+        for (const trashId of syncSet) {
           const cf = this._pbFindCF(trashId);
           const score = this.pb.scoreOverrides[trashId] ?? cf?.trashScores?.[this.pb.scoreSet] ?? cf?.trashScores?.['default'] ?? 0;
           formatItems[trashId] = score;
           if (cf) formatComments[trashId] = cf.name;
           if (cfGroupLookup[trashId]) formatGroups[trashId] = cfGroupLookup[trashId];
-          if (this.pb.requiredCFs[trashId]) requiredCFs.push(trashId);
         }
 
         // Use cached quality items from preset selection (stored when preset is applied)
@@ -5711,6 +6109,9 @@ function clonarr() {
           baselineCFs: this.pb.baselineCFs?.length ? this.pb.baselineCFs : undefined,
           coreCFIds: this.pb.coreCFIds?.length ? this.pb.coreCFIds : undefined,
           // Builder state (preserved for edit)
+          formatItemCFs: Object.keys(this.pb.formatItemCFs || {}).length > 0 ? this.pb.formatItemCFs : undefined,
+          enabledGroups: Object.keys(this.pb.enabledGroups || {}).length > 0 ? this.pb.enabledGroups : undefined,
+          cfStateOverrides: Object.keys(this.pb.cfStateOverrides || {}).length > 0 ? this.pb.cfStateOverrides : undefined,
           variantGoldenRule: this.pb.variantGoldenRule || undefined,
           goldenRuleDefault: this.pb.goldenRuleDefault || undefined,
           variantMisc: this.pb.variantMisc || undefined,
@@ -5792,7 +6193,11 @@ function clonarr() {
       // Split into required (locked), golden rule (pick one), and optional (toggleable)
       const cfNames = profile.formatComments || {};
       const cfGroups = profile.formatGroups || {};
-      const requiredSet = new Set(profile.requiredCFs || []);
+      // New model: use formatItemCFs if available, fallback to requiredCFs
+      const formatItemCFs = profile.formatItemCFs || {};
+      const requiredSet = Object.keys(formatItemCFs).length > 0
+        ? new Set(Object.keys(formatItemCFs))
+        : new Set(profile.requiredCFs || []);
       const requiredCategories = {};
       const optionalCategories = {};
       const goldenRuleCFs = [];
@@ -5908,8 +6313,10 @@ function clonarr() {
       if (!p) return;
       if (this.exportTab === 'yaml') {
         this.exportContent = this.generateRecyclarrYAML(p);
+        this.exportGroupIncludes = [];
       } else if (this.exportTab === 'trash') {
         this.exportContent = this.generateTrashJSON(p);
+        this.exportGroupIncludes = this.generateGroupIncludes(p);
       }
     },
 
@@ -6151,15 +6558,19 @@ function clonarr() {
 
     generateTrashJSON(p) {
       // TRaSH format: formatItems is { "CF Name": "trash_id" }
-      // Only required CFs go in formatItems — optional CFs belong in CF group files
-      const requiredSet = new Set(p.requiredCFs || []);
+      // Only formatItemCFs go in formatItems — group CFs belong in CF group files
+      const formatItemSet = new Set(Object.keys(p.formatItemCFs || {}));
       const coreCFs = new Set(p.coreCFIds || []);
+      const requiredSet = new Set(p.requiredCFs || []);
       const formatItems = {};
       for (const [tid] of Object.entries(p.formatItems || {})) {
-        // If we have requiredCFs data, only include required ones
-        if (requiredSet.size > 0 && !requiredSet.has(tid)) continue;
-        // Fallback: if no requiredCFs but we have coreCFs, use those
-        if (requiredSet.size === 0 && coreCFs.size > 0 && !coreCFs.has(tid)) continue;
+        // New model: use formatItemCFs if populated
+        if (formatItemSet.size > 0) {
+          if (!formatItemSet.has(tid)) continue;
+        }
+        // Fallback for old profiles: use requiredCFs or coreCFIds
+        else if (requiredSet.size > 0 && !requiredSet.has(tid)) continue;
+        else if (requiredSet.size === 0 && coreCFs.size > 0 && !coreCFs.has(tid)) continue;
         const name = (p.formatComments || {})[tid] || tid;
         formatItems[name] = tid;
       }
@@ -6192,47 +6603,57 @@ function clonarr() {
       trashProfile.items = items;
       trashProfile.formatItems = formatItems;
 
-      // Build cfGroupIncludes — optional CF groups this profile uses
-      // Match optional CFs (not in requiredSet) to TRaSH CF groups
-      if (requiredSet.size > 0) {
-        const optionalTids = new Set();
-        for (const tid of Object.keys(p.formatItems || {})) {
-          if (!requiredSet.has(tid)) optionalTids.add(tid);
-        }
-        if (optionalTids.size > 0) {
-          const cfBrowse = this.cfBrowseData[p.appType || 'radarr'];
-          if (cfBrowse?.groups) {
-            // Filter out groups excluded by variant selection
-            const excludeGroups = new Set();
-            if (p.variantGoldenRule === 'HD') excludeGroups.add('[Required] Golden Rule UHD');
-            else if (p.variantGoldenRule === 'UHD') excludeGroups.add('[Required] Golden Rule HD');
-            else if (p.variantGoldenRule === 'none') { excludeGroups.add('[Required] Golden Rule HD'); excludeGroups.add('[Required] Golden Rule UHD'); }
-            if (p.variantMisc === 'Standard') excludeGroups.add('[Optional] Miscellaneous SQP');
-            else if (p.variantMisc === 'SQP') excludeGroups.add('[Optional] Miscellaneous');
-            else if (p.variantMisc === 'none') { excludeGroups.add('[Optional] Miscellaneous'); excludeGroups.add('[Optional] Miscellaneous SQP'); }
+      // No cfGroupIncludes — TRaSH format doesn't use it
+      // Group includes are handled via group files, not profile JSON
 
-            const groupIncludes = [];
-            const seenGroups = new Set();
-            for (const group of cfBrowse.groups) {
-              if (excludeGroups.has(group.name)) continue;
-              const groupCFIds = new Set((group.custom_formats || []).map(cf => cf.trash_id));
-              const hasOptional = [...optionalTids].some(tid => groupCFIds.has(tid));
-              if (hasOptional && !seenGroups.has(group.trash_id)) {
-                seenGroups.add(group.trash_id);
-                groupIncludes.push({
-                  trash_id: group.trash_id,
-                  name: group.name
-                });
-              }
-            }
-            if (groupIncludes.length > 0) {
-              trashProfile.cfGroupIncludes = groupIncludes;
-            }
+      // Custom JSON formatting to match TRaSH style:
+      // - items array with inline sub-arrays and compact single-line entries
+      let json = JSON.stringify(trashProfile, null, 2);
+
+      // Reformat the "items" array to match TRaSH style
+      // Replace multi-line items arrays with inline: ["item1", "item2"]
+      json = json.replace(/"items": \[\n\s+("(?:[^"]+)"(?:,\n\s+"(?:[^"]+)")*)\n\s+\]/g, (match, inner) => {
+        const vals = inner.replace(/\n\s+/g, ' ');
+        return '"items": [' + vals + ']';
+      });
+      // Compact simple quality entries onto single lines
+      json = json.replace(/\{\n\s+"name": "([^"]+)",\n\s+"allowed": (true|false)\n\s+\}/g,
+        '{ "name": "$1", "allowed": $2 }');
+
+      return json;
+    },
+
+    // Generate group include snippets for enabled groups
+    generateGroupIncludes(p) {
+      const enabledGroups = p.enabledGroups || {};
+      if (Object.keys(enabledGroups).length === 0) return [];
+      const snippets = [];
+      // Use pbCategories (in builder) or raw groups from cfBrowseData
+      if (this.pbCategories?.length > 0) {
+        for (const cat of this.pbCategories) {
+          for (const g of (cat.groups || [])) {
+            if (!g.groupTrashId || !enabledGroups[g.groupTrashId]) continue;
+            snippets.push({
+              groupName: g.name, groupTrashId: g.groupTrashId,
+              profileName: p.name, profileTrashId: p.trashProfileId || '',
+              snippet: `"${p.name}": "${p.trashProfileId || 'GENERATE_ID'}"`,
+            });
           }
         }
+      } else {
+        // Fallback: raw group data from cfBrowseData
+        const groups = this.cfBrowseData[p.appType || 'radarr']?.groups || [];
+        for (const g of groups) {
+          const gid = g.trash_id;
+          if (!gid || !enabledGroups[gid]) continue;
+          snippets.push({
+            groupName: g.name, groupTrashId: gid,
+            profileName: p.name, profileTrashId: p.trashProfileId || '',
+            snippet: `"${p.name}": "${p.trashProfileId || 'GENERATE_ID'}"`,
+          });
+        }
       }
-
-      return JSON.stringify(trashProfile, null, 2);
+      return snippets;
     },
 
     getCFBrowseGroups(appType) {
@@ -7765,6 +8186,14 @@ function clonarr() {
         'Miscellaneous': 'cat-miscellaneous',
         'Optional': 'cat-optional',
         'Unwanted': 'cat-unwanted',
+        'Anime': 'cat-anime',
+        'French Audio Version': 'cat-french',
+        'French HQ Source Groups': 'cat-french',
+        'German Source Groups': 'cat-german',
+        'German Miscellaneous': 'cat-german',
+        'Language Profiles': 'cat-language',
+        'Movie Versions': 'cat-optional',
+        'Release Groups': 'cat-hq-release-groups',
       };
       return map[category] || 'cat-other';
     },

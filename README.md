@@ -43,9 +43,12 @@ Built as an alternative to config-driven tools like Recyclarr, with a visual int
 ### Profile Builder
 - Build custom profiles from scratch or start from a TRaSH template
 - Import from existing Arr instance profiles
-- Card-based settings (Scoring + Quality) with all TRaSH parameters
-- Full CF category browser with toggles, scores, Required/Optional classification
-- **Import/Export** — Recyclarr YAML (v7 + v8) and TRaSH JSON formats
+- **TRaSH group system** — formatItems (mandatory CFs) + CF groups (optional, toggleable)
+- **Three-state CF pills** — Req (required in group), Opt (optional in group), Fmt (in formatItems)
+- Each TRaSH CF group shown as separate card with group-level and per-CF state controls
+- Golden Rule and Miscellaneous variant dropdowns
+- **Export** — TRaSH JSON (strict official format) + optional group includes snippets + Recyclarr YAML (v7/v8)
+- **Import** — Recyclarr YAML, TRaSH JSON, Clonarr backup, Arr instance profiles
 
 ### Scoring Sandbox
 - Test how releases score against any profile — paste release names or search via Prowlarr

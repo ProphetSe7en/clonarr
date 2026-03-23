@@ -1,6 +1,6 @@
 FROM golang:1.24-alpine AS builder
 
-ARG VERSION=1.0.9-beta
+ARG VERSION=1.1.0-beta
 
 RUN apk add --no-cache git
 
@@ -10,7 +10,7 @@ RUN go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
 FROM alpine:3.21
 
-ARG VERSION=1.0.9-beta
+ARG VERSION=1.1.0-beta
 LABEL org.opencontainers.image.version=${VERSION}
 
 RUN apk add --no-cache git tzdata ca-certificates su-exec && \

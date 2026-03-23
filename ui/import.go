@@ -108,6 +108,11 @@ type ImportedProfile struct {
 	DefaultOnCFs          []string          `json:"defaultOnCFs,omitempty"`          // trash_ids that are optional but default-on (recommended)
 	BaselineCFs           []string          `json:"baselineCFs,omitempty"`           // CFs from TRaSH template defaults (core + default groups)
 	CoreCFIds             []string          `json:"coreCFIds,omitempty"`             // CFs from TRaSH profile coreCFs (for TRaSH JSON export)
+	FormatItemCFs         map[string]bool   `json:"formatItemCFs,omitempty"`         // CFs in formatItems (required/mandatory)
+	EnabledGroups         map[string]bool   `json:"enabledGroups,omitempty"`         // group trash_ids that are included
+	CfStateOverrides      map[string]string `json:"cfStateOverrides,omitempty"`      // per-CF state overrides (required/optional)
+	VariantGoldenRule     string            `json:"variantGoldenRule,omitempty"`     // builder: HD/UHD/none
+	VariantMisc           string            `json:"variantMisc,omitempty"`           // builder: Standard/SQP/none
 	TrashDescription      string            `json:"trashDescription,omitempty"`      // dev mode: profile description for TRaSH export
 	GroupNum              int               `json:"groupNum,omitempty"`              // dev mode: profile group number
 	ImportedAt            string            `json:"importedAt"`
