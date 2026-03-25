@@ -1021,7 +1021,7 @@
                 <span style="font-size:13px;color:#8b949e">Instance:</span>
                 <select class="input" style="width:250px"
                         x-model="maintenanceInstanceId"
-                        @change="cleanupInstanceId = maintenanceInstanceId; loadCleanupKeep(); loadCleanupCFNames(); if (maintenanceInstance) { testInstance(maintenanceInstance); loadInstanceProfiles(maintenanceInstance); }">
+                        @change="cleanupInstanceId = maintenanceInstanceId; loadCleanupKeep(); loadCleanupCFNames(); if (maintenanceInstance) { testInstance(maintenanceInstance); loadInstanceProfiles(maintenanceInstance); loadSyncHistory(maintenanceInstanceId); }">
                   <option value="">Select instance...</option>
                   <template x-for="inst in instancesOfType(tab.type)" :key="inst.id">
                     <option :value="inst.id" x-text="inst.name"></option>
@@ -4495,7 +4495,10 @@ function clonarr() {
       await this.loadConfig();
       await this.loadInstances();
       await this.loadTrashStatus();
-      if (this.instances.length > 0) {
+      const savedTab = localStorage.getItem('clonarr_tab');
+      if (savedTab && (savedTab === 'settings' || savedTab === 'about' || this.instances.some(i => i.type === savedTab))) {
+        this.currentTab = savedTab;
+      } else if (this.instances.length > 0) {
         this.currentTab = this.instances[0].type;
       }
       this.loadTrashProfiles('radarr');
@@ -7731,6 +7734,7 @@ function clonarr() {
 
     switchTab(tab) {
       this.currentTab = tab;
+      localStorage.setItem('clonarr_tab', tab);
       this.profileDetail = null;
       this.syncPlan = null;
       this.syncResult = null;
@@ -8818,33 +8822,32 @@ function clonarr() {
     },
 
     async resyncProfile(inst, sh) {
-      // Find the profile in trashProfiles to pass to openSyncModal
+      // Find the profile in trashProfiles
       const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === sh.profileTrashId);
       if (!profile) {
         alert('Profile no longer available in TRaSH data');
         return;
       }
-      this.syncForm = {
-        appType: inst.type,
-        instanceId: inst.id,
-        instanceName: inst.name,
-        profileTrashId: sh.profileTrashId,
-        profileName: sh.profileName,
-        arrProfileId: String(sh.arrProfileId),
-        newProfileName: sh.profileName,
-        importedProfileId: '',
-        behavior: { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' }
-      };
-      try {
-        const r = await fetch(`/api/instances/${inst.id}/profiles`);
-        this.arrProfiles = r.ok ? await r.json() : [];
-      } catch (e) {
-        this.arrProfiles = [];
+      // Navigate to profile detail with defaults
+      this.currentTab = inst.type;
+      await this.openProfileDetail(inst, profile);
+      // Restore optional CF selections from sync history
+      if (sh.selectedCFs && Object.keys(sh.selectedCFs).length > 0) {
+        const groups = this.profileDetail?.detail?.trashGroups || [];
+        for (const group of groups) {
+          let hasAnySynced = false;
+          for (const cf of group.cfs) {
+            if (!cf.required && sh.selectedCFs[cf.trashId]) {
+              this.selectedOptionalCFs[cf.trashId] = true;
+              hasAnySynced = true;
+            }
+          }
+          if (hasAnySynced && !group.defaultEnabled) {
+            this.selectedOptionalCFs['__grp_' + group.name] = true;
+          }
+        }
+        this.selectedOptionalCFs = { ...this.selectedOptionalCFs };
       }
-      this.syncMode = 'update';
-      this.syncPreview = null;
-      this.showSyncModal = true;
-      this.fetchSyncPreview();
     },
 
     async removeSyncHistory(instanceId, profileTrashId) {

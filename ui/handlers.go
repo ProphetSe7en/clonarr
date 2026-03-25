@@ -2235,6 +2235,11 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 	for _, a := range plan.CFActions {
 		allCFIDs = append(allCFIDs, a.TrashID)
 	}
+	// Build selectedCFs map from request (for resync restore)
+	selectedCFMap := make(map[string]bool, len(req.SelectedCFs))
+	for _, id := range req.SelectedCFs {
+		selectedCFMap[id] = true
+	}
 	entry := SyncHistoryEntry{
 		InstanceID:     inst.ID,
 		ProfileTrashID: req.ProfileTrashID,
@@ -2242,6 +2247,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		ArrProfileID:   req.ArrProfileID,
 		ArrProfileName: plan.ArrProfileName,
 		SyncedCFs:      allCFIDs,
+		SelectedCFs:    selectedCFMap,
 		CFsCreated:     result.CFsCreated,
 		CFsUpdated:     result.CFsUpdated,
 		ScoresUpdated:  result.ScoresUpdated,

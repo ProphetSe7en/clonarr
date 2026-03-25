@@ -106,16 +106,17 @@ type QSOverride struct {
 
 // SyncHistoryEntry records a completed sync operation.
 type SyncHistoryEntry struct {
-	InstanceID     string   `json:"instanceId"`
-	ProfileTrashID string   `json:"profileTrashId"`
-	ProfileName    string   `json:"profileName"`
-	ArrProfileID   int      `json:"arrProfileId"`
-	ArrProfileName string   `json:"arrProfileName"`
-	SyncedCFs      []string `json:"syncedCFs"`
-	CFsCreated     int      `json:"cfsCreated"`
-	CFsUpdated     int      `json:"cfsUpdated"`
-	ScoresUpdated  int      `json:"scoresUpdated"`
-	LastSync       string   `json:"lastSync"`
+	InstanceID     string            `json:"instanceId"`
+	ProfileTrashID string            `json:"profileTrashId"`
+	ProfileName    string            `json:"profileName"`
+	ArrProfileID   int               `json:"arrProfileId"`
+	ArrProfileName string            `json:"arrProfileName"`
+	SyncedCFs      []string          `json:"syncedCFs"`
+	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
+	CFsCreated     int               `json:"cfsCreated"`
+	CFsUpdated     int               `json:"cfsUpdated"`
+	ScoresUpdated  int               `json:"scoresUpdated"`
+	LastSync       string            `json:"lastSync"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.
