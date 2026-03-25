@@ -1473,10 +1473,10 @@ func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, a
 		return comp
 	}
 
-	// Build name → ArrCF map
+	// Build name → ArrCF map (case-insensitive keys for matching)
 	arrByName := make(map[string]*ArrCF)
 	for i := range arrCFs {
-		arrByName[arrCFs[i].Name] = &arrCFs[i]
+		arrByName[strings.ToLower(arrCFs[i].Name)] = &arrCFs[i]
 	}
 
 	// Fetch the specific Arr profile to get scores
@@ -1528,7 +1528,7 @@ func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, a
 			desiredScore = s
 		}
 
-		arrCF, exists := arrByName[trashCF.Name]
+		arrCF, exists := arrByName[strings.ToLower(trashCF.Name)]
 		if !exists {
 			comp.CFStates[cfTrashID] = ArrCFState{
 				Exists:       false,
@@ -1596,7 +1596,7 @@ func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, a
 					Default:      cfEntry.Default,
 					DesiredScore: desiredScore,
 				}
-				if arrCF, ok := arrByName[cfEntry.Name]; ok {
+				if arrCF, ok := arrByName[strings.ToLower(cfEntry.Name)]; ok {
 					ocs.Exists = true
 					ocs.ArrID = arrCF.ID
 					ocs.CurrentScore = arrScores[arrCF.ID]
@@ -1787,7 +1787,7 @@ func (app *App) handleSyncSingleCF(w http.ResponseWriter, r *http.Request) {
 	}
 	var arrCFID int
 	for _, cf := range arrCFs {
-		if cf.Name == trashCF.Name {
+		if strings.EqualFold(cf.Name, trashCF.Name) {
 			arrCFID = cf.ID
 			break
 		}
@@ -1804,6 +1804,13 @@ func (app *App) handleSyncSingleCF(w http.ResponseWriter, r *http.Request) {
 		}
 		arrCFID = created.ID
 		action = "created"
+	} else {
+		// Update existing CF specs to match TRaSH (handles name case differences and spec changes)
+		updatedCF := trashCFToArr(trashCF)
+		if _, err := client.UpdateCustomFormat(arrCFID, updatedCF); err != nil {
+			writeError(w, 502, "Failed to update CF: "+err.Error())
+			return
+		}
 	}
 
 	// Set score in profile

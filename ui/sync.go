@@ -178,10 +178,10 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 		return nil, fmt.Errorf("list CFs: %w", err)
 	}
 
-	// Build name → existing CF map
+	// Build name → existing CF map (case-insensitive keys for matching)
 	existingByName := make(map[string]*ArrCF)
 	for i := range existingCFs {
-		existingByName[existingCFs[i].Name] = &existingCFs[i]
+		existingByName[strings.ToLower(existingCFs[i].Name)] = &existingCFs[i]
 	}
 
 	plan := &SyncPlan{
@@ -221,7 +221,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			continue
 		}
 
-		existing, found := existingByName[cfName]
+		existing, found := existingByName[strings.ToLower(cfName)]
 		if !found {
 			// Add mode: controls whether missing CFs get created
 			switch behavior.AddMode {

@@ -213,6 +213,12 @@ func (cs *configStore) Get() Config {
 		cfg.SyncHistory[i] = sh
 		cfg.SyncHistory[i].SyncedCFs = make([]string, len(sh.SyncedCFs))
 		copy(cfg.SyncHistory[i].SyncedCFs, sh.SyncedCFs)
+		if len(sh.SelectedCFs) > 0 {
+			cfg.SyncHistory[i].SelectedCFs = make(map[string]bool, len(sh.SelectedCFs))
+			for k, v := range sh.SelectedCFs {
+				cfg.SyncHistory[i].SelectedCFs[k] = v
+			}
+		}
 	}
 	// Deep-copy QualitySizeOverrides (nested map)
 	if cs.config.QualitySizeOverrides != nil {

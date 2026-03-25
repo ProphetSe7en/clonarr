@@ -8990,9 +8990,10 @@ function clonarr() {
         for (const group of groups) {
           let hasAnySynced = false;
           for (const cf of group.cfs) {
-            if (!cf.required && sh.selectedCFs[cf.trashId]) {
-              this.selectedOptionalCFs[cf.trashId] = true;
-              hasAnySynced = true;
+            if (!cf.required) {
+              // Set to true if was synced, false if not (overrides initSelectedCFs defaults)
+              this.selectedOptionalCFs[cf.trashId] = !!sh.selectedCFs[cf.trashId];
+              if (sh.selectedCFs[cf.trashId]) hasAnySynced = true;
             }
           }
           if (hasAnySynced && !group.defaultEnabled) {
@@ -9049,7 +9050,6 @@ function clonarr() {
       return !this.pdOverrides.language.enabled || !this.pdOverrides.upgradeAllowed.enabled ||
              !this.pdOverrides.minFormatScore.enabled || !this.pdOverrides.minUpgradeFormatScore.enabled ||
              !this.pdOverrides.cutoffFormatScore.enabled ||
-             this.pdOverrides.cutoffFormatScore.enabled ||
              (this.pdOverrides.cutoffQuality && this.pdOverrides.cutoffQuality !== (this.profileDetail?.detail?.profile?.cutoff || ''));
     },
 

@@ -941,8 +941,8 @@ func extractFormatItemsOrder(path string) ([]string, error) {
 		}
 		if key, ok := t.(string); ok {
 			order = append(order, key)
-			// Skip the value
-			dec.Token()
+			// Skip the value — assumes scalar (string). TRaSH formatItems are always {"name": "trash_id"}.
+			dec.Token() //nolint: errcheck
 		}
 	}
 	return order, nil
