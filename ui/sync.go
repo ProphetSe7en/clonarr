@@ -72,6 +72,8 @@ type SyncRequest struct {
 	Overrides *SyncOverrides `json:"overrides,omitempty"`
 	// Sync behavior rules (nil = defaults: add_missing, remove_custom, reset_to_zero)
 	Behavior *SyncBehavior `json:"behavior,omitempty"`
+	// Per-CF score overrides (trash_id → score)
+	ScoreOverrides map[string]int `json:"scoreOverrides,omitempty"`
 }
 
 // SyncOverrides allows users to override specific profile settings from TRaSH defaults.
@@ -160,6 +162,16 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 
 	if scoreCtx == "" {
 		scoreCtx = "default"
+	}
+
+	// Merge user score overrides into cfScoreOverrides
+	if len(req.ScoreOverrides) > 0 {
+		if cfScoreOverrides == nil {
+			cfScoreOverrides = make(map[string]int, len(req.ScoreOverrides))
+		}
+		for tid, score := range req.ScoreOverrides {
+			cfScoreOverrides[tid] = score
+		}
 	}
 
 	// Resolve sync behavior rules
@@ -530,6 +542,16 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 
 	if scoreCtx == "" {
 		scoreCtx = "default"
+	}
+
+	// Merge user score overrides into cfScoreOverrides
+	if len(req.ScoreOverrides) > 0 {
+		if cfScoreOverrides == nil {
+			cfScoreOverrides = make(map[string]int, len(req.ScoreOverrides))
+		}
+		for tid, score := range req.ScoreOverrides {
+			cfScoreOverrides[tid] = score
+		}
 	}
 
 	client := NewArrClient(instance.URL, instance.APIKey)
@@ -1317,12 +1339,24 @@ func findProfile(ad *AppData, trashID string) *TrashQualityProfile {
 
 // --- Custom CF helpers for sync ---
 
-// customCFToArr converts a CustomCF (specs already in Arr format) to an ArrCF for create/update.
+// customCFToArr converts a CustomCF to an ArrCF for create/update.
+// Specification fields are normalized to Arr array format in case they were
+// stored in TRaSH object format ({"value": X} → [{"name":"value","value":X}]).
 func customCFToArr(cf *CustomCF) *ArrCF {
+	specs := make([]ArrSpecification, len(cf.Specifications))
+	for i, s := range cf.Specifications {
+		specs[i] = ArrSpecification{
+			Name:           s.Name,
+			Implementation: s.Implementation,
+			Negate:         s.Negate,
+			Required:       s.Required,
+			Fields:         convertFieldsToArr(s.Fields),
+		}
+	}
 	return &ArrCF{
 		Name:                            cf.Name,
 		IncludeCustomFormatWhenRenaming: cf.IncludeInRename,
-		Specifications:                  cf.Specifications,
+		Specifications:                  specs,
 	}
 }
 

@@ -32,6 +32,25 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
+// decodeJSON reads JSON from the request body into dst.
+// Returns false and writes a 400 error if decoding fails.
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		writeError(w, 400, "Invalid JSON")
+		return false
+	}
+	return true
+}
+
+// requireInstance looks up an instance by ID and writes a 404 if not found.
+func (app *App) requireInstance(w http.ResponseWriter, id string) (Instance, bool) {
+	inst, ok := app.config.GetInstance(id)
+	if !ok {
+		writeError(w, 404, "Instance not found")
+	}
+	return inst, ok
+}
+
 // --- Config ---
 
 func (app *App) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -58,12 +77,12 @@ func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TrashRepo    *TrashRepo      `json:"trashRepo,omitempty"`
 		PullInterval *string         `json:"pullInterval,omitempty"`
-		DevMode      *bool           `json:"devMode,omitempty"`
-		DebugLogging *bool           `json:"debugLogging"`
-		Prowlarr     *ProwlarrConfig `json:"prowlarr,omitempty"`
+		DevMode         *bool           `json:"devMode,omitempty"`
+		AdvancedScoring *bool           `json:"advancedScoring,omitempty"`
+		DebugLogging    *bool           `json:"debugLogging"`
+		Prowlarr        *ProwlarrConfig `json:"prowlarr,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -83,6 +102,9 @@ func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.DevMode != nil {
 			cfg.DevMode = *req.DevMode
+		}
+		if req.AdvancedScoring != nil {
+			cfg.AdvancedScoring = *req.AdvancedScoring
 		}
 		if req.DebugLogging != nil {
 			cfg.DebugLogging = *req.DebugLogging
@@ -224,9 +246,8 @@ func (app *App) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -289,8 +310,7 @@ func (app *App) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		URL    string `json:"url"`
 		APIKey string `json:"apiKey"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.URL == "" || req.APIKey == "" {
@@ -330,9 +350,8 @@ func (app *App) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleInstanceProfiles(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -348,9 +367,8 @@ func (app *App) handleInstanceProfiles(w http.ResponseWriter, r *http.Request) {
 // handleQualityDefinitions returns quality names from an Arr instance for the quality builder.
 func (app *App) handleQualityDefinitions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 	client := NewArrClient(inst.URL, inst.APIKey)
@@ -382,9 +400,8 @@ func (app *App) handleInstanceProfileExport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -545,9 +562,8 @@ func (app *App) handleInstanceProfileExport(w http.ResponseWriter, r *http.Reque
 
 func (app *App) handleInstanceLanguages(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -566,9 +582,8 @@ func (app *App) handleInstanceLanguages(w http.ResponseWriter, r *http.Request) 
 // Mode 2 (CFs only): cfIds selects specific CFs without profiles.
 func (app *App) handleInstanceBackup(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -578,8 +593,7 @@ func (app *App) handleInstanceBackup(w http.ResponseWriter, r *http.Request) {
 		ExtraCFIDs []int `json:"extraCfIds"`
 		CFIDs      []int `json:"cfIds"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if len(req.ProfileIDs) == 0 && len(req.CFIDs) == 0 {
@@ -663,9 +677,8 @@ func (app *App) handleInstanceBackup(w http.ResponseWriter, r *http.Request) {
 // dryRun query param: if "true", returns a preview without applying.
 func (app *App) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -814,9 +827,8 @@ func (app *App) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleInstanceCFs(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -831,9 +843,8 @@ func (app *App) handleInstanceCFs(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleInstanceQualitySizes(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -848,9 +859,8 @@ func (app *App) handleInstanceQualitySizes(w http.ResponseWriter, r *http.Reques
 
 func (app *App) handleGetInstanceNaming(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -865,9 +875,8 @@ func (app *App) handleGetInstanceNaming(w http.ResponseWriter, r *http.Request) 
 
 func (app *App) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -882,8 +891,7 @@ func (app *App) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 		Anime   string `json:"anime,omitempty"`
 		Special string `json:"special,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -990,9 +998,8 @@ func (app *App) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleSyncQualitySizes(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, ok := app.config.GetInstance(id)
+	inst, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -1001,8 +1008,7 @@ func (app *App) handleSyncQualitySizes(w http.ResponseWriter, r *http.Request) {
 		Definitions []ArrQualityDefinition `json:"definitions"`
 		Type        string                 `json:"type"` // convenience: "movie", "anime", etc — builds definitions from TRaSH data
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -1107,9 +1113,8 @@ func (app *App) handleGetQSOverrides(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleSaveQSOverrides(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	_, ok := app.config.GetInstance(id)
+	_, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -1151,9 +1156,8 @@ func (app *App) handleGetQSAutoSync(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleSaveQSAutoSync(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	_, ok := app.config.GetInstance(id)
+	_, ok := app.requireInstance(w, id)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -1788,9 +1792,8 @@ func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, a
 // handleCompareProfile handles GET /api/instances/{id}/compare?arrProfileId=X&trashProfileId=Y
 func (app *App) handleCompareProfile(w http.ResponseWriter, r *http.Request) {
 	instID := r.PathValue("id")
-	inst, ok := app.config.GetInstance(instID)
+	inst, ok := app.requireInstance(w, instID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -1839,9 +1842,8 @@ func (app *App) handleCompareProfile(w http.ResponseWriter, r *http.Request) {
 // Removes specified CF scores from an Arr quality profile (sets score to 0).
 func (app *App) handleRemoveProfileCFs(w http.ResponseWriter, r *http.Request) {
 	instID := r.PathValue("id")
-	inst, ok := app.config.GetInstance(instID)
+	inst, ok := app.requireInstance(w, instID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -1850,8 +1852,7 @@ func (app *App) handleRemoveProfileCFs(w http.ResponseWriter, r *http.Request) {
 		CFIDs        []int `json:"cfIds"` // Arr CF IDs to remove (set score to 0)
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.ArrProfileID == 0 || len(req.CFIDs) == 0 {
@@ -1904,9 +1905,8 @@ func (app *App) handleRemoveProfileCFs(w http.ResponseWriter, r *http.Request) {
 // Syncs a single CF: creates it if missing, then sets the correct score in the profile.
 func (app *App) handleSyncSingleCF(w http.ResponseWriter, r *http.Request) {
 	instID := r.PathValue("id")
-	inst, ok := app.config.GetInstance(instID)
+	inst, ok := app.requireInstance(w, instID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -1916,8 +1916,7 @@ func (app *App) handleSyncSingleCF(w http.ResponseWriter, r *http.Request) {
 		Score        int    `json:"score"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.ArrProfileID == 0 || req.TrashID == "" {
@@ -2117,8 +2116,7 @@ func (app *App) handleImportProfile(w http.ResponseWriter, r *http.Request) {
 		Name    string `json:"name"`    // optional override name
 		AppType string `json:"appType"` // for TRaSH JSON detection context (from active tab)
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	content := strings.TrimSpace(req.YAML)
@@ -2319,14 +2317,12 @@ func getSyncMutex(instanceID string) *sync.Mutex {
 func (app *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
 	var req SyncRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
-	inst, ok := app.config.GetInstance(req.InstanceID)
+	inst, ok := app.requireInstance(w, req.InstanceID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -2363,14 +2359,12 @@ func (app *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
 	var req SyncRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
-	inst, ok := app.config.GetInstance(req.InstanceID)
+	inst, ok := app.requireInstance(w, req.InstanceID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -2439,6 +2433,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		SelectedCFs:    selectedCFMap,
 		Overrides:      req.Overrides,
 		Behavior:       req.Behavior,
+		ScoreOverrides: req.ScoreOverrides,
 		CFsCreated:     result.CFsCreated,
 		CFsUpdated:     result.CFsUpdated,
 		ScoresUpdated:  result.ScoresUpdated,
@@ -2492,6 +2487,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 			SelectedCFs:       req.SelectedCFs,
 			Behavior:          req.Behavior,
 			Overrides:         req.Overrides,
+			ScoreOverrides:    req.ScoreOverrides,
 		})
 	})
 
@@ -2666,9 +2662,8 @@ type CleanupItem struct {
 // POST /api/instances/{id}/cleanup/scan
 func (app *App) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 	instanceID := r.PathValue("id")
-	inst, ok := app.config.GetInstance(instanceID)
+	inst, ok := app.requireInstance(w, instanceID)
 	if !ok {
-		writeError(w, http.StatusNotFound, "Instance not found")
 		return
 	}
 
@@ -2677,8 +2672,7 @@ func (app *App) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 		Action string   `json:"action"`
 		Keep   []string `json:"keep"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -2734,9 +2728,8 @@ func (app *App) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 // POST /api/instances/{id}/cleanup/apply
 func (app *App) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 	instanceID := r.PathValue("id")
-	inst, ok := app.config.GetInstance(instanceID)
+	inst, ok := app.requireInstance(w, instanceID)
 	if !ok {
-		writeError(w, http.StatusNotFound, "Instance not found")
 		return
 	}
 
@@ -2753,8 +2746,7 @@ func (app *App) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 		Action string `json:"action"`
 		IDs    []int  `json:"ids"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3160,8 +3152,7 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		NotifyOnRepoUpdate bool   `json:"notifyOnRepoUpdate"`
 		DiscordWebhook     string `json:"discordWebhook"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3370,8 +3361,7 @@ func (app *App) handleCreateCustomCFs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		CFs []CustomCF `json:"cfs"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if len(req.CFs) == 0 {
@@ -3466,8 +3456,7 @@ func (app *App) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Reque
 		Category   string   `json:"category"`   // target category
 		AppType    string   `json:"appType"`     // "radarr" or "sonarr"
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -3476,9 +3465,8 @@ func (app *App) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	inst, ok := app.config.GetInstance(req.InstanceID)
+	inst, ok := app.requireInstance(w, req.InstanceID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -3648,8 +3636,7 @@ func (app *App) handleScoringProwlarrSearch(w http.ResponseWriter, r *http.Reque
 		Categories []int  `json:"categories"`
 		IndexerIDs []int  `json:"indexerIds"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Query == "" {
@@ -3706,8 +3693,7 @@ func (app *App) handleScoringParse(w http.ResponseWriter, r *http.Request) {
 		InstanceID string `json:"instanceId"`
 		Title      string `json:"title"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.InstanceID == "" || req.Title == "" {
@@ -3715,9 +3701,8 @@ func (app *App) handleScoringParse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, ok := app.config.GetInstance(req.InstanceID)
+	inst, ok := app.requireInstance(w, req.InstanceID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -3735,8 +3720,7 @@ func (app *App) handleScoringParseBatch(w http.ResponseWriter, r *http.Request) 
 		InstanceID string   `json:"instanceId"`
 		Titles     []string `json:"titles"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.InstanceID == "" || len(req.Titles) == 0 {
@@ -3748,9 +3732,8 @@ func (app *App) handleScoringParseBatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	inst, ok := app.config.GetInstance(req.InstanceID)
+	inst, ok := app.requireInstance(w, req.InstanceID)
 	if !ok {
-		writeError(w, 404, "Instance not found")
 		return
 	}
 
@@ -3992,9 +3975,8 @@ func (app *App) handleScoringProfileScores(w http.ResponseWriter, r *http.Reques
 			writeError(w, 400, "Invalid instance profile key")
 			return
 		}
-		inst, ok := app.config.GetInstance(instanceID)
+		inst, ok := app.requireInstance(w, instanceID)
 		if !ok {
-			writeError(w, 404, "Instance not found")
 			return
 		}
 		client := NewArrClient(inst.URL, inst.APIKey)
@@ -4028,8 +4010,7 @@ func (app *App) handleDebugLog(w http.ResponseWriter, r *http.Request) {
 		Message  string `json:"message"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(400)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Category == "" {
