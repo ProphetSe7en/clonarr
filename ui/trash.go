@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mitchellh/copystructure"
 )
 
 // --- TRaSH Data Types ---
@@ -979,30 +981,11 @@ func SnapshotAppData(snap *TrashData, app string) *AppData {
 	default:
 		return nil
 	}
-	cp := *src
-	if src.CustomFormats != nil {
-		cp.CustomFormats = make(map[string]*TrashCF, len(src.CustomFormats))
-		for k, v := range src.CustomFormats {
-			cp.CustomFormats[k] = v
-		}
+	copied, err := copystructure.Copy(src)
+	if err != nil {
+		log.Fatalf("BUG: AppData deep-copy failed: %v", err)
 	}
-	if src.CFGroups != nil {
-		cp.CFGroups = make([]*TrashCFGroup, len(src.CFGroups))
-		copy(cp.CFGroups, src.CFGroups)
-	}
-	if src.Profiles != nil {
-		cp.Profiles = make([]*TrashQualityProfile, len(src.Profiles))
-		copy(cp.Profiles, src.Profiles)
-	}
-	if src.ProfileGroups != nil {
-		cp.ProfileGroups = make([]*ProfileGroup, len(src.ProfileGroups))
-		copy(cp.ProfileGroups, src.ProfileGroups)
-	}
-	if src.QualitySizes != nil {
-		cp.QualitySizes = make([]*TrashQualitySize, len(src.QualitySizes))
-		copy(cp.QualitySizes, src.QualitySizes)
-	}
-	return &cp
+	return copied.(*AppData)
 }
 
 // ResolvedCF is a single CF with resolved score.
