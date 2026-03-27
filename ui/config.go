@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/mitchellh/copystructure"
 )
 
 // Config holds the full application configuration, persisted to JSON.
@@ -16,6 +18,7 @@ type Config struct {
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
 	PullInterval         string                           `json:"pullInterval"` // Go duration (e.g. "24h", "1h", "0" to disable)
 	DevMode              bool                             `json:"devMode"`      // Enable TRaSH developer tools (TRaSH JSON export)
+	AdvancedScoring      bool                             `json:"advancedScoring"` // Allow per-CF score overrides on TRaSH profiles
 	DebugLogging         bool                             `json:"debugLogging"` // Write detailed operations to /config/debug.log
 	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
 	QualitySizeAutoSync  map[string]QSAutoSync             `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
@@ -54,6 +57,7 @@ type AutoSyncRule struct {
 	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
 	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
 	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
+	ScoreOverrides    map[string]int `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
 	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
 	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
 	LastSyncError     string         `json:"lastSyncError,omitempty"`
@@ -117,6 +121,7 @@ type SyncHistoryEntry struct {
 	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
 	Overrides      *SyncOverrides    `json:"overrides,omitempty"`
 	Behavior       *SyncBehavior     `json:"behavior,omitempty"`
+	ScoreOverrides map[string]int    `json:"scoreOverrides,omitempty"`
 	CFsCreated     int               `json:"cfsCreated"`
 	CFsUpdated     int               `json:"cfsUpdated"`
 	ScoresUpdated  int               `json:"scoresUpdated"`
@@ -209,76 +214,11 @@ func (cs *configStore) saveLocked() error {
 func (cs *configStore) Get() Config {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	cfg := *cs.config
-	cfg.Instances = make([]Instance, len(cs.config.Instances))
-	copy(cfg.Instances, cs.config.Instances)
-	cfg.SyncHistory = make([]SyncHistoryEntry, len(cs.config.SyncHistory))
-	for i, sh := range cs.config.SyncHistory {
-		cfg.SyncHistory[i] = sh
-		cfg.SyncHistory[i].SyncedCFs = make([]string, len(sh.SyncedCFs))
-		copy(cfg.SyncHistory[i].SyncedCFs, sh.SyncedCFs)
-		if len(sh.SelectedCFs) > 0 {
-			cfg.SyncHistory[i].SelectedCFs = make(map[string]bool, len(sh.SelectedCFs))
-			for k, v := range sh.SelectedCFs {
-				cfg.SyncHistory[i].SelectedCFs[k] = v
-			}
-		}
-		if sh.Overrides != nil {
-			o := *sh.Overrides
-			cfg.SyncHistory[i].Overrides = &o
-		}
-		if sh.Behavior != nil {
-			b := *sh.Behavior
-			cfg.SyncHistory[i].Behavior = &b
-		}
+	copied, err := copystructure.Copy(cs.config)
+	if err != nil {
+		log.Fatalf("BUG: config deep-copy failed: %v", err)
 	}
-	// Deep-copy QualitySizeOverrides (nested map)
-	if cs.config.QualitySizeOverrides != nil {
-		cfg.QualitySizeOverrides = make(map[string]map[string]QSOverride, len(cs.config.QualitySizeOverrides))
-		for k, v := range cs.config.QualitySizeOverrides {
-			inner := make(map[string]QSOverride, len(v))
-			for ik, iv := range v {
-				inner[ik] = iv
-			}
-			cfg.QualitySizeOverrides[k] = inner
-		}
-	}
-	// Deep-copy QualitySizeAutoSync
-	if cs.config.QualitySizeAutoSync != nil {
-		cfg.QualitySizeAutoSync = make(map[string]QSAutoSync, len(cs.config.QualitySizeAutoSync))
-		for k, v := range cs.config.QualitySizeAutoSync {
-			cfg.QualitySizeAutoSync[k] = v
-		}
-	}
-	// Deep-copy CleanupKeep
-	if cs.config.CleanupKeep != nil {
-		cfg.CleanupKeep = make(map[string][]string, len(cs.config.CleanupKeep))
-		for k, v := range cs.config.CleanupKeep {
-			cp := make([]string, len(v))
-			copy(cp, v)
-			cfg.CleanupKeep[k] = cp
-		}
-	}
-	// Deep-copy AutoSync rules
-	if len(cs.config.AutoSync.Rules) > 0 {
-		cfg.AutoSync.Rules = make([]AutoSyncRule, len(cs.config.AutoSync.Rules))
-		for i, r := range cs.config.AutoSync.Rules {
-			cfg.AutoSync.Rules[i] = r
-			if len(r.SelectedCFs) > 0 {
-				cfg.AutoSync.Rules[i].SelectedCFs = make([]string, len(r.SelectedCFs))
-				copy(cfg.AutoSync.Rules[i].SelectedCFs, r.SelectedCFs)
-			}
-			if r.Behavior != nil {
-				b := *r.Behavior
-				cfg.AutoSync.Rules[i].Behavior = &b
-			}
-			if r.Overrides != nil {
-				o := *r.Overrides
-				cfg.AutoSync.Rules[i].Overrides = &o
-			}
-		}
-	}
-	return cfg
+	return *copied.(*Config)
 }
 
 // Set replaces the config and saves to disk.

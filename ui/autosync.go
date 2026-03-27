@@ -88,6 +88,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		SelectedCFs:    rule.SelectedCFs,
 		Behavior:       rule.Behavior,
 		Overrides:      rule.Overrides,
+		ScoreOverrides: rule.ScoreOverrides,
 	}
 	if rule.ProfileSource == "imported" {
 		req.ImportedProfileID = rule.ImportedProfileID

@@ -58,9 +58,10 @@ func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TrashRepo    *TrashRepo      `json:"trashRepo,omitempty"`
 		PullInterval *string         `json:"pullInterval,omitempty"`
-		DevMode      *bool           `json:"devMode,omitempty"`
-		DebugLogging *bool           `json:"debugLogging"`
-		Prowlarr     *ProwlarrConfig `json:"prowlarr,omitempty"`
+		DevMode         *bool           `json:"devMode,omitempty"`
+		AdvancedScoring *bool           `json:"advancedScoring,omitempty"`
+		DebugLogging    *bool           `json:"debugLogging"`
+		Prowlarr        *ProwlarrConfig `json:"prowlarr,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "Invalid JSON")
@@ -83,6 +84,9 @@ func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.DevMode != nil {
 			cfg.DevMode = *req.DevMode
+		}
+		if req.AdvancedScoring != nil {
+			cfg.AdvancedScoring = *req.AdvancedScoring
 		}
 		if req.DebugLogging != nil {
 			cfg.DebugLogging = *req.DebugLogging
@@ -2439,6 +2443,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		SelectedCFs:    selectedCFMap,
 		Overrides:      req.Overrides,
 		Behavior:       req.Behavior,
+		ScoreOverrides: req.ScoreOverrides,
 		CFsCreated:     result.CFsCreated,
 		CFsUpdated:     result.CFsUpdated,
 		ScoresUpdated:  result.ScoresUpdated,
@@ -2492,6 +2497,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 			SelectedCFs:       req.SelectedCFs,
 			Behavior:          req.Behavior,
 			Overrides:         req.Overrides,
+			ScoreOverrides:    req.ScoreOverrides,
 		})
 	})
 
