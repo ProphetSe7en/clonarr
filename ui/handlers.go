@@ -233,9 +233,13 @@ func (app *App) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	client := NewArrClient(inst.URL, inst.APIKey)
 	status, err := client.TestConnection()
 	if err != nil {
+		errMsg := err.Error()
+		if isConnectionError(err) {
+			errMsg = inst.Name + " is not reachable — check that the instance is running and the URL is correct"
+		}
 		writeJSON(w, map[string]any{
 			"connected": false,
-			"error":     err.Error(),
+			"error":     errMsg,
 		})
 		return
 	}
@@ -304,9 +308,13 @@ func (app *App) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	client := NewArrClient(req.URL, req.APIKey)
 	status, err := client.TestConnection()
 	if err != nil {
+		errMsg := err.Error()
+		if isConnectionError(err) {
+			errMsg = "Instance is not reachable — check that the URL is correct and the instance is running"
+		}
 		writeJSON(w, map[string]any{
 			"connected": false,
-			"error":     err.Error(),
+			"error":     errMsg,
 		})
 		return
 	}
@@ -1809,7 +1817,7 @@ func (app *App) handleCompareProfile(w http.ResponseWriter, r *http.Request) {
 	var lastSyncedCFs []string
 	history := app.config.GetSyncHistory(inst.ID)
 	for _, sh := range history {
-		if sh.ProfileTrashID == trashProfileID {
+		if sh.ArrProfileID == arrProfileID {
 			lastSyncedCFs = sh.SyncedCFs
 			break
 		}
@@ -2333,7 +2341,7 @@ func (app *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 		imported = &p
 	}
 	customCFs := app.customCFs.List(inst.Type)
-	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ProfileTrashID, req.Behavior)
+	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
 	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs)
 	if err != nil {
 		log.Printf("Dry-run error for %s: %v", inst.Name, err)
@@ -2386,7 +2394,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		imported = &p
 	}
 	customCFs := app.customCFs.List(inst.Type)
-	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ProfileTrashID, req.Behavior)
+	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
 	behavior := ResolveSyncBehavior(req.Behavior)
 	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs)
 	if err != nil {
@@ -2402,8 +2410,9 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.debugLog.Logf(LogSync, "Apply: %q → %s | %d created, %d updated, %d scores | %d errors",
-		plan.ProfileName, inst.Name, result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, len(result.Errors))
+	app.debugLog.Logf(LogSync, "Apply: %q → %s | arrProfileId=%d | mode=%s | %d created, %d updated, %d scores | %d errors",
+		plan.ProfileName, inst.Name, req.ArrProfileID, func() string { if req.ArrProfileID == 0 { return "create" }; return "update" }(),
+		result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, len(result.Errors))
 	if len(result.Errors) > 0 {
 		for _, e := range result.Errors {
 			app.debugLog.Logf(LogError, "Apply error: %s", e)
@@ -2428,6 +2437,8 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		ArrProfileName: plan.ArrProfileName,
 		SyncedCFs:      allCFIDs,
 		SelectedCFs:    selectedCFMap,
+		Overrides:      req.Overrides,
+		Behavior:       req.Behavior,
 		CFsCreated:     result.CFsCreated,
 		CFsUpdated:     result.CFsUpdated,
 		ScoresUpdated:  result.ScoresUpdated,
@@ -2437,10 +2448,52 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 	if result.ProfileCreated {
 		entry.ArrProfileID = result.ArrProfileID
 		entry.ArrProfileName = result.ArrProfileName
+		// Update auto-sync rule that has arrProfileId=0 (was waiting for profile creation)
+		app.config.Update(func(cfg *Config) {
+			for i := range cfg.AutoSync.Rules {
+				r := &cfg.AutoSync.Rules[i]
+				if r.ArrProfileID == 0 && r.InstanceID == req.InstanceID &&
+					((r.TrashProfileID != "" && r.TrashProfileID == req.ProfileTrashID) ||
+						(r.ImportedProfileID != "" && r.ImportedProfileID == req.ImportedProfileID)) {
+					log.Printf("Sync: updating auto-sync rule %s with new Arr profile ID %d", r.ID, result.ArrProfileID)
+					r.ArrProfileID = result.ArrProfileID
+					return
+				}
+			}
+		})
 	}
 	if err := app.config.UpsertSyncHistory(entry); err != nil {
 		log.Printf("Failed to save sync history: %v", err)
 	}
+
+	// Ensure an auto-sync rule exists for this profile (disabled by default)
+	arrID := req.ArrProfileID
+	if result.ProfileCreated {
+		arrID = result.ArrProfileID
+	}
+	app.config.Update(func(cfg *Config) {
+		for _, r := range cfg.AutoSync.Rules {
+			if r.InstanceID == req.InstanceID && r.ArrProfileID == arrID {
+				return // rule already exists
+			}
+		}
+		source := "trash"
+		if req.ImportedProfileID != "" {
+			source = "imported"
+		}
+		cfg.AutoSync.Rules = append(cfg.AutoSync.Rules, AutoSyncRule{
+			ID:                generateID(),
+			Enabled:           false,
+			InstanceID:        req.InstanceID,
+			ProfileSource:     source,
+			TrashProfileID:    req.ProfileTrashID,
+			ImportedProfileID: req.ImportedProfileID,
+			ArrProfileID:      arrID,
+			SelectedCFs:       req.SelectedCFs,
+			Behavior:          req.Behavior,
+			Overrides:         req.Overrides,
+		})
+	})
 
 	writeJSON(w, result)
 }
@@ -2449,14 +2502,14 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 
 // getLastSyncedCFs returns the CF snapshot from the previous sync for "add_new" mode.
 // Returns nil if not needed (behavior is not "add_new") or no history exists.
-func (app *App) getLastSyncedCFs(instanceID, profileTrashID string, behavior *SyncBehavior) []string {
+func (app *App) getLastSyncedCFs(instanceID string, arrProfileID int, behavior *SyncBehavior) []string {
 	b := ResolveSyncBehavior(behavior)
 	if b.AddMode != "add_new" {
 		return nil
 	}
 	history := app.config.GetSyncHistory(instanceID)
 	for _, h := range history {
-		if h.ProfileTrashID == profileTrashID {
+		if h.ArrProfileID == arrProfileID {
 			return h.SyncedCFs
 		}
 	}
@@ -2469,6 +2522,58 @@ func (app *App) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Missing instance ID")
 		return
 	}
+	// Clean up stale entries for this instance before returning (only if instance is reachable)
+	inst, ok := app.config.GetInstance(id)
+	if ok {
+		client := NewArrClient(inst.URL, inst.APIKey)
+		profiles, err := client.ListProfiles()
+		if err != nil {
+			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
+		} else {
+			validIDs := make(map[int]bool)
+			for _, p := range profiles {
+				validIDs[p.ID] = true
+			}
+			var events []CleanupEvent
+			app.config.Update(func(cfg *Config) {
+				cleanedHistory := make([]SyncHistoryEntry, 0, len(cfg.SyncHistory))
+				for _, h := range cfg.SyncHistory {
+					if h.InstanceID == id && !validIDs[h.ArrProfileID] {
+						log.Printf("Cleanup: removing stale sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, inst.Name)
+						events = append(events, CleanupEvent{
+							ProfileName:  h.ProfileName,
+							InstanceName: inst.Name,
+							ArrProfileID: h.ArrProfileID,
+							Timestamp:    time.Now().Format(time.RFC3339),
+						})
+						continue
+					}
+					cleanedHistory = append(cleanedHistory, h)
+				}
+				cleanedRules := make([]AutoSyncRule, 0, len(cfg.AutoSync.Rules))
+				for _, r := range cfg.AutoSync.Rules {
+					if r.InstanceID == id && !validIDs[r.ArrProfileID] && r.ArrProfileID != 0 {
+						log.Printf("Cleanup: removing stale auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, inst.Name)
+						continue
+					}
+					cleanedRules = append(cleanedRules, r)
+				}
+				if len(events) > 0 {
+					cfg.SyncHistory = cleanedHistory
+					cfg.AutoSync.Rules = cleanedRules
+				}
+			})
+			if len(events) > 0 {
+				app.cleanupMu.Lock()
+				app.cleanupEvents = append(app.cleanupEvents, events...)
+				if len(app.cleanupEvents) > 50 {
+					app.cleanupEvents = app.cleanupEvents[len(app.cleanupEvents)-50:]
+				}
+				app.cleanupMu.Unlock()
+				app.notifyCleanup(events)
+			}
+		}
+	}
 	entries := app.config.GetSyncHistory(id)
 	if entries == nil {
 		entries = []SyncHistoryEntry{}
@@ -2478,16 +2583,33 @@ func (app *App) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleDeleteSyncHistory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	profileTrashID := r.PathValue("profileTrashId")
-	if id == "" || profileTrashID == "" {
-		writeError(w, 400, "Missing instance ID or profile trash ID")
+	arrProfileIDStr := r.PathValue("arrProfileId")
+	if id == "" || arrProfileIDStr == "" {
+		writeError(w, 400, "Missing instance ID or Arr profile ID")
 		return
 	}
-	if err := app.config.DeleteSyncHistory(id, profileTrashID); err != nil {
+	arrProfileID, err := strconv.Atoi(arrProfileIDStr)
+	if err != nil {
+		writeError(w, 400, "arrProfileId must be a number")
+		return
+	}
+	if err := app.config.DeleteSyncHistory(id, arrProfileID); err != nil {
 		writeError(w, 404, err.Error())
 		return
 	}
 	writeJSON(w, map[string]string{"status": "deleted"})
+}
+
+// handleCleanupEvents returns and clears pending cleanup events.
+func (app *App) handleCleanupEvents(w http.ResponseWriter, r *http.Request) {
+	app.cleanupMu.Lock()
+	events := app.cleanupEvents
+	app.cleanupEvents = nil
+	app.cleanupMu.Unlock()
+	if events == nil {
+		events = []CleanupEvent{}
+	}
+	writeJSON(w, events)
 }
 
 // --- Helpers ---
@@ -3120,12 +3242,11 @@ func (app *App) handleCreateAutoSyncRule(w http.ResponseWriter, r *http.Request)
 
 	rule.ID = generateID()
 
+	// Check for duplicate inside Update callback to avoid TOCTOU race
 	var duplicate bool
 	if err := app.config.Update(func(cfg *Config) {
 		for _, existing := range cfg.AutoSync.Rules {
-			if existing.InstanceID == rule.InstanceID &&
-				((rule.ProfileSource == "trash" && existing.TrashProfileID == rule.TrashProfileID) ||
-					(rule.ProfileSource == "imported" && existing.ImportedProfileID == rule.ImportedProfileID)) {
+			if existing.InstanceID == rule.InstanceID && existing.ArrProfileID == rule.ArrProfileID {
 				duplicate = true
 				return
 			}
@@ -3465,6 +3586,9 @@ func (app *App) handleCFSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cache and return
+	// NOTE: Cache is never explicitly invalidated because the CF schema (available implementations
+	// and field definitions) comes from the Arr instance, not the TRaSH repo. It only changes
+	// when the Arr software itself is updated, which is rare and a restart clears it.
 	cfSchemaCache.Store(appType, data)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)

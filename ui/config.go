@@ -44,18 +44,19 @@ type AutoSyncConfig struct {
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
-	ID                string        `json:"id"`
-	Enabled           bool          `json:"enabled"`
-	InstanceID        string        `json:"instanceId"`
-	ProfileSource     string        `json:"profileSource"`               // "trash" or "imported"
-	TrashProfileID    string        `json:"trashProfileId,omitempty"`
-	ImportedProfileID string        `json:"importedProfileId,omitempty"`
-	ArrProfileID      int           `json:"arrProfileId"`                // target Arr profile to update
-	SelectedCFs       []string      `json:"selectedCFs,omitempty"`       // user's optional CF selections
-	Behavior          *SyncBehavior `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
-	LastSyncCommit    string        `json:"lastSyncCommit,omitempty"`
-	LastSyncTime      string        `json:"lastSyncTime,omitempty"`
-	LastSyncError     string        `json:"lastSyncError,omitempty"`
+	ID                string         `json:"id"`
+	Enabled           bool           `json:"enabled"`
+	InstanceID        string         `json:"instanceId"`
+	ProfileSource     string         `json:"profileSource"`               // "trash" or "imported"
+	TrashProfileID    string         `json:"trashProfileId,omitempty"`
+	ImportedProfileID string         `json:"importedProfileId,omitempty"`
+	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to update
+	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
+	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
+	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
+	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
+	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
+	LastSyncError     string         `json:"lastSyncError,omitempty"`
 }
 
 // SyncBehavior controls how the sync engine handles CF additions, score overrides, and removals.
@@ -114,6 +115,8 @@ type SyncHistoryEntry struct {
 	ArrProfileName string            `json:"arrProfileName"`
 	SyncedCFs      []string          `json:"syncedCFs"`
 	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
+	Overrides      *SyncOverrides    `json:"overrides,omitempty"`
+	Behavior       *SyncBehavior     `json:"behavior,omitempty"`
 	CFsCreated     int               `json:"cfsCreated"`
 	CFsUpdated     int               `json:"cfsUpdated"`
 	ScoresUpdated  int               `json:"scoresUpdated"`
@@ -220,6 +223,14 @@ func (cs *configStore) Get() Config {
 				cfg.SyncHistory[i].SelectedCFs[k] = v
 			}
 		}
+		if sh.Overrides != nil {
+			o := *sh.Overrides
+			cfg.SyncHistory[i].Overrides = &o
+		}
+		if sh.Behavior != nil {
+			b := *sh.Behavior
+			cfg.SyncHistory[i].Behavior = &b
+		}
 	}
 	// Deep-copy QualitySizeOverrides (nested map)
 	if cs.config.QualitySizeOverrides != nil {
@@ -260,6 +271,10 @@ func (cs *configStore) Get() Config {
 			if r.Behavior != nil {
 				b := *r.Behavior
 				cfg.AutoSync.Rules[i].Behavior = &b
+			}
+			if r.Overrides != nil {
+				o := *r.Overrides
+				cfg.AutoSync.Rules[i].Overrides = &o
 			}
 		}
 	}
@@ -356,12 +371,13 @@ func (cs *configStore) DeleteInstance(id string) error {
 	return cs.saveLocked()
 }
 
-// UpsertSyncHistory adds or updates a sync history entry (keyed by instanceId + profileTrashId).
+// UpsertSyncHistory adds or updates a sync history entry (keyed by instanceId + arrProfileId).
+// This allows the same TRaSH profile to be synced to multiple Arr profiles on the same instance.
 func (cs *configStore) UpsertSyncHistory(entry SyncHistoryEntry) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for i, sh := range cs.config.SyncHistory {
-		if sh.InstanceID == entry.InstanceID && sh.ProfileTrashID == entry.ProfileTrashID {
+		if sh.InstanceID == entry.InstanceID && sh.ArrProfileID == entry.ArrProfileID {
 			cs.config.SyncHistory[i] = entry
 			return cs.saveLocked()
 		}
@@ -383,12 +399,12 @@ func (cs *configStore) GetSyncHistory(instanceID string) []SyncHistoryEntry {
 	return entries
 }
 
-// DeleteSyncHistory removes a sync history entry by instanceId + profileTrashId.
-func (cs *configStore) DeleteSyncHistory(instanceID, profileTrashID string) error {
+// DeleteSyncHistory removes a sync history entry by instanceId + arrProfileId.
+func (cs *configStore) DeleteSyncHistory(instanceID string, arrProfileID int) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for i, sh := range cs.config.SyncHistory {
-		if sh.InstanceID == instanceID && sh.ProfileTrashID == profileTrashID {
+		if sh.InstanceID == instanceID && sh.ArrProfileID == arrProfileID {
 			cs.config.SyncHistory = append(cs.config.SyncHistory[:i], cs.config.SyncHistory[i+1:]...)
 			return cs.saveLocked()
 		}

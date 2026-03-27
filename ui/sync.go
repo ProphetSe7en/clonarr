@@ -202,6 +202,8 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	for _, trashID := range req.SelectedCFs {
 		allCFTrashIDs[trashID] = true
 	}
+	log.Printf("Sync plan: %d core formatItems + %d selectedCFs = %d total CFs",
+		len(profile.FormatItems), len(req.SelectedCFs), len(allCFTrashIDs))
 
 	// Map: CF name → Arr CF ID (for score assignment)
 	cfNameToArrID := make(map[string]int)
@@ -279,7 +281,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			}
 		}
 		if targetProfile == nil {
-			return nil, fmt.Errorf("Arr profile %d not found", req.ArrProfileID)
+			return nil, fmt.Errorf("target profile no longer exists in Arr (internal ID %d) — it may have been deleted or recreated", req.ArrProfileID)
 		}
 
 		plan.ArrProfileName = targetProfile.Name
@@ -627,6 +629,42 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			return result, nil
 		}
 
+		// Apply user overrides to created profile
+		if req.Overrides != nil {
+			log.Printf("Sync: applying overrides to new profile — %s", overrideSummary(req.Overrides))
+			if req.Overrides.UpgradeAllowed != nil {
+				arrProfile.UpgradeAllowed = *req.Overrides.UpgradeAllowed
+			}
+			if req.Overrides.MinFormatScore != nil {
+				arrProfile.MinFormatScore = *req.Overrides.MinFormatScore
+			}
+			if req.Overrides.MinUpgradeFormatScore != nil {
+				v := *req.Overrides.MinUpgradeFormatScore
+				if v < 1 {
+					v = 1
+				}
+				arrProfile.MinUpgradeFormatScore = v
+			}
+			if req.Overrides.CutoffFormatScore != nil {
+				arrProfile.CutoffFormatScore = *req.Overrides.CutoffFormatScore
+			}
+			if req.Overrides.Language != nil {
+				if langs, err := client.ListLanguages(); err == nil {
+					for i := range langs {
+						if strings.EqualFold(langs[i].Name, *req.Overrides.Language) {
+							arrProfile.Language = &langs[i]
+							break
+						}
+					}
+				}
+			}
+			if req.Overrides.CutoffQuality != nil && *req.Overrides.CutoffQuality != "__skip__" {
+				if cid, err := resolveCutoff(*req.Overrides.CutoffQuality, arrProfile.Items); err == nil {
+					arrProfile.Cutoff = cid
+				}
+			}
+		}
+
 		created, err := client.CreateProfile(arrProfile)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("create profile: %v", err))
@@ -658,8 +696,18 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 		if targetProfile == nil {
-			result.Errors = append(result.Errors, "target profile not found")
+			result.Errors = append(result.Errors, fmt.Sprintf("target profile no longer exists in Arr (internal ID %d) — it may have been deleted or recreated", req.ArrProfileID))
 			return result, nil
+		}
+
+		// Snapshot current profile-level settings for change detection
+		prevMinFormatScore := targetProfile.MinFormatScore
+		prevMinUpgradeFormatScore := targetProfile.MinUpgradeFormatScore
+		prevCutoffFormatScore := targetProfile.CutoffFormatScore
+		prevUpgradeAllowed := targetProfile.UpgradeAllowed
+		var prevLanguageID int
+		if targetProfile.Language != nil {
+			prevLanguageID = targetProfile.Language.ID
 		}
 
 		// Update profile-level settings (cutoff, min scores, upgrade)
@@ -673,6 +721,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 		// Apply user overrides (if any)
 		if req.Overrides != nil {
+			log.Printf("Sync: applying overrides — %s", overrideSummary(req.Overrides))
 			if req.Overrides.UpgradeAllowed != nil {
 				targetProfile.UpgradeAllowed = *req.Overrides.UpgradeAllowed
 			}
@@ -689,34 +738,38 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			if req.Overrides.CutoffFormatScore != nil {
 				targetProfile.CutoffFormatScore = *req.Overrides.CutoffFormatScore
 			}
-		}
-		// Resolve cutoff quality name → numeric ID using existing profile items
-		// CutoffQuality "__skip__" means don't touch cutoff at all
-		cutoffName := profile.Cutoff
-		if req.Overrides != nil && req.Overrides.CutoffQuality != nil {
-			if *req.Overrides.CutoffQuality == "__skip__" {
-				cutoffName = "" // skip cutoff resolution entirely
-			} else {
-				cutoffName = *req.Overrides.CutoffQuality
-			}
-		}
-		if cutoffName == "" {
-			for _, item := range targetProfile.Items {
-				if item.Allowed {
-					if item.Name != "" {
-						cutoffName = item.Name
-					} else if item.Quality != nil {
-						cutoffName = item.Quality.Name
+			if req.Overrides.Language != nil {
+				// Resolve language name → Arr language object
+				if langs, err := client.ListLanguages(); err == nil {
+					for i := range langs {
+						if strings.EqualFold(langs[i].Name, *req.Overrides.Language) {
+							targetProfile.Language = &langs[i]
+							break
+						}
 					}
-					break
 				}
 			}
 		}
-		if cutoffName != "" {
-			if cid, err := resolveCutoff(cutoffName, targetProfile.Items); err == nil {
-				targetProfile.Cutoff = cid
+		// Detect profile-level setting changes
+		var curLanguageID int
+		if targetProfile.Language != nil {
+			curLanguageID = targetProfile.Language.ID
+		}
+		profileSettingsChanged := targetProfile.MinFormatScore != prevMinFormatScore ||
+			targetProfile.MinUpgradeFormatScore != prevMinUpgradeFormatScore ||
+			targetProfile.CutoffFormatScore != prevCutoffFormatScore ||
+			targetProfile.UpgradeAllowed != prevUpgradeAllowed ||
+			curLanguageID != prevLanguageID
+
+		// Determine cutoff name (resolved to ID later, after quality items rebuild)
+		// CutoffQuality "__skip__" means don't touch cutoff at all
+		cutoffName := profile.Cutoff
+		skipCutoff := false
+		if req.Overrides != nil && req.Overrides.CutoffQuality != nil {
+			if *req.Overrides.CutoffQuality == "__skip__" {
+				skipCutoff = true
 			} else {
-				log.Printf("Warning: could not resolve cutoff %q: %v", cutoffName, err)
+				cutoffName = *req.Overrides.CutoffQuality
 			}
 		}
 
@@ -832,14 +885,14 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					qualityByName[qualityDefs[i].Quality.Name] = &qualityDefs[i]
 				}
 				// Build old allowed map for comparison
-					oldAllowed := make(map[string]bool)
-					for _, item := range targetProfile.Items {
-						name := item.Name
-						if name == "" && item.Quality != nil { name = item.Quality.Name }
-						if name != "" { oldAllowed[name] = item.Allowed }
-					}
+				oldAllowed := make(map[string]bool)
+				for _, item := range targetProfile.Items {
+					name := item.Name
+					if name == "" && item.Quality != nil { name = item.Quality.Name }
+					if name != "" { oldAllowed[name] = item.Allowed }
+				}
 
-					newItems, err := resolveQualityItems(profile.Items, qualityByName)
+				newItems, err := resolveQualityItems(profile.Items, qualityByName)
 				if err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("resolve quality items: %v", err))
 				} else {
@@ -880,6 +933,42 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 						len(targetProfile.Items), len(newItems), len(unused))
 				}
 			}
+		}
+
+		// Resolve cutoff after quality items rebuild so the ID matches the final item set
+		if !skipCutoff {
+			if cutoffName == "" {
+				for _, item := range targetProfile.Items {
+					if item.Allowed {
+						if item.Name != "" {
+							cutoffName = item.Name
+						} else if item.Quality != nil {
+							cutoffName = item.Quality.Name
+						}
+						break
+					}
+				}
+			}
+			if cutoffName != "" {
+				if cid, err := resolveCutoff(cutoffName, targetProfile.Items); err == nil {
+					if cid != targetProfile.Cutoff {
+						log.Printf("Sync: cutoff resolved %q → %d (was %d)", cutoffName, cid, targetProfile.Cutoff)
+						targetProfile.Cutoff = cid
+						updated = true
+					}
+				} else {
+					log.Printf("Warning: could not resolve cutoff %q: %v", cutoffName, err)
+				}
+			}
+		}
+
+		if profileSettingsChanged {
+			updated = true
+			log.Printf("Sync: profile settings changed (minScore=%d→%d, minUpgrade=%d→%d, cutoffScore=%d→%d, upgrade=%v→%v)",
+				prevMinFormatScore, targetProfile.MinFormatScore,
+				prevMinUpgradeFormatScore, targetProfile.MinUpgradeFormatScore,
+				prevCutoffFormatScore, targetProfile.CutoffFormatScore,
+				prevUpgradeAllowed, targetProfile.UpgradeAllowed)
 		}
 
 		if updated {

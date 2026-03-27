@@ -112,6 +112,9 @@ func overrideSummary(o *SyncOverrides) string {
 	if o.MinFormatScore != nil {
 		parts = append(parts, fmt.Sprintf("minScore=%d", *o.MinFormatScore))
 	}
+	if o.MinUpgradeFormatScore != nil {
+		parts = append(parts, fmt.Sprintf("minUpgrade=%d", *o.MinUpgradeFormatScore))
+	}
 	if o.CutoffFormatScore != nil {
 		parts = append(parts, fmt.Sprintf("cutoffScore=%d", *o.CutoffFormatScore))
 	}

@@ -514,32 +514,30 @@
                   <template x-if="syncHistory[inst.id] && syncHistory[inst.id].length > 0">
                     <div>
                       <div style="padding:8px 16px;font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#0d1117;border-bottom:1px solid #21262d" x-text="inst.name"></div>
-                      <template x-for="sh in syncHistory[inst.id]" :key="sh.profileTrashId">
+                      <template x-for="sh in syncHistory[inst.id]" :key="sh.arrProfileId">
                         <div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;gap:8px;font-size:12px">
                           <span style="color:#58a6ff;font-weight:500" x-text="sh.profileName"></span>
-                          <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId)">
-                            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
                               <label class="toggle toggle-sm" @click.stop title="Toggle auto-sync for this profile">
                                 <input type="checkbox"
-                                       :checked="autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId)?.enabled"
-                                       @change="(() => { const rule = autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId); if (rule) toggleAutoSyncRule(rule); })()">
+                                       :checked="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled"
+                                       @change="(() => { const rule = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (rule) toggleAutoSyncRule(rule); })()">
                                 <span class="slider"></span>
                               </label>
                               <span style="font-size:9px"
-                                    :style="autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId)?.enabled ? 'color:#3fb950' : 'color:#f8514980'"
-                                    x-text="autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId)?.enabled ? 'auto-sync' : 'auto-sync off'"></span>
-                            </div>
-                          </template>
+                                    :style="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'color:#3fb950' : 'color:#f8514980'"
+                                    x-text="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'auto-sync' : 'auto-sync off'"></span>
+                          </div>
                           <span style="color:#484f58">&rarr;</span>
                           <span style="color:#e1e4e8" x-text="sh.arrProfileName"></span>
-                          <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId)?.lastSyncError">
+                          <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">
                             <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#3d1f1f;color:#f85149;flex-shrink:0"
-                                  :title="autoSyncRules.find(r => r.instanceId === inst.id && r.trashProfileId === sh.profileTrashId)?.lastSyncError">error</span>
+                                  :title="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>
                           </template>
                           <span style="color:#8b949e;margin-left:auto" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
                           <span style="color:#8b949e" x-text="timeAgo(sh.lastSync)"></span>
                           <button class="btn btn-sm" @click.stop="resyncProfile(inst, sh)">Re-sync</button>
-                          <button class="btn btn-sm" style="color:#f85149;border-color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.profileTrashId)">Remove</button>
+                          <button class="btn btn-sm" style="color:#f85149;border-color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)">Remove</button>
                         </div>
                       </template>
                     </div>
@@ -1416,7 +1414,7 @@
                           <span style="font-size:10px;color:#58a6ff;cursor:pointer" @click="copyToClipboard(scheme.pattern)">Copy</span>
                           <template x-if="namingSelectedInstance[tab.type]">
                             <span style="font-size:10px;color:#d29922;cursor:pointer"
-                              @click="applyNamingScheme(tab.type, section.key, scheme)">Sync</span>
+                              @click="$el.textContent='Syncing...'; $el.style.color='#8b949e'; applyNamingScheme(tab.type, section.key, scheme).then(() => { $el.textContent='✓ Synced'; $el.style.color='#3fb950'; setTimeout(() => { $el.textContent='Sync'; $el.style.color='#d29922'; }, 2000); })">Sync</span>
                           </template>
                         </span>
                       </div>
@@ -2521,7 +2519,7 @@
 
         <!-- Profile settings — card grid (matching builder layout exactly) -->
         <div x-show="profileDetail?.detail?.profile" style="padding:14px 20px;border-bottom:1px solid #30363d"
-             x-init="$watch('profileDetail', v => { if (v?.detail?.profile) { const p = v.detail.profile; pdOverrides.language.value = p.language || 'Original'; pdOverrides.upgradeAllowed.value = p.upgradeAllowed ?? true; pdOverrides.minFormatScore.value = p.minFormatScore ?? 0; pdOverrides.minUpgradeFormatScore.value = p.minUpgradeFormatScore ?? 1; pdOverrides.cutoffFormatScore.value = p.cutoffFormatScore || p.cutoffScore || 10000; pdOverrides.cutoffQuality = p.cutoff || ''; }})">
+>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
             <!-- Scoring card -->
@@ -3376,11 +3374,11 @@
       <!-- Mode selector -->
       <div style="display:flex;gap:16px;margin-bottom:16px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-          <input type="radio" value="create" x-model="syncMode" style="accent-color:#58a6ff">
+          <input type="radio" value="create" x-model="syncMode" @change="autoSyncRuleForSync = null; syncForm.arrProfileId = '0'" style="accent-color:#58a6ff">
           Create new profile
         </label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-          <input type="radio" value="update" x-model="syncMode" style="accent-color:#58a6ff">
+          <input type="radio" value="update" x-model="syncMode" @change="updateAutoSyncRuleForSync()" style="accent-color:#58a6ff">
           Update existing profile
         </label>
       </div>
@@ -3887,6 +3885,17 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div style="position:fixed;top:16px;right:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:400px">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div style="padding:10px 14px;border-radius:6px;font-size:12px;line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,0.4);cursor:pointer;animation:fadeIn 0.2s"
+           :style="toast.type === 'warning' ? 'background:#2d1b00;border:1px solid #d29922;color:#e3b341' : toast.type === 'error' ? 'background:#3d1f1f;border:1px solid #f85149;color:#f85149' : 'background:#0d2818;border:1px solid #238636;color:#3fb950'"
+           @click="toasts = toasts.filter(t => t.id !== toast.id)"
+           x-text="toast.message">
+      </div>
+    </template>
   </div>
 
   <!-- CF Editor Modal (Create/Edit) -->
@@ -4414,6 +4423,7 @@ function clonarr() {
     qsSyncResult: {},    // per app-type: { ok, message }
     qsAutoSync: {},      // per app-type: { enabled, type }
     confirmModal: { show: false, title: '', message: '', confirmLabel: '', onConfirm: null, onCancel: null },
+    toasts: [], // { id, message, type: 'info'|'warning'|'error', timeout }
 
     // Naming schemes (cached per app type)
     namingData: {},  // { radarr: { folder: {...}, file: {...} }, sonarr: { season: {...}, series: {...}, episodes: {...} } }
@@ -4504,6 +4514,7 @@ function clonarr() {
     sandboxCFBrowser: { open: false, appType: '', categories: [], customCFs: [], selected: {}, scores: {}, expanded: {}, filter: '' },
     showSyncModal: false,
     syncMode: 'create',
+    resyncTargetArrProfileId: null, // set by resyncProfile to ensure correct Arr profile is selected
     // Maintenance
     maintenanceInstanceId: '',
 
@@ -4588,10 +4599,12 @@ function clonarr() {
       this.loadAutoSyncRules();
       this.loadSandboxResults('radarr');
       this.loadSandboxResults('sonarr');
-      // Load sync history for all instances
+      // Load sync history for all instances (also triggers stale cleanup)
       for (const inst of this.instances) {
-        this.loadSyncHistory(inst.id);
+        await this.loadInstanceProfiles(inst);
+        await this.loadSyncHistory(inst.id);
       }
+      this.checkCleanupEvents();
       // Auto-select instance if only one per type (no need to choose)
       // Build auto-select maps, then assign all at once for Alpine reactivity
       const autoQs = {};
@@ -5083,7 +5096,10 @@ function clonarr() {
     },
 
     async deleteImportedProfile(id, appType) {
-      if (!confirm('Delete this imported profile?')) return;
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Delete Profile', message: 'Delete this imported profile?', confirmLabel: 'Delete', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
       try {
         await fetch(`/api/import/profiles/${id}`, { method: 'DELETE' });
         this.loadImportedProfiles(appType);
@@ -7928,7 +7944,6 @@ function clonarr() {
       this.cleanupKeepList.push(name);
       this.cleanupKeepInput = '';
       this.cleanupKeepSuggestions = [];
-      this.cleanupKeepFocused = false;
       this.saveCleanupKeep();
     },
     async addCleanupKeep() {
@@ -8083,7 +8098,10 @@ function clonarr() {
     },
 
     async deleteInstance(inst) {
-      if (!confirm(`Delete ${inst.name}?`)) return;
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Delete Instance', message: `Delete ${inst.name}? All sync history and auto-sync rules for this instance will also be removed.`, confirmLabel: 'Delete', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
       const r = await fetch(`/api/instances/${inst.id}`, { method: 'DELETE' });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -8254,7 +8272,10 @@ function clonarr() {
     },
 
     async applyRestore() {
-      if (!confirm(`Apply backup to ${this.restoreInstance.name}? This will create/update CFs and profiles.`)) return;
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Restore Backup', message: `Apply backup to ${this.restoreInstance.name}? This will create/update CFs and profiles.`, confirmLabel: 'Apply', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
       this.restoreLoading = true;
       try {
         const filtered = this.getFilteredRestoreData();
@@ -8315,6 +8336,25 @@ function clonarr() {
       }
     },
 
+    // --- Notifications ---
+
+    showToast(message, type = 'info', duration = 8000) {
+      const id = Date.now() + Math.random();
+      this.toasts = [...this.toasts, { id, message, type }];
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, duration);
+    },
+
+    async checkCleanupEvents() {
+      try {
+        const r = await fetch('/api/cleanup-events');
+        if (!r.ok) return;
+        const events = await r.json();
+        for (const ev of events) {
+          this.showToast(`"${ev.profileName}" removed — profile was deleted from ${ev.instanceName}`, 'warning', 10000);
+        }
+      } catch (e) { /* ignore */ }
+    },
+
     // --- TRaSH ---
 
     async pullTrash() {
@@ -8335,6 +8375,12 @@ function clonarr() {
             this.loadCFBrowse('sonarr');
             this.loadNaming('radarr');
             this.loadNaming('sonarr');
+            // Reload sync data and check for cleanup events
+            await this.loadAutoSyncRules();
+            for (const inst of this.instances) {
+              await this.loadSyncHistory(inst.id);
+            }
+            this.checkCleanupEvents();
           }
         }, 2000);
         setTimeout(() => { clearInterval(poll); this.pulling = false; }, 120000);
@@ -8365,6 +8411,19 @@ function clonarr() {
         this.profileDetail = { ...this.profileDetail, detail: detail };
         this.initDetailSections(detail);
         this.initSelectedCFs(detail);
+        // Reset overrides to TRaSH defaults (resyncProfile may override these after)
+        if (detail.profile) {
+          const p = detail.profile;
+          this.pdOverrideActive = false;
+          this.pdOverrides = {
+            language: { enabled: true, value: p.language || 'Original' },
+            upgradeAllowed: { enabled: true, value: p.upgradeAllowed ?? true },
+            minFormatScore: { enabled: true, value: p.minFormatScore ?? 0 },
+            minUpgradeFormatScore: { enabled: true, value: p.minUpgradeFormatScore ?? 1 },
+            cutoffFormatScore: { enabled: true, value: p.cutoffFormatScore || p.cutoffScore || 10000 },
+            cutoffQuality: p.cutoff || ''
+          };
+        }
       } catch (e) { console.error('loadProfileDetail:', e); }
     },
 
@@ -9002,13 +9061,22 @@ function clonarr() {
       }
       // Load languages for this instance
       this.getLanguagesForInstance(instId);
-      // Auto-detect mode: if previously synced, default to update
-      const history = (this.syncHistory[instId] || []).find(h => h.profileTrashId === profileTrashId);
-      if (history && history.arrProfileId) {
+      // Auto-detect mode: use resync target if set, otherwise find first matching history entry
+      const arrProfileIds = new Set((this.arrProfiles || []).map(p => p.id));
+      if (this.resyncTargetArrProfileId && arrProfileIds.has(this.resyncTargetArrProfileId)) {
         this.syncMode = 'update';
-        this.syncForm.arrProfileId = String(history.arrProfileId);
+        this.syncForm.arrProfileId = String(this.resyncTargetArrProfileId);
+        this.resyncTargetArrProfileId = null;
       } else {
-        this.syncMode = 'create';
+        const history = (this.syncHistory[instId] || []).find(h =>
+          h.profileTrashId === profileTrashId && arrProfileIds.has(h.arrProfileId)
+        );
+        if (history && history.arrProfileId) {
+          this.syncMode = 'update';
+          this.syncForm.arrProfileId = String(history.arrProfileId);
+        } else {
+          this.syncMode = 'create';
+        }
       }
       this.syncPreview = null;
       // Auto-fetch preview if update mode with pre-selected profile
@@ -9032,6 +9100,8 @@ function clonarr() {
       if (this.syncMode === 'create') {
         body.profileName = this.syncForm.newProfileName;
       }
+      // Finalize overrides if still in edit mode
+      if (this.pdOverrideActive) this.pdFinishOverrides();
       // Build overrides from profile detail toggles
       const ov = this.pdOverrides;
       const overrides = {};
@@ -9119,20 +9189,24 @@ function clonarr() {
         }
         this.syncResult = result;
         this.syncPlan = null;
-        // Reload sync history for the instance
-        this.loadSyncHistory(this.syncForm.instanceId);
-        // Auto-update existing auto-sync rule with current selectedCFs
-        const existingRule = this.autoSyncRules.find(r =>
-          r.instanceId === this.syncForm.instanceId &&
-          ((this.syncForm.profileTrashId && r.trashProfileId === this.syncForm.profileTrashId) ||
-           (this.syncForm.importedProfileId && r.importedProfileId === this.syncForm.importedProfileId))
-        );
+        // Reload Arr profiles first (new profile may have been created), then sync history + rules
+        const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
+        if (inst) await this.loadInstanceProfiles(inst);
+        await this.loadAutoSyncRules();
+        await this.loadSyncHistory(this.syncForm.instanceId);
+        // Auto-update existing auto-sync rule with current settings
+        const syncBody = this.buildSyncBody();
+        const arrId = parseInt(this.syncForm.arrProfileId) || 0;
+        const existingRule = arrId > 0
+          ? this.autoSyncRules.find(r => r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrId)
+          : null;
         if (existingRule) {
           const updated = {
             ...existingRule,
             selectedCFs: this.getSelectedCFIds(),
-            arrProfileId: parseInt(this.syncForm.arrProfileId) || existingRule.arrProfileId,
-            behavior: this.syncForm.behavior || existingRule.behavior
+            arrProfileId: arrId,
+            behavior: this.syncForm.behavior || existingRule.behavior,
+            overrides: syncBody.overrides || null
           };
           try {
             await fetch(`/api/auto-sync/rules/${existingRule.id}`, {
@@ -9168,6 +9242,8 @@ function clonarr() {
     },
 
     async resyncProfile(inst, sh) {
+      // Set target Arr profile for sync modal to pick up
+      this.resyncTargetArrProfileId = sh.arrProfileId;
       // Find the profile in trashProfiles
       const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === sh.profileTrashId);
       if (!profile) {
@@ -9181,26 +9257,52 @@ function clonarr() {
       if (sh.selectedCFs && Object.keys(sh.selectedCFs).length > 0) {
         const groups = this.profileDetail?.detail?.trashGroups || [];
         for (const group of groups) {
-          let hasAnySynced = false;
+          // Check if ANY CF from this group (required or optional) was in the sync
+          const groupWasSynced = group.cfs.some(cf => sh.selectedCFs[cf.trashId]);
           for (const cf of group.cfs) {
             if (!cf.required) {
-              // Set to true if was synced, false if not (overrides initSelectedCFs defaults)
               this.selectedOptionalCFs[cf.trashId] = !!sh.selectedCFs[cf.trashId];
-              if (sh.selectedCFs[cf.trashId]) hasAnySynced = true;
             }
           }
-          if (hasAnySynced && !group.defaultEnabled) {
+          // Restore group state based on whether any CF from it was synced
+          if (groupWasSynced) {
             this.selectedOptionalCFs['__grp_' + group.name] = true;
+          } else if (group.defaultEnabled) {
+            this.selectedOptionalCFs['__grp_' + group.name] = false;
           }
         }
         this.selectedOptionalCFs = { ...this.selectedOptionalCFs };
       }
+      // Restore overrides from sync history
+      if (sh.overrides) {
+        const ov = sh.overrides;
+        if (ov.language !== undefined) { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; }
+        if (ov.minFormatScore !== undefined) { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; }
+        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; }
+        if (ov.cutoffFormatScore !== undefined) { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; }
+        if (ov.upgradeAllowed !== undefined) { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; }
+        if (ov.cutoffQuality !== undefined) { this.pdOverrides.cutoffQuality = ov.cutoffQuality; }
+      }
+      // Restore behavior from sync history
+      if (sh.behavior) {
+        this.syncForm.behavior = { ...this.syncForm.behavior, ...sh.behavior };
+      }
     },
 
-    async removeSyncHistory(instanceId, profileTrashId) {
-      if (!confirm('Remove this sync history entry?')) return;
+    async removeSyncHistory(instanceId, arrProfileId) {
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Remove Sync Entry', message: 'Remove this sync history entry and its auto-sync rule?', confirmLabel: 'Remove', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
       try {
-        await fetch(`/api/instances/${instanceId}/sync-history/${encodeURIComponent(profileTrashId)}`, { method: 'DELETE' });
+        const r = await fetch(`/api/instances/${instanceId}/sync-history/${arrProfileId}`, { method: 'DELETE' });
+        if (!r.ok) { console.error('removeSyncHistory: HTTP', r.status); }
+        // Also remove associated auto-sync rule
+        const rule = this.autoSyncRules.find(r => r.instanceId === instanceId && r.arrProfileId === arrProfileId);
+        if (rule) {
+          await fetch(`/api/auto-sync/rules/${rule.id}`, { method: 'DELETE' });
+          await this.loadAutoSyncRules();
+        }
         await this.loadSyncHistory(instanceId);
       } catch (e) { console.error('removeSyncHistory:', e); }
     },
@@ -9231,12 +9333,12 @@ function clonarr() {
       } catch (e) { console.error('loadAutoSyncRules:', e); }
     },
 
-    findAutoSyncRule(instanceId, profileTrashId, importedProfileId) {
-      return this.autoSyncRules.find(r =>
-        r.instanceId === instanceId &&
-        ((profileTrashId && r.trashProfileId === profileTrashId) ||
-         (importedProfileId && r.importedProfileId === importedProfileId))
-      ) || null;
+    findAutoSyncRule(instanceId, arrProfileId) {
+      const aid = parseInt(arrProfileId) || 0;
+      if (aid > 0) {
+        return this.autoSyncRules.find(r => r.instanceId === instanceId && r.arrProfileId === aid) || null;
+      }
+      return null;
     },
 
     pdHasOverrides() {
@@ -9262,8 +9364,7 @@ function clonarr() {
     updateAutoSyncRuleForSync() {
       this.autoSyncRuleForSync = this.findAutoSyncRule(
         this.syncForm.instanceId,
-        this.syncForm.profileTrashId,
-        this.syncForm.importedProfileId
+        this.syncForm.arrProfileId
       );
       // Populate behavior from existing auto-sync rule
       if (this.autoSyncRuleForSync?.behavior) {
@@ -9273,8 +9374,30 @@ function clonarr() {
 
     async toggleAutoSyncForProfile(enabled) {
       this.debugLog('UI', `Auto-sync: ${enabled ? 'enabled' : 'disabled'} for "${this.syncForm.profileName}" → ${this.syncForm.instanceName}`);
-      if (enabled) {
-        // Create rule
+      const existing = this.autoSyncRuleForSync;
+      if (existing) {
+        // Update existing rule — toggle enabled and update settings
+        const syncBody = this.buildSyncBody();
+        const updated = {
+          ...existing,
+          enabled: enabled,
+          selectedCFs: this.getSelectedCFIds(),
+          behavior: this.syncForm.behavior,
+          overrides: syncBody.overrides || null,
+          arrProfileId: parseInt(this.syncForm.arrProfileId) || existing.arrProfileId
+        };
+        try {
+          await fetch(`/api/auto-sync/rules/${existing.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated)
+          });
+          await this.loadAutoSyncRules();
+          this.updateAutoSyncRuleForSync();
+        } catch (e) { console.error('toggleAutoSyncForProfile:', e); }
+      } else if (enabled) {
+        // No rule exists yet — create one
+        const syncBody = this.buildSyncBody();
         const rule = {
           enabled: true,
           instanceId: this.syncForm.instanceId,
@@ -9283,7 +9406,8 @@ function clonarr() {
           importedProfileId: this.syncForm.importedProfileId || '',
           arrProfileId: parseInt(this.syncForm.arrProfileId) || 0,
           selectedCFs: this.getSelectedCFIds(),
-          behavior: this.syncForm.behavior
+          behavior: this.syncForm.behavior,
+          overrides: syncBody.overrides || null
         };
         try {
           const r = await fetch('/api/auto-sync/rules', {
@@ -9296,15 +9420,6 @@ function clonarr() {
             this.updateAutoSyncRuleForSync();
           }
         } catch (e) { console.error('createAutoSyncRule:', e); }
-      } else {
-        // Delete rule
-        if (this.autoSyncRuleForSync) {
-          try {
-            await fetch(`/api/auto-sync/rules/${this.autoSyncRuleForSync.id}`, { method: 'DELETE' });
-            await this.loadAutoSyncRules();
-            this.autoSyncRuleForSync = null;
-          } catch (e) { console.error('deleteAutoSyncRule:', e); }
-        }
       }
     },
 
@@ -9317,11 +9432,19 @@ function clonarr() {
           body: JSON.stringify(rule)
         });
         await this.loadAutoSyncRules();
+        // Force reactivity update on sync history (toggle text depends on autoSyncRules)
+        const instId = rule.instanceId;
+        if (this.syncHistory[instId]) {
+          this.syncHistory = { ...this.syncHistory };
+        }
       } catch (e) { console.error('toggleAutoSyncRule:', e); }
     },
 
     async deleteAutoSyncRule(rule) {
-      if (!confirm('Remove this auto-sync rule?')) return;
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Remove Auto-Sync Rule', message: 'Remove this auto-sync rule?', confirmLabel: 'Remove', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
       try {
         await fetch(`/api/auto-sync/rules/${rule.id}`, { method: 'DELETE' });
         await this.loadAutoSyncRules();

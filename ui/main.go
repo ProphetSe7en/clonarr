@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -21,6 +22,14 @@ var Version = "dev" // overridden at build time via ldflags
 var staticFiles embed.FS
 
 // App holds shared application state.
+// CleanupEvent records a stale rule/history removal for frontend notification.
+type CleanupEvent struct {
+	ProfileName string `json:"profileName"`
+	InstanceName string `json:"instanceName"`
+	ArrProfileID int    `json:"arrProfileId"`
+	Timestamp    string `json:"timestamp"`
+}
+
 type App struct {
 	config        *configStore
 	trash         *trashStore
@@ -28,6 +37,8 @@ type App struct {
 	customCFs     *customCFStore
 	debugLog      *debugLogger
 	pullUpdateCh  chan string // send new interval string to reschedule pull
+	cleanupEvents []CleanupEvent
+	cleanupMu     sync.Mutex
 }
 
 func main() {
@@ -223,7 +234,7 @@ func main() {
 
 	// Sync History
 	mux.HandleFunc("GET /api/instances/{id}/sync-history", app.handleSyncHistory)
-	mux.HandleFunc("DELETE /api/instances/{id}/sync-history/{profileTrashId}", app.handleDeleteSyncHistory)
+	mux.HandleFunc("DELETE /api/instances/{id}/sync-history/{arrProfileId}", app.handleDeleteSyncHistory)
 
 	// Auto-Sync
 	mux.HandleFunc("GET /api/auto-sync/settings", app.handleGetAutoSyncSettings)
@@ -232,6 +243,9 @@ func main() {
 	mux.HandleFunc("POST /api/auto-sync/rules", app.handleCreateAutoSyncRule)
 	mux.HandleFunc("PUT /api/auto-sync/rules/{id}", app.handleUpdateAutoSyncRule)
 	mux.HandleFunc("DELETE /api/auto-sync/rules/{id}", app.handleDeleteAutoSyncRule)
+
+	// Cleanup events
+	mux.HandleFunc("GET /api/cleanup-events", app.handleCleanupEvents)
 
 	// Debug logging
 	mux.HandleFunc("POST /api/debug/log", app.handleDebugLog)

@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.6.1-beta
+
+### Features
+- **Auto-sync rule on every sync** — Syncing a profile now always creates an auto-sync rule (disabled by default). Toggle on/off directly from Sync Rules & History.
+- **Multiple profiles from same TRaSH source** — Same TRaSH profile (e.g. WEB-1080p) can now be synced to multiple Arr profiles on the same instance with different overrides and CF selections.
+- **Toast notifications** — Non-intrusive UI notifications for cleanup events (deleted profiles).
+- **Discord cleanup notifications** — Amber Discord embed when synced profiles are auto-removed because the Arr profile was deleted.
+- **Friendly connection errors** — "Sonarr is not reachable — will retry on next sync" instead of raw TCP error traces in Discord and UI.
+
+### Bug fixes
+- **Cutoff error on resync** — Cutoff was resolved against old quality items before rebuild, causing "Cutoff must be an allowed quality" errors on resync.
+- **Min Score / overrides not syncing** — Overrides (Min Score, Cutoff Score, Min Upgrade, Language) were not applied in create mode, not saved in auto-sync rules, and not sent when only profile settings changed.
+- **Resync didn't restore settings** — Optional CFs, overrides, behavior, and target profile were not restored from sync history. Groups with only required CFs (e.g. Season Packs) were skipped.
+- **Deleted auto-sync rule still running** — Race condition where a deleted rule could still execute during a pull.
+- **Same TRaSH profile overwrote sync history** — Syncing a second profile from the same TRaSH source replaced the first profile's sync history and auto-sync rule.
+- **Stale sync history after profile deletion** — Deleting a profile in Arr left orphaned sync history and auto-sync rules. Now auto-cleaned on pull and page load.
+- **Auto-sync rule stale after profile recreate** — Rule now updated with new Arr profile ID when profile is deleted and recreated.
+- **Keep List search broken after first entry** — Adding one CF (e.g. IMAX) prevented finding similar CFs (IMAX Enhanced) in subsequent searches.
+- **File Naming sync had no feedback** — Sync button now shows "Syncing..." → "✓ Synced".
+- **Remove sync entry used browser popup** — All confirmation dialogs now use consistent in-app modal.
+- **Resync selected wrong Arr profile** — When multiple profiles share the same TRaSH source, resync now correctly selects the target profile.
+- **Auto-sync toggle didn't update without refresh** — Toggle in Sync Rules now updates immediately.
+- **Connection errors spammed Discord** — Unreachable instances no longer send repeated Discord notifications. Friendly message shown once on startup or new TRaSH changes.
+
 ## v1.6.0-beta
 
 ### Features
