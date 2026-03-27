@@ -18,6 +18,7 @@ type Config struct {
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
 	PullInterval         string                           `json:"pullInterval"` // Go duration (e.g. "24h", "1h", "0" to disable)
 	DevMode              bool                             `json:"devMode"`      // Enable TRaSH developer tools (TRaSH JSON export)
+	AdvancedScoring      bool                             `json:"advancedScoring"` // Allow per-CF score overrides on TRaSH profiles
 	DebugLogging         bool                             `json:"debugLogging"` // Write detailed operations to /config/debug.log
 	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
 	QualitySizeAutoSync  map[string]QSAutoSync             `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
@@ -56,6 +57,7 @@ type AutoSyncRule struct {
 	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
 	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
 	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
+	ScoreOverrides    map[string]int `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
 	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
 	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
 	LastSyncError     string         `json:"lastSyncError,omitempty"`
@@ -119,6 +121,7 @@ type SyncHistoryEntry struct {
 	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
 	Overrides      *SyncOverrides    `json:"overrides,omitempty"`
 	Behavior       *SyncBehavior     `json:"behavior,omitempty"`
+	ScoreOverrides map[string]int    `json:"scoreOverrides,omitempty"`
 	CFsCreated     int               `json:"cfsCreated"`
 	CFsUpdated     int               `json:"cfsUpdated"`
 	ScoresUpdated  int               `json:"scoresUpdated"`
