@@ -242,6 +242,11 @@
   /* Loading */
   .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes toastSlideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes toastSlideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
+  @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+  .toast-enter { animation: toastSlideIn 0.3s ease-out forwards; }
+  .toast-exit { animation: toastSlideOut 0.3s ease-in forwards; }
 
   /* Empty state */
   .empty-state { text-align: center; padding: 48px 20px; color: #8b949e; }
@@ -506,7 +511,8 @@
               <div style="display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:8px;border-left:3px solid #e1e4e8" @click="syncRulesExpanded = { ...syncRulesExpanded, [tab.type]: !syncRulesExpanded[tab.type] }">
                 <span class="profile-group-chevron" :class="{ open: syncRulesExpanded[tab.type] }">&#9654;</span>
                 <span style="font-size:13px;font-weight:500">Sync Rules & History</span>
-                <span style="font-size:11px;color:#8b949e;margin-left:auto"
+                <button class="btn btn-sm" style="margin-left:auto;font-size:10px;padding:2px 8px" @click.stop="syncAllProfiles(tab.type)" title="Sync all profiles for this app type">Sync All</button>
+                <span style="font-size:11px;color:#8b949e"
                       x-text="(() => { let count = 0; for (const inst of instancesOfType(tab.type)) count += (syncHistory[inst.id]?.length || 0); return count > 0 ? count + ' synced profile' + (count !== 1 ? 's' : '') : 'No syncs yet'; })()"></span>
               </div>
               <div x-show="syncRulesExpanded[tab.type]" style="border-top:1px solid #21262d">
@@ -516,7 +522,7 @@
                       <div style="padding:8px 16px;font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#0d1117;border-bottom:1px solid #21262d" x-text="inst.name"></div>
                       <template x-for="sh in syncHistory[inst.id]" :key="sh.arrProfileId">
                         <div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;gap:8px;font-size:12px">
-                          <span style="color:#58a6ff;font-weight:500" x-text="sh.profileName"></span>
+                          <a class="profile-name-link" style="color:#58a6ff;font-weight:500;cursor:pointer" @click.stop="editSyncedProfile(inst, sh)" x-text="sh.profileName"></a>
                           <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
                               <label class="toggle toggle-sm" @click.stop title="Toggle auto-sync for this profile">
                                 <input type="checkbox"
@@ -536,7 +542,8 @@
                           </template>
                           <span style="color:#8b949e;margin-left:auto" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
                           <span style="color:#8b949e" x-text="timeAgo(sh.lastSync)"></span>
-                          <button class="btn btn-sm" @click.stop="resyncProfile(inst, sh)">Re-sync</button>
+                          <button class="btn btn-sm" @click.stop="editSyncedProfile(inst, sh)">Edit</button>
+                          <button class="btn btn-sm" @click.stop="quickSyncProfile(inst, sh)">Sync</button>
                           <button class="btn btn-sm" style="color:#f85149;border-color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)">Remove</button>
                         </div>
                       </template>
@@ -2638,6 +2645,13 @@
               <span style="font-size:11px;color:#d29922">Override Mode — edit values to customize sync settings. Yellow indicates values that differ from TRaSH defaults.</span>
             </template>
             <div style="flex:1"></div>
+            <template x-if="config.advancedScoring && !profileDetail?.detail?.imported">
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#8b949e;cursor:pointer;user-select:none" title="Enable per-CF score overrides">
+                <input type="checkbox" x-model="advancedScoringEnabled" @change="if (!advancedScoringEnabled) syncScoreOverrides = {}" style="accent-color:#d29922">
+                <span>Advanced Scoring</span>
+                <span x-show="Object.keys(syncScoreOverrides).length > 0" style="background:#d29922;color:#0d1117;font-size:9px;padding:0 4px;border-radius:3px;font-weight:600" x-text="Object.keys(syncScoreOverrides).length"></span>
+              </label>
+            </template>
             <template x-if="!pdOverrideActive">
               <button class="btn" style="font-size:11px;padding:3px 10px;border-color:#d29922;color:#d29922" title="Override language, scores, cutoff, and upgrade settings for this sync only" @click="pdOverrideActive = true">Customize overrides</button>
             </template>
@@ -2648,6 +2662,9 @@
                 <button class="btn" style="font-size:11px;padding:3px 10px" @click="pdFinishOverrides()">Done</button>
               </div>
             </template>
+          </div>
+          <div x-show="advancedScoringEnabled" style="width:100%;margin-top:8px;padding:6px 10px;background:#2d1b00;border:1px solid #d29922;border-radius:4px;font-size:11px;color:#e3b341;line-height:1.4">
+            &#9888; Advanced scoring enabled — per-CF score overrides will be applied. Deviating from TRaSH defaults may produce unexpected results.
           </div>
         </div>
 
@@ -2675,9 +2692,16 @@
                       <template x-for="cf in cat.cfs" :key="cf.trashId">
                         <div class="cf-row">
                           <div class="cf-name" x-text="cf.name"></div>
-                          <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'">
-                            <span x-text="(cf.score > 0 ? '+' : '') + cf.score"></span>
-                          </div>
+                          <template x-if="advancedScoringEnabled">
+                            <input type="number" class="pb-score-input" style="flex-shrink:0"
+                                   :value="syncScoreOverrides[cf.trashId] !== undefined ? syncScoreOverrides[cf.trashId] : cf.score"
+                                   @input="syncScoreOverrides[cf.trashId] = $event.target.value !== '' ? parseInt($event.target.value) : undefined; syncScoreOverrides = {...syncScoreOverrides}">
+                          </template>
+                          <template x-if="!advancedScoringEnabled">
+                            <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'">
+                              <span x-text="(cf.score > 0 ? '+' : '') + cf.score"></span>
+                            </div>
+                          </template>
                         </div>
                       </template>
                     </div>
@@ -2859,9 +2883,62 @@
                         <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
                         <span class="cf-default-badge" x-show="cf.default">recommended</span>
                       </div>
-                      <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'">
-                        <span x-text="cf.hasScore ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></span>
-                      </div>
+                      <template x-if="advancedScoringEnabled">
+                        <input type="number" class="pb-score-input" style="flex-shrink:0"
+                               :value="syncScoreOverrides[cf.trashId] !== undefined ? syncScoreOverrides[cf.trashId] : cf.score"
+                               @input="syncScoreOverrides[cf.trashId] = $event.target.value !== '' ? parseInt($event.target.value) : undefined; syncScoreOverrides = {...syncScoreOverrides}">
+                      </template>
+                      <template x-if="!advancedScoringEnabled">
+                        <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'">
+                          <span x-text="cf.hasScore ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Custom CFs section -->
+        <template x-if="syncCustomCFs.length > 0 && profileDetail?.detail?.trashGroups">
+          <div>
+            <div style="font-size:11px;color:#6e7681;text-transform:uppercase;letter-spacing:0.5px;padding:12px 0 6px;font-weight:600">
+              Custom Formats
+              <span style="text-transform:none;letter-spacing:0;font-weight:400"> — user-created CFs to include in sync</span>
+            </div>
+            <template x-for="catGroup in (() => { const map = {}; for (const cf of syncCustomCFs) { const cat = cf.category || 'Uncategorized'; if (!map[cat]) map[cat] = []; map[cat].push(cf); } return Object.entries(map).map(([name, cfs]) => ({ name, cfs })); })()" :key="catGroup.name">
+              <div class="detail-section" style="margin-bottom:4px;border-left:3px solid #d29922">
+                <div class="detail-section-header" @click="toggleGroupExpanded('ccf', catGroup.name)">
+                  <span class="detail-section-chevron" :class="{ open: groupExpanded['ccf/' + catGroup.name] }">&#9654;</span>
+                  <div style="font-size:13px;font-weight:500;color:#d29922" x-text="catGroup.name"></div>
+                  <div style="font-size:11px;color:#484f58;margin-right:auto;margin-left:8px"
+                       x-text="catGroup.cfs.filter(cf => selectedOptionalCFs[cf.id]).length + '/' + catGroup.cfs.length"></div>
+                  <label class="toggle toggle-sm" @click.stop>
+                    <input type="checkbox"
+                           :checked="catGroup.cfs.every(cf => selectedOptionalCFs[cf.id])"
+                           @change="catGroup.cfs.forEach(cf => { selectedOptionalCFs[cf.id] = $event.target.checked }); selectedOptionalCFs = {...selectedOptionalCFs}">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+                <div x-show="groupExpanded['ccf/' + catGroup.name]">
+                  <template x-for="cf in catGroup.cfs" :key="cf.id">
+                    <div class="cf-row" :style="selectedOptionalCFs[cf.id] ? '' : 'opacity:0.35'">
+                      <label class="toggle toggle-sm">
+                        <input type="checkbox" :checked="selectedOptionalCFs[cf.id]"
+                               @change="selectedOptionalCFs[cf.id] = $event.target.checked; selectedOptionalCFs = {...selectedOptionalCFs}">
+                        <span class="slider"></span>
+                      </label>
+                      <div class="cf-name" style="color:#d29922" x-text="cf.name"></div>
+                      <template x-if="selectedOptionalCFs[cf.id]">
+                        <input type="number" class="pb-score-input" style="flex-shrink:0"
+                               :value="syncScoreOverrides[cf.id] !== undefined ? syncScoreOverrides[cf.id] : (cf.score || 0)"
+                               @input="syncScoreOverrides[cf.id] = $event.target.value !== '' ? parseInt($event.target.value) : 0; syncScoreOverrides = {...syncScoreOverrides}">
+                      </template>
+                      <template x-if="!selectedOptionalCFs[cf.id]">
+                        <div class="cf-score zero"><span x-text="cf.score || 0"></span></div>
+                      </template>
                     </div>
                   </template>
                 </div>
@@ -3055,6 +3132,25 @@
               <span style="color:#8b949e">Not cloned yet. Click Pull in the nav bar.</span>
             </template>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced Scoring -->
+    <div class="settings-section">
+      <div class="settings-title">Advanced Scoring</div>
+      <div class="settings-body">
+        <div class="setting-row">
+          <div class="setting-label">Advanced Scoring</div>
+          <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" x-model="config.advancedScoring" @change="saveConfig(['advancedScoring'])" style="accent-color:#d29922">
+              <span style="font-size:12px;color:#8b949e">Allow per-CF score overrides on TRaSH profiles</span>
+            </label>
+          </div>
+        </div>
+        <div style="padding:8px 16px;font-size:11px;color:#d29922;line-height:1.4">
+          &#9888; Deviating from TRaSH recommended scores may produce unexpected results. Use with caution.
         </div>
       </div>
     </div>
@@ -3439,8 +3535,8 @@
           <div x-show="syncPreview?.error" style="color:#f47067" x-text="syncPreview?.error"></div>
         </div>
       </div>
-      <!-- Sync behavior rules (update mode only) -->
-      <div x-show="syncMode === 'update'" style="margin-bottom:12px;padding:10px 12px;background:#161b22;border:1px solid #30363d;border-radius:6px">
+      <!-- Sync behavior rules -->
+      <div style="margin-bottom:12px;padding:10px 12px;background:#161b22;border:1px solid #30363d;border-radius:6px">
         <div style="font-size:12px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Custom Formats</div>
         <div style="display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -3467,6 +3563,7 @@
           </div>
         </div>
         <div style="font-size:10px;color:#484f58;margin-top:6px">Add: when to create missing CFs &bull; Scores: whether to overwrite manual changes &bull; Reset: what happens to scores of removed CFs</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:4px">CFs and scores will be synced according to the Custom Formats rules below. Use overrides on the profile page for score adjustments.</div>
       </div>
 
       <!-- Auto-sync toggle -->
@@ -3888,12 +3985,19 @@
   </div>
 
   <!-- Toast notifications -->
-  <div style="position:fixed;top:16px;right:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:400px">
+  <div style="position:fixed;bottom:20px;right:20px;z-index:10000;display:flex;flex-direction:column-reverse;gap:8px;max-width:420px;pointer-events:none">
     <template x-for="toast in toasts" :key="toast.id">
-      <div style="padding:10px 14px;border-radius:6px;font-size:12px;line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,0.4);cursor:pointer;animation:fadeIn 0.2s"
-           :style="toast.type === 'warning' ? 'background:#2d1b00;border:1px solid #d29922;color:#e3b341' : toast.type === 'error' ? 'background:#3d1f1f;border:1px solid #f85149;color:#f85149' : 'background:#0d2818;border:1px solid #238636;color:#3fb950'"
-           @click="toasts = toasts.filter(t => t.id !== toast.id)"
-           x-text="toast.message">
+      <div style="position:relative;border-radius:6px;font-size:12px;line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,0.4);overflow:hidden;pointer-events:auto"
+           :class="toast.exiting ? 'toast-exit' : 'toast-enter'"
+           :style="toast.type === 'warning' ? 'background:#2d1b00;border:1px solid #d29922;color:#e3b341' : toast.type === 'error' ? 'background:#3d1f1f;border:1px solid #f85149;color:#f85149' : 'background:#0d2818;border:1px solid #238636;color:#3fb950'">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 32px 10px 14px">
+          <span x-text="toast.type === 'error' ? '✕' : toast.type === 'warning' ? '⚠' : '✓'" style="font-size:14px;flex-shrink:0"></span>
+          <span x-text="toast.message" style="flex:1"></span>
+          <button @click="dismissToast(toast.id)" style="position:absolute;top:6px;right:8px;background:none;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:0.6;padding:0;line-height:1">&times;</button>
+        </div>
+        <div style="height:2px;width:100%;position:relative">
+          <div :style="'height:100%;animation:toastProgress ' + (toast.duration || 8000) + 'ms linear forwards;' + (toast.type === 'warning' ? 'background:#d29922' : toast.type === 'error' ? 'background:#f85149' : 'background:#3fb950')"></div>
+        </div>
       </div>
     </template>
   </div>
@@ -4423,7 +4527,10 @@ function clonarr() {
     qsSyncResult: {},    // per app-type: { ok, message }
     qsAutoSync: {},      // per app-type: { enabled, type }
     confirmModal: { show: false, title: '', message: '', confirmLabel: '', onConfirm: null, onCancel: null },
-    toasts: [], // { id, message, type: 'info'|'warning'|'error', timeout }
+    toasts: [], // { id, message, type: 'info'|'warning'|'error', duration }
+    syncScoreOverrides: {}, // trash_id → custom score
+    advancedScoringEnabled: false, // toggle for advanced score editing
+    syncCustomCFs: [], // user-created CFs for adding to TRaSH profiles
 
     // Naming schemes (cached per app type)
     namingData: {},  // { radarr: { folder: {...}, file: {...} }, sonarr: { season: {...}, series: {...}, episodes: {...} } }
@@ -4668,6 +4775,7 @@ function clonarr() {
         if (fields && fields.includes('pullInterval')) body.pullInterval = this.config.pullInterval;
         if (fields && fields.includes('devMode')) body.devMode = this.config.devMode;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
+        if (fields && fields.includes('advancedScoring')) body.advancedScoring = this.config.advancedScoring;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
         await fetch('/api/config', {
           method: 'PUT',
@@ -8340,8 +8448,16 @@ function clonarr() {
 
     showToast(message, type = 'info', duration = 8000) {
       const id = Date.now() + Math.random();
-      this.toasts = [...this.toasts, { id, message, type }];
-      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, duration);
+      this.toasts = [...this.toasts, { id, message, type, duration, exiting: false }];
+      setTimeout(() => this.dismissToast(id), duration);
+    },
+
+    dismissToast(id) {
+      const toast = this.toasts.find(t => t.id === id);
+      if (!toast || toast.exiting) return;
+      toast.exiting = true;
+      this.toasts = [...this.toasts];
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 300);
     },
 
     async checkCleanupEvents() {
@@ -8398,7 +8514,12 @@ function clonarr() {
       this.selectedOptionalCFs = {};
 
       this.showProfileInfo = false;
+      this.syncScoreOverrides = {};
+      this.advancedScoringEnabled = false;
+      this.syncCustomCFs = [];
       this.profileDetail = { instance: inst, profile: profile, detail: null };
+      // Load custom CFs for this app type
+      fetch(`/api/custom-cfs/${inst.type}`).then(r => r.ok ? r.json() : []).then(d => this.syncCustomCFs = d || []).catch(() => {});
       // Pre-load languages and quality presets for this instance (for override dropdowns)
       this.getLanguagesForInstance(inst.id);
       if (!this.pbQualityPresets.length) {
@@ -8955,6 +9076,9 @@ function clonarr() {
           }
         }
       }
+      for (const cf of (this.syncCustomCFs || [])) {
+        if (this.selectedOptionalCFs[cf.id]) idSet.add(cf.id);
+      }
       return [...idSet];
     },
 
@@ -9116,6 +9240,7 @@ function clonarr() {
       if (hasOverrides) body.overrides = overrides;
       // Sync behavior rules
       if (this.syncForm.behavior) body.behavior = this.syncForm.behavior;
+      if (Object.keys(this.syncScoreOverrides).length > 0) body.scoreOverrides = this.syncScoreOverrides;
       return body;
     },
 
@@ -9286,6 +9411,90 @@ function clonarr() {
       // Restore behavior from sync history
       if (sh.behavior) {
         this.syncForm.behavior = { ...this.syncForm.behavior, ...sh.behavior };
+      }
+      // Restore score overrides from sync history or auto-sync rule
+      const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+      const scoreOv = rule?.scoreOverrides || sh.scoreOverrides;
+      if (scoreOv && Object.keys(scoreOv).length > 0) {
+        this.syncScoreOverrides = { ...scoreOv };
+        this.advancedScoringEnabled = true;
+      }
+    },
+
+    async editSyncedProfile(inst, sh) {
+      await this.resyncProfile(inst, sh);
+    },
+
+    async quickSyncProfile(inst, sh) {
+      const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+      const body = {
+        instanceId: inst.id,
+        profileTrashId: sh.profileTrashId,
+        arrProfileId: sh.arrProfileId,
+        selectedCFs: rule?.selectedCFs || [],
+        behavior: rule?.behavior || sh.behavior || { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' },
+        overrides: rule?.overrides || sh.overrides || null,
+        scoreOverrides: rule?.scoreOverrides || sh.scoreOverrides || null
+      };
+      this.showToast(`Syncing "${sh.profileName}" to ${inst.name}...`, 'info', 15000);
+      try {
+        const r = await fetch('/api/sync/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) {
+          const e = await r.json().catch(() => ({ error: 'Sync failed' }));
+          this.showToast(`Sync failed for "${sh.profileName}": ${e.error || 'Unknown error'}`, 'error', 10000);
+          return;
+        }
+        const result = await r.json();
+        if (result.errors?.length > 0) {
+          this.showToast(`Sync "${sh.profileName}": completed with errors — ${result.errors[0]}`, 'warning', 10000);
+        } else {
+          const changes = [];
+          if (result.cfsCreated > 0) changes.push(`${result.cfsCreated} CFs created`);
+          if (result.cfsUpdated > 0) changes.push(`${result.cfsUpdated} CFs updated`);
+          if (result.scoresUpdated > 0) changes.push(`${result.scoresUpdated} scores set`);
+          const summary = changes.length > 0 ? changes.join(', ') : 'no changes needed';
+          this.showToast(`Synced "${sh.profileName}" to ${inst.name} — ${summary}`, 'info', 8000);
+        }
+        await this.loadSyncHistory(inst.id);
+      } catch (e) {
+        this.showToast(`Sync failed for "${sh.profileName}": ${e.message}`, 'error', 10000);
+      }
+    },
+
+    async syncAllProfiles(appType) {
+      const instances = this.instancesOfType(appType);
+      let total = 0;
+      const tasks = [];
+      for (const inst of instances) {
+        const history = this.syncHistory[inst.id] || [];
+        for (const sh of history) {
+          tasks.push({ inst, sh });
+          total++;
+        }
+      }
+      if (total === 0) {
+        this.showToast('No synced profiles to sync', 'warning');
+        return;
+      }
+      this.showToast(`Syncing ${total} profile${total !== 1 ? 's' : ''}...`, 'info', 15000);
+      let succeeded = 0;
+      let failed = 0;
+      for (const { inst, sh } of tasks) {
+        try {
+          await this.quickSyncProfile(inst, sh);
+          succeeded++;
+        } catch (e) {
+          failed++;
+        }
+      }
+      if (failed > 0) {
+        this.showToast(`Sync All complete: ${succeeded} succeeded, ${failed} failed`, 'warning', 10000);
+      } else {
+        this.showToast(`Sync All complete: ${succeeded} profile${succeeded !== 1 ? 's' : ''} synced`, 'info', 8000);
       }
     },
 
