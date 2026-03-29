@@ -68,7 +68,8 @@ type SyncRequest struct {
 	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
 	ProfileName       string         `json:"profileName"`                 // custom name for new profile (optional)
 	SelectedCFs       []string       `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
-	ScoreOverrides    map[string]int `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // quality item overrides (name → allowed)
 	// Profile setting overrides (nil = use TRaSH default)
 	Overrides *SyncOverrides `json:"overrides,omitempty"`
 	// Sync behavior rules (nil = defaults: add_missing, remove_custom, reset_to_zero)
@@ -686,6 +687,32 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
+		// Apply quality overrides to new profile
+		if len(req.QualityOverrides) > 0 {
+			for i := range arrProfile.Items {
+				name := arrProfile.Items[i].Name
+				if name == "" && arrProfile.Items[i].Quality != nil {
+					name = arrProfile.Items[i].Quality.Name
+				}
+				if override, ok := req.QualityOverrides[name]; ok {
+					arrProfile.Items[i].Allowed = override
+				}
+			}
+			// Re-resolve cutoff — disabled quality can't be cutoff
+			for _, item := range arrProfile.Items {
+				if item.Allowed {
+					name := item.Name
+					if name == "" && item.Quality != nil {
+						name = item.Quality.Name
+					}
+					if cid, err := resolveCutoff(name, arrProfile.Items); err == nil {
+						arrProfile.Cutoff = cid
+					}
+					break
+				}
+			}
+		}
+
 		created, err := client.CreateProfile(arrProfile)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("create profile: %v", err))
@@ -952,6 +979,28 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					}
 					log.Printf("Sync: updated quality items: %d items (%d from TRaSH, %d unused)",
 						len(targetProfile.Items), len(newItems), len(unused))
+				}
+			}
+		}
+
+		// Apply quality overrides (user-toggled resolutions)
+		if len(req.QualityOverrides) > 0 {
+			for i := range targetProfile.Items {
+				name := targetProfile.Items[i].Name
+				if name == "" && targetProfile.Items[i].Quality != nil {
+					name = targetProfile.Items[i].Quality.Name
+				}
+				if override, ok := req.QualityOverrides[name]; ok {
+					if targetProfile.Items[i].Allowed != override {
+						targetProfile.Items[i].Allowed = override
+						if override {
+							result.QualityDetails = append(result.QualityDetails, name+": Disabled → Enabled (override)")
+						} else {
+							result.QualityDetails = append(result.QualityDetails, name+": Enabled → Disabled (override)")
+						}
+						result.QualityUpdated = true
+						updated = true
+					}
 				}
 			}
 		}

@@ -24,7 +24,6 @@
   <Requires>Radarr or Sonarr instance with API access. See project page for setup instructions.</Requires>
   <Config Name="WebUI" Target="6060" Default="6060" Mode="tcp" Description="Web UI port" Type="Port" Display="always" Required="true" Mask="false">6060</Config>
   <Config Name="Config Path" Target="/config" Default="/mnt/user/appdata/clonarr" Mode="rw" Description="Configuration, profiles, sync history, and TRaSH Guides cache" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/clonarr</Config>
-  <Config Name="Timezone" Target="TZ" Default="America/New_York" Description="Container timezone" Type="Variable" Display="always" Required="false" Mask="false">America/New_York</Config>
   <Config Name="PUID" Target="PUID" Default="99" Description="User ID for file ownership" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Description="Group ID for file ownership" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
 </Container>

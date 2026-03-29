@@ -52,7 +52,8 @@ type AutoSyncRule struct {
 	ImportedProfileID string         `json:"importedProfileId,omitempty"`
 	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to update
 	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
-	ScoreOverrides    map[string]int `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // quality item overrides (name → allowed)
 	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
 	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
 	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
@@ -118,10 +119,11 @@ type SyncHistoryEntry struct {
 	ArrProfileName string            `json:"arrProfileName"`
 	SyncedCFs      []string          `json:"syncedCFs"`
 	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
-	ScoreOverrides map[string]int    `json:"scoreOverrides,omitempty"`
-	Overrides      *SyncOverrides    `json:"overrides,omitempty"`
-	Behavior       *SyncBehavior     `json:"behavior,omitempty"`
-	CFsCreated     int               `json:"cfsCreated"`
+	ScoreOverrides   map[string]int    `json:"scoreOverrides,omitempty"`
+	QualityOverrides map[string]bool   `json:"qualityOverrides,omitempty"`
+	Overrides        *SyncOverrides    `json:"overrides,omitempty"`
+	Behavior         *SyncBehavior     `json:"behavior,omitempty"`
+	CFsCreated       int               `json:"cfsCreated"`
 	CFsUpdated     int               `json:"cfsUpdated"`
 	ScoresUpdated  int               `json:"scoresUpdated"`
 	LastSync       string            `json:"lastSync"`
@@ -233,6 +235,12 @@ func (cs *configStore) Get() Config {
 				cfg.SyncHistory[i].ScoreOverrides[k] = v
 			}
 		}
+		if len(sh.QualityOverrides) > 0 {
+			cfg.SyncHistory[i].QualityOverrides = make(map[string]bool, len(sh.QualityOverrides))
+			for k, v := range sh.QualityOverrides {
+				cfg.SyncHistory[i].QualityOverrides[k] = v
+			}
+		}
 		if sh.Overrides != nil {
 			o := *sh.Overrides
 			cfg.SyncHistory[i].Overrides = &o
@@ -282,6 +290,12 @@ func (cs *configStore) Get() Config {
 				cfg.AutoSync.Rules[i].ScoreOverrides = make(map[string]int, len(r.ScoreOverrides))
 				for k, v := range r.ScoreOverrides {
 					cfg.AutoSync.Rules[i].ScoreOverrides[k] = v
+				}
+			}
+			if len(r.QualityOverrides) > 0 {
+				cfg.AutoSync.Rules[i].QualityOverrides = make(map[string]bool, len(r.QualityOverrides))
+				for k, v := range r.QualityOverrides {
+					cfg.AutoSync.Rules[i].QualityOverrides[k] = v
 				}
 			}
 			if r.Behavior != nil {

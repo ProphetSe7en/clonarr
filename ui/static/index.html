@@ -2446,7 +2446,7 @@
 
   <!-- ==================== PROFILE DETAIL ==================== -->
   <div class="page" x-show="profileDetail && currentTab !== 'settings' && currentTab !== 'about'" x-cloak>
-    <a class="back-link" @click="profileDetail = null; syncPlan = null; syncResult = null; showProfileInfo = false; selectedOptionalCFs = {}; groupExpanded = {}; detailSections = { core: true }; pdOverrideActive = false; cfScoreOverrides = {}; cfScoreOverrideActive = false; pdOverrides = { language: {enabled:true,value:'Original'}, upgradeAllowed: {enabled:true,value:true}, minFormatScore: {enabled:true,value:0}, minUpgradeFormatScore: {enabled:true,value:1}, cutoffFormatScore: {enabled:true,value:10000}, cutoffQuality: '' }">&larr; Back to Profiles</a>
+    <a class="back-link" @click="profileDetail = null; syncPlan = null; syncResult = null; showProfileInfo = false; selectedOptionalCFs = {}; groupExpanded = {}; detailSections = { core: true }; pdOverrideActive = false; cfScoreOverrides = {}; cfScoreOverrideActive = false; qualityOverrides = {}; qualityOverrideActive = false; pdOverrides = { language: {enabled:true,value:'Original'}, upgradeAllowed: {enabled:true,value:true}, minFormatScore: {enabled:true,value:0}, minUpgradeFormatScore: {enabled:true,value:1}, cutoffFormatScore: {enabled:true,value:10000}, cutoffQuality: '' }">&larr; Back to Profiles</a>
 
     <div style="margin-top:16px" x-show="profileDetail">
       <!-- Sync result banner -->
@@ -2672,13 +2672,44 @@
                   <input type="checkbox" x-model="cfScoreOverrideActive" style="accent-color:#d29922">
                   CF scores
                 </label>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#d29922" title="Enable/disable quality items (resolutions)">
+                  <input type="checkbox" x-model="qualityOverrideActive" style="accent-color:#d29922">
+                  Qualities
+                </label>
                 <button class="btn" style="font-size:11px;padding:3px 10px;border-color:#d29922;color:#d29922"
-                        @click="const p = profileDetail.detail.profile; pdOverrides.language = {enabled:true,value:p.language||'Original'}; pdOverrides.upgradeAllowed = {enabled:true,value:p.upgradeAllowed??true}; pdOverrides.minFormatScore = {enabled:true,value:p.minFormatScore??0}; pdOverrides.minUpgradeFormatScore = {enabled:true,value:p.minUpgradeFormatScore??1}; pdOverrides.cutoffFormatScore = {enabled:true,value:p.cutoffFormatScore||p.cutoffScore||10000}; pdOverrides.cutoffQuality = p.cutoff||''; cfScoreOverrides = {}; cfScoreOverrideActive = false">Reset to TRaSH</button>
+                        @click="const p = profileDetail.detail.profile; pdOverrides.language = {enabled:true,value:p.language||'Original'}; pdOverrides.upgradeAllowed = {enabled:true,value:p.upgradeAllowed??true}; pdOverrides.minFormatScore = {enabled:true,value:p.minFormatScore??0}; pdOverrides.minUpgradeFormatScore = {enabled:true,value:p.minUpgradeFormatScore??1}; pdOverrides.cutoffFormatScore = {enabled:true,value:p.cutoffFormatScore||p.cutoffScore||10000}; pdOverrides.cutoffQuality = p.cutoff||''; cfScoreOverrides = {}; cfScoreOverrideActive = false; qualityOverrides = {}; qualityOverrideActive = false">Reset to TRaSH</button>
                 <button class="btn" style="font-size:11px;padding:3px 10px" @click="pdFinishOverrides()">Done</button>
               </div>
             </template>
           </div>
         </div>
+
+        <!-- Quality item overrides -->
+        <template x-if="qualityOverrideActive && profileDetail?.detail?.profile?.items?.length > 0">
+          <div style="margin-bottom:12px;padding:10px 14px;background:#161b22;border:1px solid #d29922;border-radius:6px">
+            <div style="font-size:12px;font-weight:600;color:#d29922;margin-bottom:8px">Quality Overrides</div>
+            <div style="font-size:10px;color:#6e7681;margin-bottom:8px">Toggle resolutions on/off. Changes override TRaSH defaults for this sync rule.</div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <template x-for="item in profileDetail.detail.profile.items" :key="item.name">
+                <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+                  <input type="checkbox"
+                         :checked="qualityOverrides[item.name] !== undefined ? qualityOverrides[item.name] : item.allowed"
+                         @change="if ($event.target.checked === item.allowed) { const {[item.name]: _, ...rest} = qualityOverrides; qualityOverrides = rest; } else { qualityOverrides = {...qualityOverrides, [item.name]: $event.target.checked}; }"
+                         style="accent-color:#d29922;flex-shrink:0">
+                  <span style="font-size:12px;min-width:180px" :style="(qualityOverrides[item.name] !== undefined ? qualityOverrides[item.name] : item.allowed) ? 'color:#e1e4e8' : 'color:#484f58'" x-text="item.name"></span>
+                  <template x-if="item.items && item.items.length > 0">
+                    <div style="display:flex;gap:3px">
+                      <template x-for="sub in item.items" :key="sub">
+                        <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#30363d;color:#8b949e" x-text="sub"></span>
+                      </template>
+                    </div>
+                  </template>
+                  <span x-show="qualityOverrides[item.name] !== undefined" style="font-size:9px;color:#d29922;margin-left:auto">override</span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
 
         <!-- Imported profile: Required CFs (locked) -->
         <template x-if="profileDetail?.detail?.imported && profileDetail?.detail?.importedRequiredCategories?.length > 0">
@@ -4398,6 +4429,8 @@ function clonarr() {
     pdOverrideActive: false, // whether override editing mode is open
     cfScoreOverrides: {}, // per-CF score overrides { trashId: score }
     cfScoreOverrideActive: false, // whether CF score editing is enabled
+    qualityOverrides: {}, // quality item overrides { name: allowed(bool) }
+    qualityOverrideActive: false, // whether quality editing is enabled
     pdOverrides: {
       language: { enabled: true, value: 'Original' },
       upgradeAllowed: { enabled: true, value: true },
@@ -8520,6 +8553,8 @@ function clonarr() {
           this.pdOverrideActive = false;
           this.cfScoreOverrides = {};
           this.cfScoreOverrideActive = false;
+          this.qualityOverrides = {};
+          this.qualityOverrideActive = false;
           this.pdOverrides = {
             language: { enabled: true, value: p.language || 'Original' },
             upgradeAllowed: { enabled: true, value: p.upgradeAllowed ?? true },
@@ -9348,6 +9383,7 @@ function clonarr() {
       if (hasOverrides) body.overrides = overrides;
       // Per-CF score overrides
       if (Object.keys(this.cfScoreOverrides).length > 0) body.scoreOverrides = this.cfScoreOverrides;
+      if (Object.keys(this.qualityOverrides).length > 0) body.qualityOverrides = this.qualityOverrides;
       // Sync behavior rules
       if (this.syncForm.behavior) body.behavior = this.syncForm.behavior;
       return body;
@@ -9453,7 +9489,8 @@ function clonarr() {
             arrProfileId: arrId,
             behavior: this.syncForm.behavior || existingRule.behavior,
             overrides: syncBody.overrides || null,
-            scoreOverrides: syncBody.scoreOverrides || null
+            scoreOverrides: syncBody.scoreOverrides || null,
+            qualityOverrides: syncBody.qualityOverrides || null
           };
           try {
             await fetch(`/api/auto-sync/rules/${existingRule.id}`, {
@@ -9486,6 +9523,7 @@ function clonarr() {
         arrProfileId: sh.arrProfileId,
         selectedCFs: Object.keys(sh.selectedCFs || {}).filter(k => sh.selectedCFs[k]),
         scoreOverrides: sh.scoreOverrides || null,
+        qualityOverrides: sh.qualityOverrides || null,
         overrides: sh.overrides || null,
         behavior: sh.behavior || null
       };
@@ -9601,6 +9639,11 @@ function clonarr() {
         this.cfScoreOverrides = { ...sh.scoreOverrides };
         this.cfScoreOverrideActive = true;
       }
+      // Restore quality overrides
+      if (sh.qualityOverrides && Object.keys(sh.qualityOverrides).length > 0) {
+        this.qualityOverrides = { ...sh.qualityOverrides };
+        this.qualityOverrideActive = true;
+      }
       // Restore behavior from sync history
       if (sh.behavior) {
         this.syncForm.behavior = { ...this.syncForm.behavior, ...sh.behavior };
@@ -9703,6 +9746,7 @@ function clonarr() {
           behavior: this.syncForm.behavior,
           overrides: syncBody.overrides || null,
           scoreOverrides: syncBody.scoreOverrides || null,
+          qualityOverrides: syncBody.qualityOverrides || null,
           arrProfileId: parseInt(this.syncForm.arrProfileId) || existing.arrProfileId
         };
         try {
@@ -9727,7 +9771,8 @@ function clonarr() {
           selectedCFs: this.getSelectedCFIds(),
           behavior: this.syncForm.behavior,
           overrides: syncBody.overrides || null,
-          scoreOverrides: syncBody.scoreOverrides || null
+          scoreOverrides: syncBody.scoreOverrides || null,
+          qualityOverrides: syncBody.qualityOverrides || null
         };
         try {
           const r = await fetch('/api/auto-sync/rules', {
