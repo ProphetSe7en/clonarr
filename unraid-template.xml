@@ -10,7 +10,7 @@
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/prophetse7en/clonarr/issues</Support>
+  <Support>https://discordapp.com/channels/492590071455940612/1486391669384417300</Support>
   <Project>https://github.com/prophetse7en/clonarr</Project>
   <Overview>TRaSH Guides sync tool for Radarr and Sonarr with a built-in web UI. Browse, customize, and sync Custom Formats, Quality Profiles, Scores, and Quality Sizes from TRaSH Guides to your Radarr and Sonarr instances. Features profile builder, scoring sandbox, auto-sync, and import/export support.</Overview>
   <Category>MediaApp:Other</Category>

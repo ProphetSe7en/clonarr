@@ -204,6 +204,13 @@ Clonarr is in **beta**. While it has been tested extensively in a home environme
 
 The authors are not responsible for any unintended changes to your media automation setup. **Use at your own risk.**
 
+## Support
+
+For questions, help, or bug reports:
+
+- **Discord:** [`#prophetse7en-apps`](https://discordapp.com/channels/492590071455940612/1486391669384417300) on the [TRaSH Guides Discord](https://trash-guides.info/discord) (under Community Apps)
+- **GitHub:** [prophetse7en/clonarr/issues](https://github.com/prophetse7en/clonarr/issues)
+
 ## License
 
 MIT
