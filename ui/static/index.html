@@ -3106,39 +3106,28 @@
               </template>
               <template x-if="cleanupResult.affectCount > 0">
                 <div>
-                  <!-- Short summary for large lists or nuclear operations -->
-                  <template x-if="cleanupResult.affectCount >= 20 || ['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
+                  <!-- Summary for delete-all operations -->
+                  <template x-if="['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
                     <div style="text-align:center;padding:20px 16px">
                       <div style="font-size:36px;margin-bottom:8px;color:#d29922">&#9888;</div>
                       <div style="font-size:15px;color:#e1e4e8;margin-bottom:4px">
-                        <strong x-text="cleanupResult.affectCount"></strong> <span x-text="cleanupResult.affectCount === 1 ? 'item' : 'items'"></span> will be affected
+                        <strong x-text="cleanupResult.affectCount"></strong> <span x-text="cleanupResult.affectCount === 1 ? 'custom format' : 'custom formats'"></span> will be deleted
                       </div>
-                      <div style="font-size:12px;color:#8b949e" x-text="'out of ' + cleanupResult.totalCount + ' total custom formats'"></div>
                     </div>
                   </template>
-                  <!-- Detailed list for small, targeted operations -->
-                  <template x-if="cleanupResult.affectCount < 20 && !['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
+                  <!-- Detailed list for scan operations -->
+                  <template x-if="!['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
                     <div>
                       <div style="font-size:13px;color:#e1e4e8;margin-bottom:12px">
                         Found <strong x-text="cleanupResult.affectCount"></strong> items out of <span x-text="cleanupResult.totalCount"></span> total CFs.
                       </div>
-                      <div style="max-height:350px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
-                        <table style="width:100%;font-size:12px;border-collapse:collapse">
-                          <thead>
-                            <tr style="background:#161b22;position:sticky;top:0">
-                              <th style="text-align:left;padding:8px;color:#8b949e;border-bottom:1px solid #21262d">Name</th>
-                              <th style="text-align:left;padding:8px;color:#8b949e;border-bottom:1px solid #21262d">Detail</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <template x-for="item in cleanupResult.items" :key="item.id">
-                              <tr style="border-bottom:1px solid #21262d">
-                                <td style="padding:6px 8px;color:#e1e4e8" x-text="item.name"></td>
-                                <td style="padding:6px 8px;color:#8b949e;font-size:11px" x-text="item.detail || '—'"></td>
-                              </tr>
-                            </template>
-                          </tbody>
-                        </table>
+                      <div style="columns:2;column-gap:16px;font-size:12px">
+                        <template x-for="item in cleanupResult.items" :key="item.id">
+                          <div style="break-inside:avoid;padding:4px 8px;margin-bottom:4px;background:#161b22;border-radius:4px;border-left:3px solid #30363d">
+                            <div style="color:#e1e4e8;font-weight:500" x-text="item.name"></div>
+                            <div x-show="item.detail" style="color:#8b949e;font-size:11px;margin-top:1px" x-text="item.detail"></div>
+                          </div>
+                        </template>
                       </div>
                     </div>
                   </template>
