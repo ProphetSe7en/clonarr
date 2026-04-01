@@ -125,11 +125,11 @@
   .cat-golden-rule .detail-section-header, .cat-golden-rule .pb-cat-header { border-left: 3px solid #d2a8ff; }
   .cat-audio .detail-section-header, .cat-audio .pb-cat-header { border-left: 3px solid #d29922; }
   .cat-hdr .detail-section-header, .cat-hdr .pb-cat-header { border-left: 3px solid #a371f7; }
-  .cat-streaming .detail-section-header, .cat-streaming .pb-cat-header { border-left: 3px solid #58a6ff; }
+  .cat-streaming .detail-section-header, .cat-streaming .pb-cat-header { border-left: 3px solid #39d353; }
   .cat-optional .detail-section-header, .cat-optional .pb-cat-header { border-left: 3px solid #58a6ff; }
   .cat-unwanted .detail-section-header, .cat-unwanted .pb-cat-header { border-left: 3px solid #f85149; }
-  .cat-hq-release-groups .detail-section-header, .cat-hq-release-groups .pb-cat-header { border-left: 3px solid #d29922; }
-  .cat-resolution .detail-section-header, .cat-resolution .pb-cat-header { border-left: 3px solid #58a6ff; }
+  .cat-hq-release-groups .detail-section-header, .cat-hq-release-groups .pb-cat-header { border-left: 3px solid #e3b341; }
+  .cat-resolution .detail-section-header, .cat-resolution .pb-cat-header { border-left: 3px solid #79c0ff; }
   .cat-anime .detail-section-header, .cat-anime .pb-cat-header { border-left: 3px solid #f778ba; }
   .cat-french .detail-section-header, .cat-french .pb-cat-header { border-left: 3px solid #39d2e0; }
   .cat-language .detail-section-header, .cat-language .pb-cat-header { border-left: 3px solid #3fb950; }
@@ -430,7 +430,10 @@
       <template x-if="trashStatus.cloned">
         <span @click="showChangelog = !showChangelog" style="cursor:pointer" title="Click for changelog">
           TRaSH synced <span x-text="formatSyncTime(trashStatus.lastPull)"></span>
-          <span x-show="trashStatus.commitHash" style="color:#484f58;font-size:10px;margin-left:4px" x-text="trashStatus.commitHash"></span>
+          <span x-show="trashStatus.commitHash" style="color:#8b949e;font-size:10px;margin-left:4px" x-text="trashStatus.commitHash"></span>
+          <span x-show="config.pullInterval && config.pullInterval !== 'off' && trashStatus.lastPull"
+                style="color:#6e7681;font-size:10px;margin-left:6px"
+                x-text="'· next ' + nextPullTime()"></span>
           <span style="color:#484f58;font-size:10px;margin-left:2px;transition:transform 0.2s;display:inline-block"
                 :style="showChangelog ? 'transform:rotate(180deg)' : ''">&#9662;</span>
         </span>
@@ -446,9 +449,23 @@
       <!-- Changelog dropdown -->
       <div x-show="showChangelog" @click.outside="showChangelog = false" x-cloak
            style="position:absolute;top:calc(100% + 6px);right:0;width:500px;background:#161b22;border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:200;max-height:420px;overflow-y:auto">
+
+        <!-- Last pull diff -->
+        <template x-if="trashStatus.lastDiff">
+          <div>
+            <div style="padding:10px 16px 8px;font-size:13px;font-weight:600;color:#e1e4e8;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center">
+              <span>Latest Update <span style="font-size:10px;color:#8b949e;font-weight:400" x-text="trashStatus.lastDiff.time ? formatSyncTime(trashStatus.lastDiff.time) : ''"></span></span>
+              <span style="font-size:10px;color:#8b949e;font-weight:400" x-text="trashStatus.lastDiff.prevCommit + ' → ' + trashStatus.lastDiff.newCommit"></span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid #30363d;font-size:12px;color:#c9d1d9;white-space:pre-line;line-height:1.6"
+                 x-text="trashStatus.lastDiff.summary.replace(/\*\*/g, '').replace(/^\n/, '')"></div>
+          </div>
+        </template>
+
+        <!-- TRaSH Changelog (updates.txt) -->
         <div style="padding:10px 16px 8px;font-size:13px;font-weight:600;color:#e1e4e8;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center">
-          Guide Updates
-          <span style="font-size:10px;color:#484f58;font-weight:400">from updates.txt</span>
+          TRaSH Changelog
+          <span style="font-size:10px;color:#8b949e;font-weight:400">from updates.txt</span>
         </div>
         <template x-if="!trashStatus.changelog || trashStatus.changelog.length === 0">
           <div style="padding:16px;font-size:12px;color:#8b949e;text-align:center">No changelog available</div>
@@ -457,7 +474,7 @@
           <div style="padding:10px 16px;border-bottom:1px solid #21262d">
             <div style="font-size:11px;font-weight:600;color:#8b949e;margin-bottom:6px;display:flex;justify-content:space-between">
               <span x-text="formatChangelogDate(section.date)"></span>
-              <span style="color:#484f58;font-weight:400" x-text="section.entries.length + (section.entries.length === 1 ? ' change' : ' changes')"></span>
+              <span style="color:#6e7681;font-weight:400" x-text="section.entries.length + (section.entries.length === 1 ? ' change' : ' changes')"></span>
             </div>
             <template x-for="entry in section.entries" :key="entry.pr || entry.msg">
               <div style="display:flex;align-items:flex-start;gap:8px;padding:3px 0;font-size:12px;line-height:1.4">
@@ -468,8 +485,8 @@
                   <span style="color:#8b949e" x-text="entry.scope + ':'"></span>
                   <span style="color:#c9d1d9" x-text="entry.msg"></span>
                   <a x-show="entry.pr" :href="'https://github.com/TRaSH-Guides/Guides/pull/' + entry.pr"
-                     target="_blank" rel="noopener" style="color:#484f58;font-size:10px;text-decoration:none;margin-left:4px"
-                     @mouseenter="$el.style.color='#58a6ff'" @mouseleave="$el.style.color='#484f58'"
+                     target="_blank" rel="noopener" style="color:#6e7681;font-size:10px;text-decoration:none;margin-left:4px"
+                     @mouseenter="$el.style.color='#58a6ff'" @mouseleave="$el.style.color='#6e7681'"
                      x-text="'#' + entry.pr"></a>
                 </span>
               </div>
@@ -1062,20 +1079,20 @@
                 <button class="btn btn-sm" style="background:#238636;color:#fff;white-space:nowrap" @click="openImportCFModal(tab.type)">Import</button>
               </div>
             </div>
-            <template x-for="cat in getCFBrowseGroups(tab.type)" :key="cat.category">
-              <div class="card" style="margin-bottom:12px">
-                <div class="detail-section-header" @click="toggleDetailSection('cfb_' + cat.category)" style="cursor:pointer"
+            <template x-for="cat in getCFBrowseGroups(tab.type)" :key="cat.displayName">
+              <div class="detail-section" :class="getCategoryClass(cat.category)" style="margin-bottom:8px">
+                <div class="detail-section-header" @click="toggleDetailSection('cfb_' + cat.displayName)" style="cursor:pointer"
                      :style="cat.isCustom ? 'border-left:3px solid #d29922;background:#1a1500' : ''">
-                  <div class="detail-section-label" :style="cat.isCustom ? 'color:#d29922' : ''" x-text="cat.category"></div>
+                  <div class="detail-section-label" :style="cat.isCustom ? 'color:#d29922' : ''" x-text="cat.displayName"></div>
                   <div class="detail-section-count" x-text="cat.totalCFs + ' CFs'"></div>
-                  <span class="detail-section-chevron" :class="{ open: detailSections['cfb_' + cat.category] }">&#9654;</span>
+                  <span class="detail-section-chevron" :class="{ open: detailSections['cfb_' + cat.displayName] }">&#9654;</span>
                 </div>
-                <div x-show="detailSections['cfb_' + cat.category]">
+                <div x-show="detailSections['cfb_' + cat.displayName]">
                   <template x-for="group in cat.groups" :key="group.name">
                     <div class="cf-section">
                       <!-- Single group in category: show CFs directly -->
                       <template x-if="cat.groups.length === 1">
-                        <div>
+                        <div :style="group.cfs.length >= 30 ? 'display:grid;grid-template-columns:repeat(3,1fr);gap:0 12px' : group.cfs.length >= 10 ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:0 12px' : ''">
                           <template x-for="cf in group.cfs" :key="cf.trashId">
                             <div>
                               <div class="cf-row">
@@ -1117,15 +1134,16 @@
                       <template x-if="cat.groups.length > 1 && group.cfs.length > 1">
                         <div>
                           <div class="cf-section-title" style="cursor:pointer;user-select:none"
-                               @click="toggleGroupExpanded('cfb_' + cat.category, group.shortName)">
+                               @click="toggleGroupExpanded('cfb_' + cat.displayName, group.shortName)">
                             <div style="display:flex;align-items:center;gap:8px">
                               <span class="detail-section-chevron" style="font-size:10px"
-                                    :class="{ open: groupExpanded['cfb_' + cat.category + '/' + group.shortName] }">&#9654;</span>
+                                    :class="{ open: groupExpanded['cfb_' + cat.displayName + '/' + group.shortName] }">&#9654;</span>
                               <span x-text="group.shortName"></span>
                               <span style="font-size:11px;color:#484f58" x-text="group.cfs.length + ' CFs'"></span>
                             </div>
                           </div>
-                          <div x-show="groupExpanded['cfb_' + cat.category + '/' + group.shortName]">
+                          <div x-show="groupExpanded['cfb_' + cat.displayName + '/' + group.shortName]"
+                               :style="group.cfs.length >= 30 ? 'display:grid;grid-template-columns:repeat(3,1fr);gap:0 12px' : group.cfs.length >= 10 ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:0 12px' : ''">
                             <template x-for="cf in group.cfs" :key="cf.trashId">
                               <div>
                                 <div class="cf-row">
@@ -4834,9 +4852,17 @@ function clonarr() {
       // Test all instances on load
       this.testAllInstances();
       // Tick every 30s: update timeAgo() and refresh TRaSH status
-      setInterval(() => {
+      setInterval(async () => {
         this._nowTick = Date.now();
-        this.loadTrashStatus();
+        const prevPull = this.trashStatus?.lastPull;
+        await this.loadTrashStatus();
+        // If lastPull changed (scheduled pull completed), reload sync data
+        if (this.trashStatus?.lastPull && this.trashStatus.lastPull !== prevPull) {
+          await this.loadAutoSyncRules();
+          for (const inst of this.instances) {
+            await this.loadSyncHistory(inst.id);
+          }
+        }
       }, 30000);
       // Re-test instances every 60 seconds
       setInterval(() => this.testAllInstances(), 60000);
@@ -7135,26 +7161,26 @@ function clonarr() {
         cfMap[cf.trash_id] = cf;
       }
 
-      // Parse groups into categories
-      const catMap = {};
+      // Each TRaSH group file becomes its own top-level category
+      const categories = [];
       const usedCFIds = new Set();
 
       for (const group of data.groups) {
-        let category, shortName;
+        let prefix = '', shortName = '';
         if (group.name.startsWith('[')) {
           const idx = group.name.indexOf(']');
           if (idx > 0) {
-            category = group.name.substring(1, idx).trim();
-            shortName = group.name.substring(idx + 1).trim() || category;
+            prefix = group.name.substring(1, idx).trim();
+            shortName = group.name.substring(idx + 1).trim();
           }
         }
-        if (!category) { category = 'Other'; shortName = group.name; }
-
-        // Remap categories
-        if (category === 'Required') category = 'Golden Rule';
-        if (category === 'SQP') category = 'Miscellaneous';
-
-        if (!catMap[category]) catMap[category] = { category, groups: [], totalCFs: 0 };
+        // Remap prefixes
+        if (prefix === 'Required') prefix = 'Golden Rule';
+        if (prefix === 'SQP') prefix = 'Miscellaneous';
+        // Display name: use shortName if present, otherwise prefix, otherwise full name
+        const displayName = shortName ? (prefix + ' — ' + shortName) : (prefix || group.name);
+        // Category class uses the prefix for color matching
+        const categoryClass = prefix || 'Other';
 
         const cfs = [];
         for (const cfEntry of (group.custom_formats || [])) {
@@ -7169,98 +7195,48 @@ function clonarr() {
         }
 
         if (cfs.length > 0) {
-          catMap[category].groups.push({ name: group.name, shortName, cfs });
-          catMap[category].totalCFs += cfs.length;
+          categories.push({
+            category: categoryClass,
+            displayName,
+            groups: [{ name: group.name, shortName: shortName || displayName, cfs }],
+            totalCFs: cfs.length,
+            trashDescription: group.trash_description || '',
+          });
         }
       }
 
-      // CFs not in any group
+      // CFs not in any TRaSH group go into "Other"
       const ungrouped = [];
       for (const cf of data.cfs) {
         if (!usedCFIds.has(cf.trash_id)) {
-          const cat = this._cfCategoryByName(cf.name);
-          if (!catMap[cat]) catMap[cat] = { category: cat, groups: [], totalCFs: 0 };
-          ungrouped.push({ cat, cf: { trashId: cf.trash_id, name: cf.name, description: cf.description || '', score: cf.trash_scores?.default } });
+          ungrouped.push({ trashId: cf.trash_id, name: cf.name, description: cf.description || '', score: cf.trash_scores?.default });
         }
       }
-      // Group ungrouped CFs by category
-      const ungroupedByCat = {};
-      for (const { cat, cf } of ungrouped) {
-        if (!ungroupedByCat[cat]) ungroupedByCat[cat] = [];
-        ungroupedByCat[cat].push(cf);
-      }
-      for (const [cat, cfs] of Object.entries(ungroupedByCat)) {
-        if (!catMap[cat]) catMap[cat] = { category: cat, groups: [], totalCFs: 0 };
-        cfs.sort((a, b) => a.name.localeCompare(b.name));
-        catMap[cat].groups.push({ name: cat, shortName: cat, cfs });
-        catMap[cat].totalCFs += cfs.length;
+      if (ungrouped.length > 0) {
+        ungrouped.sort((a, b) => a.name.localeCompare(b.name));
+        categories.push({ category: 'Other', displayName: 'Other', groups: [{ name: 'Other', shortName: 'Other', cfs: ungrouped }], totalCFs: ungrouped.length });
       }
 
-      // Inject custom CFs into their assigned categories
+      // Inject custom CFs
       const customCFs = data.customCFs || [];
-      const customByCat = {};
-      for (const ccf of customCFs) {
-        const cat = ccf.category || 'Custom';
-        if (!customByCat[cat]) customByCat[cat] = [];
-        customByCat[cat].push({ trashId: ccf.id, name: ccf.name, description: '', score: undefined, isCustom: true });
-      }
-      // Always group custom CFs into a dedicated "Custom" category with amber styling
-      const allCustomCFs = [];
-      for (const cfs of Object.values(customByCat)) {
-        allCustomCFs.push(...cfs);
-      }
-      if (allCustomCFs.length > 0) {
+      if (customCFs.length > 0) {
+        const allCustomCFs = customCFs.map(ccf => ({ trashId: ccf.id, name: ccf.name, description: '', score: undefined, isCustom: true }));
         allCustomCFs.sort((a, b) => a.name.localeCompare(b.name));
-        catMap['Custom'] = { category: 'Custom', groups: [{ name: 'Custom Formats', shortName: 'Custom Formats', cfs: allCustomCFs }], totalCFs: allCustomCFs.length, isCustom: true };
+        categories.push({ category: 'Custom', displayName: 'Custom', groups: [{ name: 'Custom Formats', shortName: 'Custom Formats', cfs: allCustomCFs }], totalCFs: allCustomCFs.length, isCustom: true });
       }
 
-      // Sort categories
+      // Sort by prefix order, then by display name within same prefix
       const order = { 'Golden Rule': 0, 'Audio': 1, 'HDR Formats': 2, 'HQ Release Groups': 3,
                        'Resolution': 4, 'Streaming Services': 5, 'Miscellaneous': 6, 'Optional': 7,
                        'Release Groups': 8, 'Unwanted': 9, 'Movie Versions': 10, 'Anime': 11,
                        'French Audio Version': 12, 'French HQ Source Groups': 13,
                        'German Source Groups': 14, 'German Miscellaneous': 15,
                        'Language Profiles': 16, 'SQP': 17, 'Other': 18, 'Custom': 99 };
-      return Object.values(catMap).sort((a, b) => (order[a.category] ?? 50) - (order[b.category] ?? 50));
-    },
-
-    _cfCategoryByName(name) {
-      const n = name.toLowerCase();
-      // French HQ Source Groups (before generic HQ check)
-      if (n.startsWith('fr ')) return 'French HQ Source Groups';
-      // German Source Groups & German Miscellaneous
-      if (n === 'german' || n.startsWith('german ') || n.startsWith('not german')) {
-        if (['german lq','german lq (release title)','german microsized','german 1080p booster','german 2160p booster'].includes(n))
-          return 'German Miscellaneous';
-        return 'German Source Groups';
-      }
-      // HQ Release Groups
-      for (const p of ['remux tier','uhd bluray tier','hd bluray tier','web tier']) {
-        if (n.startsWith(p)) return 'HQ Release Groups';
-      }
-      // Anime
-      if (n.startsWith('anime ')) return 'Anime';
-      if (['v0','v1','v2','v3','v4','10bit','uncensored','dubs only','anime dual audio'].includes(n)) return 'Anime';
-      // French Audio Version
-      if (['vff','vof','vfi','vf2','vfq','voq','vq','vfb','vostfr','fansub','fastsub'].includes(n)) return 'French Audio Version';
-      // Language Profiles
-      if (n.startsWith('language:') || n === 'wrong language') return 'Language Profiles';
-      // Streaming Services — individual services not in CF groups
-      if (['vrv','abema','adn','b-global','bilibili','cr','funi','hidive','wkn'].includes(n)) return 'Streaming Services';
-      // Series/Movie Versions
-      if (['hybrid','remaster'].includes(n)) return 'Movie Versions';
-      // Unwanted
-      if (['br-disk','br-disk (btn)','lq','lq (release title)','3d','upscaled','extras','generated dynamic hdr','sing-along versions','av1','x265 (hd)'].includes(n)) return 'Unwanted';
-      // Audio
-      if (['1.0 mono','2.0 stereo','3.0 sound','4.0 sound','5.1 surround','6.1 surround','7.1 surround','mp3','opus'].includes(n)) return 'Audio';
-      // Miscellaneous
-      if (['repack/proper','repack2','repack3','x264','x265','x266','x265 (no hdr/dv)','no-rlsgroup','obfuscated','retags','scene',
-        'bad dual groups','black and white editions','freeleech','internal','hfr','multi','vc-1','vp9','mpeg2',
-        'line/mic dubbed','with ad','with.ad','dutch groups','webdl boost','uhd streaming boost','hd streaming boost',
-        'single episode','multi-episode','web scene','season pack'].includes(n)) return 'Miscellaneous';
-      // Resolution
-      if (['720p','1080p','2160p'].includes(n)) return 'Resolution';
-      return 'Other';
+      return categories.sort((a, b) => {
+        const oa = order[a.category] ?? 50, ob = order[b.category] ?? 50;
+        if (oa !== ob) return oa - ob;
+        return a.displayName.localeCompare(b.displayName);
+      });
     },
 
     // --- CF Editor (Create/Edit) ---
@@ -10064,6 +10040,7 @@ function clonarr() {
 
     timeAgo(isoString) {
       if (!isoString) return 'never';
+      void this._nowTick; // reactive dependency — triggers re-render every 30s
       const diff = Date.now() - new Date(isoString).getTime();
       const mins = Math.floor(diff / 60000);
       if (mins < 1) return 'just now';
@@ -10072,6 +10049,24 @@ function clonarr() {
       if (hours < 24) return hours + 'h ago';
       const days = Math.floor(hours / 24);
       return days + 'd ago';
+    },
+
+    nextPullTime() {
+      void this._nowTick;
+      const interval = this.config.pullInterval;
+      const lastPull = this.trashStatus?.lastPull;
+      if (!interval || interval === 'off' || !lastPull) return '';
+      const match = interval.match(/^(\d+)(m|h)$/);
+      if (!match) return '';
+      const ms = parseInt(match[1]) * (match[2] === 'h' ? 3600000 : 60000);
+      const next = new Date(lastPull).getTime() + ms;
+      const diff = next - Date.now();
+      if (diff <= 0) return 'soon';
+      const mins = Math.floor(diff / 60000);
+      if (mins < 60) return mins + 'm';
+      const hours = Math.floor(mins / 60);
+      const remMins = mins % 60;
+      return remMins > 0 ? hours + 'h ' + remMins + 'm' : hours + 'h';
     },
 
     formatCommitDate(dateStr) {

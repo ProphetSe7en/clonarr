@@ -1282,11 +1282,16 @@ func (app *App) handleTrashStatus(w http.ResponseWriter, r *http.Request) {
 func (app *App) handleTrashPull(w http.ResponseWriter, r *http.Request) {
 	cfg := app.config.Get()
 	go func() {
+		prevCommit := app.trash.CurrentCommit()
 		if err := app.trash.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
 			log.Printf("TRaSH pull failed: %v", err)
 			app.debugLog.Logf(LogError, "TRaSH pull failed: %v", err)
 			app.trash.SetPullError(err.Error())
 		} else {
+			newCommit := app.trash.CurrentCommit()
+			if prevCommit != "" && newCommit != prevCommit {
+				app.notifyRepoUpdate(prevCommit, newCommit)
+			}
 			app.debugLog.Logf(LogAutoSync, "TRaSH pull completed — running auto-sync")
 			app.autoSyncQualitySizes()
 			app.autoSyncAfterPull()

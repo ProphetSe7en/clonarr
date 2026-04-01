@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.7.6-beta
+
+### Features
+- **Git diff Discord notifications** — "TRaSH Guides Updated" now shows actual file changes (Added/Updated/Removed per CF, profile, group) via git diff instead of stale updates.txt entries.
+- **Separate weekly changelog notification** — "TRaSH Weekly Changelog" Discord notification sent only when TRaSH updates their changelog (amber embed, distinct from per-pull blue notifications).
+- **Latest Update in GUI dropdown** — Changelog dropdown now shows last pull's actual changes at the top, with timestamp and commit range. TRaSH Changelog (updates.txt) shown below.
+- **Next pull countdown** — Header bar shows time until next scheduled pull (auto-updates every 30s).
+- **Arr profile name in Discord** — Auto-sync Discord notifications show Arr profile name when different from TRaSH profile name.
+- **CF tab uses TRaSH groups** — Custom Formats tab now uses actual TRaSH CF group files as categories instead of hardcoded fake categorization. Each group file is its own collapsible section with color-coded borders.
+- **Multi-column CF lists** — CF lists with 10+ items use 2 columns, 30+ use 3 columns for compact display.
+
+### Bug fixes
+- **CF description duplicate name** — TRaSH markdown descriptions started with a bold title line repeating the CF name. Now stripped automatically.
+- **Pull remote URL sync** — Changing repo URL in settings now updates the git remote before fetching. Previously the old remote was used until re-clone.
+- **Quality override flip-flop** — Quality overrides (user-toggled resolutions) are now applied before comparing with Arr state, preventing false Enabled/Disabled changes on every sync.
+- **Discord "no changes" spam** — Auto-sync no longer sends Discord notifications for profiles that are already in sync.
+- **Discord bullet point formatting** — Fixed indented bullet points rendering incorrectly in Discord embeds.
+- **Manual pull sends Discord notification** — Manual pull button now triggers "TRaSH Guides Updated" notification (previously only scheduled pulls did).
+- **timeAgo auto-updates** — Sync timestamps in UI now update automatically every 30s without manual refresh.
+- **Sync history auto-reload** — Frontend detects when scheduled pull completes and reloads sync data automatically.
+- **Last diff persisted to disk** — Latest Update diff survives container restarts.
+- **Unique category colors** — Fixed duplicate colors for Streaming Services, Optional, Resolution, and HQ Release Groups categories.
+- **Improved text contrast** — Fixed dark-on-dark text for commit hash, changelog counts, and PR links in UI.
+- **Dockerfile version** — Updated from 1.7.2-beta to 1.7.6-beta.
+
 ## v1.7.5-beta
 
 ### Bug fixes

@@ -82,6 +82,11 @@ func main() {
 		pullUpdateCh: make(chan string, 1),
 	}
 
+	// Wire up changelog notification callback
+	trash.onNewChangelog = func(section ChangelogSection) {
+		app.notifyChangelog(section)
+	}
+
 	// Startup: reset auto-sync commit hashes so all rules re-evaluate on next pull.
 	// This ensures quality item changes and other updates are picked up after version upgrades.
 	// Also clean up broken rules with arrProfileId=0 (create mode bug from older versions).

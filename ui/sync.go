@@ -968,17 +968,31 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 				if err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("resolve quality items: %v", err))
 				} else {
-					// Track quality changes
+					// Apply quality overrides to newItems before comparing with Arr state
+					// so we compare against the final desired state, not intermediate TRaSH state
+					for i := range newItems {
+						name := newItems[i].Name
+						if name == "" && newItems[i].Quality != nil { name = newItems[i].Quality.Name }
+						if override, ok := req.QualityOverrides[name]; ok {
+							newItems[i].Allowed = override
+						}
+					}
+
+					// Track quality changes (comparing Arr state vs desired final state)
 					for _, item := range newItems {
 						name := item.Name
 						if name == "" && item.Quality != nil { name = item.Quality.Name }
 						if name == "" { continue }
 						oldState, exists := oldAllowed[name]
 						if exists && oldState != item.Allowed {
+							suffix := ""
+							if _, isOverride := req.QualityOverrides[name]; isOverride {
+								suffix = " (override)"
+							}
 							if item.Allowed {
-								result.QualityDetails = append(result.QualityDetails, name+": Disabled → Enabled")
+								result.QualityDetails = append(result.QualityDetails, name+": Disabled → Enabled"+suffix)
 							} else {
-								result.QualityDetails = append(result.QualityDetails, name+": Enabled → Disabled")
+								result.QualityDetails = append(result.QualityDetails, name+": Enabled → Disabled"+suffix)
 							}
 						}
 					}
@@ -1007,7 +1021,8 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Apply quality overrides (user-toggled resolutions)
+		// Apply quality overrides for cases where quality rebuild was skipped
+		// (overrides are already baked into newItems when rebuild runs)
 		if len(req.QualityOverrides) > 0 {
 			for i := range targetProfile.Items {
 				name := targetProfile.Items[i].Name

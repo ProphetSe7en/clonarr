@@ -409,12 +409,16 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 	} else {
 		color = 0x3fb950 // green
 		title = "Auto-Sync Applied"
-		description = fmt.Sprintf("**Instance:** %s\n**Profile:** %s", inst.Name, profileName)
+		arrName := ""
+		if result != nil && result.ArrProfileName != "" && result.ArrProfileName != profileName {
+			arrName = " → " + result.ArrProfileName
+		}
+		description = fmt.Sprintf("**Instance:** %s\n**Profile:** %s%s", inst.Name, profileName, arrName)
 		if result.CFsCreated > 0 || result.CFsUpdated > 0 {
 			description += fmt.Sprintf("\n**CFs:** %d created, %d updated", result.CFsCreated, result.CFsUpdated)
 			for _, d := range result.CFDetails {
-				if len(description) > 1800 { description += "\n  - ..."; break }
-				description += "\n  - " + d
+				if len(description) > 1800 { description += "\n- ..."; break }
+				description += "\n- " + d
 			}
 		}
 		if result.ScoresUpdated > 0 || result.ScoresZeroed > 0 {
@@ -423,25 +427,25 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 			if result.ScoresZeroed > 0 { parts = append(parts, fmt.Sprintf("%d reset to 0", result.ScoresZeroed)) }
 			description += fmt.Sprintf("\n**Scores:** %s", strings.Join(parts, ", "))
 			for _, d := range result.ScoreDetails {
-				if len(description) > 1800 { description += "\n  - ..."; break }
-				description += "\n  - " + d
+				if len(description) > 1800 { description += "\n- ..."; break }
+				description += "\n- " + d
 			}
 		}
 		if result.QualityUpdated {
 			description += "\n**Quality:** Profile quality items updated"
 			for _, d := range result.QualityDetails {
-				if len(description) > 1800 { description += "\n  - ..."; break }
-				description += "\n  - " + d
+				if len(description) > 1800 { description += "\n- ..."; break }
+				description += "\n- " + d
 			}
 		}
 		if len(result.SettingsDetails) > 0 {
 			description += "\n**Settings:**"
 			for _, d := range result.SettingsDetails {
-				description += "\n  - " + d
+				description += "\n- " + d
 			}
 		}
 		if result.CFsCreated == 0 && result.CFsUpdated == 0 && result.ScoresUpdated == 0 && result.ScoresZeroed == 0 && !result.QualityUpdated && len(result.SettingsDetails) == 0 {
-			description += "\n**No changes** — profile already in sync"
+			return // no actual changes — skip Discord notification
 		}
 	}
 
@@ -467,7 +471,7 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 }
 
 // notifyRepoUpdate sends a Discord notification when the TRaSH repo has new commits.
-// Includes changelog entries from updates.txt for human-readable context.
+// Shows actual file changes (CFs, profiles, groups) from the stored pull diff.
 func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 	cfg := app.config.Get()
 	if !cfg.AutoSync.NotifyOnRepoUpdate {
@@ -480,24 +484,10 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 
 	description := fmt.Sprintf("**Commit:** `%s` → `%s`", prevCommit, newCommit)
 
-	// Build changelog from parsed updates.txt (already available after pull)
+	// Use stored diff from CloneOrPull
 	status := app.trash.Status()
-	if len(status.Changelog) > 0 {
-		section := status.Changelog[0] // latest section
-		description += fmt.Sprintf("\n\n**Changes** — %s", section.Date)
-		for _, e := range section.Entries {
-			icon := "🔧"
-			if e.Type == "feat" {
-				icon = "✨"
-			} else if e.Type == "refactor" {
-				icon = "♻️"
-			}
-			line := fmt.Sprintf("\n%s **%s:** %s", icon, e.Scope, e.Msg)
-			if e.PR != "" {
-				line += fmt.Sprintf(" ([#%s](https://github.com/TRaSH-Guides/Guides/pull/%s))", e.PR, e.PR)
-			}
-			description += line
-		}
+	if status.LastDiff != nil && status.LastDiff.Summary != "" {
+		description += "\n" + status.LastDiff.Summary
 	}
 
 	embed := map[string]any{
@@ -520,4 +510,58 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 	}
 	resp.Body.Close()
 	log.Printf("Repo update: Discord notification sent (%s → %s)", prevCommit, newCommit)
+}
+
+// notifyChangelog sends a separate Discord notification when updates.txt has a new date section.
+func (app *App) notifyChangelog(section ChangelogSection) {
+	cfg := app.config.Get()
+	if !cfg.AutoSync.NotifyOnRepoUpdate {
+		return
+	}
+	webhook := cfg.AutoSync.DiscordWebhook
+	if webhook == "" {
+		return
+	}
+
+	description := fmt.Sprintf("**Week of %s** — %d changes", section.Date, len(section.Entries))
+	for _, e := range section.Entries {
+		icon := "🔧"
+		if e.Type == "feat" {
+			icon = "✨"
+		} else if e.Type == "fix" {
+			icon = "🐛"
+		} else if e.Type == "refactor" {
+			icon = "♻️"
+		}
+		line := fmt.Sprintf("\n%s **%s:** %s", icon, e.Scope, e.Msg)
+		if e.PR != "" {
+			line += fmt.Sprintf(" ([#%s](https://github.com/TRaSH-Guides/Guides/pull/%s))", e.PR, e.PR)
+		}
+		if len(description) > 1800 {
+			description += "\n- ..."
+			break
+		}
+		description += line
+	}
+
+	embed := map[string]any{
+		"title":       "TRaSH Weekly Changelog",
+		"description": description,
+		"color":       0xd29922, // amber
+		"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+	}
+	payload, err := json.Marshal(map[string]any{"embeds": []any{embed}})
+	if err != nil {
+		log.Printf("Changelog: failed to marshal Discord payload: %v", err)
+		return
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(webhook, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		log.Printf("Changelog: Discord notification failed: %v", err)
+		return
+	}
+	resp.Body.Close()
+	log.Printf("Changelog: Discord notification sent (week of %s)", section.Date)
 }

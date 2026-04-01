@@ -128,12 +128,21 @@ type AppData struct {
 	Naming        *TrashNaming
 }
 
+// PullDiff summarizes what changed in the last pull (for GUI display).
+type PullDiff struct {
+	PrevCommit string `json:"prevCommit"`
+	NewCommit  string `json:"newCommit"`
+	Summary    string `json:"summary"` // human-readable diff (same format as Discord)
+	Time       string `json:"time"`    // ISO 8601 timestamp of when the change was pulled
+}
+
 // TrashData holds all parsed TRaSH data + repo metadata.
 type TrashData struct {
 	LastPull   time.Time
 	CommitHash string
 	CommitDate string // git commit date (e.g. "2025-06-12 17:04:00 +0200")
 	Changelog  []ChangelogSection
+	LastDiff   *PullDiff // diff from last pull (nil if no changes)
 	Radarr     AppData
 	Sonarr     AppData
 }
@@ -142,18 +151,29 @@ type TrashData struct {
 
 // trashStore manages the TRaSH repo and parsed data.
 type trashStore struct {
-	mu        sync.RWMutex // protects data
-	pullMu    sync.Mutex   // serializes clone/pull operations (C4)
-	data      *TrashData
-	dataDir   string // path to TRaSH repo clone
-	pullError string // last pull error (empty = OK)
+	mu                sync.RWMutex // protects data
+	pullMu            sync.Mutex   // serializes clone/pull operations (C4)
+	data              *TrashData
+	dataDir           string                        // path to TRaSH repo clone
+	pullError         string                        // last pull error (empty = OK)
+	lastChangelogDate string                        // tracks last seen changelog date for new-section detection
+	onNewChangelog    func(section ChangelogSection) // called when updates.txt has a new date section
 }
 
 func newTrashStore(dir string) *trashStore {
-	return &trashStore{
+	ts := &trashStore{
 		data:    &TrashData{},
 		dataDir: filepath.Join(dir, "trash-guides"),
 	}
+	// Restore last diff from disk (also sets CommitHash so startup pull can detect changes)
+	if data, err := os.ReadFile(filepath.Join(dir, "last-pull-diff.json")); err == nil {
+		var diff PullDiff
+		if json.Unmarshal(data, &diff) == nil {
+			ts.data.LastDiff = &diff
+			ts.data.CommitHash = diff.NewCommit
+		}
+	}
+	return ts
 }
 
 // Snapshot returns an immutable snapshot of current TRaSH data (C1: safe for long-running operations).
@@ -181,6 +201,142 @@ func (ts *trashStore) DataDir() string {
 	return ts.dataDir
 }
 
+// DiffChangedFiles returns a human-readable summary of files changed between two commits.
+// Groups changes by app type (Radarr/Sonarr) and category (CFs, Profiles, Groups, etc).
+// Uses git diff --name-status to show Added/Modified/Deleted per file.
+func (ts *trashStore) DiffChangedFiles(prevCommit, newCommit string) string {
+	out, err := exec.Command("git", "-C", ts.dataDir, "diff", "--name-status", prevCommit, newCommit).Output()
+	if err != nil {
+		log.Printf("DiffChangedFiles: git diff failed: %v", err)
+		return ""
+	}
+
+	type change struct {
+		name   string
+		status string // "Added", "Updated", "Removed"
+	}
+	type appChanges struct {
+		cfs      []change
+		profiles []change
+		groups   []change
+		naming   []change
+		other    int
+	}
+	apps := map[string]*appChanges{}
+	descChanges := 0
+
+	statusLabel := func(s string) string {
+		switch s {
+		case "A":
+			return "Added"
+		case "D":
+			return "Removed"
+		default:
+			return "Updated"
+		}
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		// Format: "M\tdocs/json/radarr/cf/obfuscated.json"
+		fields := strings.SplitN(line, "\t", 2)
+		if len(fields) != 2 {
+			continue
+		}
+		status := statusLabel(fields[0])
+		filePath := fields[1]
+
+		// docs/json/{radarr,sonarr}/{cf,quality-profiles,cf-groups,naming,quality-size}/*.json
+		parts := strings.Split(filePath, "/")
+		if len(parts) >= 5 && parts[0] == "docs" && parts[1] == "json" {
+			appType := parts[2]
+			category := parts[3]
+			filename := parts[len(parts)-1]
+
+			if apps[appType] == nil {
+				apps[appType] = &appChanges{}
+			}
+			ac := apps[appType]
+
+			// Try to read the "name" field from the JSON file for a readable name
+			// (won't work for deleted files, falls back to filename)
+			readableName := ts.readJSONName(filepath.Join(ts.dataDir, filePath))
+			if readableName == "" {
+				readableName = strings.TrimSuffix(filename, ".json")
+			}
+
+			c := change{name: readableName, status: status}
+			switch category {
+			case "cf":
+				ac.cfs = append(ac.cfs, c)
+			case "quality-profiles":
+				ac.profiles = append(ac.profiles, c)
+			case "cf-groups":
+				ac.groups = append(ac.groups, c)
+			case "naming":
+				ac.naming = append(ac.naming, c)
+			default:
+				ac.other++
+			}
+		} else if len(parts) >= 2 && parts[0] == "includes" && parts[1] == "cf-descriptions" {
+			descChanges++
+		}
+	}
+
+	if len(apps) == 0 && descChanges == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	writeChanges := func(label string, changes []change) {
+		if len(changes) == 0 {
+			return
+		}
+		sb.WriteString("\n**" + label + ":**")
+		for _, c := range changes {
+			sb.WriteString(fmt.Sprintf("\n- %s (%s)", c.name, c.status))
+		}
+	}
+
+	for _, appType := range []string{"radarr", "sonarr"} {
+		ac := apps[appType]
+		if ac == nil {
+			continue
+		}
+		title := strings.ToUpper(appType[:1]) + appType[1:]
+		sb.WriteString("\n**" + title + "**")
+		writeChanges("Custom Formats", ac.cfs)
+		writeChanges("Profiles", ac.profiles)
+		writeChanges("Groups", ac.groups)
+		writeChanges("Naming", ac.naming)
+		if ac.other > 0 {
+			sb.WriteString(fmt.Sprintf("\n**Other:** %d files", ac.other))
+		}
+	}
+	if descChanges > 0 {
+		sb.WriteString(fmt.Sprintf("\n**Descriptions:** %d updated", descChanges))
+	}
+
+	return sb.String()
+}
+
+// readJSONName reads the "name" field from a JSON file, returns empty string on failure.
+func (ts *trashStore) readJSONName(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var obj struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return ""
+	}
+	return obj.Name
+}
+
 // ChangelogEntry represents one change from updates.txt.
 type ChangelogEntry struct {
 	Type  string `json:"type"`  // "feat", "fix", "refactor", etc.
@@ -200,7 +356,8 @@ type TrashStatus struct {
 	LastPull     string             `json:"lastPull"`
 	CommitHash   string             `json:"commitHash"`
 	CommitDate   string             `json:"commitDate,omitempty"`
-	Changelog    []ChangelogSection `json:"changelog,omitempty"` // recent updates from updates.txt
+	LastDiff     *PullDiff          `json:"lastDiff,omitempty"`     // what changed in last pull
+	Changelog    []ChangelogSection `json:"changelog,omitempty"`    // recent updates from updates.txt
 	RadarrCFs    int                `json:"radarrCFs"`
 	SonarrCFs    int                `json:"sonarrCFs"`
 	RadarrGroups int                `json:"radarrGroups"`
@@ -226,6 +383,7 @@ func (ts *trashStore) Status() TrashStatus {
 	st := TrashStatus{
 		CommitHash: ts.data.CommitHash,
 		CommitDate: ts.data.CommitDate,
+		LastDiff:   ts.data.LastDiff,
 		Changelog:  ts.data.Changelog,
 		Cloned:     ts.data.CommitHash != "",
 		RadarrCFs:    len(ts.data.Radarr.CustomFormats),
@@ -347,6 +505,14 @@ func (ts *trashStore) CloneOrPull(repoURL, branch string) error {
 			}
 		}
 
+		// Ensure remote URL matches config (user may have changed repo in UI)
+		setURL := exec.Command("git", "-C", ts.dataDir, "remote", "set-url", "origin", repoURL)
+		setURL.Stdout = os.Stdout
+		setURL.Stderr = os.Stderr
+		if err := setURL.Run(); err != nil {
+			log.Printf("Warning: failed to update remote URL: %v", err)
+		}
+
 		// M13: Pull with explicit branch
 		log.Printf("Pulling TRaSH repo in %s (branch: %s)", ts.dataDir, branch)
 		cmd := exec.Command("git", "-C", ts.dataDir, "fetch", "origin", branch)
@@ -401,11 +567,47 @@ func (ts *trashStore) CloneOrPull(repoURL, branch string) error {
 	data.Changelog = parseChangelog(filepath.Join(ts.dataDir, "docs", "updates.txt"), 5)
 	data.LastPull = time.Now()
 
+	// Generate diff from previous commit (if available)
+	ts.mu.RLock()
+	prevCommit := ts.data.CommitHash
+	prevChangelogDate := ts.lastChangelogDate
+	ts.mu.RUnlock()
+
+	if prevCommit != "" && data.CommitHash != prevCommit {
+		if diff := ts.DiffChangedFiles(prevCommit, data.CommitHash); diff != "" {
+			data.LastDiff = &PullDiff{
+				PrevCommit: prevCommit,
+				NewCommit:  data.CommitHash,
+				Summary:    diff,
+				Time:       time.Now().Format(time.RFC3339),
+			}
+			// Persist to disk so it survives restarts
+			if raw, err := json.Marshal(data.LastDiff); err == nil {
+				_ = os.WriteFile(filepath.Join(filepath.Dir(ts.dataDir), "last-pull-diff.json"), raw, 0644)
+			}
+		}
+	} else {
+		// No changes — preserve previous diff so GUI keeps showing it
+		data.LastDiff = ts.data.LastDiff
+	}
+
+	// Track changelog date for new-section detection
+	newChangelogDate := ""
+	if len(data.Changelog) > 0 {
+		newChangelogDate = data.Changelog[0].Date
+	}
+
 	// Atomic swap
 	ts.mu.Lock()
 	ts.data = data
 	ts.pullError = ""
+	ts.lastChangelogDate = newChangelogDate
 	ts.mu.Unlock()
+
+	// Notify if changelog has a new section (for separate Discord notification)
+	if newChangelogDate != "" && newChangelogDate != prevChangelogDate && prevChangelogDate != "" && ts.onNewChangelog != nil {
+		ts.onNewChangelog(data.Changelog[0])
+	}
 
 	log.Printf("TRaSH data loaded: Radarr %d CFs / %d profiles, Sonarr %d CFs / %d profiles",
 		len(data.Radarr.CustomFormats), len(data.Radarr.Profiles),
@@ -561,6 +763,7 @@ var (
 	reIncludeMd   = regexp.MustCompile(`\{!\s*include-markdown\s+"[^"]+"\s*!\}`)
 	reSnippetIncl = regexp.MustCompile(`--8<--\s+"[^"]+"`)
 	reAdmonition  = regexp.MustCompile(`\?\?\?\s+\w+\s+"[^"]*"`)
+	reTitleLine   = regexp.MustCompile(`(?m)^\*\*[^*]+\*\*\s*$`)
 )
 
 // loadCFDescriptions reads includes/cf-descriptions/*.md and returns a map of
@@ -604,6 +807,7 @@ func escapeHTML(s string) string {
 func cleanDescription(raw string) string {
 	s := reComment.ReplaceAllString(raw, "")
 	s = reHTML.ReplaceAllString(s, "")
+	s = reTitleLine.ReplaceAllString(s, "")
 	s = reMarkdownLn.ReplaceAllString(s, "$1")
 	s = reTemplate.ReplaceAllString(s, "")
 	s = reIncludeMd.ReplaceAllString(s, "")
