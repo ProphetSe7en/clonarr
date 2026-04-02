@@ -538,12 +538,14 @@
                     <div>
                       <div style="padding:8px 16px;font-size:11px;color:#8b949e;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#0d1117;border-bottom:1px solid #21262d;display:flex;align-items:center">
                         <span x-text="inst.name"></span>
-                        <button class="btn btn-sm" style="margin-left:auto;font-size:10px;padding:2px 8px;border-color:#238636;color:#3fb950" @click.stop="syncAllForInstance(inst)" title="Re-sync all TRaSH profiles on this instance">Sync All</button>
+                        <button class="btn btn-sm" style="margin-left:auto;font-size:10px;padding:2px 8px;border-color:#238636;color:#3fb950" @click.stop="syncAllForInstance(inst)" title="Re-sync all profiles with auto-sync enabled on this instance">Sync All</button>
                       </div>
                       <template x-for="sh in syncHistory[inst.id].filter(s => !s.importedProfileId)" :key="sh.arrProfileId">
                         <div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;gap:8px;font-size:12px">
-                          <span style="color:#58a6ff;font-weight:500" x-text="sh.profileName"></span>
-                          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                          <span style="color:#58a6ff;font-weight:500;min-width:180px" x-text="sh.profileName"></span>
+                          <span style="color:#8b949e;flex-shrink:0;font-size:15px;margin:0 6px">&rarr;</span>
+                          <span style="color:#e1e4e8;min-width:140px" x-text="sh.arrProfileName"></span>
+                          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;min-width:100px">
                               <label class="toggle toggle-sm" @click.stop title="Toggle auto-sync for this profile">
                                 <input type="checkbox"
                                        :checked="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled"
@@ -554,8 +556,6 @@
                                     :style="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'color:#3fb950' : 'color:#f8514980'"
                                     x-text="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'auto-sync' : 'auto-sync off'"></span>
                           </div>
-                          <span style="color:#484f58">&rarr;</span>
-                          <span style="color:#e1e4e8" x-text="sh.arrProfileName"></span>
                           <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">
                             <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#3d1f1f;color:#f85149;flex-shrink:0"
                                   :title="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>
@@ -3369,14 +3369,14 @@
         <template x-for="inst in [...instances].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))" :key="inst.id">
           <div class="inst-row">
             <img class="inst-icon" :src="instanceIconUrl(inst)" :alt="inst.type">
-            <div style="flex:1;font-size:13px;font-weight:500" x-text="inst.name"></div>
-            <div style="font-size:12px;color:#8b949e;width:220px" x-text="inst.url"></div>
-            <div style="width:100px;text-align:right">
+            <div style="font-size:13px;font-weight:500;min-width:80px" x-text="inst.name"></div>
+            <div style="font-size:11px;color:#484f58;margin-left:4px" x-text="inst.url"></div>
+            <div style="margin-left:auto;text-align:right;white-space:nowrap">
               <template x-if="instanceStatus[inst.id] === 'testing'">
                 <span class="status-testing"><span class="spinner"></span></span>
               </template>
               <template x-if="instanceStatus[inst.id] === 'connected'">
-                <span class="status-connected">Connected</span>
+                <span class="status-connected">Connected<span x-show="instanceVersion[inst.id]" style="color:#8b949e;font-weight:400;font-size:11px" x-text="' · v' + instanceVersion[inst.id]"></span></span>
               </template>
               <template x-if="instanceStatus[inst.id] === 'failed'">
                 <span class="status-failed">Failed</span>
@@ -3496,9 +3496,10 @@
               <span x-show="prowlarrTesting" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
               <span x-show="!prowlarrTesting">Test</span>
             </button>
-            <span x-show="prowlarrTestResult" style="font-size:12px"
-              :style="prowlarrTestResult?.ok ? 'color:#3fb950' : 'color:#f85149'"
-              x-text="prowlarrTestResult?.message"></span>
+            <span x-show="prowlarrTestResult" style="font-size:12px">
+              <span :style="prowlarrTestResult?.ok ? 'color:#3fb950' : 'color:#f85149'" x-text="prowlarrTestResult?.message"></span>
+              <span x-show="prowlarrTestResult?.version" style="color:#8b949e;font-size:11px" x-text="' · v' + prowlarrTestResult?.version"></span>
+            </span>
           </div>
         </div>
       </div>
@@ -4682,6 +4683,7 @@ function clonarr() {
     expandedInstances: {},
     expandedProfileGroups: {},
     instanceStatus: {},
+    instanceVersion: {},
     pulling: false,
     subTabs: {},  // per app-type sub-tab: { radarr: 'profiles', sonarr: 'profiles' }
     profileTabs: {},  // per app-type profile tab: { radarr: 'trash-sync', sonarr: 'trash-sync' }
@@ -5038,10 +5040,20 @@ function clonarr() {
         await this.loadTrashStatus();
         // If lastPull changed (scheduled pull completed), reload sync data
         if (this.trashStatus?.lastPull && this.trashStatus.lastPull !== prevPull) {
+          // Show pull diff toast for scheduled pulls (only if diff is fresh — newCommit matches current)
+          if (this.trashStatus.lastDiff?.summary && this.trashStatus.lastDiff.newCommit === this.trashStatus.commitHash) {
+            const diffTime = new Date(this.trashStatus.lastDiff.time).getTime();
+            if (Date.now() - diffTime < 60000) { // only if diff is less than 60s old
+              const summary = this.trashStatus.lastDiff.summary.replace(/\*\*/g, '').replace(/^\n/, '').replace(/\n/g, ', ').replace(/:,/g, ':');
+              this.showToast('TRaSH updated: ' + summary, 'info', 10000);
+            }
+          }
           await this.loadAutoSyncRules();
           for (const inst of this.instances) {
             await this.loadSyncHistory(inst.id);
           }
+          // Delay auto-sync event check — auto-sync runs async after pull completes
+          setTimeout(() => this.checkAutoSyncEvents(), 5000);
         }
       }, 30000);
       // Re-test instances every 60 seconds
@@ -8675,6 +8687,10 @@ function clonarr() {
       for (const inst of this.instances) {
         this.testInstance(inst);
       }
+      // Also test Prowlarr if configured
+      if (this.config.prowlarr?.enabled && this.config.prowlarr?.url && this.config.prowlarr?.apiKey) {
+        this.testProwlarr();
+      }
     },
 
     async testInstance(inst) {
@@ -8684,6 +8700,9 @@ function clonarr() {
         if (!r.ok) { this.instanceStatus = { ...this.instanceStatus, [inst.id]: 'failed' }; return; }
         const data = await r.json();
         this.instanceStatus = { ...this.instanceStatus, [inst.id]: data.connected ? 'connected' : 'failed' };
+        if (data.connected && data.version) {
+          this.instanceVersion = { ...this.instanceVersion, [inst.id]: data.version };
+        }
       } catch (e) {
         this.instanceStatus = { ...this.instanceStatus, [inst.id]: 'failed' };
       }
@@ -8786,6 +8805,36 @@ function clonarr() {
       } catch (e) { /* ignore */ }
     },
 
+    async checkAutoSyncEvents() {
+      try {
+        const r = await fetch('/api/auto-sync/events');
+        if (!r.ok) return;
+        const events = await r.json();
+        for (let i = 0; i < events.length; i++) {
+          const ev = events[i];
+          setTimeout(() => {
+            if (ev.error) {
+              this.showToast(`Auto-sync failed: ${ev.instanceName} — ${ev.profileName}: ${ev.error}`, 'error', 8000);
+            } else {
+              const profileLabel = ev.arrProfileName && ev.arrProfileName !== ev.profileName
+                ? `${ev.profileName} → ${ev.arrProfileName}` : ev.profileName;
+              let msg = `Auto-sync: ${ev.instanceName} — "${profileLabel}"`;
+              if (ev.details?.length > 0) {
+                msg += '\n' + ev.details.join('\n');
+              }
+              this.showToast(msg, 'info', 8000);
+            }
+          }, i * 3000);
+        }
+        // Reload sync history if any events came through
+        if (events.length > 0) {
+          for (const inst of this.instances) {
+            await this.loadSyncHistory(inst.id);
+          }
+        }
+      } catch (e) { /* ignore */ }
+    },
+
     // Find the instance that has sync history for an imported profile
     findSyncedInstance(appType, importedProfileId) {
       for (const inst of this.instancesOfType(appType)) {
@@ -8835,6 +8884,8 @@ function clonarr() {
               await this.loadSyncHistory(inst.id);
             }
             this.checkCleanupEvents();
+            // Delay auto-sync event check — auto-sync runs async after pull completes
+            setTimeout(() => this.checkAutoSyncEvents(), 5000);
           }
         }, 2000);
         setTimeout(() => { clearInterval(poll); this.pulling = false; }, 120000);
@@ -9986,15 +10037,24 @@ function clonarr() {
           this.setRuleSyncError(inst.id, sh.arrProfileId, result.errors[0]);
           return { ok: false, name: sh.profileName, error: result.errors[0] };
         }
-        const parts = [];
-        if (result.cfsCreated) parts.push(`${result.cfsCreated} CFs created`);
-        if (result.cfsUpdated) parts.push(`${result.cfsUpdated} CFs updated`);
-        if (result.scoresUpdated) parts.push(`${result.scoresUpdated} scores`);
-        const summary = parts.length ? parts.join(', ') : 'no changes';
-        if (!silent) this.showToast(`"${sh.profileName}" synced — ${summary}`, 'info', 6000);
+        const details = [
+          ...(result.cfDetails || []),
+          ...(result.scoreDetails || []),
+          ...(result.qualityDetails || []),
+          ...(result.settingsDetails || [])
+        ];
+        let msg = `${inst.name} — "${sh.profileName}" synced`;
+        if (details.length > 0) {
+          const shown = details.length > 5 ? [...details.slice(0, 4), `...and ${details.length - 4} more`] : details;
+          msg += '\n' + shown.join('\n');
+        } else {
+          msg += ' — no changes';
+        }
+        if (!silent) this.showToast(msg, 'info', details.length > 0 ? 8000 : 4000);
         this.setRuleSyncError(inst.id, sh.arrProfileId, '');
         await this.loadSyncHistory(inst.id);
-        return { ok: true, name: sh.profileName, summary };
+        const summary = details.length > 0 ? details.slice(0, 3).join(', ') : 'no changes';
+        return { ok: true, name: sh.profileName, summary, details };
       } catch (e) {
         if (!silent) this.showToast(`Sync error: ${e.message}`, 'error', 8000);
         this.setRuleSyncError(inst.id, sh.arrProfileId, e.message);
@@ -10018,16 +10078,27 @@ function clonarr() {
 
     async syncAllForInstance(inst, builderOnly = false) {
       const all = this.syncHistory[inst.id] || [];
-      const entries = builderOnly ? all.filter(sh => sh.importedProfileId) : all.filter(sh => !sh.importedProfileId);
-      if (!entries.length) return;
+      const entries = (builderOnly ? all.filter(sh => sh.importedProfileId) : all.filter(sh => !sh.importedProfileId))
+        .filter(sh => {
+          const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+          return rule?.enabled;
+        });
+      if (!entries.length) {
+        this.showToast(`Sync All (${inst.name}): no profiles with auto-sync enabled`, 'warning', 4000);
+        return;
+      }
       const results = [];
       for (const sh of entries) {
         results.push(await this.quickSync(inst, sh, true));
       }
-      const lines = results.map(r => r.ok ? `${r.name} — ${r.summary}` : `${r.name} — FAILED: ${r.error}`);
+      const lines = results.map(r => {
+        if (!r.ok) return `${r.name} — FAILED: ${r.error}`;
+        if (r.details?.length > 0) return `${r.name} — ${r.details.slice(0, 2).join(', ')}`;
+        return `${r.name} — no changes`;
+      });
       const errors = results.filter(r => !r.ok).length;
       const toastType = errors === results.length ? 'error' : errors > 0 ? 'warning' : 'info';
-      this.showToast(`Sync All (${inst.name}):\n${lines.join('\n')}`, toastType, 8000);
+      this.showToast(`Sync All (${inst.name}):\n${lines.join('\n')}`, toastType, 10000);
     },
 
     // --- Sync History ---
@@ -10296,8 +10367,7 @@ function clonarr() {
           if (sh) {
             const inst = this.instances.find(i => i.id === instId);
             if (inst) {
-              this.showToast('Auto-sync enabled — syncing now...', 'info', 3000);
-              await this.quickSync(inst, sh, true);
+              await this.quickSync(inst, sh);
             }
           }
         }
@@ -10994,7 +11064,7 @@ function clonarr() {
         });
         const data = await r.json();
         if (data.connected) {
-          this.prowlarrTestResult = { ok: true, message: 'Connected! Version: ' + (data.version || 'unknown') };
+          this.prowlarrTestResult = { ok: true, message: 'Connected', version: data.version };
         } else {
           this.prowlarrTestResult = { ok: false, message: data.error || 'Connection failed' };
         }

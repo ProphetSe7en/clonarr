@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.8.0-beta
+
+### Features
+- **Auto-sync GUI toasts** — When scheduled or manual pull triggers auto-sync, toast notifications show detailed results (CF names, score changes, quality items) with staggered 3s delay between multiple profiles.
+- **Detailed sync toasts** — quickSync, Sync All, and toggle auto-sync now show specific changes (e.g. "Repack/Proper: 5 → 6") instead of just counts.
+- **Sync All respects auto-sync** — Only syncs profiles with auto-sync enabled. Shows warning if no profiles qualify.
+- **Scheduled pull diff toast** — Scheduled pulls show "TRaSH updated: ..." toast in GUI automatically.
+- **Instance version display** — Settings shows "Connected · vX.Y.Z" for Radarr, Sonarr, and Prowlarr consistently.
+- **Prowlarr auto-test** — Prowlarr tested on init and every 60s alongside Radarr/Sonarr.
+
+### UI improvements
+- **Sync rules layout** — Fixed min-widths for profile names, arrow, Arr name, and auto-sync toggle for vertical alignment across all rules.
+- **Larger arrow** — Profile → Arr arrow more visible (15px, lighter color, centered margins).
+- **Settings layout** — Instance URL inline after name, version on same line as Connected.
+
 ## v1.7.9-beta
 
 ### Features

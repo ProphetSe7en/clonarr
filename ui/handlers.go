@@ -2762,6 +2762,18 @@ func (app *App) handleCleanupEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, events)
 }
 
+// handleAutoSyncEvents returns and clears pending auto-sync events for frontend toast.
+func (app *App) handleAutoSyncEvents(w http.ResponseWriter, r *http.Request) {
+	app.autoSyncMu.Lock()
+	events := app.autoSyncEvents
+	app.autoSyncEvents = nil
+	app.autoSyncMu.Unlock()
+	if events == nil {
+		events = []AutoSyncEvent{}
+	}
+	writeJSON(w, events)
+}
+
 // --- Helpers ---
 
 const maskSentinel = "********"

@@ -30,15 +30,32 @@ type CleanupEvent struct {
 	Timestamp    string `json:"timestamp"`
 }
 
+// AutoSyncEvent records an auto-sync result for frontend toast notification.
+type AutoSyncEvent struct {
+	InstanceName   string   `json:"instanceName"`
+	ProfileName    string   `json:"profileName"`
+	ArrProfileName string   `json:"arrProfileName,omitempty"`
+	CFsCreated     int      `json:"cfsCreated"`
+	CFsUpdated     int      `json:"cfsUpdated"`
+	ScoresUpdated  int      `json:"scoresUpdated"`
+	QualityUpdated bool     `json:"qualityUpdated"`
+	SettingsCount  int      `json:"settingsCount"`
+	Details        []string `json:"details,omitempty"` // e.g. "Repack/Proper: 5 → 6"
+	Error          string   `json:"error,omitempty"`
+	Timestamp      string   `json:"timestamp"`
+}
+
 type App struct {
-	config        *configStore
-	trash         *trashStore
-	profiles      *profileStore
-	customCFs     *customCFStore
-	debugLog      *debugLogger
-	pullUpdateCh  chan string // send new interval string to reschedule pull
-	cleanupEvents []CleanupEvent
-	cleanupMu     sync.Mutex
+	config         *configStore
+	trash          *trashStore
+	profiles       *profileStore
+	customCFs      *customCFStore
+	debugLog       *debugLogger
+	pullUpdateCh   chan string // send new interval string to reschedule pull
+	cleanupEvents  []CleanupEvent
+	cleanupMu      sync.Mutex
+	autoSyncEvents []AutoSyncEvent
+	autoSyncMu     sync.Mutex
 }
 
 func main() {
@@ -252,6 +269,7 @@ func main() {
 
 	// Cleanup events
 	mux.HandleFunc("GET /api/cleanup-events", app.handleCleanupEvents)
+	mux.HandleFunc("GET /api/auto-sync/events", app.handleAutoSyncEvents)
 
 	// Debug logging
 	mux.HandleFunc("POST /api/debug/log", app.handleDebugLog)

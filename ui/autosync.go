@@ -234,6 +234,36 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	}
 
 	app.notifyAutoSync(rule, inst, plan.ProfileName, result, nil)
+
+	// Push event to frontend toast queue (only when there are actual changes)
+	if result.CFsCreated > 0 || result.CFsUpdated > 0 || result.ScoresUpdated > 0 || result.QualityUpdated || len(result.SettingsDetails) > 0 {
+		// Collect details for toast (max 5 lines)
+		var details []string
+		details = append(details, result.CFDetails...)
+		details = append(details, result.ScoreDetails...)
+		details = append(details, result.QualityDetails...)
+		details = append(details, result.SettingsDetails...)
+		if len(details) > 5 {
+			details = append(details[:4], fmt.Sprintf("...and %d more", len(details)-4))
+		}
+		app.autoSyncMu.Lock()
+		app.autoSyncEvents = append(app.autoSyncEvents, AutoSyncEvent{
+			InstanceName:   inst.Name,
+			ProfileName:    plan.ProfileName,
+			ArrProfileName: result.ArrProfileName,
+			CFsCreated:     result.CFsCreated,
+			CFsUpdated:     result.CFsUpdated,
+			ScoresUpdated:  result.ScoresUpdated,
+			QualityUpdated: result.QualityUpdated,
+			SettingsCount:  len(result.SettingsDetails),
+			Details:        details,
+			Timestamp:      time.Now().Format(time.RFC3339),
+		})
+		if len(app.autoSyncEvents) > 50 {
+			app.autoSyncEvents = app.autoSyncEvents[len(app.autoSyncEvents)-50:]
+		}
+		app.autoSyncMu.Unlock()
+	}
 }
 
 // cleanupStaleRules removes auto-sync rules and sync history for Arr profiles that no longer exist.
