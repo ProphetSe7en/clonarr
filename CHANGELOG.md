@@ -3,26 +3,23 @@
 ## v1.7.9-beta
 
 ### Features
-- **Compare overhaul** — Compare tab now shows profile settings (min score, cutoff, language, upgrade allowed, quality items) alongside CF comparison. All sections in collapsible cards with summary badges.
+- **Compare overhaul** — Compare tab now shows profile settings (min score, cutoff, language, upgrade allowed, quality items) alongside CF comparison. All sections in collapsible cards with summary badges and status icons.
 - **Settings sync from Compare** — Checkboxes on each setting/quality diff: checked syncs to TRaSH value, unchecked keeps current value as override. Overrides passed to sync modal automatically.
-- **Override badges on sync rules** — TRaSH Sync tab shows amber "X overrides" pill on rules with score, quality, or settings overrides. Hover for breakdown.
+- **Override and custom CF badges on sync rules** — TRaSH Sync tab shows separate pills: blue "X custom CFs" for user-created formats, amber "X overrides" for score/quality/settings overrides. Tooltips explain each.
 - **Auto-sync immediate run** — Enabling auto-sync toggle now runs sync immediately instead of waiting for next TRaSH pull.
 - **Pull toast notification** — Manual pull shows toast with result: "TRaSH data up to date" or diff summary.
+- **conflicts.json support** — Auto-deselect conflicting CFs when TRaSH merges conflicts.json. Activates automatically on pull.
 
 ### Bug fixes
-- **Sync All Fixes** — Now shows confirm dialog explaining what will happen. Uses correct profile pre-selection via resyncTargetArrProfileId.
+- **Optional exclusive groups (SDR)** — Can now deselect all toggles. Golden Rule still requires at least one active.
+- **Sync All Fixes** — Confirm dialog with profile names. Correct profile pre-selection via resyncTargetArrProfileId.
 - **Required CFs counts** — Compare badges now show section-specific counts (not global totals that included grouped CFs).
 - **Auto-sync hidden in Compare sync** — Sync modal from Compare hides auto-sync toggle.
 - **Select option type mismatch** — Fixed String vs number comparison for Arr profile dropdown pre-selection.
-
-## v1.7.8-beta
-
-### Bug fixes
-- **Optional exclusive groups (SDR) can now deactivate all** — SDR and similar "pick one" groups now allow deselecting all toggles. Golden Rule still requires at least one active.
-- **Shallow clone diff detection** — Pull diff now works reliably with shallow clones (fetch uses `--deepen=1`).
+- **Shallow clone diff detection** — Pull diff works reliably with shallow clones (fetch uses `--deepen=1`).
 
 ### Internal
-- Prepared support for upcoming TRaSH conflicts.json (mutually exclusive CF declarations). Will activate automatically when TRaSH merges the data.
+- Prepared conflicts.json parsing (ConflictsData structs, API endpoint, frontend loading). Zero-downtime activation when TRaSH merges PR #2681.
 
 ## v1.7.7-beta
 

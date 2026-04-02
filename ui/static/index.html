@@ -560,12 +560,20 @@
                             <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#3d1f1f;color:#f85149;flex-shrink:0"
                                   :title="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>
                           </template>
-                          <template x-if="(() => { const r = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (!r) return false; return Object.keys(r.scoreOverrides || {}).length + Object.keys(r.qualityOverrides || {}).length + (r.overrides ? Object.keys(r.overrides).filter(k => r.overrides[k] !== undefined).length : 0) > 0; })()">
-                            <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922;flex-shrink:0;margin-left:auto"
-                                  :title="(() => { const r = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (!r) return ''; const parts = []; const so = Object.keys(r.scoreOverrides || {}).length; if (so) parts.push(so + ' score'); const qo = Object.keys(r.qualityOverrides || {}).length; if (qo) parts.push(qo + ' quality'); const oo = r.overrides ? Object.keys(r.overrides).filter(k => r.overrides[k] !== undefined).length : 0; if (oo) parts.push(oo + ' settings'); return parts.join(', '); })()"
-                                  x-text="(() => { const r = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (!r) return ''; let n = Object.keys(r.scoreOverrides || {}).length + Object.keys(r.qualityOverrides || {}).length + (r.overrides ? Object.keys(r.overrides).filter(k => r.overrides[k] !== undefined).length : 0); return n + ' override' + (n !== 1 ? 's' : ''); })()"></span>
-                          </template>
-                          <span :style="'color:#8b949e;' + ((() => { const r = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (!r) return true; return Object.keys(r.scoreOverrides || {}).length + Object.keys(r.qualityOverrides || {}).length + (r.overrides ? Object.keys(r.overrides).filter(k => r.overrides[k] !== undefined).length : 0) === 0; })() ? 'margin-left:auto' : '')" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
+                          <span style="display:flex;gap:4px;align-items:center;margin-left:auto;flex-shrink:0"
+                                x-data="{ get _rule() { return autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId) || {}; }, get _so() { return Object.keys(this._rule.scoreOverrides || {}).filter(k => !k.startsWith('custom:')).length; }, get _extra() { return Object.keys(this._rule.scoreOverrides || {}).filter(k => k.startsWith('custom:')).length; }, get _qo() { return Object.keys(this._rule.qualityOverrides || {}).length; }, get _oo() { return this._rule.overrides ? Object.keys(this._rule.overrides).filter(k => this._rule.overrides[k] !== undefined).length : 0; } }">
+                            <template x-if="_extra > 0">
+                              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff;flex-shrink:0"
+                                    title="Custom formats created by you and added to this profile"
+                                    x-text="_extra + ' custom CF' + (_extra !== 1 ? 's' : '')"></span>
+                            </template>
+                            <template x-if="_so + _qo + _oo > 0">
+                              <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922;flex-shrink:0"
+                                    :title="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
+                                    x-text="(_so + _qo + _oo) + ' override' + ((_so + _qo + _oo) !== 1 ? 's' : '')"></span>
+                            </template>
+                          </span>
+                          <span style="color:#8b949e" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
                           <span style="color:#8b949e" x-text="timeAgo(sh.lastSync)"></span>
                           <button class="btn btn-sm" @click.stop="resyncProfile(inst, sh)" title="Edit sync settings — overrides, optional CFs, behavior">Edit</button>
                           <button class="btn btn-sm" style="border-color:#238636;color:#3fb950" @click.stop="quickSync(inst, sh)" title="Re-sync with saved settings">Sync</button>
