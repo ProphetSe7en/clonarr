@@ -1,6 +1,6 @@
 # Clonarr
 
-> **Beta Software** — Clonarr is under active development. Features may change, and bugs are expected. Please report issues on [GitHub](https://github.com/prophetse7en/clonarr/issues).
+Latest version: `v1.8.1` — Please report issues on [GitHub](https://github.com/prophetse7en/clonarr/issues).
 
 A TRaSH Guides sync tool for Radarr and Sonarr with a built-in web UI. Browse, customize, and sync Custom Formats, Quality Profiles, Scores, and Quality Sizes — no YAML configs, no CLI, just a browser.
 
