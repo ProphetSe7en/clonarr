@@ -11,6 +11,10 @@
     <Tag>dev</Tag>
     <TagDescription>Development builds — may contain bugs or breaking changes</TagDescription>
   </Branch>
+  <Branch>
+    <Tag>v1.8.4</Tag>
+    <TagDescription>Pinned stable release</TagDescription>
+  </Branch>
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
