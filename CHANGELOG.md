@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.8.2
+
+### Improved
+
+- **Sync Rules column headers** — TRaSH Profile, Arr Profile, Auto-Sync, Details, and Actions columns with consistent alignment across all rows
+- **Arr Profile ID** — Profile ID shown next to Arr profile name (e.g. `ID 23`) for easy identification
+- **Builder Synced Profiles** — Same column layout as TRaSH sync (Your Profile, Arr Profile, Details, Actions)
+- **Text readability** — All secondary text lightened from `#484f58` to `#6e7681` across all tabs (quality sizes, scoring sandbox, settings, compare, builder)
+- **Healthcheck suggestion UI** — Suggestion box hidden when no Extra Parameters command is available (e.g. distroless images)
+
+### Fixed
+
+- **conflicts.json parser** — Updated to match the TRaSH Guides PR #2681 schema where trash_ids are object keys, not fields. Ready for when the PR merges.
+
 ## v1.8.1
 
 First stable release — all previous beta versions consolidated.

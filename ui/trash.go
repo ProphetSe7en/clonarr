@@ -124,9 +124,39 @@ type ConflictEntry struct {
 	Name    string `json:"name,omitempty"`
 }
 
+// conflictsRaw matches the TRaSH conflicts.json schema where trash_ids are object keys:
+//
+//	{"custom_formats": [{"trash_id": {"name": "...", "desc": "..."}, ...}]}
+type conflictsRaw struct {
+	CustomFormats []map[string]struct {
+		Name string `json:"name"`
+		Desc string `json:"desc"`
+	} `json:"custom_formats"`
+}
+
 // ConflictsData holds mutually exclusive CF groups from conflicts.json.
+// Internally converted from the raw format to flat ConflictEntry slices for API/UI use.
 type ConflictsData struct {
 	CustomFormats [][]ConflictEntry `json:"custom_formats"`
+}
+
+// parseConflicts reads TRaSH conflicts.json (map-keyed by trash_id) into ConflictsData.
+func parseConflicts(data []byte) (*ConflictsData, error) {
+	var raw conflictsRaw
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	result := &ConflictsData{}
+	for _, group := range raw.CustomFormats {
+		var entries []ConflictEntry
+		for trashID, info := range group {
+			entries = append(entries, ConflictEntry{TrashID: trashID, Name: info.Name})
+		}
+		if len(entries) >= 2 {
+			result.CustomFormats = append(result.CustomFormats, entries)
+		}
+	}
+	return result, nil
 }
 
 // AppData holds all parsed TRaSH data for one app (radarr or sonarr).
@@ -769,11 +799,10 @@ func (ts *trashStore) parseAppData(app string) (AppData, error) {
 	// Parse conflicts.json (mutually exclusive CFs) — nil if file doesn't exist yet
 	conflictsFile := filepath.Join(base, "conflicts.json")
 	if data, err := os.ReadFile(conflictsFile); err == nil {
-		var conflicts ConflictsData
-		if err := json.Unmarshal(data, &conflicts); err != nil {
+		if conflicts, err := parseConflicts(data); err != nil {
 			log.Printf("Warning: skip conflicts %s: %v", app, err)
 		} else if len(conflicts.CustomFormats) > 0 {
-			ad.Conflicts = &conflicts
+			ad.Conflicts = conflicts
 			log.Printf("Loaded %d conflict groups for %s", len(conflicts.CustomFormats), app)
 		}
 	}
