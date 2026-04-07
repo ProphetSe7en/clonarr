@@ -64,7 +64,8 @@ type AutoSyncRule struct {
 	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to update
 	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
 	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // quality item overrides (name → allowed)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
 	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
 	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
 	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
@@ -131,7 +132,8 @@ type SyncHistoryEntry struct {
 	SyncedCFs      []string          `json:"syncedCFs"`
 	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
 	ScoreOverrides   map[string]int    `json:"scoreOverrides,omitempty"`
-	QualityOverrides map[string]bool   `json:"qualityOverrides,omitempty"`
+	QualityOverrides map[string]bool   `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
+	QualityStructure []QualityItem     `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
 	Overrides        *SyncOverrides    `json:"overrides,omitempty"`
 	Behavior         *SyncBehavior     `json:"behavior,omitempty"`
 	CFsCreated       int               `json:"cfsCreated"`
@@ -265,6 +267,9 @@ func (cs *configStore) Get() Config {
 				cfg.SyncHistory[i].QualityOverrides[k] = v
 			}
 		}
+		if len(sh.QualityStructure) > 0 {
+			cfg.SyncHistory[i].QualityStructure = cloneQualityItems(sh.QualityStructure)
+		}
 		if sh.Overrides != nil {
 			o := *sh.Overrides
 			cfg.SyncHistory[i].Overrides = &o
@@ -321,6 +326,9 @@ func (cs *configStore) Get() Config {
 				for k, v := range r.QualityOverrides {
 					cfg.AutoSync.Rules[i].QualityOverrides[k] = v
 				}
+			}
+			if len(r.QualityStructure) > 0 {
+				cfg.AutoSync.Rules[i].QualityStructure = cloneQualityItems(r.QualityStructure)
 			}
 			if r.Behavior != nil {
 				b := *r.Behavior

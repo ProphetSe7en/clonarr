@@ -2567,6 +2567,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		SelectedCFs:    selectedCFMap,
 		ScoreOverrides:   req.ScoreOverrides,
 		QualityOverrides: req.QualityOverrides,
+		QualityStructure: req.QualityStructure,
 		Overrides:      req.Overrides,
 		Behavior:       req.Behavior,
 		CFsCreated:     result.CFsCreated,
@@ -2619,6 +2620,8 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 					cfg.AutoSync.Rules[i].ImportedProfileID = req.ImportedProfileID
 					cfg.AutoSync.Rules[i].SelectedCFs = req.SelectedCFs
 					cfg.AutoSync.Rules[i].ScoreOverrides = req.ScoreOverrides
+					cfg.AutoSync.Rules[i].QualityOverrides = req.QualityOverrides
+					cfg.AutoSync.Rules[i].QualityStructure = req.QualityStructure
 					cfg.AutoSync.Rules[i].Behavior = req.Behavior
 					cfg.AutoSync.Rules[i].Overrides = req.Overrides
 				}
@@ -2635,6 +2638,8 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 			ArrProfileID:      arrID,
 			SelectedCFs:       req.SelectedCFs,
 			ScoreOverrides:    req.ScoreOverrides,
+			QualityOverrides:  req.QualityOverrides,
+			QualityStructure:  req.QualityStructure,
 			Behavior:          req.Behavior,
 			Overrides:         req.Overrides,
 		})

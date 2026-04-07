@@ -75,7 +75,8 @@ type SyncRequest struct {
 	ProfileName       string         `json:"profileName"`                 // custom name for new profile (optional)
 	SelectedCFs       []string       `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
 	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // quality item overrides (name → allowed)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
 	// Profile setting overrides (nil = use TRaSH default)
 	Overrides *SyncOverrides `json:"overrides,omitempty"`
 	// Sync behavior rules (nil = defaults: add_missing, remove_custom, reset_to_zero)
@@ -406,10 +407,15 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 		}
 		// else "do_not_adjust": leave unsynced CF scores as-is
 
-		// Compare quality items: check if TRaSH profile's allowed qualities differ from Arr
-		if len(profile.Items) > 0 {
+		// Compare quality items: check if desired allowed qualities differ from Arr.
+		// Source: structure override trumps TRaSH items.
+		desiredItems := profile.Items
+		if len(req.QualityStructure) > 0 {
+			desiredItems = req.QualityStructure
+		}
+		if len(desiredItems) > 0 {
 			trashAllowed := make(map[string]bool)
-			for _, item := range profile.Items {
+			for _, item := range desiredItems {
 				if item.Allowed {
 					trashAllowed[item.Name] = true
 				}
@@ -653,7 +659,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			selectedCFsMap[id] = true
 		}
 
-		arrProfile, err := BuildArrProfile(profile, ad, qualityDefs, languages, nameToID, selectedCFsMap, req.ProfileName, cfScoreOverrides, customCFs)
+		arrProfile, err := BuildArrProfile(profile, ad, qualityDefs, languages, nameToID, selectedCFsMap, req.ProfileName, cfScoreOverrides, customCFs, req.QualityStructure)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("build profile: %v", err))
 			return result, nil
@@ -695,8 +701,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Apply quality overrides to new profile
-		if len(req.QualityOverrides) > 0 {
+		// Apply legacy flat quality overrides (only if no structure override is in play —
+		// structure override is applied earlier inside BuildArrProfile)
+		if len(req.QualityOverrides) > 0 && len(req.QualityStructure) == 0 {
 			for i := range arrProfile.Items {
 				name := arrProfile.Items[i].Name
 				if name == "" && arrProfile.Items[i].Quality != nil {
@@ -945,8 +952,8 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Update quality items from TRaSH profile
-		if len(profile.Items) > 0 {
+		// Update quality items from TRaSH profile (or from structure override if set)
+		if len(profile.Items) > 0 || len(req.QualityStructure) > 0 {
 			qualityDefs, err := client.ListQualityDefinitions()
 			if err != nil {
 				log.Printf("Sync: failed to fetch quality defs: %v", err)
@@ -964,17 +971,26 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					if name != "" { oldAllowed[name] = item.Allowed }
 				}
 
-				newItems, err := resolveQualityItems(profile.Items, qualityByName)
+				// Source: structure override trumps TRaSH items.
+				itemsSource := profile.Items
+				usingStructureOverride := len(req.QualityStructure) > 0
+				if usingStructureOverride {
+					itemsSource = req.QualityStructure
+				}
+
+				newItems, err := resolveQualityItems(itemsSource, qualityByName)
 				if err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("resolve quality items: %v", err))
 				} else {
-					// Apply quality overrides to newItems before comparing with Arr state
-					// so we compare against the final desired state, not intermediate TRaSH state
-					for i := range newItems {
-						name := newItems[i].Name
-						if name == "" && newItems[i].Quality != nil { name = newItems[i].Quality.Name }
-						if override, ok := req.QualityOverrides[name]; ok {
-							newItems[i].Allowed = override
+					// Apply legacy flat overrides only when no structure override is present.
+					// Structure override is already the user's final desired state — no further mutation needed.
+					if !usingStructureOverride && len(req.QualityOverrides) > 0 {
+						for i := range newItems {
+							name := newItems[i].Name
+							if name == "" && newItems[i].Quality != nil { name = newItems[i].Quality.Name }
+							if override, ok := req.QualityOverrides[name]; ok {
+								newItems[i].Allowed = override
+							}
 						}
 					}
 
@@ -1021,9 +1037,10 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Apply quality overrides for cases where quality rebuild was skipped
-		// (overrides are already baked into newItems when rebuild runs)
-		if len(req.QualityOverrides) > 0 {
+		// Apply legacy flat quality overrides for cases where quality rebuild was skipped
+		// (overrides are already baked into newItems when rebuild runs).
+		// Structure override always rebuilds, so this fallback is legacy-only.
+		if len(req.QualityOverrides) > 0 && len(req.QualityStructure) == 0 {
 			for i := range targetProfile.Items {
 				name := targetProfile.Items[i].Name
 				if name == "" && targetProfile.Items[i].Quality != nil {
@@ -1140,6 +1157,7 @@ func BuildArrProfile(
 	profileName string,
 	cfScoreOverrides map[string]int,
 	customCFs []CustomCF,
+	qualityStructureOverride []QualityItem,
 ) (*ArrQualityProfile, error) {
 	// Build quality name → definition map
 	qualityByName := make(map[string]*ArrQualityDefinition)
@@ -1147,8 +1165,14 @@ func BuildArrProfile(
 		qualityByName[qualityDefs[i].Quality.Name] = &qualityDefs[i]
 	}
 
-	// Resolve quality items from TRaSH profile
-	items, err := resolveQualityItems(profile.Items, qualityByName)
+	// Resolve quality items: structure override trumps TRaSH items.
+	// When set, the override is the user's frozen snapshot of the quality structure
+	// (rebuilt by the Edit Groups editor) and replaces TRaSH's items entirely.
+	itemsSource := profile.Items
+	if len(qualityStructureOverride) > 0 {
+		itemsSource = qualityStructureOverride
+	}
+	items, err := resolveQualityItems(itemsSource, qualityByName)
 	if err != nil {
 		return nil, fmt.Errorf("resolve quality items: %w", err)
 	}

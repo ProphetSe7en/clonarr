@@ -407,6 +407,33 @@
   .pd-settings .toggle .slider { border-radius: 7px; }
   .pd-settings .toggle .slider:before { width: 10px; height: 10px; }
   .pd-settings .toggle input:checked + .slider:before { transform: translateX(12px); }
+
+  /* Quality Structure Override editor (Edit Groups mode) */
+  .qs-row { display: flex; align-items: center; gap: 6px; padding: 4px 4px; border-radius: 4px; border: 1px solid transparent; min-height: 22px; }
+  .qs-row.is-group { background: rgba(88,166,255,0.05); border-color: rgba(88,166,255,0.25); }
+  .qs-row.is-dragging { opacity: 0.35; }
+  .qs-row.dnd-merge-hover { border-color: #3fb950; background: rgba(63,185,80,0.12); }
+  .qs-handle { color: #6e7681; cursor: grab; font-size: 10px; padding: 0 2px; user-select: none; }
+  .qs-handle:active { cursor: grabbing; }
+  .qs-chevron { font-size: 9px; color: #8b949e; cursor: pointer; user-select: none; width: 10px; transition: transform 0.15s; display: inline-block; }
+  .qs-chevron.open { transform: rotate(90deg); }
+  .qs-name { font-size: 11px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qs-name.editable { cursor: text; }
+  .qs-name.editable:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
+  .qs-badge { font-size: 9px; color: #6e7681; padding: 1px 5px; border-radius: 3px; background: #21262d; flex-shrink: 0; }
+  .qs-rename-input { background: transparent; border: 1px solid #58a6ff; color: #e1e4e8; font-size: 11px; padding: 1px 4px; border-radius: 3px; flex: 1; min-width: 0; }
+  .qs-drop-gap { height: 4px; margin: 0 -4px; border-radius: 2px; transition: background 0.1s; }
+  .qs-edit-on .qs-drop-gap.dnd-active { background: rgba(88,166,255,0.15); }
+  .qs-edit-on .qs-drop-gap.dnd-hover { background: #58a6ff; height: 6px; }
+  .qs-group-members { margin: 4px 0 6px 22px; padding: 4px 8px; border-left: 2px solid rgba(88,166,255,0.3); display: flex; flex-direction: column; gap: 2px; border-radius: 0 4px 4px 0; }
+  .qs-group-members.dnd-merge-hover { border-left-color: #3fb950; background: rgba(63,185,80,0.1); }
+  .qs-member { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 11px; color: #8b949e; }
+  .qs-member.is-dragging { opacity: 0.35; }
+  .qs-pill { background: #21262d; color: #e1e4e8; padding: 2px 7px; border-radius: 3px; font-size: 10px; cursor: grab; user-select: none; }
+  .qs-pill:active { cursor: grabbing; }
+  .qs-tiny-x { background: transparent; border: 1px solid #f85149; color: #f85149; padding: 0 5px; font-size: 9px; border-radius: 3px; cursor: pointer; line-height: 14px; }
+  .qs-tiny-x:hover { background: #f85149; color: #0d1117; }
+  .qs-empty-group { font-style: italic; color: #6e7681; font-size: 10px; }
 </style>
 </head>
 <body>
@@ -2862,8 +2889,13 @@
                     <template x-if="pdOverrideActive">
                       <select class="pb-input" style="width:100%;font-size:12px" x-model="pdOverrides.cutoffQuality"
                               :style="pdOverrides.cutoffQuality !== (profileDetail?.detail?.profile?.cutoff || '') && pdOverrides.cutoffQuality !== '' ? 'border-color:#d29922' : ''">
-                        <option :value="profileDetail?.detail?.profile?.cutoff || ''" x-text="(profileDetail?.detail?.profile?.cutoff || '—') + ' (TRaSH default)'"></option>
-                        <template x-for="item in (profileDetail?.detail?.profile?.items || []).filter(i => i.allowed !== false && i.name !== (profileDetail?.detail?.profile?.cutoff || ''))" :key="item.name">
+                        <!-- TRaSH default option: always rendered so x-model can match its value at init.
+                             Disabled (greyed out) when its name no longer exists as an allowed entry in the override structure. -->
+                        <option :value="profileDetail?.detail?.profile?.cutoff || ''"
+                                :disabled="!qsTrashDefaultCutoffValid()"
+                                x-text="(profileDetail?.detail?.profile?.cutoff || '—') + (qsTrashDefaultCutoffValid() ? ' (TRaSH default)' : ' (TRaSH default — not in structure)')"></option>
+                        <!-- Cutoff candidates: from qualityStructure when set (so renamed/created groups appear), else from TRaSH profile.items -->
+                        <template x-for="item in (qualityStructure.length > 0 ? qualityStructure : (profileDetail?.detail?.profile?.items || [])).filter(i => i.allowed !== false && i.name !== (profileDetail?.detail?.profile?.cutoff || ''))" :key="item.name + (item._id || '')">
                           <option :value="item.name" x-text="item.name"></option>
                         </template>
                         <option value="__skip__">— Don't sync cutoff —</option>
@@ -2936,7 +2968,8 @@
                 <span style="font-size:11px;color:#d29922;margin-right:6px">Extra CFs</span>
                 <div style="flex:1"></div>
                 <button class="btn" style="font-size:11px;padding:3px 10px;border-color:#d29922;color:#d29922"
-                        @click="const p = profileDetail.detail.profile; pdOverrides.language = {enabled:true,value:p.language||'Original'}; pdOverrides.upgradeAllowed = {enabled:true,value:p.upgradeAllowed??true}; pdOverrides.minFormatScore = {enabled:true,value:p.minFormatScore??0}; pdOverrides.minUpgradeFormatScore = {enabled:true,value:p.minUpgradeFormatScore??1}; pdOverrides.cutoffFormatScore = {enabled:true,value:p.cutoffFormatScore||p.cutoffScore||10000}; pdOverrides.cutoffQuality = p.cutoff||''; cfScoreOverrides = {}; cfScoreOverrideActive = false; qualityOverrides = {}; qualityOverrideActive = false; extraCFs = {}; extraCFsActive = false; extraCFSearch = ''">Reset to TRaSH</button>
+                        title="Reset all overrides (settings, CF scores, qualities, structure, extras) to TRaSH defaults"
+                        @click="const p = profileDetail.detail.profile; pdOverrides.language = {enabled:true,value:p.language||'Original'}; pdOverrides.upgradeAllowed = {enabled:true,value:p.upgradeAllowed??true}; pdOverrides.minFormatScore = {enabled:true,value:p.minFormatScore??0}; pdOverrides.minUpgradeFormatScore = {enabled:true,value:p.minUpgradeFormatScore??1}; pdOverrides.cutoffFormatScore = {enabled:true,value:p.cutoffFormatScore||p.cutoffScore||10000}; pdOverrides.cutoffQuality = p.cutoff||''; cfScoreOverrides = {}; cfScoreOverrideActive = false; qualityOverrides = {}; qualityOverrideActive = false; qualityStructure = []; qualityStructureEditMode = false; qualityStructureExpanded = {}; qualityStructureRenaming = null; extraCFs = {}; extraCFsActive = false; extraCFSearch = ''">Reset to TRaSH</button>
                 <button class="btn" style="font-size:11px;padding:3px 10px" @click="pdFinishOverrides()">Done</button>
               </div>
             </template>
@@ -2945,27 +2978,153 @@
 
         <!-- Quality item overrides -->
         <template x-if="qualityOverrideActive && profileDetail?.detail?.profile?.items?.length > 0">
-          <div style="margin-bottom:12px;padding:10px 14px;background:#161b22;border:1px solid #d29922;border-radius:6px">
-            <div style="display:flex;align-items:center;margin-bottom:8px">
+          <div style="margin-bottom:12px;padding:10px 14px;background:#161b22;border:1px solid #d29922;border-radius:6px"
+               :class="qualityStructureEditMode ? 'qs-edit-on' : ''">
+            <!-- header -->
+            <div style="display:flex;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
               <div style="font-size:12px;font-weight:600;color:#d29922">Quality Overrides</div>
-              <div style="font-size:10px;color:#6e7681;margin-left:8px">Toggle resolutions on/off</div>
+              <div style="font-size:10px;color:#6e7681" x-show="!qualityStructureEditMode">Toggle resolutions on/off</div>
+              <div style="font-size:10px;color:#6e7681" x-show="qualityStructureEditMode">Drag rows to reorder · drop on a row to merge · click group name to rename</div>
+              <div style="flex:1"></div>
+              <button class="btn"
+                      style="font-size:10px;padding:2px 10px"
+                      :style="qualityStructureEditMode ? 'background:#238636;border-color:#238636;color:#fff' : ''"
+                      @click="qsToggleEditMode()">
+                <span x-text="qualityStructureEditMode ? '✓ Done Editing Groups' : 'Edit Groups'"></span>
+              </button>
+              <button class="btn"
+                      style="font-size:10px;padding:2px 10px;border-color:#d29922;color:#d29922"
+                      title="Reset all quality overrides to TRaSH default. Discards toggles, groups, ordering, and renames. Cannot be undone."
+                      @click="qsResetAll()">Reset to TRaSH</button>
             </div>
-            <div :style="'column-count:' + (profileDetail.detail.profile.items.length > 12 ? 3 : profileDetail.detail.profile.items.length > 6 ? 2 : 1) + ';column-gap:16px'">
-              <template x-for="item in profileDetail.detail.profile.items" :key="item.name">
-                <div style="break-inside:avoid;display:flex;align-items:center;gap:6px;padding:4px 0">
-                  <label class="toggle toggle-sm" style="flex-shrink:0">
-                    <input type="checkbox"
-                           :checked="qualityOverrides[item.name] !== undefined ? qualityOverrides[item.name] : item.allowed"
-                           @change="if ($event.target.checked === item.allowed) { const {[item.name]: _, ...rest} = qualityOverrides; qualityOverrides = rest; } else { qualityOverrides = {...qualityOverrides, [item.name]: $event.target.checked}; }">
-                    <span class="slider"></span>
-                  </label>
-                  <span style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
-                        :style="(qualityOverrides[item.name] !== undefined ? qualityOverrides[item.name] : item.allowed) ? 'color:#e1e4e8' : 'color:#6e7681'"
-                        x-text="item.name"></span>
-                  <span x-show="qualityOverrides[item.name] !== undefined" style="font-size:8px;color:#d29922;flex-shrink:0">●</span>
-                </div>
-              </template>
-            </div>
+
+            <!-- LEGACY view: structure not yet initialized → flat toggle list (existing behavior) -->
+            <template x-if="qualityStructure.length === 0">
+              <div :style="'column-count:' + (profileDetail.detail.profile.items.length > 12 ? 3 : profileDetail.detail.profile.items.length > 6 ? 2 : 1) + ';column-gap:16px'">
+                <template x-for="item in profileDetail.detail.profile.items" :key="item.name">
+                  <div style="break-inside:avoid;display:flex;align-items:center;gap:6px;padding:4px 0">
+                    <label class="toggle toggle-sm" style="flex-shrink:0">
+                      <input type="checkbox"
+                             :checked="qualityOverrides[item.name] !== undefined ? qualityOverrides[item.name] : item.allowed"
+                             @change="if ($event.target.checked === item.allowed) { const {[item.name]: _, ...rest} = qualityOverrides; qualityOverrides = rest; } else { qualityOverrides = {...qualityOverrides, [item.name]: $event.target.checked}; }">
+                      <span class="slider"></span>
+                    </label>
+                    <span style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                          :style="(qualityOverrides[item.name] !== undefined ? qualityOverrides[item.name] : item.allowed) ? 'color:#e1e4e8' : 'color:#6e7681'"
+                          x-text="item.name"></span>
+                    <span x-show="qualityOverrides[item.name] !== undefined" style="font-size:8px;color:#d29922;flex-shrink:0">●</span>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- STRUCTURE-DRIVEN view: qualityStructure is the source of truth -->
+            <template x-if="qualityStructure.length > 0">
+              <div :style="'column-count:' + (qualityStructure.length > 12 ? 3 : qualityStructure.length > 6 ? 2 : 1) + ';column-gap:16px'">
+                <template x-for="(item, idx) in qualityStructure" :key="item._id">
+                  <div style="break-inside:avoid">
+                    <!-- gap before first row (only in edit mode) -->
+                    <template x-if="idx === 0 && qualityStructureEditMode">
+                      <div class="qs-drop-gap"
+                           :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === 0 }"
+                           @dragover.prevent="qualityStructureDrag.dropGap = 0"
+                           @dragleave="qualityStructureDrag.dropGap = null"
+                           @drop.prevent="qsHandleDropOnGap(0)"></div>
+                    </template>
+
+                    <!-- the row -->
+                    <div class="qs-row"
+                         :class="{
+                           'is-group': item.items && qualityStructureEditMode,
+                           'is-dragging': qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx,
+                           'dnd-merge-hover': qualityStructureDrag.dropMerge === idx
+                         }"
+                         :draggable="qualityStructureEditMode"
+                         @dragstart="if (qualityStructureEditMode) { qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx; }"
+                         @dragover.prevent="if (qualityStructureEditMode && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                         @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
+                         @drop.prevent="qsHandleDropOnRow(idx)"
+                         @dragend="qsResetDrag()">
+
+                      <!-- Drag handle + chevron only in edit mode. In non-edit mode no spacers
+                           so single and group rows both start at the toggle (matches legacy view alignment). -->
+                      <span class="qs-handle" x-show="qualityStructureEditMode" title="Drag to reorder · drop on another row to merge">⋮⋮</span>
+                      <template x-if="qualityStructureEditMode">
+                        <template x-if="item.items">
+                          <span class="qs-chevron"
+                                :class="{ open: qualityStructureExpanded[item._id] }"
+                                @click="qualityStructureExpanded[item._id] = !qualityStructureExpanded[item._id]">&#9654;</span>
+                        </template>
+                      </template>
+                      <template x-if="qualityStructureEditMode && !item.items">
+                        <span style="width:10px;display:inline-block"></span>
+                      </template>
+
+                      <label class="toggle toggle-sm" style="flex-shrink:0">
+                        <input type="checkbox" x-model="item.allowed">
+                        <span class="slider"></span>
+                      </label>
+
+                      <template x-if="qualityStructureRenaming !== item._id">
+                        <span class="qs-name"
+                              :class="(qualityStructureEditMode && item.items) ? 'editable' : ''"
+                              :style="item.allowed ? 'color:#e1e4e8' : 'color:#6e7681'"
+                              @click="if (qualityStructureEditMode && item.items) qsStartRename(item)"
+                              x-text="item.name"></span>
+                      </template>
+                      <template x-if="qualityStructureRenaming === item._id">
+                        <input class="qs-rename-input"
+                               x-model="item.name"
+                               @blur="qualityStructureRenaming = null"
+                               @keyup.enter="qualityStructureRenaming = null"
+                               @keyup.escape="qualityStructureRenaming = null"
+                               x-init="$nextTick(() => $el.focus())">
+                      </template>
+
+                      <span x-show="item.items" class="qs-badge" x-text="item.items.length"></span>
+                      <span x-show="qsIsOverridden(item)" style="font-size:8px;color:#d29922;flex-shrink:0" title="Differs from TRaSH default">●</span>
+
+                      <button x-show="qualityStructureEditMode && item.items" class="qs-tiny-x"
+                              style="font-size:9px;padding:0 6px"
+                              @click="qsDeleteGroup(idx)" title="Delete group (members become individual singles)">× delete</button>
+                    </div>
+
+                    <!-- expanded group members. The whole panel is a drop target so the user
+                         doesn't have to aim at the group header to add a member. -->
+                    <div class="qs-group-members"
+                         x-show="item.items && qualityStructureEditMode && qualityStructureExpanded[item._id]"
+                         x-cloak
+                         :class="{ 'dnd-merge-hover': qualityStructureDrag.dropMerge === idx && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) }"
+                         @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                         @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
+                         @drop.prevent.stop="qsHandleDropOnRow(idx)">
+                      <template x-for="(m, mIdx) in item.items" :key="'qsm-'+item._id+'-'+m+'-'+mIdx">
+                        <div class="qs-member"
+                             :class="{ 'is-dragging': qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx && qualityStructureDrag.srcMember === mIdx }">
+                          <span class="qs-pill"
+                                draggable="true"
+                                @dragstart.stop="qualityStructureDrag.kind = 'member'; qualityStructureDrag.srcGroup = idx; qualityStructureDrag.srcMember = mIdx"
+                                @dragend="qsResetDrag()"
+                                x-text="m"></span>
+                          <div style="flex:1"></div>
+                          <button class="qs-tiny-x" @click="qsUngroupMember(idx, mIdx)" title="Remove from group (back to single)">×</button>
+                        </div>
+                      </template>
+                      <div class="qs-empty-group" x-show="item.items.length === 0">empty group — drag a member here or click × delete</div>
+                    </div>
+
+                    <!-- gap after every row -->
+                    <template x-if="qualityStructureEditMode">
+                      <div class="qs-drop-gap"
+                           :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === idx + 1 }"
+                           @dragover.prevent="qualityStructureDrag.dropGap = idx + 1"
+                           @dragleave="qualityStructureDrag.dropGap = null"
+                           @drop.prevent="qsHandleDropOnGap(idx + 1)"></div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
         </template>
 
@@ -4310,6 +4469,29 @@
     </div>
   </div>
 
+  <!-- Input modal (single text field) -->
+  <div class="modal-overlay" x-show="inputModal.show" @click.self="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()" x-cloak>
+    <div class="modal" style="max-width:420px">
+      <div class="modal-title" x-text="inputModal.title"></div>
+      <div x-show="inputModal.message" style="font-size:13px;color:#8b949e;white-space:pre-line;line-height:1.6;margin-bottom:8px" x-text="inputModal.message"></div>
+      <input type="text" class="input" style="width:100%;font-size:13px;padding:6px 10px"
+             x-model="inputModal.value"
+             :placeholder="inputModal.placeholder || ''"
+             @keyup.enter="if (!inputModal.value || !inputModal.value.trim()) return; inputModal.show = false; if(inputModal.onConfirm) inputModal.onConfirm(inputModal.value)"
+             @keyup.escape="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()"
+             x-init="$watch('inputModal.show', v => { if (v) $nextTick(() => $el.focus()) })">
+      <div class="modal-actions">
+        <button class="btn" @click="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()">Cancel</button>
+        <button class="btn btn-primary"
+                :disabled="!inputModal.value || !inputModal.value.trim()"
+                :style="(!inputModal.value || !inputModal.value.trim()) ? 'opacity:0.4;cursor:not-allowed' : ''"
+                @click="if (!inputModal.value || !inputModal.value.trim()) return; inputModal.show = false; if(inputModal.onConfirm) inputModal.onConfirm(inputModal.value)">
+          <span x-text="inputModal.confirmLabel || 'OK'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast notifications -->
   <div style="position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:450px;width:100%">
     <template x-for="toast in toasts" :key="toast.id">
@@ -4756,8 +4938,17 @@ function clonarr() {
     pdOverrideActive: false, // whether override editing mode is open
     cfScoreOverrides: {}, // per-CF score overrides { trashId: score }
     cfScoreOverrideActive: false, // whether CF score editing is enabled
-    qualityOverrides: {}, // quality item overrides { name: allowed(bool) }
+    qualityOverrides: {}, // legacy flat overrides { name: allowed(bool) } — kept for backwards compat
     qualityOverrideActive: false, // whether quality editing is enabled
+    // Quality structure override (full structure replacing TRaSH items).
+    // Format: [{ _id, name, allowed, items?: [string] }]. Empty when not in use.
+    // When non-empty, this is sent as `qualityStructure` to backend and trumps qualityOverrides.
+    qualityStructure: [],
+    qualityStructureEditMode: false,
+    qualityStructureExpanded: {},
+    qualityStructureRenaming: null,
+    qualityStructureDrag: { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null },
+    _qsIdCounter: 0,
     extraCFs: {}, // { trashId: score } — extra CFs not in profile
     extraCFsActive: false,
     extraCFSearch: '',
@@ -4859,6 +5050,7 @@ function clonarr() {
     qsSyncResult: {},    // per app-type: { ok, message }
     qsAutoSync: {},      // per app-type: { enabled, type }
     confirmModal: { show: false, title: '', message: '', confirmLabel: '', onConfirm: null, onCancel: null },
+    inputModal: { show: false, title: '', message: '', value: '', placeholder: '', confirmLabel: '', onConfirm: null, onCancel: null },
     toasts: [], // { id, message, type: 'info'|'warning'|'error', timeout }
 
     // Naming schemes (cached per app type)
@@ -5018,6 +5210,9 @@ function clonarr() {
     },
 
     async init() {
+      // Reactive validation: any change to qualityStructure (rename, delete, merge, toggle)
+      // re-validates pdOverrides.cutoffQuality and resets it to first allowed if it became invalid.
+      this.$watch('qualityStructure', () => this.qsValidateCutoff());
       await this.loadConfig();
       await this.loadInstances();
       await this.loadTrashStatus();
@@ -8978,6 +9173,10 @@ function clonarr() {
           this.cfScoreOverrideActive = false;
           this.qualityOverrides = {};
           this.qualityOverrideActive = false;
+          this.qualityStructure = [];
+          this.qualityStructureEditMode = false;
+          this.qualityStructureExpanded = {};
+          this.qualityStructureRenaming = null;
           this.extraCFs = {};
           this.extraCFsActive = false;
           this.extraCFSearch = '';
@@ -9894,7 +10093,12 @@ function clonarr() {
       const allScoreOverrides = { ...this.cfScoreOverrides };
       for (const [tid, score] of Object.entries(this.extraCFs)) allScoreOverrides[tid] = score;
       if (Object.keys(allScoreOverrides).length > 0) body.scoreOverrides = allScoreOverrides;
-      if (Object.keys(this.qualityOverrides).length > 0) body.qualityOverrides = this.qualityOverrides;
+      // Quality overrides: structure (new) trumps flat map (legacy)
+      if (this.qualityStructure.length > 0) {
+        body.qualityStructure = this.qsForBackend();
+      } else if (Object.keys(this.qualityOverrides).length > 0) {
+        body.qualityOverrides = this.qualityOverrides;
+      }
       // Sync behavior rules
       if (this.syncForm.behavior) body.behavior = this.syncForm.behavior;
       return body;
@@ -10229,8 +10433,15 @@ function clonarr() {
         this.cfScoreOverrides = { ...sh.scoreOverrides };
         this.cfScoreOverrideActive = true;
       }
-      // Restore quality overrides
-      if (sh.qualityOverrides && Object.keys(sh.qualityOverrides).length > 0) {
+      // Restore quality overrides — prefer structure override over legacy flat map
+      if (sh.qualityStructure && sh.qualityStructure.length > 0) {
+        this.qualityStructure = sh.qualityStructure.map(it => {
+          const out = { _id: ++this._qsIdCounter, name: it.name, allowed: !!it.allowed };
+          if (it.items && it.items.length > 0) out.items = [...it.items];
+          return out;
+        });
+        this.qualityOverrideActive = true;
+      } else if (sh.qualityOverrides && Object.keys(sh.qualityOverrides).length > 0) {
         this.qualityOverrides = { ...sh.qualityOverrides };
         this.qualityOverrideActive = true;
       }
@@ -10344,7 +10555,263 @@ function clonarr() {
              (this.pdOverrides.cutoffQuality && this.pdOverrides.cutoffQuality !== (this.profileDetail?.detail?.profile?.cutoff || ''));
     },
 
-    // Finalize override editing: mark changed fields as enabled=false so buildSyncBody sends them
+    // ======================================================================
+    // Quality Structure Override (full structure replacing TRaSH items)
+    // ======================================================================
+
+    // Initialize qualityStructure from the current profile's items.
+    // Bakes any legacy flat overrides into the structure, then clears them.
+    qsInitFromProfile() {
+      const items = this.profileDetail?.detail?.profile?.items || [];
+      if (items.length === 0) return;
+      this.qualityStructure = items.map(it => {
+        // Apply legacy flat override if present
+        const legacy = this.qualityOverrides[it.name];
+        const allowed = (legacy !== undefined) ? legacy : !!it.allowed;
+        const out = { _id: ++this._qsIdCounter, name: it.name, allowed };
+        if (it.items && it.items.length > 0) {
+          out.items = [...it.items];
+        }
+        return out;
+      });
+      // Now that legacy is migrated, clear it (we only want one source of truth)
+      this.qualityOverrides = {};
+    },
+
+    // Trash default lookup helper (used for "is overridden" indicator)
+    qsTrashDefaultFor(name) {
+      const items = this.profileDetail?.detail?.profile?.items || [];
+      return items.find(i => i.name === name);
+    },
+
+    qsIsOverridden(item) {
+      const def = this.qsTrashDefaultFor(item.name);
+      if (!def) return true; // user-created group
+      if (!!def.allowed !== !!item.allowed) return true;
+      const a = (def.items || []).slice().sort().join('|');
+      const b = (item.items || []).slice().sort().join('|');
+      return a !== b;
+    },
+
+    // Returns true if the TRaSH default cutoff name is a valid allowed entry given the current state.
+    // When no structure override is active, the TRaSH default is always valid (sourced from profile.items).
+    // When structure override is active, it's only valid if a top-level allowed item with that exact name exists.
+    qsTrashDefaultCutoffValid() {
+      const trashCutoff = this.profileDetail?.detail?.profile?.cutoff || '';
+      if (!trashCutoff) return false;
+      if (this.qualityStructure.length === 0) return true;
+      return this.qualityStructure.some(it => it.name === trashCutoff && it.allowed);
+    },
+
+    // Validate pdOverrides.cutoffQuality against the current source-of-truth.
+    // If invalid (name no longer exists or is disabled), reset to first allowed entry from
+    // the structure (or back to TRaSH default if structure is empty).
+    // Triggered reactively whenever qualityStructure changes (rename, delete, merge, etc.).
+    qsValidateCutoff() {
+      const cutoff = this.pdOverrides?.cutoffQuality;
+      if (cutoff === undefined || cutoff === '__skip__' || cutoff === '') return;
+
+      // When no structure override is active, fall back to profile.items as source
+      const source = this.qualityStructure.length > 0
+        ? this.qualityStructure
+        : (this.profileDetail?.detail?.profile?.items || []);
+      if (source.length === 0) return;
+
+      // Check if current cutoff is a valid allowed entry
+      const valid = source.some(it => it.name === cutoff && it.allowed);
+      if (valid) return;
+
+      // Not valid — pick first allowed as fallback
+      const firstAllowed = source.find(it => it.allowed);
+      this.pdOverrides.cutoffQuality = firstAllowed ? firstAllowed.name : '';
+    },
+
+    // Toggle Edit Groups mode. On first activation, lazy-init structure from TRaSH default.
+    qsToggleEditMode() {
+      if (!this.qualityStructureEditMode && this.qualityStructure.length === 0) {
+        this.qsInitFromProfile();
+      }
+      this.qualityStructureEditMode = !this.qualityStructureEditMode;
+      if (!this.qualityStructureEditMode) {
+        this.qualityStructureExpanded = {};
+        this.qualityStructureRenaming = null;
+        this.qsResetDrag();
+      }
+    },
+
+    qsStartRename(item) {
+      this.qualityStructureRenaming = item._id;
+    },
+
+    qsResetDrag() {
+      this.qualityStructureDrag = { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null };
+    },
+
+    // Drag-drop on a gap → reorder (or ungroup-and-insert if dragging a member)
+    qsHandleDropOnGap(gapIdx) {
+      const d = this.qualityStructureDrag;
+      if (d.kind === 'top') {
+        const src = d.src;
+        if (src === gapIdx || src === gapIdx - 1) { this.qsResetDrag(); return; }
+        const moved = this.qualityStructure.splice(src, 1)[0];
+        const insertAt = src < gapIdx ? gapIdx - 1 : gapIdx;
+        this.qualityStructure.splice(insertAt, 0, moved);
+      } else if (d.kind === 'member') {
+        const grp = this.qualityStructure[d.srcGroup];
+        if (!grp || !grp.items) { this.qsResetDrag(); return; }
+        const memberName = grp.items.splice(d.srcMember, 1)[0];
+        const newSingle = { _id: ++this._qsIdCounter, name: memberName, allowed: false };
+        let insertAt = gapIdx;
+        if (grp.items.length === 0) {
+          this.qualityStructure.splice(d.srcGroup, 1);
+          if (d.srcGroup < gapIdx) insertAt -= 1;
+        }
+        this.qualityStructure.splice(insertAt, 0, newSingle);
+      }
+      this.qsResetDrag();
+    },
+
+    // Drag-drop on a row → merge (create group if both singles, add to group otherwise)
+    qsHandleDropOnRow(targetIdx) {
+      const d = this.qualityStructureDrag;
+      if (d.kind === 'top') {
+        const src = d.src;
+        if (src === targetIdx) { this.qsResetDrag(); return; }
+        const srcItem = this.qualityStructure[src];
+        const tgtItem = this.qualityStructure[targetIdx];
+        if (tgtItem.items) {
+          // target is a group → add source's name(s) as members
+          const newMembers = srcItem.items ? srcItem.items : [srcItem.name];
+          tgtItem.items.push(...newMembers);
+          this.qualityStructure.splice(src, 1);
+        } else if (srcItem.items) {
+          // dragging a group onto a single → add the single to the group, position group at target
+          srcItem.items.push(tgtItem.name);
+          this.qualityStructure.splice(targetIdx, 1);
+        } else {
+          // both singles → prompt for group name via input modal
+          const defaultName = `${srcItem.name} | ${tgtItem.name}`;
+          this.inputModal = {
+            show: true,
+            title: 'New Quality Group',
+            message: 'Both qualities will be merged into a single group. Arr will treat them as equal — CF scores decide the winner.',
+            value: defaultName,
+            placeholder: 'Group name',
+            confirmLabel: 'Create',
+            onConfirm: (groupName) => {
+              if (!groupName) return;
+              const newGroup = {
+                _id: ++this._qsIdCounter,
+                name: groupName,
+                allowed: true,
+                items: [srcItem.name, tgtItem.name],
+              };
+              const indices = [src, targetIdx].sort((a, b) => b - a);
+              indices.forEach(i => this.qualityStructure.splice(i, 1));
+              const insertAt = Math.min(src, targetIdx);
+              this.qualityStructure.splice(insertAt, 0, newGroup);
+              this.qualityStructureExpanded[newGroup._id] = true;
+            },
+            onCancel: null,
+          };
+        }
+      } else if (d.kind === 'member') {
+        const oldGroup = this.qualityStructure[d.srcGroup];
+        if (!oldGroup || !oldGroup.items) { this.qsResetDrag(); return; }
+        const memberName = oldGroup.items.splice(d.srcMember, 1)[0];
+        let tIdx = targetIdx;
+        if (oldGroup.items.length === 0) {
+          this.qualityStructure.splice(d.srcGroup, 1);
+          if (d.srcGroup < tIdx) tIdx -= 1;
+        }
+        const tgtItem = this.qualityStructure[tIdx];
+        if (!tgtItem) { this.qsResetDrag(); return; }
+        if (tgtItem.items) {
+          tgtItem.items.push(memberName);
+        } else {
+          // create new group from dragged member + target single
+          const defaultName = `${memberName} | ${tgtItem.name}`;
+          this.inputModal = {
+            show: true,
+            title: 'New Quality Group',
+            message: 'Both qualities will be merged into a single group.',
+            value: defaultName,
+            placeholder: 'Group name',
+            confirmLabel: 'Create',
+            onConfirm: (groupName) => {
+              if (!groupName) return;
+              const newGroup = {
+                _id: ++this._qsIdCounter,
+                name: groupName,
+                allowed: true,
+                items: [memberName, tgtItem.name],
+              };
+              this.qualityStructure.splice(tIdx, 1, newGroup);
+              this.qualityStructureExpanded[newGroup._id] = true;
+            },
+            onCancel: null,
+          };
+        }
+      }
+      this.qsResetDrag();
+    },
+
+    qsDeleteGroup(idx) {
+      const grp = this.qualityStructure[idx];
+      if (!grp || !grp.items) return;
+      const singles = grp.items.map(name => ({
+        _id: ++this._qsIdCounter,
+        name,
+        allowed: false,
+      }));
+      this.qualityStructure.splice(idx, 1, ...singles);
+    },
+
+    qsUngroupMember(groupIdx, memberIdx) {
+      const grp = this.qualityStructure[groupIdx];
+      if (!grp || !grp.items) return;
+      const removed = grp.items.splice(memberIdx, 1)[0];
+      this.qualityStructure.splice(groupIdx + 1, 0, {
+        _id: ++this._qsIdCounter,
+        name: removed,
+        allowed: false,
+      });
+      if (grp.items.length === 0) {
+        this.qualityStructure.splice(groupIdx, 1);
+      }
+    },
+
+    // Reset all quality overrides to TRaSH default. Clears both legacy and structure overrides.
+    qsResetAll() {
+      this.confirmModal = {
+        show: true,
+        title: 'Reset Quality Overrides',
+        message: 'Reset to TRaSH default?\n\nAll override structure changes (toggles, groups, ordering, renames) will be discarded. This cannot be undone.',
+        confirmLabel: 'Reset',
+        onConfirm: () => {
+          this.qualityStructure = [];
+          this.qualityOverrides = {};
+          this.qualityStructureExpanded = {};
+          this.qualityStructureRenaming = null;
+          this.qsResetDrag();
+        },
+        onCancel: null,
+      };
+    },
+
+    // Strip _id before sending to backend (backend doesn't need it)
+    qsForBackend() {
+      return this.qualityStructure.map(it => {
+        const out = { name: it.name, allowed: it.allowed };
+        if (it.items && it.items.length > 0) out.items = [...it.items];
+        return out;
+      });
+    },
+
+    // Finalize override editing: mark changed fields as enabled=false so buildSyncBody sends them.
+    // Closing override mode also closes all sub-editors (CF scores, qualities, extras) so the panel
+    // collapses cleanly. Stored override data is preserved — re-opening Customize Overrides and
+    // toggling a sub-editor on shows the edits again.
     pdFinishOverrides() {
       const p = this.profileDetail?.detail?.profile;
       if (p) {
@@ -10355,6 +10822,12 @@ function clonarr() {
         this.pdOverrides.cutoffFormatScore.enabled = (this.pdOverrides.cutoffFormatScore.value === (p.cutoffFormatScore || p.cutoffScore || 10000));
       }
       this.pdOverrideActive = false;
+      this.cfScoreOverrideActive = false;
+      this.qualityOverrideActive = false;
+      this.qualityStructureEditMode = false;
+      this.qualityStructureExpanded = {};
+      this.qualityStructureRenaming = null;
+      this.extraCFsActive = false;
     },
 
     updateAutoSyncRuleForSync() {

@@ -84,6 +84,24 @@ type QualityItem struct {
 	Items   []string `json:"items,omitempty"`
 }
 
+// cloneQualityItems returns a deep copy of a slice of QualityItems.
+// Used for snapshot/deep-copy in config snapshots so the live config can be
+// safely shared across goroutines.
+func cloneQualityItems(src []QualityItem) []QualityItem {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]QualityItem, len(src))
+	for i, it := range src {
+		out[i] = QualityItem{Name: it.Name, Allowed: it.Allowed}
+		if len(it.Items) > 0 {
+			out[i].Items = make([]string, len(it.Items))
+			copy(out[i].Items, it.Items)
+		}
+	}
+	return out
+}
+
 // ProfileGroup organizes profiles into display categories.
 type ProfileGroup struct {
 	Name     string            `json:"name"`

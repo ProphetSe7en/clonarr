@@ -94,6 +94,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		SelectedCFs:    rule.SelectedCFs,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
+		QualityStructure: rule.QualityStructure,
 		Behavior:       rule.Behavior,
 		Overrides:      rule.Overrides,
 	}
@@ -209,6 +210,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		SelectedCFs:    selectedCFMap,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
+		QualityStructure: rule.QualityStructure,
 		Overrides:      rule.Overrides,
 		Behavior:       rule.Behavior,
 		CFsCreated:     result.CFsCreated,
