@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -116,7 +115,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	// Dry-run plan
 	customCFs := app.customCFs.List(inst.Type)
 	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
-	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs)
+	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.httpClient)
 	if err != nil {
 		errMsg := fmt.Sprintf("plan failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
@@ -163,7 +162,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	}
 
 	// Apply
-	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior))
+	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.httpClient)
 	if err != nil {
 		if isConnectionError(err) {
 			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
@@ -263,7 +262,9 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			Timestamp:      time.Now().Format(time.RFC3339),
 		})
 		if len(app.autoSyncEvents) > 50 {
-			app.autoSyncEvents = app.autoSyncEvents[len(app.autoSyncEvents)-50:]
+			trimmed := make([]AutoSyncEvent, 50)
+			copy(trimmed, app.autoSyncEvents[len(app.autoSyncEvents)-50:])
+			app.autoSyncEvents = trimmed
 		}
 		app.autoSyncMu.Unlock()
 	}
@@ -279,7 +280,7 @@ func (app *App) cleanupStaleRules() {
 	validProfiles := make(map[string]map[int]bool) // instanceID → set of arrProfileIDs
 	for _, inst := range cfg.Instances {
 		instNames[inst.ID] = inst.Name
-		client := NewArrClient(inst.URL, inst.APIKey)
+		client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
@@ -337,7 +338,9 @@ func (app *App) cleanupStaleRules() {
 		app.cleanupMu.Lock()
 		app.cleanupEvents = append(app.cleanupEvents, events...)
 		if len(app.cleanupEvents) > 50 {
-			app.cleanupEvents = app.cleanupEvents[len(app.cleanupEvents)-50:]
+			trimmed := make([]CleanupEvent, 50)
+			copy(trimmed, app.cleanupEvents[len(app.cleanupEvents)-50:])
+			app.cleanupEvents = trimmed
 		}
 		app.cleanupMu.Unlock()
 		app.notifyCleanup(events)
@@ -399,9 +402,8 @@ func (app *App) sendGotify(title, message, level string) {
 		},
 	}
 	body, _ := json.Marshal(payload)
-	client := &http.Client{Timeout: 10 * time.Second}
 	gotifyURL := strings.TrimRight(cfg.AutoSync.GotifyURL, "/") + "/message?token=" + url.QueryEscape(cfg.AutoSync.GotifyToken)
-	resp, err := client.Post(gotifyURL, "application/json", bytes.NewReader(body))
+	resp, err := app.notifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Gotify: send failed: %v", err)
 		return
@@ -431,8 +433,7 @@ func (app *App) notifyCleanup(events []CleanupEvent) {
 			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			client := &http.Client{Timeout: 10 * time.Second}
-			if resp, err := client.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Cleanup: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -555,8 +556,7 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			client := &http.Client{Timeout: 10 * time.Second}
-			if resp, err := client.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Auto-sync: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -601,8 +601,7 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			client := &http.Client{Timeout: 10 * time.Second}
-			if resp, err := client.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Repo update: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -656,8 +655,7 @@ func (app *App) notifyChangelog(section ChangelogSection) {
 			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			client := &http.Client{Timeout: 10 * time.Second}
-			if resp, err := client.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Changelog: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()

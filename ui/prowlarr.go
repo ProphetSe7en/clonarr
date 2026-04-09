@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 // ProwlarrClient talks to a Prowlarr instance's API v1.
@@ -18,7 +17,7 @@ type ProwlarrClient struct {
 	client  *http.Client
 }
 
-func NewProwlarrClient(url, apiKey string) *ProwlarrClient {
+func NewProwlarrClient(url, apiKey string, client *http.Client) *ProwlarrClient {
 	url = strings.TrimRight(url, "/")
 	if !strings.HasPrefix(url, "http") {
 		url = "http://" + url
@@ -26,7 +25,7 @@ func NewProwlarrClient(url, apiKey string) *ProwlarrClient {
 	return &ProwlarrClient{
 		baseURL: url,
 		apiKey:  apiKey,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  client,
 	}
 }
 

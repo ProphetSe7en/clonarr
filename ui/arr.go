@@ -18,7 +18,7 @@ type ArrClient struct {
 	client  *http.Client
 }
 
-func NewArrClient(url, apiKey string) *ArrClient {
+func NewArrClient(url, apiKey string, client *http.Client) *ArrClient {
 	url = strings.TrimRight(url, "/")
 	if !strings.HasPrefix(url, "http") {
 		url = "http://" + url
@@ -26,7 +26,7 @@ func NewArrClient(url, apiKey string) *ArrClient {
 	return &ArrClient{
 		baseURL: url,
 		apiKey:  apiKey,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  client,
 	}
 }
 

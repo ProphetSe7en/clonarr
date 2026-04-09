@@ -254,7 +254,7 @@ func (app *App) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	status, err := client.TestConnection()
 	if err != nil {
 		errMsg := err.Error()
@@ -329,7 +329,7 @@ func (app *App) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(req.URL, req.APIKey)
+	client := NewArrClient(req.URL, req.APIKey, app.httpClient)
 	status, err := client.TestConnection()
 	if err != nil {
 		errMsg := err.Error()
@@ -358,7 +358,7 @@ func (app *App) handleInstanceProfiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	profiles, err := client.ListProfiles()
 	if err != nil {
 		writeError(w, 502, "Failed to connect to instance")
@@ -373,7 +373,7 @@ func (app *App) handleQualityDefinitions(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	defs, err := client.ListQualityDefinitions()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch quality definitions: "+err.Error())
@@ -408,7 +408,7 @@ func (app *App) handleInstanceProfileExport(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	profiles, err := client.ListProfiles()
 	if err != nil {
@@ -569,7 +569,7 @@ func (app *App) handleInstanceLanguages(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	languages, err := client.ListLanguages()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch languages")
@@ -601,7 +601,7 @@ func (app *App) handleInstanceBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	allCFs, err := client.ListCustomFormats()
 	if err != nil {
@@ -691,7 +691,7 @@ func (app *App) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	// Fetch current state from instance
 	existingCFs, err := client.ListCustomFormats()
@@ -828,7 +828,7 @@ func (app *App) handleInstanceCFs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	cfs, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, 502, "Failed to connect to instance")
@@ -843,7 +843,7 @@ func (app *App) handleInstanceQualitySizes(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	defs, err := client.ListQualityDefinitions()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch quality sizes: "+err.Error())
@@ -858,7 +858,7 @@ func (app *App) handleGetInstanceNaming(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	naming, err := client.GetNaming()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch naming config: "+err.Error())
@@ -937,7 +937,7 @@ func (app *App) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	// Fetch current config first (we need id and other fields)
 	current, err := client.GetNaming()
@@ -1023,7 +1023,7 @@ func (app *App) handleSyncQualitySizes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	if err := client.UpdateQualityDefinitions(req.Definitions); err != nil {
 		writeError(w, 502, "Sync failed: "+err.Error())
 		return
@@ -1049,7 +1049,7 @@ func (app *App) buildQualitySizeDefs(inst Instance, qsType string) ([]ArrQuality
 		return nil, fmt.Errorf("no TRaSH quality sizes for type %q", qsType)
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	defs, err := client.ListQualityDefinitions()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch definitions: %w", err)
@@ -1213,7 +1213,7 @@ func (app *App) autoSyncQualitySizes() {
 		}
 
 		// Get current instance quality definitions
-		client := NewArrClient(inst.URL, inst.APIKey)
+		client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 		defs, err := client.ListQualityDefinitions()
 		if err != nil {
 			log.Printf("Auto-sync QS [%s]: failed to fetch definitions: %v", inst.Name, err)
@@ -1543,7 +1543,7 @@ type OptionalCFState struct {
 
 // buildProfileComparison compares a specific Arr profile against a TRaSH profile.
 // Uses TRaSH CF groups consistently: ungrouped formatItems in FormatItems, grouped CFs in Groups.
-func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, arrProfileID int, syncedCFs []string) *ProfileComparison {
+func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, arrProfileID int, syncedCFs []string, httpClient *http.Client) *ProfileComparison {
 	comp := &ProfileComparison{
 		ArrProfileID:   arrProfileID,
 		TrashProfileID: trashProfileID,
@@ -1566,7 +1566,7 @@ func buildProfileComparison(inst Instance, ad *AppData, trashProfileID string, a
 	}
 	comp.TrashProfileName = trashProfile.Name
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, httpClient)
 
 	// Fetch existing CFs from instance
 	arrCFs, err := client.ListCustomFormats()
@@ -1946,7 +1946,7 @@ func (app *App) handleCompareProfile(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	comp := buildProfileComparison(inst, ad, trashProfileID, arrProfileID, lastSyncedCFs)
+	comp := buildProfileComparison(inst, ad, trashProfileID, arrProfileID, lastSyncedCFs, app.httpClient)
 
 	if comp.Error == "" {
 		app.debugLog.Logf(LogCompare, "%q vs %q on %s | %d matching, %d wrong, %d missing, %d extra",
@@ -1983,7 +1983,7 @@ func (app *App) handleRemoveProfileCFs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	profiles, err := client.ListProfiles()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch profiles: "+err.Error())
@@ -2060,7 +2060,7 @@ func (app *App) handleSyncSingleCF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	// Check if CF already exists in instance
 	arrCFs, err := client.ListCustomFormats()
@@ -2466,7 +2466,7 @@ func (app *App) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	}
 	customCFs := app.customCFs.List(inst.Type)
 	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
-	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs)
+	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.httpClient)
 	if err != nil {
 		log.Printf("Dry-run error for %s: %v", inst.Name, err)
 		writeError(w, 400, err.Error())
@@ -2520,7 +2520,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 	customCFs := app.customCFs.List(inst.Type)
 	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
 	behavior := ResolveSyncBehavior(req.Behavior)
-	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs)
+	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.httpClient)
 	if err != nil {
 		log.Printf("Apply plan error for %s: %v", inst.Name, err)
 		app.debugLog.Logf(LogError, "Apply plan error for %s: %v", inst.Name, err)
@@ -2528,7 +2528,7 @@ func (app *App) handleApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, behavior)
+	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, behavior, app.httpClient)
 	if err != nil {
 		log.Printf("Apply exec error for %s: %v", inst.Name, err)
 		app.debugLog.Logf(LogError, "Apply exec error for %s: %v", inst.Name, err)
@@ -2675,7 +2675,7 @@ func (app *App) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 	// Clean up stale entries for this instance before returning (only if instance is reachable)
 	inst, ok := app.config.GetInstance(id)
 	if ok {
-		client := NewArrClient(inst.URL, inst.APIKey)
+		client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
@@ -2723,7 +2723,9 @@ func (app *App) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 				app.cleanupMu.Lock()
 				app.cleanupEvents = append(app.cleanupEvents, events...)
 				if len(app.cleanupEvents) > 50 {
-					app.cleanupEvents = app.cleanupEvents[len(app.cleanupEvents)-50:]
+					trimmed := make([]CleanupEvent, 50)
+					copy(trimmed, app.cleanupEvents[len(app.cleanupEvents)-50:])
+					app.cleanupEvents = trimmed
 				}
 				app.cleanupMu.Unlock()
 				app.notifyCleanup(events)
@@ -2850,7 +2852,7 @@ func (app *App) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	switch req.Action {
 	case "duplicates":
@@ -2926,7 +2928,7 @@ func (app *App) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 
 	switch req.Action {
 	case "duplicates":
@@ -3433,9 +3435,8 @@ func (app *App) handleTestGotify(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	body, _ := json.Marshal(payload)
-	client := &http.Client{Timeout: 10 * time.Second}
 	gotifyURL := strings.TrimRight(req.URL, "/") + "/message?token=" + url.QueryEscape(req.Token)
-	resp, err := client.Post(gotifyURL, "application/json", bytes.NewReader(body))
+	resp, err := app.notifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		writeError(w, 502, fmt.Sprintf("Failed to reach Gotify: %v", err))
 		return
@@ -3740,7 +3741,7 @@ func (app *App) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Fetch all CFs from instance
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	arrCFs, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch CFs from instance: "+err.Error())
@@ -3831,7 +3832,7 @@ func (app *App) handleCFSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch schema from Arr API
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	data, status, err := client.doRequest("GET", "/customformat/schema", nil)
 	if err != nil {
 		writeError(w, 502, "Failed to fetch schema: "+err.Error())
@@ -3872,7 +3873,7 @@ func (app *App) handleTestProwlarr(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"connected": false, "error": "Prowlarr URL and API key are required"})
 		return
 	}
-	client := NewProwlarrClient(req.URL, req.APIKey)
+	client := NewProwlarrClient(req.URL, req.APIKey, app.httpClient)
 	version, err := client.TestConnection()
 	if err != nil {
 		writeJSON(w, map[string]any{"connected": false, "error": err.Error()})
@@ -3887,7 +3888,7 @@ func (app *App) handleScoringProwlarrIndexers(w http.ResponseWriter, r *http.Req
 		writeJSON(w, []any{})
 		return
 	}
-	client := NewProwlarrClient(cfg.Prowlarr.URL, cfg.Prowlarr.APIKey)
+	client := NewProwlarrClient(cfg.Prowlarr.URL, cfg.Prowlarr.APIKey, app.httpClient)
 	indexers, err := client.ListIndexers()
 	if err != nil {
 		writeError(w, 502, "Prowlarr error: "+err.Error())
@@ -3921,7 +3922,7 @@ func (app *App) handleScoringProwlarrSearch(w http.ResponseWriter, r *http.Reque
 		writeError(w, 400, "Prowlarr not configured or disabled")
 		return
 	}
-	client := NewProwlarrClient(cfg.Prowlarr.URL, cfg.Prowlarr.APIKey)
+	client := NewProwlarrClient(cfg.Prowlarr.URL, cfg.Prowlarr.APIKey, app.httpClient)
 	releases, err := client.Search(req.Query, req.Categories, req.IndexerIDs)
 	if err != nil {
 		writeError(w, 502, "Prowlarr search failed: "+err.Error())
@@ -4024,7 +4025,7 @@ func (app *App) handleScoringParseBatch(w http.ResponseWriter, r *http.Request) 
 
 // parseSingleRelease calls the Arr Parse API and enriches CFs with trash_ids.
 func (app *App) parseSingleRelease(inst Instance, title string) (*ScoringParseResult, error) {
-	client := NewArrClient(inst.URL, inst.APIKey)
+	client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 	data, status, err := client.doRequest("GET", "/parse?title="+url.QueryEscape(title), nil)
 	if err != nil {
 		return nil, err
@@ -4252,7 +4253,7 @@ func (app *App) handleScoringProfileScores(w http.ResponseWriter, r *http.Reques
 			writeError(w, 404, "Instance not found")
 			return
 		}
-		client := NewArrClient(inst.URL, inst.APIKey)
+		client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			writeError(w, 502, "Failed to fetch profiles: "+err.Error())

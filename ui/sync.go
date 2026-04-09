@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -118,7 +119,7 @@ func resolveScore(trashID string, trashCF *TrashCF, scoreCtx string, cfScoreOver
 // Supports both TRaSH profiles (via ProfileTrashID) and imported/custom profiles (via ImportedProfile).
 // customCFs allows syncing user-created CFs (IDs starting with "custom:").
 // lastSyncedCFs is the CF snapshot from the previous sync (used by "add_new" mode).
-func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *ImportedProfile, customCFs []CustomCF, lastSyncedCFs []string) (*SyncPlan, error) {
+func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *ImportedProfile, customCFs []CustomCF, lastSyncedCFs []string, httpClient *http.Client) (*SyncPlan, error) {
 	if ad == nil {
 		return nil, fmt.Errorf("no TRaSH data for %s", instance.Type)
 	}
@@ -193,7 +194,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	}
 
 	// Connect to Arr instance
-	client := NewArrClient(instance.URL, instance.APIKey)
+	client := NewArrClient(instance.URL, instance.APIKey, httpClient)
 
 	// Fetch existing CFs
 	existingCFs, err := client.ListCustomFormats()
@@ -496,7 +497,7 @@ type SyncResult struct {
 }
 
 // ExecuteSyncPlan applies a previously built sync plan.
-func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *SyncPlan, imported *ImportedProfile, customCFs []CustomCF, behavior SyncBehavior) (*SyncResult, error) {
+func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *SyncPlan, imported *ImportedProfile, customCFs []CustomCF, behavior SyncBehavior, httpClient *http.Client) (*SyncResult, error) {
 	if ad == nil {
 		return nil, fmt.Errorf("no TRaSH data for %s", instance.Type)
 	}
@@ -551,7 +552,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 	}
 
-	client := NewArrClient(instance.URL, instance.APIKey)
+	client := NewArrClient(instance.URL, instance.APIKey, httpClient)
 	result := &SyncResult{Errors: []string{}}
 
 	// Track created CF name → Arr ID for score assignment

@@ -51,7 +51,9 @@ type App struct {
 	profiles       *profileStore
 	customCFs      *customCFStore
 	debugLog       *debugLogger
-	pullUpdateCh   chan string // send new interval string to reschedule pull
+	httpClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls
+	notifyClient   *http.Client // shared HTTP client for Discord/Gotify notifications
+	pullUpdateCh   chan string  // send new interval string to reschedule pull
 	cleanupEvents  []CleanupEvent
 	cleanupMu      sync.Mutex
 	autoSyncEvents []AutoSyncEvent
@@ -96,6 +98,8 @@ func main() {
 		profiles:     profiles,
 		customCFs:    customCFs,
 		debugLog:     debugLog,
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		notifyClient: &http.Client{Timeout: 10 * time.Second},
 		pullUpdateCh: make(chan string, 1),
 	}
 

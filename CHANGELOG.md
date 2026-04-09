@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.8.6 (in development — `:dev` tag)
+## v1.8.6
 
 ### Added
 
@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- **Memory leak** — Every API call created a new `http.Client` with its own connection pool, accumulating ~2-3 MiB/hour of unreclaimable transport state. Replaced with two shared clients (one for Arr/Prowlarr API, one for notifications). Also fixed event slice reslicing to release old backing arrays.
 - **Five sync diff blindspots** — Sync previously missed Radarr-side changes that kept the same set of allowed qualities: reorder items, reorder groups, extracting a quality from a group, cutoff change, and upgradeUntil change. The diff was set-based and silently ignored ordering and structure. Replaced with a structure-aware fingerprint that captures ordering, group structure, and allowed-state. Covers Auto-Sync, manual Sync, and Sync All.
 - **Sync result banner hiding change details** — After Save & Sync, the profile detail banner only showed `cfsCreated` / `cfsUpdated` / `scoresUpdated` counts. Quality flips, cutoff changes, and per-CF changes were in the backend response but never rendered. Banner now lists the full details.
 - **Imported profile toast hiding change details** — Same blindspot in the `startApply` toast path. Now renders the full details list like `Sync` / `Sync All` already did.
