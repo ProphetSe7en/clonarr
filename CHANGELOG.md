@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.8.7
+
+### Fixed
+
+- **Custom Format editor — context dropdown showed wrong app types** — When editing a user-created CF, the "Trash Scores → Context" dropdown listed all contexts regardless of app type. A Sonarr CF's dropdown showed Radarr-only SQP tiers (`sqp-1-1080p`, `sqp-2`, etc.) and `anime-radarr`. The list is now derived dynamically from the actual TRaSH-Guides CF JSONs on disk via a new `/api/trash/{app}/score-contexts` endpoint, so Sonarr CFs only show Sonarr contexts (including `anime-sonarr`) and Radarr CFs only show Radarr contexts (with all SQP tiers). New contexts added by TRaSH upstream are picked up automatically without code changes.
+
+### Improved
+
+- **Sync Profile modal — clearer dropdown labels and descriptions** — All three dropdowns (Add / Scores / Reset) had labels and descriptions that either implied the wrong behavior or hid important details. Rewritten against the actual `BuildSyncPlan` / `ExecuteSyncPlan` logic so each option states exactly what it does:
+  - **Scores:** "Enforce TRaSH scores" / "Allow custom scores" suggested TRaSH defaults override everything and that "custom scores" meant Clonarr-side overrides. Both misleading — Clonarr score overrides apply in *both* modes, and the real distinction is how Clonarr handles manual edits made directly in Arr's UI. Renamed to "Overwrite all scores in Arr" / "Preserve manual edits in Arr" with descriptions that spell out the behavior precisely.
+  - **Add:** "Automatically add new formats" didn't mention that this mode respects manual CF removals in Arr (the actual reason to pick it over "add missing"). Renamed to "Respect manual removals — only add new ones" and the description now explains the `lastSyncedSet` comparison and the first-sync edge case.
+  - **Reset:** "Reset unsynced scores to 0" didn't clarify that only non-zero scores are touched, or what "unsynced" means. Renamed to "Zero out orphaned scores" and the description spells out that it targets CFs in the target Arr profile that are no longer part of this sync.
+  No logic change — pure text and label rewrite.
+- **File Naming tab — verbatim TRaSH-Guides text** — All descriptions on the File Naming tab now quote TRaSH-Guides directly instead of paraphrasing. Clonarr is a TRaSH sync tool; it should use the wording the guide maintainers have crafted. Replaced the "Why use a naming scheme?" and "IMDb vs TVDb / TMDb" info cards, per-scheme descriptions (Original Title, P2P/Scene), section descriptions for Movie File/Folder Format, Episode/Series/Season Folder Format, and the Plex "Edition Tags" warning with their TRaSH-Guides source text. Source file paths documented in the UI markup.
+
 ## v1.8.6
 
 ### Added

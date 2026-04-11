@@ -229,6 +229,7 @@ func main() {
 	mux.HandleFunc("GET /api/trash/status", app.handleTrashStatus)
 	mux.HandleFunc("POST /api/trash/pull", app.handleTrashPull)
 	mux.HandleFunc("GET /api/trash/{app}/cfs", app.handleTrashCFs)
+	mux.HandleFunc("GET /api/trash/{app}/score-contexts", app.handleTrashScoreContexts)
 	mux.HandleFunc("GET /api/trash/{app}/cf-groups", app.handleTrashCFGroups)
 	mux.HandleFunc("GET /api/trash/{app}/profiles", app.handleTrashProfiles)
 	mux.HandleFunc("GET /api/trash/{app}/profiles/{id}", app.handleTrashProfileDetail)

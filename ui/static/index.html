@@ -1565,20 +1565,39 @@
         <div style="padding:12px 20px;font-size:12px;color:#8b949e;border-bottom:1px solid #21262d;line-height:1.5">
           TRaSH recommended naming schemes for folders and files. Select a media server tab and an instance to compare and apply.
         </div>
-        <!-- Shared info cards -->
+        <!-- Shared info cards — text sourced verbatim from TRaSH-Guides:
+             includes/starr/renaming-description-faq.md
+             includes/{sonarr,radarr}/{imdb-vs-tvdb,imdb-vs-tmdb}.md
+             includes/{sonarr,radarr}/{tvdb-imdb-info,tmdb-imdb-info}.md -->
         <div class="card" style="padding:14px 16px;margin:12px 16px 0">
           <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px">Why use a naming scheme?</div>
           <div style="font-size:12px;color:#8b949e;line-height:1.6">
-            Adding non-recoverable information (quality, release group, edition, repack status) to filenames prevents duplicate downloads,
-            stops download loops on re-import, and ensures Radarr/Sonarr always knows what you have.
-            Media servers display titles — not filenames — so longer names don't affect your viewing experience.
+            While naming is a personal choice, adding non-recoverable information to your filenames is strongly recommended for several good reasons.
+          </div>
+          <div style="font-size:12px;color:#8b949e;line-height:1.6;margin-top:8px">
+            <strong style="color:#c9d1d9">Non-recoverable information</strong> includes:
+            <ul style="margin:4px 0 0 18px;padding:0">
+              <li><strong style="color:#c9d1d9">Quality source</strong> — HDTV, WEB-DL, Blu-ray, Remux, etc.</li>
+              <li><strong style="color:#c9d1d9">Release group</strong> — the team that created the release</li>
+              <li><strong style="color:#c9d1d9">Edition type</strong> — Director's Cut, Theatrical, Unrated, etc.</li>
+              <li><strong style="color:#c9d1d9">Repack/Proper status</strong> — whether it's a fixed version</li>
+            </ul>
+          </div>
+          <div style="font-size:12px;color:#8b949e;line-height:1.6;margin-top:8px">
+            Including these details enables easy re-imports (files won't get wrongly identified as HDTV or WEB-DL quality),
+            prevents duplicate downloads, and stops download loops because Radarr/Sonarr always know what you already have.
+            Media servers like Plex, Emby and Jellyfin display titles and metadata rather than the actual filename, so the length doesn't matter for viewing.
           </div>
         </div>
         <div class="card" style="padding:14px 16px;margin:12px 16px 0">
           <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px" x-text="tab.type === 'radarr' ? 'IMDb vs TMDb' : 'IMDb vs TVDb'"></div>
           <div style="font-size:12px;color:#8b949e;line-height:1.6" x-text="tab.type === 'radarr'
-            ? 'Both IDs are unique. TMDb can occasionally remove IDs and re-add with a new one, but is more aligned with Radarr since it uses TMDb as metadata source. IMDb IDs, once present, are very accurate and rarely change. TMDb is usually better as it guarantees a match — IMDb only works if the TMDb entry has the correct association.'
-            : 'Both IDs are unique. TVDb can occasionally remove IDs and re-add with a new one, but is more aligned with Sonarr since it uses TVDb as metadata source. IMDb IDs, once present, are very accurate and rarely change.'"></div>
+            ? 'While both IMDb and TMDb IDs are unique, TMDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TMDb as its metadata source, they can be seen as \'more aligned\' with Radarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'
+            : 'While both IMDb and TVDb IDs are unique, TVDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TVDb as its metadata source, they can be seen as \'more aligned\' with Sonarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'"></div>
+          <div style="font-size:12px;color:#58a6ff;line-height:1.6;margin-top:8px;padding:8px 10px;background:#0d1117;border-left:3px solid #58a6ff;border-radius:3px"
+               x-text="tab.type === 'radarr'
+                 ? 'TMDb is usually better as it guarantees a match, IMDb only gets matched if the TMDb entry has the correct IMDb ID association.'
+                 : 'TVDb is usually better as it guarantees a match, IMDb only gets matched if the TVDb entry has the correct IMDb ID association.'"></div>
         </div>
         <template x-if="getNaming(tab.type)">
           <div>
@@ -1646,20 +1665,22 @@
               <!-- Naming sections rendered by media server tab -->
               <template x-for="section in getNamingSections(tab.type, namingMediaServer[tab.type] || 'standard', namingPlexSingleEntry[tab.type])" :key="section.key">
                 <div style="margin-bottom:16px">
-                  <!-- Edition Tags box (only for Plex file sections) -->
+                  <!-- Edition Tags box (only for Plex file sections)
+                       Text sourced verbatim from TRaSH-Guides:
+                       docs/Radarr/Radarr-recommended-naming-scheme.md (!!! danger admonition under the Plex section) -->
                   <template x-if="section.showEditionToggle">
                     <div style="border:1px solid #21262d;border-left:3px solid #d29922;border-radius:6px;padding:14px 16px;margin-bottom:12px">
                       <div style="display:flex;align-items:flex-start;gap:12px">
                         <div style="flex:1">
                           <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px">Edition Tags</div>
                           <div style="font-size:12px;color:#8b949e;line-height:1.6">
-                            Plex uses <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> to recognize editions (Director's Cut, Theatrical) in the UI.
-                            If you keep multiple copies with different editions in a <strong style="color:#c9d1d9">merged library</strong> (e.g. 1080p Director's Cut + 2160p Theatrical),
-                            Plex will show them as <strong style="color:#f85149">separate items</strong>.
+                            If you use the <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> part of the recommended file name, Plex will recognize the movie edition and add it to the Plex interface — for example, Director's Cut.
                           </div>
                           <div style="font-size:12px;color:#8b949e;line-height:1.6;margin-top:6px">
-                            Enable <strong style="color:#c9d1d9">single-entry mode</strong> to replace <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> with <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{Edition Tags}</code> —
-                            editions still appear in the filename but Plex treats all copies as one library entry.
+                            However, this means that if you have two copies of a movie with different editions in a single <strong style="color:#c9d1d9">merged library</strong> — for example, a 1080p Director's Cut and a 2160p Theatrical Edition — these will appear as <strong style="color:#f85149">two separate items</strong> in Plex.
+                          </div>
+                          <div style="font-size:12px;color:#8b949e;line-height:1.6;margin-top:6px">
+                            If you want a movie to appear only once per library when you keep more than one copy of a movie, replace <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> with <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{Edition Tags}</code>.
                           </div>
                         </div>
                         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px;flex-shrink:0">
@@ -4032,27 +4053,27 @@
           <div>
             <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:3px">Add</label>
             <select class="input" x-model="syncForm.behavior.addMode" style="font-size:12px;width:100%" @change="fetchSyncPreview()">
-              <option value="add_missing">Automatically add any missing formats</option>
-              <option value="add_new">Automatically add new formats</option>
+              <option value="add_missing">Add any missing formats</option>
+              <option value="add_new">Respect manual removals — only add new ones</option>
               <option value="do_not_add">Do not add any formats</option>
             </select>
-            <div style="font-size:10px;color:#6e7681;margin-top:3px" x-text="syncForm.behavior.addMode === 'add_missing' ? 'Creates all CFs from the TRaSH profile that don\'t exist in Arr yet.' : syncForm.behavior.addMode === 'add_new' ? 'Only creates CFs that were added to the TRaSH profile since your last sync.' : 'No CFs will be created. Only scores on existing CFs will be updated.'"></div>
+            <div style="font-size:10px;color:#6e7681;margin-top:3px;line-height:1.5" x-text="syncForm.behavior.addMode === 'add_missing' ? 'Creates every CF in this sync set that doesn\'t exist in Arr yet. Runs on every sync regardless of history.' : syncForm.behavior.addMode === 'add_new' ? 'Only creates CFs that weren\'t part of your previous sync — for example, CFs TRaSH has added upstream since then. CFs you manually deleted from Arr after a previous sync will stay deleted. On your first-ever sync this behaves identically to \'Add any missing formats\'.' : 'No CFs will be created. Existing CFs in Arr still get their scores updated according to the Scores option below. Missing CFs are silently skipped.'"></div>
           </div>
           <div>
             <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:3px">Scores</label>
             <select class="input" x-model="syncForm.behavior.removeMode" style="font-size:12px;width:100%" @change="fetchSyncPreview()">
-              <option value="remove_custom">Enforce TRaSH scores</option>
-              <option value="allow_custom">Allow custom scores</option>
+              <option value="remove_custom">Overwrite all scores in Arr</option>
+              <option value="allow_custom">Preserve manual edits in Arr</option>
             </select>
-            <div style="font-size:10px;color:#6e7681;margin-top:3px" x-text="syncForm.behavior.removeMode === 'remove_custom' ? 'All CF scores will be set to TRaSH recommended values, overwriting any manual changes.' : 'CFs with manually changed scores in Arr will be skipped — only default or unset scores are updated.'"></div>
+            <div style="font-size:10px;color:#6e7681;margin-top:3px;line-height:1.5" x-text="syncForm.behavior.removeMode === 'remove_custom' ? 'Clonarr pushes its desired scores (TRaSH defaults plus any score overrides you\'ve set in Clonarr) to Arr, replacing any manual edits made directly in Arr\'s UI.' : 'Skips CFs that have a non-zero score in Arr which differs from Clonarr\'s desired value — those are treated as manual edits and left alone. CFs currently at 0 still get the desired score written. Your Clonarr score overrides still apply in both modes; they\'re part of \'the desired value\', not a separate layer.'"></div>
           </div>
           <div x-show="syncMode === 'update'">
             <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:3px">Reset</label>
             <select class="input" x-model="syncForm.behavior.resetMode" style="font-size:12px;width:100%" @change="fetchSyncPreview()">
-              <option value="reset_to_zero">Reset unsynced scores to 0</option>
+              <option value="reset_to_zero">Zero out orphaned scores</option>
               <option value="do_not_adjust">Do not adjust existing scores</option>
             </select>
-            <div style="font-size:10px;color:#6e7681;margin-top:3px" x-text="syncForm.behavior.resetMode === 'reset_to_zero' ? 'CFs not included in this sync will have their scores reset to 0.' : 'Scores on CFs not included in this sync will be left unchanged.'"></div>
+            <div style="font-size:10px;color:#6e7681;margin-top:3px;line-height:1.5" x-text="syncForm.behavior.resetMode === 'reset_to_zero' ? 'For CFs currently scored non-zero in the target Arr profile that are no longer part of this sync, the score is reset to 0. CFs already at 0 are left alone. Useful for cleaning up leftover scores after removing a CF from the profile.' : 'Any CF in the target Arr profile that isn\'t part of this sync keeps whatever score it already has — Clonarr leaves it completely alone.'"></div>
           </div>
         </div>
       </div>
@@ -4683,24 +4704,9 @@
               <template x-for="(ts, tsIdx) in cfEditorForm.trashScores" :key="ts._key || tsIdx">
                 <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
                   <select class="input" x-model="ts.context" style="flex:1;font-size:12px;padding:3px 6px">
-                    <option value="default">Default</option>
-                    <option value="sqp-1-1080p">sqp-1-1080p</option>
-                    <option value="sqp-1-2160p">sqp-1-2160p</option>
-                    <option value="sqp-1-web-1080p">sqp-1-web-1080p</option>
-                    <option value="sqp-1-web-2160p">sqp-1-web-2160p</option>
-                    <option value="sqp-2">sqp-2</option>
-                    <option value="sqp-3">sqp-3</option>
-                    <option value="sqp-4">sqp-4</option>
-                    <option value="sqp-4-ma-hybrid">sqp-4-ma-hybrid</option>
-                    <option value="sqp-5">sqp-5</option>
-                    <option value="anime-radarr">anime-radarr</option>
-                    <option value="french-multi-vf">french-multi-vf</option>
-                    <option value="french-multi-vo">french-multi-vo</option>
-                    <option value="french-vostfr">french-vostfr</option>
-                    <option value="french-anime-multi">french-anime-multi</option>
-                    <option value="french-anime-vostfr">french-anime-vostfr</option>
-                    <option value="german">german</option>
-                    <option value="german-anime">german-anime</option>
+                    <template x-for="ctx in trashScoreContexts(cfEditorForm.appType)" :key="ctx">
+                      <option :value="ctx" x-text="ctx === 'default' ? 'Default' : ctx"></option>
+                    </template>
                   </select>
                   <input class="input" type="number" x-model.number="ts.score" style="width:80px;font-size:12px;padding:3px 6px" placeholder="0">
                   <button class="btn btn-sm" style="color:#f85149;padding:2px 6px" @click="cfEditorForm.trashScores.splice(tsIdx, 1)">&#10005;</button>
@@ -5404,26 +5410,28 @@ function clonarr() {
       if (!n) return [];
       const ms = mediaServer || 'standard';
 
+      // Descriptions sourced verbatim from TRaSH-Guides where available.
+      // Schemes without TRaSH-authored descriptions have no desc field.
       const schemeDesc = {
-        'standard': { label: 'Standard', recommended: true, desc: 'The recommended naming scheme. Includes all non-recoverable information in brackets.' },
-        'default': { label: 'Default', recommended: true, desc: 'The recommended format.' },
-        'original': { label: 'Original Title', desc: 'Uses the release title as-is. Prevents download loops from title/content mismatches, but gives less control over naming.' },
-        'p2p-scene': { label: 'P2P / Scene', desc: 'Dots instead of spaces/brackets. Closest to P2P/scene naming, but uses exact audio/HDR formats from the media file.' },
+        'standard': { label: 'Standard', recommended: true },
+        'default': { label: 'Default', recommended: true },
+        'original': { label: 'Original Title', desc: 'Another option is to use {Original Title} instead of the recommended naming scheme above. {Original Title} uses the title of the release, which includes all the information from the release itself. The benefit of this naming scheme is that it prevents download loops that can happen during import when there\'s a mismatch between the release title and the file contents (for example, if the release title says DTS-ES but the contents are actually DTS). The downside is that you have less control over how the files are named.' },
+        'p2p-scene': { label: 'P2P / Scene', desc: 'Use P2P/Scene naming if you don\'t like spaces and brackets in the filename. It\'s the closest to the P2P/scene naming scheme, except it uses the exact audio and HDR formats from the media file, where the original release or filename might be unclear.' },
         'plex-imdb': { label: 'Plex (IMDb)', recommended: true },
         'plex-tmdb': { label: 'Plex (TMDb)' },
         'plex-tvdb': { label: 'Plex (TVDb)' },
-        'plex-anime-imdb': { label: 'Plex Anime (IMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
-        'plex-anime-tmdb': { label: 'Plex Anime (TMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'plex-anime-imdb': { label: 'Plex Anime (IMDb)' },
+        'plex-anime-tmdb': { label: 'Plex Anime (TMDb)' },
         'emby-imdb': { label: 'Emby (IMDb)', recommended: true },
         'emby-tmdb': { label: 'Emby (TMDb)' },
         'emby-tvdb': { label: 'Emby (TVDb)' },
-        'emby-anime-imdb': { label: 'Emby Anime (IMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
-        'emby-anime-tmdb': { label: 'Emby Anime (TMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'emby-anime-imdb': { label: 'Emby Anime (IMDb)' },
+        'emby-anime-tmdb': { label: 'Emby Anime (TMDb)' },
         'jellyfin-imdb': { label: 'Jellyfin (IMDb)', recommended: true },
         'jellyfin-tmdb': { label: 'Jellyfin (TMDb)' },
         'jellyfin-tvdb': { label: 'Jellyfin (TVDb)' },
-        'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
-        'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)', desc: 'Anime-specific fields (audio languages, bit depth).' },
+        'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)' },
+        'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)' },
       };
 
       // Media server key filters
@@ -5520,16 +5528,36 @@ function clonarr() {
 
       const sections = [];
 
+      // Section descriptions sourced verbatim from TRaSH-Guides where available.
+      // Sonarr: docs/Sonarr/Sonarr-recommended-naming-scheme.md
+      // Radarr: docs/Radarr/Radarr-recommended-naming-scheme.md (+ includes/radarr/radarr-folder-name-after-year-info.md)
+      const radarrFileDesc = {
+        standard: '',
+        plex: 'This naming scheme is designed to work with the New Plex Agent.',
+        emby: 'Source: Emby Wiki/Docs',
+        jellyfin: 'Source: Jellyfin Wiki/Docs',
+      };
+      const radarrFolderDesc = {
+        standard: 'The minimum needed and recommended format',
+        plex: 'Keep in mind adding anything additional after the release year could give issues during a fresh import into Radarr, but it can help for movies that have the same release name and year',
+        emby: 'Keep in mind adding anything additional after the release year could give issues during a fresh import into Radarr, but it can help for movies that have the same release name and year',
+        jellyfin: 'Keep in mind adding anything additional after the release year could give issues during a fresh import into Radarr, but it can help for movies that have the same release name and year',
+      };
+      const sonarrSeriesDesc = {
+        standard: '',
+        plex: 'This naming scheme is made to be used with the New Plex TV Series Scanner.',
+        emby: 'Source: Emby Wiki/Docs',
+        jellyfin: 'Source: Jellyfin Wiki/Docs — Jellyfin doesn\'t support IMDb IDs for shows.',
+      };
+
       if (appType === 'radarr') {
         // File format first, folder second
         const fileSchemes = makeSchemes(n.file, 'file', radarrExamples.file);
         if (fileSchemes.length > 0) {
           sections.push({
             key: 'file',
-            label: 'Movie File Format',
-            description: ms === 'standard'
-              ? 'Includes quality, audio, HDR, and release group info.'
-              : ms.charAt(0).toUpperCase() + ms.slice(1) + ' file naming with media server IDs.',
+            label: 'Standard Movie Format',
+            description: radarrFileDesc[ms] || '',
             schemes: fileSchemes,
             showEditionToggle: ms === 'plex',
           });
@@ -5539,9 +5567,7 @@ function clonarr() {
           sections.push({
             key: 'folder',
             label: 'Movie Folder Format',
-            description: ms === 'standard'
-              ? 'The minimum needed and recommended format.'
-              : 'Adding anything after the release year can help with duplicate names but may give issues during fresh import.',
+            description: radarrFolderDesc[ms] || '',
             schemes: folderSchemes,
           });
         }
@@ -5549,17 +5575,12 @@ function clonarr() {
         // Episodes first (most important)
         for (const [epType, schemes] of Object.entries(n.episodes || {})) {
           const epLabel = epType.charAt(0).toUpperCase() + epType.slice(1);
-          const epDescs = {
-            standard: 'Standard numbered episodes (S01E01). The most common format.',
-            daily: 'Date-based episodes for daily shows (talk shows, news).',
-            anime: 'Anime episodes with absolute episode numbers and audio language info.',
-          };
           const epSchemes = makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType]);
           if (epSchemes.length > 0) {
             sections.push({
               key: 'episodes-' + epType,
-              label: 'Episode File Format — ' + epLabel,
-              description: epDescs[epType] || '',
+              label: 'Episode Format — ' + epLabel,
+              description: '',
               schemes: epSchemes,
             });
           }
@@ -5568,16 +5589,14 @@ function clonarr() {
         if (seriesSchemes.length > 0) sections.push({
           key: 'series',
           label: 'Series Folder Format',
-          description: ms === 'standard'
-            ? 'The minimum needed and recommended format.'
-            : 'Adding media server IDs helps with matching.',
+          description: sonarrSeriesDesc[ms] || '',
           schemes: seriesSchemes,
         });
         if (n.season && ms === 'standard') {
           sections.push({
             key: 'season',
             label: 'Season Folder Format',
-            description: 'How season sub-folders are named.',
+            description: 'For this, there\'s only one real option to use in our opinion.',
             schemes: makeSchemes(n.season, 'season', { 'default': 'Season 01' }),
           });
         }
@@ -7840,6 +7859,29 @@ function clonarr() {
 
     getAvailableImplementations() {
       return this.cfEditorSchema[this.cfEditorForm.appType] || [];
+    },
+
+    // TRaSH trash_scores context keys, derived at runtime from the actual
+    // CF JSON files on disk via /api/trash/{app}/score-contexts.
+    // Keeps the Custom Format editor dropdown in sync with upstream TRaSH
+    // (new SQP tiers, new language variants, etc.) without hardcoded lists.
+    // Cached per appType in _trashScoreContextCache; lazy-loaded on first access.
+    trashScoreContexts(appType) {
+      if (!appType) return ['default'];
+      const cached = this._trashScoreContextCache[appType];
+      if (cached) return cached;
+      // Seed with 'default' so the dropdown is never empty while the fetch
+      // is in flight. Alpine will re-render once the cache is populated.
+      if (this._trashScoreContextCache[appType] === undefined) {
+        this._trashScoreContextCache[appType] = ['default'];
+        fetch(`/api/trash/${appType}/score-contexts`)
+          .then(r => r.ok ? r.json() : ['default'])
+          .then(keys => {
+            this._trashScoreContextCache = { ...this._trashScoreContextCache, [appType]: (keys && keys.length ? keys : ['default']) };
+          })
+          .catch(() => {});
+      }
+      return this._trashScoreContextCache[appType];
     },
 
     addCFSpec() {
@@ -11422,6 +11464,7 @@ function clonarr() {
     },
 
     _sandboxCFCache: {},
+    _trashScoreContextCache: {},
     async openSandboxCFBrowser(appType) {
       const sb = this.sandbox[appType];
       const selected = {};

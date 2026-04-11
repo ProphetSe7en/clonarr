@@ -1322,6 +1322,46 @@ func (app *App) handleTrashCFs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, cfs)
 }
 
+// handleTrashScoreContexts returns the distinct trash_scores context keys
+// actually used in TRaSH-Guides CFs for the given app. Keeps the Custom Format
+// editor's context dropdown in sync with upstream without hardcoding.
+func (app *App) handleTrashScoreContexts(w http.ResponseWriter, r *http.Request) {
+	appType := r.PathValue("app")
+	if appType != "radarr" && appType != "sonarr" {
+		writeError(w, 400, "app must be 'radarr' or 'sonarr'")
+		return
+	}
+
+	ad := app.trash.GetAppData(appType)
+	if ad == nil {
+		writeJSON(w, []string{"default"})
+		return
+	}
+
+	seen := map[string]struct{}{"default": {}}
+	for _, cf := range ad.CustomFormats {
+		for k := range cf.TrashScores {
+			seen[k] = struct{}{}
+		}
+	}
+
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	// Stable ordering: "default" first, then alphabetical.
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i] == "default" {
+			return true
+		}
+		if keys[j] == "default" {
+			return false
+		}
+		return keys[i] < keys[j]
+	})
+	writeJSON(w, keys)
+}
+
 func (app *App) handleTrashCFGroups(w http.ResponseWriter, r *http.Request) {
 	appType := r.PathValue("app")
 	if appType != "radarr" && appType != "sonarr" {
