@@ -2988,17 +2988,28 @@ func (app *App) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"deleted": count})
 
 	case "delete-cfs-and-scores":
-		// First reset all scores to 0, then delete CFs
+		// Delete CFs first, then reset scores only for the deleted CFs.
+		// This order is safer: if CF deletion fails partway through, orphaned
+		// scores are harmless and easy to clean up.
+		deletedIDs := make(map[int]bool, len(req.IDs))
+		for _, id := range req.IDs {
+			deletedIDs[id] = true
+		}
+		count, err := applyDeleteCFs(client, req.IDs)
+		if err != nil {
+			writeJSON(w, map[string]any{"deleted": count, "scoresReset": 0, "error": "CF deletion failed: " + err.Error()})
+			return
+		}
 		profiles, err := client.ListProfiles()
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Failed to list profiles: "+err.Error())
+			writeJSON(w, map[string]any{"deleted": count, "scoresReset": 0, "error": "CFs deleted but failed to list profiles for score reset: " + err.Error()})
 			return
 		}
 		resetCount := 0
 		for i := range profiles {
 			changed := false
 			for j := range profiles[i].FormatItems {
-				if profiles[i].FormatItems[j].Score != 0 {
+				if profiles[i].FormatItems[j].Score != 0 && deletedIDs[profiles[i].FormatItems[j].Format] {
 					profiles[i].FormatItems[j].Score = 0
 					changed = true
 					resetCount++
@@ -3009,12 +3020,6 @@ func (app *App) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 					log.Printf("CLEANUP: Failed to reset scores on profile %s: %v", profiles[i].Name, err)
 				}
 			}
-		}
-		count, err := applyDeleteCFs(client, req.IDs)
-		if err != nil {
-			// Report partial success: scores were already reset
-			writeJSON(w, map[string]any{"deleted": count, "scoresReset": resetCount, "error": err.Error()})
-			return
 		}
 		writeJSON(w, map[string]any{"deleted": count, "scoresReset": resetCount})
 

@@ -471,8 +471,8 @@
         <span>TRaSH not synced</span>
       </template>
       <button class="btn btn-sm" @click="pullTrash()" :disabled="pulling" style="margin-left:8px">
-        <template x-if="pulling"><span class="spinner"></span></template>
-        <template x-if="!pulling"><span>Pull</span></template>
+        <span x-show="pulling" class="spinner"></span>
+        <span x-show="!pulling">Pull</span>
       </button>
 
       <!-- Changelog dropdown -->
@@ -802,8 +802,8 @@
                       <div style="font-size:13px;font-weight:600;color:#e1e4e8">Profiles</div>
                       <button class="btn btn-sm" @click="loadInstanceProfiles(getCompareInstance(tab.type))"
                               :disabled="instProfilesLoading[getCompareInstance(tab.type)?.id]">
-                        <template x-if="instProfilesLoading[getCompareInstance(tab.type)?.id]"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span></template>
-                        <template x-if="!instProfilesLoading[getCompareInstance(tab.type)?.id]"><span x-text="instProfiles[getCompareInstance(tab.type)?.id] ? 'Refresh' : 'Load Profiles'"></span></template>
+                        <span x-show="instProfilesLoading[getCompareInstance(tab.type)?.id]" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+                        <span x-show="!instProfilesLoading[getCompareInstance(tab.type)?.id]" x-text="instProfiles[getCompareInstance(tab.type)?.id] ? 'Refresh' : 'Load Profiles'"></span>
                       </button>
                     </div>
                     <template x-if="instProfiles[getCompareInstance(tab.type)?.id]">
@@ -1857,7 +1857,7 @@
                       <div style="display:flex;justify-content:space-between;align-items:flex-start">
                         <div>
                           <div style="font-size:14px;font-weight:600;color:#d29922">Delete All Custom Formats (Keep Scores)</div>
-                          <div style="font-size:12px;color:#8b949e;margin-top:4px">Remove all CFs but preserve score mappings in profiles. CFs can be re-added and will retain their scores.</div>
+                          <div style="font-size:12px;color:#8b949e;margin-top:4px">Remove all CFs but preserve score mappings in profiles (respects Keep List). CFs can be re-added and will retain their scores.</div>
                         </div>
                         <button class="btn" style="border-color:#d29922;color:#d29922" @click="cleanupScan('delete-cfs-keep-scores')" :disabled="cleanupScanning">Scan</button>
                       </div>
@@ -1868,7 +1868,7 @@
                       <div style="display:flex;justify-content:space-between;align-items:flex-start">
                         <div>
                           <div style="font-size:14px;font-weight:600;color:#f85149">Delete All Custom Formats &amp; Scores</div>
-                          <div style="font-size:12px;color:#8b949e;margin-top:4px">Complete fresh start — removes all CFs and resets all scores to 0 across every profile. This cannot be undone.</div>
+                          <div style="font-size:12px;color:#8b949e;margin-top:4px">Complete fresh start — removes all CFs and resets their scores to 0 across every profile (respects Keep List). This cannot be undone.</div>
                         </div>
                         <button class="btn btn-danger" @click="cleanupScan('delete-cfs-and-scores')" :disabled="cleanupScanning">Scan</button>
                       </div>
@@ -2226,8 +2226,8 @@
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px">
         <template x-if="!_resyncReturnSubTab">
           <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
-            <template x-if="pbSaving"><span class="spinner"></span></template>
-            <template x-if="!pbSaving"><span x-text="pb.editId ? 'Update Profile' : 'Create Profile'"></span></template>
+            <span x-show="pbSaving" class="spinner"></span>
+            <span x-show="!pbSaving" x-text="pb.editId ? 'Update Profile' : 'Create Profile'"></span>
           </button>
         </template>
         <template x-if="pb.editId">
@@ -2727,8 +2727,8 @@
         <button class="btn" @click="cancelProfileBuilder()">Cancel</button>
         <template x-if="!_resyncReturnSubTab">
           <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
-            <template x-if="pbSaving"><span class="spinner"></span></template>
-            <template x-if="!pbSaving"><span x-text="pb.editId ? 'Update Profile' : 'Create Profile'"></span></template>
+            <span x-show="pbSaving" class="spinner"></span>
+            <span x-show="!pbSaving" x-text="pb.editId ? 'Update Profile' : 'Create Profile'"></span>
           </button>
         </template>
         <template x-if="pb.editId">
@@ -3551,8 +3551,8 @@
           <button class="btn" @click="cleanupResult = null">Cancel</button>
           <button class="btn" :class="['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action) ? 'btn-danger' : 'btn-primary'"
             @click="cleanupApply()" :disabled="cleanupApplying">
-            <template x-if="cleanupApplying"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span></template>
-            <template x-if="!cleanupApplying"><span x-text="(cleanupResult.action?.startsWith('delete') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span></template>
+            <span x-show="cleanupApplying" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+            <span x-show="!cleanupApplying" x-text="(cleanupResult.action?.startsWith('delete') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span>
           </button>
         </div>
         <div class="modal-footer" x-show="cleanupResult.applied !== undefined">
@@ -4311,10 +4311,8 @@
           <div class="modal-actions">
             <button class="btn" @click="backupStep = 'profiles'">Back</button>
             <button class="btn btn-primary" @click="downloadBackup()" :disabled="backupLoading">
-              <template x-if="backupLoading"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span></template>
-              <template x-if="!backupLoading">
-                <span x-text="'Download Backup (' + (Object.keys(backupScoredCFs).length + Object.values(backupSelectedCFs).filter(Boolean).length) + ' CFs)'"></span>
-              </template>
+              <span x-show="backupLoading" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+              <span x-show="!backupLoading" x-text="'Download Backup (' + (Object.keys(backupScoredCFs).length + Object.values(backupSelectedCFs).filter(Boolean).length) + ' CFs)'"></span>
             </button>
           </div>
         </div>
@@ -4339,10 +4337,8 @@
           <div class="modal-actions">
             <button class="btn" @click="backupStep = 'mode'; backupSelectedCFs = {}">Back</button>
             <button class="btn btn-primary" @click="downloadCFBackup()" :disabled="backupLoading || Object.values(backupSelectedCFs).filter(Boolean).length === 0">
-              <template x-if="backupLoading"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span></template>
-              <template x-if="!backupLoading">
-                <span x-text="'Download Backup (' + Object.values(backupSelectedCFs).filter(Boolean).length + ' CFs)'"></span>
-              </template>
+              <span x-show="backupLoading" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+              <span x-show="!backupLoading" x-text="'Download Backup (' + Object.values(backupSelectedCFs).filter(Boolean).length + ' CFs)'"></span>
             </button>
           </div>
         </div>
@@ -4417,8 +4413,8 @@
             <button class="btn" @click="restoreData = null; restoreSelectedProfiles = {}; restoreSelectedCFs = {}">Back</button>
             <button class="btn btn-primary" @click="previewRestore()"
                     :disabled="restoreLoading || (Object.values(restoreSelectedProfiles).filter(Boolean).length === 0 && Object.values(restoreSelectedCFs).filter(Boolean).length === 0)">
-              <template x-if="restoreLoading"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span></template>
-              <template x-if="!restoreLoading">Preview</template>
+              <span x-show="restoreLoading" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+              <span x-show="!restoreLoading">Preview</span>
             </button>
           </div>
         </div>
@@ -4447,8 +4443,8 @@
           <div class="modal-actions">
             <button class="btn" @click="restorePreview = null">Back</button>
             <button class="btn btn-primary" @click="applyRestore()" :disabled="restoreLoading">
-              <template x-if="restoreLoading"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span></template>
-              <template x-if="!restoreLoading">Apply</template>
+              <span x-show="restoreLoading" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+              <span x-show="!restoreLoading">Apply</span>
             </button>
           </div>
         </div>
