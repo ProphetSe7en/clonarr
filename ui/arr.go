@@ -93,10 +93,10 @@ func (c *ArrClient) TestConnection() (*ArrSystemStatus, error) {
 
 // ArrCF represents a Custom Format as returned by Radarr/Sonarr API.
 type ArrCF struct {
-	ID                           int                `json:"id,omitempty"`
-	Name                         string             `json:"name"`
-	IncludeCustomFormatWhenRenaming bool            `json:"includeCustomFormatWhenRenaming"`
-	Specifications               []ArrSpecification `json:"specifications"`
+	ID                              int                `json:"id,omitempty"`
+	Name                            string             `json:"name"`
+	IncludeCustomFormatWhenRenaming bool               `json:"includeCustomFormatWhenRenaming"`
+	Specifications                  []ArrSpecification `json:"specifications"`
 }
 
 // ArrSpecification is a spec within an Arr Custom Format.
@@ -225,6 +225,8 @@ func (c *ArrClient) ListProfiles() ([]ArrQualityProfile, error) {
 
 // UpdateProfile updates a quality profile (primarily for CF scores).
 func (c *ArrClient) UpdateProfile(profile *ArrQualityProfile) error {
+	preprocessProfile(profile)
+
 	data, status, err := c.doRequest("PUT", fmt.Sprintf("/qualityprofile/%d", profile.ID), profile)
 	if err != nil {
 		return err
@@ -242,12 +244,12 @@ func (c *ArrClient) UpdateProfile(profile *ArrQualityProfile) error {
 // haven't been explicitly set. Go unmarshals these as 0. The frontend
 // treats 0 as "not explicitly set" and marks them as needing sync.
 type ArrQualityDefinition struct {
-	ID            int              `json:"id"`
-	Quality       ArrQualityRef    `json:"quality"`
-	Title         string           `json:"title"`
-	MinSize       float64          `json:"minSize"`
-	MaxSize       float64          `json:"maxSize"`
-	PreferredSize float64          `json:"preferredSize"`
+	ID            int           `json:"id"`
+	Quality       ArrQualityRef `json:"quality"`
+	Title         string        `json:"title"`
+	MinSize       float64       `json:"minSize"`
+	MaxSize       float64       `json:"maxSize"`
+	PreferredSize float64       `json:"preferredSize"`
 }
 
 type ArrQualityRef struct {
@@ -291,6 +293,8 @@ func (c *ArrClient) UpdateQualityDefinitions(defs []ArrQualityDefinition) error 
 
 // CreateProfile creates a new quality profile.
 func (c *ArrClient) CreateProfile(profile *ArrQualityProfile) (*ArrQualityProfile, error) {
+	preprocessProfile(profile)
+
 	data, status, err := c.doRequest("POST", "/qualityprofile", profile)
 	if err != nil {
 		return nil, err
@@ -447,4 +451,16 @@ func extractFieldValue(raw json.RawMessage) any {
 	}
 
 	return nil
+}
+
+// preprocessProfile ensures nil slices are initialized empty.
+// This is necesarry because Arr instances (at least Radarr as of 13 Apr 2026) do not handle nil arrays in JSON payloads properly.
+func preprocessProfile(profile *ArrQualityProfile) {
+	if profile.FormatItems == nil {
+		profile.FormatItems = make([]ArrProfileFormatItem, 0)
+	}
+
+	if profile.Items == nil {
+		profile.Items = make([]ArrQualityItem, 0)
+	}
 }
