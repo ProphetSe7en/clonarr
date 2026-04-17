@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.1
+
+### Fixed
+
+- **Dry-run Apply button shows wrong instance** — When selecting a non-default instance in the sync modal's Target Instance dropdown, the dry-run results banner showed "Apply to [default instance]" instead of the selected instance. Now uses `syncPlan.instanceName` from the backend.
+
 ## v2.0.0
 
 ### Compare — Redesigned

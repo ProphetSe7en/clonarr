@@ -3256,7 +3256,7 @@
           </div>
           <button class="btn btn-primary" @click="applySync()" :disabled="syncing">
             <span x-show="syncing" class="spinner"></span>
-            <span x-show="!syncing">Apply to <span x-text="profileDetail?.instance?.name"></span></span>
+            <span x-show="!syncing">Apply to <span x-text="syncPlan?.instanceName || profileDetail?.instance?.name"></span></span>
           </button>
         </div>
       </template>

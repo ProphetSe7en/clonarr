@@ -24,6 +24,7 @@
   <Date>2026-04-17</Date>
   <Changes>
 ### 2026-04-17
+- v2.0.1: Fix dry-run Apply button showing wrong instance when multiple instances configured.
 - v2.0.0: Compare redesign, Sync History and Rollback, Profile Builder overhaul, Settings sidebar, Scoring Sandbox improvements, browser navigation, Sonarr language fix, Profile Detail redesign.
 ### 2026-04-12
 - v1.9.0: Clone profile, inline rename, dry-run preview, keep list fix, auto-sync fixes.
