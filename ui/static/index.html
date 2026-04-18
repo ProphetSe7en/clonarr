@@ -4231,7 +4231,7 @@
         <!-- ===== Notifications ===== -->
         <div x-show="settingsSection === 'notifications'">
           <div class="settings-section-title">Notifications</div>
-          <div class="settings-section-desc">Auto-sync event notifications via Discord and Gotify.</div>
+          <div class="settings-section-desc">Auto-sync event notifications via Discord, Gotify, and Pushover.</div>
           <div class="setting-row">
             <div class="setting-label">Events</div>
             <div class="setting-value" style="display:flex;gap:16px">
@@ -4252,70 +4252,166 @@
 
           <!-- Discord -->
           <div style="border-top:1px solid #21262d;margin-top:12px;padding-top:12px">
-            <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Discord</div>
-            <div class="setting-row">
-              <div class="setting-label">Sync webhook</div>
-              <div class="setting-value">
-                <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhook" @change="saveAutoSyncSettings()" placeholder="https://discord.com/api/webhooks/..." autocomplete="one-time-code">
+            <div class="inst-row" style="padding:8px 0;cursor:pointer" @click="notifOpen.discord = !notifOpen.discord">
+              <span class="profile-group-chevron" :class="{ open: notifOpen.discord }">&#9654;</span>
+              <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Discord</div>
+              <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="autoSyncSettings.discordWebhook ? (autoSyncSettings.discordEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap" @click.stop>
+                <template x-if="discordTesting">
+                  <span class="status-testing"><span class="spinner"></span></span>
+                </template>
+                <template x-if="!discordTesting && discordTestResult === 'Sent!'">
+                  <span class="status-connected">Sent!</span>
+                </template>
+                <template x-if="!discordTesting && discordTestResult && discordTestResult !== 'Sent!'">
+                  <span class="status-failed" x-text="discordTestResult"></span>
+                </template>
+                <template x-if="!discordTesting && !discordTestResult">
+                  <span style="font-size:12px;color:#aaa">Not tested</span>
+                </template>
               </div>
+              <button class="btn btn-sm" style="margin-left:8px" @click.stop="testDiscord()" :disabled="!autoSyncSettings.discordWebhook || discordTesting">Test</button>
             </div>
-            <div style="font-size:12px;color:#8b949e;margin:-4px 0 8px 160px">Sync success, failure, and cleanup</div>
-            <div class="setting-row">
-              <div class="setting-label">Updates webhook</div>
-              <div class="setting-value">
-                <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhookUpdates" @change="saveAutoSyncSettings()" placeholder="Optional — falls back to sync webhook if empty" autocomplete="one-time-code">
+            <div x-show="notifOpen.discord" style="padding-bottom:8px">
+              <div class="setting-row" style="margin-top:4px">
+                <div class="setting-label">Enable</div>
+                <div class="setting-value">
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                    <input type="checkbox" x-model="autoSyncSettings.discordEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
+                    Send notifications via Discord
+                  </label>
+                </div>
               </div>
+              <div class="setting-row">
+                <div class="setting-label">Sync webhook</div>
+                <div class="setting-value">
+                  <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhook" @change="saveAutoSyncSettings()" placeholder="https://discord.com/api/webhooks/..." autocomplete="one-time-code">
+                </div>
+              </div>
+              <div style="font-size:12px;color:#8b949e;margin:-4px 0 8px 160px">Sync success, failure, and cleanup</div>
+              <div class="setting-row">
+                <div class="setting-label">Updates webhook</div>
+                <div class="setting-value">
+                  <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhookUpdates" @change="saveAutoSyncSettings()" placeholder="Optional — falls back to sync webhook if empty" autocomplete="one-time-code">
+                </div>
+              </div>
+              <div style="font-size:12px;color:#8b949e;margin:-4px 0 4px 160px">TRaSH repo updates and weekly changelog</div>
             </div>
-            <div style="font-size:12px;color:#8b949e;margin:-4px 0 4px 160px">TRaSH repo updates and weekly changelog</div>
           </div>
 
           <!-- Gotify -->
-          <div style="border-top:1px solid #21262d;margin-top:12px;padding-top:12px">
-            <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Gotify</div>
-            <div class="setting-row">
-              <div class="setting-label">Enable</div>
-              <div class="setting-value">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                  <input type="checkbox" x-model="autoSyncSettings.gotifyEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                  Send push notifications via Gotify
-                </label>
+          <div style="border-top:1px solid #21262d;margin-top:4px;padding-top:4px">
+            <div class="inst-row" style="padding:8px 0;cursor:pointer" @click="notifOpen.gotify = !notifOpen.gotify">
+              <span class="profile-group-chevron" :class="{ open: notifOpen.gotify }">&#9654;</span>
+              <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Gotify</div>
+              <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="(autoSyncSettings.gotifyUrl || autoSyncSettings.gotifyToken) ? (autoSyncSettings.gotifyEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap" @click.stop>
+                <template x-if="gotifyTesting">
+                  <span class="status-testing"><span class="spinner"></span></span>
+                </template>
+                <template x-if="!gotifyTesting && gotifyTestResult === 'Sent!'">
+                  <span class="status-connected">Sent!</span>
+                </template>
+                <template x-if="!gotifyTesting && gotifyTestResult && gotifyTestResult !== 'Sent!'">
+                  <span class="status-failed" x-text="gotifyTestResult"></span>
+                </template>
+                <template x-if="!gotifyTesting && !gotifyTestResult">
+                  <span style="font-size:12px;color:#aaa">Not tested</span>
+                </template>
+              </div>
+              <button class="btn btn-sm" style="margin-left:8px" @click.stop="testGotify()" :disabled="!autoSyncSettings.gotifyUrl || !autoSyncSettings.gotifyToken || gotifyTesting">Test</button>
+            </div>
+            <div x-show="notifOpen.gotify" style="padding-bottom:8px">
+              <div class="setting-row" style="margin-top:4px">
+                <div class="setting-label">Enable</div>
+                <div class="setting-value">
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                    <input type="checkbox" x-model="autoSyncSettings.gotifyEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
+                    Send push notifications via Gotify
+                  </label>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">URL</div>
+                <div class="setting-value">
+                  <input class="input" style="width:400px" x-model="autoSyncSettings.gotifyUrl" @change="saveAutoSyncSettings()" placeholder="https://gotify.example.com" autocomplete="one-time-code">
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">App Token</div>
+                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
+                  <input :type="gotifyTokenVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.gotifyToken" @change="saveAutoSyncSettings()" placeholder="App token from Gotify">
+                  <button class="btn btn-sm" @click="gotifyTokenVisible = !gotifyTokenVisible" x-text="gotifyTokenVisible ? '🔒' : '👁'" style="min-width:32px"></button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">Levels</div>
+                <div class="setting-value" style="display:flex;gap:16px;flex-wrap:wrap">
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                    <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityCritical" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
+                    Critical <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyCriticalValue" @change="saveAutoSyncSettings()">
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                    <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityWarning" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
+                    Warning <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyWarningValue" @change="saveAutoSyncSettings()">
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                    <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityInfo" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
+                    Info <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyInfoValue" @change="saveAutoSyncSettings()">
+                  </label>
+                </div>
+              </div>
+              <div style="font-size:12px;color:#8b949e;margin:4px 0 0 160px">Critical: sync failures · Warning: stale cleanup · Info: sync success, repo updates, changelog</div>
+            </div>
+          </div>
+
+          <!-- Pushover -->
+          <div style="border-top:1px solid #21262d;margin-top:4px;padding-top:4px">
+            <div class="inst-row" style="padding:8px 0;cursor:pointer" @click="notifOpen.pushover = !notifOpen.pushover">
+              <span class="profile-group-chevron" :class="{ open: notifOpen.pushover }">&#9654;</span>
+              <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Pushover</div>
+              <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="(autoSyncSettings.pushoverUserKey || autoSyncSettings.pushoverAppToken) ? (autoSyncSettings.pushoverEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
+              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap" @click.stop>
+                <template x-if="pushoverTesting">
+                  <span class="status-testing"><span class="spinner"></span></span>
+                </template>
+                <template x-if="!pushoverTesting && pushoverTestResult === 'Sent!'">
+                  <span class="status-connected">Sent!</span>
+                </template>
+                <template x-if="!pushoverTesting && pushoverTestResult && pushoverTestResult !== 'Sent!'">
+                  <span class="status-failed" x-text="pushoverTestResult"></span>
+                </template>
+                <template x-if="!pushoverTesting && !pushoverTestResult">
+                  <span style="font-size:12px;color:#aaa">Not tested</span>
+                </template>
+              </div>
+              <button class="btn btn-sm" style="margin-left:8px" @click.stop="testPushover()" :disabled="!autoSyncSettings.pushoverUserKey || !autoSyncSettings.pushoverAppToken || pushoverTesting">Test</button>
+            </div>
+            <div x-show="notifOpen.pushover" style="padding-bottom:8px">
+              <div class="setting-row" style="margin-top:4px">
+                <div class="setting-label">Enable</div>
+                <div class="setting-value">
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                    <input type="checkbox" x-model="autoSyncSettings.pushoverEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
+                    Send push notifications via Pushover
+                  </label>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">User Key</div>
+                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
+                  <input :type="pushoverUserKeyVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.pushoverUserKey" @change="saveAutoSyncSettings()" placeholder="Your Pushover user key">
+                  <button class="btn btn-sm" @click="pushoverUserKeyVisible = !pushoverUserKeyVisible" x-text="pushoverUserKeyVisible ? '🔒' : '👁'" style="min-width:32px"></button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">App Token</div>
+                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
+                  <input :type="pushoverAppTokenVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.pushoverAppToken" @change="saveAutoSyncSettings()" placeholder="App/API token from Pushover">
+                  <button class="btn btn-sm" @click="pushoverAppTokenVisible = !pushoverAppTokenVisible" x-text="pushoverAppTokenVisible ? '🔒' : '👁'" style="min-width:32px"></button>
+                </div>
               </div>
             </div>
-            <div class="setting-row">
-              <div class="setting-label">URL</div>
-              <div class="setting-value">
-                <input class="input" style="width:400px" x-model="autoSyncSettings.gotifyUrl" @change="saveAutoSyncSettings()" placeholder="https://gotify.example.com" autocomplete="one-time-code">
-              </div>
-            </div>
-            <div class="setting-row">
-              <div class="setting-label">App Token</div>
-              <div class="setting-value" style="display:flex;gap:8px;align-items:center">
-                <input :type="gotifyTokenVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.gotifyToken" @change="saveAutoSyncSettings()" placeholder="App token from Gotify">
-                <button class="btn btn-sm" @click="gotifyTokenVisible = !gotifyTokenVisible" x-text="gotifyTokenVisible ? '🔒' : '👁'" style="min-width:32px"></button>
-                <button class="btn btn-sm" @click="testGotify()" :disabled="!autoSyncSettings.gotifyUrl || !autoSyncSettings.gotifyToken || gotifyTesting">
-                  <span x-show="!gotifyTesting">Test</span><span x-show="gotifyTesting">...</span>
-                </button>
-                <span x-show="gotifyTestResult" :style="gotifyTestResult === 'Sent!' ? 'color:#3fb950;font-size:12px' : 'color:#f85149;font-size:12px'" x-text="gotifyTestResult"></span>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div class="setting-label">Levels</div>
-              <div class="setting-value" style="display:flex;gap:16px;flex-wrap:wrap">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                  <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityCritical" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                  Critical <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyCriticalValue" @change="saveAutoSyncSettings()">
-                </label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                  <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityWarning" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                  Warning <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyWarningValue" @change="saveAutoSyncSettings()">
-                </label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                  <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityInfo" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                  Info <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyInfoValue" @change="saveAutoSyncSettings()">
-                </label>
-              </div>
-            </div>
-            <div style="font-size:12px;color:#8b949e;margin:4px 0 0 160px">Critical: sync failures · Warning: stale cleanup · Info: sync success, repo updates, changelog</div>
           </div>
         </div>
 
@@ -5899,13 +5995,20 @@ function clonarr() {
     syncPreviewLoading: false,
 
     // Auto-Sync
-    autoSyncSettings: { enabled: false, notifyOnSuccess: true, notifyOnFailure: true, notifyOnRepoUpdate: false, discordWebhook: '', discordWebhookUpdates: '', gotifyEnabled: false, gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3 },
+    autoSyncSettings: { enabled: false, notifyOnSuccess: true, notifyOnFailure: true, notifyOnRepoUpdate: false, discordEnabled: true, discordWebhook: '', discordWebhookUpdates: '', gotifyEnabled: false, gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverEnabled: false, pushoverUserKey: '', pushoverAppToken: '' },
+    notifOpen: { discord: false, gotify: false, pushover: false },
     gotifyTokenVisible: false,
+    pushoverUserKeyVisible: false,
+    pushoverAppTokenVisible: false,
     settingsOpen: 'instances',  // legacy accordion (unused after sidebar redesign)
     settingsSection: 'instances',
     uiScale: localStorage.getItem('clonarr-ui-scale') || '1',
+    discordTesting: false,
+    discordTestResult: '',
     gotifyTesting: false,
     gotifyTestResult: '',
+    pushoverTesting: false,
+    pushoverTestResult: '',
     autoSyncRules: [],
     autoSyncRuleForSync: null, // existing rule that matches current syncForm (if any)
 
@@ -11937,6 +12040,29 @@ function clonarr() {
       } catch (e) { console.error('saveAutoSyncSettings:', e); }
     },
 
+    async testDiscord() {
+      if (!this.autoSyncSettings.discordWebhook) return;
+      this.discordTesting = true;
+      this.discordTestResult = '';
+      try {
+        const resp = await fetch('/api/auto-sync/test-discord', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ webhook: this.autoSyncSettings.discordWebhook }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          this.discordTestResult = err.error || 'Failed';
+        } else {
+          this.discordTestResult = 'Sent!';
+        }
+      } catch (e) {
+        this.discordTestResult = e.message;
+      } finally {
+        this.discordTesting = false;
+      }
+    },
+
     async testGotify() {
       if (!this.autoSyncSettings.gotifyUrl || !this.autoSyncSettings.gotifyToken) return;
       this.gotifyTesting = true;
@@ -11957,7 +12083,29 @@ function clonarr() {
         this.gotifyTestResult = e.message;
       } finally {
         this.gotifyTesting = false;
-        setTimeout(() => { this.gotifyTestResult = ''; }, 5000);
+      }
+    },
+
+    async testPushover() {
+      if (!this.autoSyncSettings.pushoverUserKey || !this.autoSyncSettings.pushoverAppToken) return;
+      this.pushoverTesting = true;
+      this.pushoverTestResult = '';
+      try {
+        const resp = await fetch('/api/auto-sync/test-pushover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userKey: this.autoSyncSettings.pushoverUserKey, appToken: this.autoSyncSettings.pushoverAppToken }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          this.pushoverTestResult = err.error || 'Failed';
+        } else {
+          this.pushoverTestResult = 'Sent!';
+        }
+      } catch (e) {
+        this.pushoverTestResult = e.message;
+      } finally {
+        this.pushoverTesting = false;
       }
     },
 

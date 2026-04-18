@@ -41,11 +41,12 @@ type ProwlarrConfig struct {
 // AutoSyncConfig holds global auto-sync settings and rules.
 type AutoSyncConfig struct {
 	Enabled            bool           `json:"enabled"`
-	NotifyOnSuccess    bool           `json:"notifyOnSuccess"`
-	NotifyOnFailure    bool           `json:"notifyOnFailure"`
-	NotifyOnRepoUpdate bool           `json:"notifyOnRepoUpdate"`
-	DiscordWebhook     string         `json:"discordWebhook,omitempty"`
-	DiscordWebhookUpdates string      `json:"discordWebhookUpdates,omitempty"` // separate webhook for TRaSH repo updates (falls back to main if empty)
+	NotifyOnSuccess       bool           `json:"notifyOnSuccess"`
+	NotifyOnFailure       bool           `json:"notifyOnFailure"`
+	NotifyOnRepoUpdate    bool           `json:"notifyOnRepoUpdate"`
+	DiscordEnabled        *bool          `json:"discordEnabled,omitempty"` // pointer: nil = not yet set, defaults to true
+	DiscordWebhook        string         `json:"discordWebhook,omitempty"`
+	DiscordWebhookUpdates string         `json:"discordWebhookUpdates,omitempty"` // separate webhook for TRaSH repo updates (falls back to main if empty)
 	// Gotify
 	GotifyEnabled          bool   `json:"gotifyEnabled"`
 	GotifyURL              string `json:"gotifyUrl,omitempty"`
@@ -56,7 +57,11 @@ type AutoSyncConfig struct {
 	GotifyCriticalValue    *int   `json:"gotifyCriticalValue,omitempty"`
 	GotifyWarningValue     *int   `json:"gotifyWarningValue,omitempty"`
 	GotifyInfoValue        *int   `json:"gotifyInfoValue,omitempty"`
-	Rules                  []AutoSyncRule `json:"rules,omitempty"`
+	// Pushover
+	PushoverEnabled  bool   `json:"pushoverEnabled"`
+	PushoverUserKey  string `json:"pushoverUserKey,omitempty"`
+	PushoverAppToken string `json:"pushoverAppToken,omitempty"`
+	Rules                    []AutoSyncRule `json:"rules,omitempty"`
 }
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
@@ -223,6 +228,11 @@ func (cs *configStore) Load() error {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("parse config: %w", err)
+	}
+	// DiscordEnabled defaults to true (preserves existing behaviour for users who already have a webhook)
+	if cfg.AutoSync.DiscordEnabled == nil {
+		v := true
+		cfg.AutoSync.DiscordEnabled = &v
 	}
 	// Apply defaults for Gotify priority values (nil = never set by user)
 	if cfg.AutoSync.GotifyCriticalValue == nil {

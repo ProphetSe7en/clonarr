@@ -3804,6 +3804,7 @@ func (app *App) handleGetAutoSyncSettings(w http.ResponseWriter, r *http.Request
 		"notifyOnSuccess":       cfg.AutoSync.NotifyOnSuccess,
 		"notifyOnFailure":       cfg.AutoSync.NotifyOnFailure,
 		"notifyOnRepoUpdate":    cfg.AutoSync.NotifyOnRepoUpdate,
+		"discordEnabled":        cfg.AutoSync.DiscordEnabled,
 		"discordWebhook":        cfg.AutoSync.DiscordWebhook,
 		"discordWebhookUpdates": cfg.AutoSync.DiscordWebhookUpdates,
 		"gotifyEnabled":         cfg.AutoSync.GotifyEnabled,
@@ -3815,6 +3816,9 @@ func (app *App) handleGetAutoSyncSettings(w http.ResponseWriter, r *http.Request
 		"gotifyCriticalValue":    cfg.AutoSync.GotifyCriticalValue,
 		"gotifyWarningValue":     cfg.AutoSync.GotifyWarningValue,
 		"gotifyInfoValue":        cfg.AutoSync.GotifyInfoValue,
+		"pushoverEnabled":  cfg.AutoSync.PushoverEnabled,
+		"pushoverUserKey":  cfg.AutoSync.PushoverUserKey,
+		"pushoverAppToken": cfg.AutoSync.PushoverAppToken,
 	})
 }
 
@@ -3826,6 +3830,7 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		NotifyOnSuccess       bool   `json:"notifyOnSuccess"`
 		NotifyOnFailure       bool   `json:"notifyOnFailure"`
 		NotifyOnRepoUpdate    bool   `json:"notifyOnRepoUpdate"`
+		DiscordEnabled        bool   `json:"discordEnabled"`
 		DiscordWebhook        string `json:"discordWebhook"`
 		DiscordWebhookUpdates string `json:"discordWebhookUpdates"`
 		GotifyEnabled         bool   `json:"gotifyEnabled"`
@@ -3837,6 +3842,9 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		GotifyCriticalValue    int   `json:"gotifyCriticalValue"`
 		GotifyWarningValue     int   `json:"gotifyWarningValue"`
 		GotifyInfoValue        int   `json:"gotifyInfoValue"`
+		PushoverEnabled  bool   `json:"pushoverEnabled"`
+		PushoverUserKey  string `json:"pushoverUserKey"`
+		PushoverAppToken string `json:"pushoverAppToken"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "Invalid JSON")
@@ -3868,6 +3876,8 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		cfg.AutoSync.NotifyOnSuccess = req.NotifyOnSuccess
 		cfg.AutoSync.NotifyOnFailure = req.NotifyOnFailure
 		cfg.AutoSync.NotifyOnRepoUpdate = req.NotifyOnRepoUpdate
+		de := req.DiscordEnabled
+		cfg.AutoSync.DiscordEnabled = &de
 		cfg.AutoSync.DiscordWebhook = webhook
 		cfg.AutoSync.DiscordWebhookUpdates = webhookUpdates
 		cfg.AutoSync.GotifyEnabled = req.GotifyEnabled
@@ -3880,6 +3890,9 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		cfg.AutoSync.GotifyCriticalValue = &cv
 		cfg.AutoSync.GotifyWarningValue = &wv
 		cfg.AutoSync.GotifyInfoValue = &iv
+		cfg.AutoSync.PushoverEnabled = req.PushoverEnabled
+		cfg.AutoSync.PushoverUserKey = strings.TrimSpace(req.PushoverUserKey)
+		cfg.AutoSync.PushoverAppToken = strings.TrimSpace(req.PushoverAppToken)
 	}); err != nil {
 		writeError(w, 500, "Failed to save settings")
 		return
@@ -3918,6 +3931,72 @@ func (app *App) handleTestGotify(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		writeError(w, resp.StatusCode, fmt.Sprintf("Gotify returned %d", resp.StatusCode))
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func (app *App) handleTestDiscord(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var req struct {
+		Webhook string `json:"webhook"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Webhook == "" {
+		writeError(w, 400, "webhook required")
+		return
+	}
+	webhook := strings.TrimSpace(req.Webhook)
+	if !strings.HasPrefix(webhook, "https://discord.com/api/webhooks/") &&
+		!strings.HasPrefix(webhook, "https://discordapp.com/api/webhooks/") {
+		writeError(w, 400, "Discord webhook must start with https://discord.com/api/webhooks/")
+		return
+	}
+	embed := map[string]any{
+		"title":       "Clonarr Test",
+		"description": "If you see this, Discord is configured correctly!",
+		"color":       0x58a6ff,
+		"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+	}
+	payload, _ := json.Marshal(map[string]any{"embeds": []any{embed}})
+	resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		writeError(w, 502, fmt.Sprintf("Failed to reach Discord: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		writeError(w, resp.StatusCode, fmt.Sprintf("Discord returned %d", resp.StatusCode))
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func (app *App) handleTestPushover(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var req struct {
+		UserKey  string `json:"userKey"`
+		AppToken string `json:"appToken"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserKey == "" || req.AppToken == "" {
+		writeError(w, 400, "userKey and appToken required")
+		return
+	}
+	payload := map[string]any{
+		"token":    strings.TrimSpace(req.AppToken),
+		"user":     strings.TrimSpace(req.UserKey),
+		"title":    "Clonarr Test",
+		"message":  "If you see this, Pushover is configured correctly!",
+		"priority": 0,
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := app.notifyClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	if err != nil {
+		writeError(w, 502, fmt.Sprintf("Failed to reach Pushover: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		writeError(w, resp.StatusCode, fmt.Sprintf("Pushover returned %d", resp.StatusCode))
 		return
 	}
 	writeJSON(w, map[string]string{"status": "ok"})
