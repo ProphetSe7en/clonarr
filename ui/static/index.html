@@ -4256,21 +4256,6 @@
               <span class="profile-group-chevron" :class="{ open: notifOpen.discord }">&#9654;</span>
               <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Discord</div>
               <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="autoSyncSettings.discordWebhook ? (autoSyncSettings.discordEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
-              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap" @click.stop>
-                <template x-if="discordTesting">
-                  <span class="status-testing"><span class="spinner"></span></span>
-                </template>
-                <template x-if="!discordTesting && discordTestResult === 'Sent!'">
-                  <span class="status-connected">Sent!</span>
-                </template>
-                <template x-if="!discordTesting && discordTestResult && discordTestResult !== 'Sent!'">
-                  <span class="status-failed" x-text="discordTestResult"></span>
-                </template>
-                <template x-if="!discordTesting && !discordTestResult">
-                  <span style="font-size:12px;color:#aaa">Not tested</span>
-                </template>
-              </div>
-              <button class="btn btn-sm" style="margin-left:8px" @click.stop="testDiscord()" :disabled="!autoSyncSettings.discordWebhook || discordTesting">Test</button>
             </div>
             <div x-show="notifOpen.discord" style="padding-bottom:8px">
               <div class="setting-row" style="margin-top:4px">
@@ -4284,15 +4269,23 @@
               </div>
               <div class="setting-row">
                 <div class="setting-label">Sync webhook</div>
-                <div class="setting-value">
+                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
                   <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhook" @change="saveAutoSyncSettings()" placeholder="https://discord.com/api/webhooks/..." autocomplete="one-time-code">
+                  <button class="btn btn-sm" @click="testDiscordWebhook('sync')" :disabled="!autoSyncSettings.discordWebhook || discordSyncTesting">
+                    <span x-show="!discordSyncTesting">Test</span><span x-show="discordSyncTesting">...</span>
+                  </button>
+                  <span x-show="discordSyncTestResult" :style="discordSyncTestResult === 'Sent!' ? 'color:#3fb950;font-size:12px' : 'color:#f85149;font-size:12px'" x-text="discordSyncTestResult"></span>
                 </div>
               </div>
               <div style="font-size:12px;color:#8b949e;margin:-4px 0 8px 160px">Sync success, failure, and cleanup</div>
               <div class="setting-row">
                 <div class="setting-label">Updates webhook</div>
-                <div class="setting-value">
+                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
                   <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhookUpdates" @change="saveAutoSyncSettings()" placeholder="Optional — falls back to sync webhook if empty" autocomplete="one-time-code">
+                  <button class="btn btn-sm" @click="testDiscordWebhook('updates')" :disabled="!autoSyncSettings.discordWebhookUpdates || discordUpdatesTesting">
+                    <span x-show="!discordUpdatesTesting">Test</span><span x-show="discordUpdatesTesting">...</span>
+                  </button>
+                  <span x-show="discordUpdatesTestResult" :style="discordUpdatesTestResult === 'Sent!' ? 'color:#3fb950;font-size:12px' : 'color:#f85149;font-size:12px'" x-text="discordUpdatesTestResult"></span>
                 </div>
               </div>
               <div style="font-size:12px;color:#8b949e;margin:-4px 0 4px 160px">TRaSH repo updates and weekly changelog</div>
@@ -6003,8 +5996,10 @@ function clonarr() {
     settingsOpen: 'instances',  // legacy accordion (unused after sidebar redesign)
     settingsSection: 'instances',
     uiScale: localStorage.getItem('clonarr-ui-scale') || '1',
-    discordTesting: false,
-    discordTestResult: '',
+    discordSyncTesting: false,
+    discordSyncTestResult: '',
+    discordUpdatesTesting: false,
+    discordUpdatesTestResult: '',
     gotifyTesting: false,
     gotifyTestResult: '',
     pushoverTesting: false,
@@ -12040,26 +12035,29 @@ function clonarr() {
       } catch (e) { console.error('saveAutoSyncSettings:', e); }
     },
 
-    async testDiscord() {
-      if (!this.autoSyncSettings.discordWebhook) return;
-      this.discordTesting = true;
-      this.discordTestResult = '';
+    async testDiscordWebhook(type) {
+      const webhook = type === 'updates' ? this.autoSyncSettings.discordWebhookUpdates : this.autoSyncSettings.discordWebhook;
+      if (!webhook) return;
+      const testingKey = type === 'updates' ? 'discordUpdatesTesting' : 'discordSyncTesting';
+      const resultKey = type === 'updates' ? 'discordUpdatesTestResult' : 'discordSyncTestResult';
+      this[testingKey] = true;
+      this[resultKey] = '';
       try {
         const resp = await fetch('/api/auto-sync/test-discord', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ webhook: this.autoSyncSettings.discordWebhook }),
+          body: JSON.stringify({ webhook }),
         });
         if (!resp.ok) {
           const err = await resp.json();
-          this.discordTestResult = err.error || 'Failed';
+          this[resultKey] = err.error || 'Failed';
         } else {
-          this.discordTestResult = 'Sent!';
+          this[resultKey] = 'Sent!';
         }
       } catch (e) {
-        this.discordTestResult = e.message;
+        this[resultKey] = e.message;
       } finally {
-        this.discordTesting = false;
+        this[testingKey] = false;
       }
     },
 
