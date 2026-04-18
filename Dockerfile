@@ -5,7 +5,7 @@ ARG VERSION=2.0.3
 RUN apk add --no-cache git
 
 WORKDIR /build
-COPY ui/ .
+COPY . .
 RUN go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
 FROM alpine:3.21

@@ -1,6 +1,7 @@
-package main
+package core
 
 import (
+	"clonarr/internal/arr"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,15 +15,15 @@ import (
 
 // CustomCF represents a user-imported or user-created custom format not found in TRaSH guides.
 type CustomCF struct {
-	ID       string `json:"id"`       // synthetic ID: "custom:<hex>"
+	ID       string `json:"id"` // synthetic ID: "custom:<hex>"
 	Name     string `json:"name"`
 	AppType  string `json:"appType"`  // "radarr" or "sonarr"
 	Category string `json:"category"` // user-chosen category (default: "Custom")
 
 	// CF definition
-	IncludeInRename bool               `json:"includeInRename,omitempty"`
-	ArrID           int                `json:"arrId,omitempty"`
-	Specifications  []ArrSpecification `json:"specifications,omitempty"`
+	IncludeInRename bool                   `json:"includeInRename,omitempty"`
+	ArrID           int                    `json:"arrId,omitempty"`
+	Specifications  []arr.ArrSpecification `json:"specifications,omitempty"`
 
 	// Developer mode: TRaSH guide fields (only populated when devMode is used)
 	TrashID     string         `json:"trashId,omitempty"`
@@ -40,19 +41,19 @@ func (cf *CustomCF) GetName() string    { return cf.Name }
 func (cf *CustomCF) SetName(n string)   { cf.Name = n }
 func (cf *CustomCF) GetAppType() string { return cf.AppType }
 
-// customCFStore manages custom CFs in app-type-scoped subdirectories.
+// CustomCFStore manages custom CFs in app-type-scoped subdirectories.
 // Files are stored in {dir}/{appType}/cf/ to avoid cross-app name collisions.
 // Same-named CFs in different apps (e.g. "!LQ" in both Radarr and Sonarr)
 // are stored in separate directories and never collide.
-type customCFStore struct {
+type CustomCFStore struct {
 	dir    string
 	stores map[string]*FileStore[CustomCF, *CustomCF]
 }
 
 var knownAppTypes = []string{"radarr", "sonarr"}
 
-func newCustomCFStore(dir string) *customCFStore {
-	s := &customCFStore{
+func NewCustomCFStore(dir string) *CustomCFStore {
+	s := &CustomCFStore{
 		dir:    dir,
 		stores: make(map[string]*FileStore[CustomCF, *CustomCF], len(knownAppTypes)),
 	}
@@ -66,12 +67,11 @@ func newCustomCFStore(dir string) *customCFStore {
 	return s
 }
 
-func (s *customCFStore) storeFor(appType string) *FileStore[CustomCF, *CustomCF] {
-	return s.stores[appType]
+func (cs *CustomCFStore) storeFor(appType string) *FileStore[CustomCF, *CustomCF] {
+	return cs.stores[appType]
 }
 
-// generateCustomID creates a synthetic ID like "custom:a1b2c3d4e5f6".
-func generateCustomID() string {
+func GenerateCustomID() string {
 	b := make([]byte, 12)
 	if _, err := rand.Read(b); err != nil {
 		return "custom:fallback"
@@ -80,16 +80,16 @@ func generateCustomID() string {
 }
 
 // List returns custom CFs filtered by app type. If appType is empty, returns all.
-func (s *customCFStore) List(appType string) []CustomCF {
+func (cs *CustomCFStore) List(appType string) []CustomCF {
 	if appType != "" {
-		store := s.storeFor(appType)
+		store := cs.storeFor(appType)
 		if store == nil {
 			return nil
 		}
 		return store.List("")
 	}
 	var result []CustomCF
-	for _, store := range s.stores {
+	for _, store := range cs.stores {
 		result = append(result, store.List("")...)
 	}
 	return result
@@ -97,10 +97,10 @@ func (s *customCFStore) List(appType string) []CustomCF {
 
 // Add saves one or more custom CFs. Generates IDs for items that don't have one.
 // Skips duplicates (same Name within same app type). Returns the number added.
-func (s *customCFStore) Add(cfs []CustomCF) (int, error) {
+func (cs *CustomCFStore) Add(cfs []CustomCF) (int, error) {
 	for i := range cfs {
 		if cfs[i].ID == "" {
-			cfs[i].ID = generateCustomID()
+			cfs[i].ID = GenerateCustomID()
 		}
 	}
 	byApp := make(map[string][]CustomCF)
@@ -109,7 +109,7 @@ func (s *customCFStore) Add(cfs []CustomCF) (int, error) {
 	}
 	total := 0
 	for appType, items := range byApp {
-		store := s.storeFor(appType)
+		store := cs.storeFor(appType)
 		if store == nil {
 			continue
 		}
@@ -123,8 +123,8 @@ func (s *customCFStore) Add(cfs []CustomCF) (int, error) {
 }
 
 // Get returns a single custom CF by ID, searching all app-type stores.
-func (s *customCFStore) Get(id string) (CustomCF, bool) {
-	for _, store := range s.stores {
+func (cs *CustomCFStore) Get(id string) (CustomCF, bool) {
+	for _, store := range cs.stores {
 		if cf, ok := store.Get(id); ok {
 			return cf, true
 		}
@@ -133,8 +133,8 @@ func (s *customCFStore) Get(id string) (CustomCF, bool) {
 }
 
 // Delete removes a custom CF by ID, searching all app-type stores.
-func (s *customCFStore) Delete(id string) error {
-	for _, store := range s.stores {
+func (cs *CustomCFStore) Delete(id string) error {
+	for _, store := range cs.stores {
 		if err := store.Delete(id); err == nil {
 			return nil
 		}
@@ -146,8 +146,8 @@ func (s *customCFStore) Delete(id string) error {
 // Note: does not handle cross-app-type moves. If a CF's appType changes,
 // the old file remains as an orphan. The UI prevents this (appType is read-only
 // during edit), but direct API calls could trigger it.
-func (s *customCFStore) Update(cf CustomCF) error {
-	store := s.storeFor(cf.AppType)
+func (cs *CustomCFStore) Update(cf CustomCF) error {
+	store := cs.storeFor(cf.AppType)
 	if store == nil {
 		return fmt.Errorf("unknown app type: %s", cf.AppType)
 	}
@@ -158,7 +158,7 @@ func (s *customCFStore) Update(cf CustomCF) error {
 // directory to the new app-type-scoped structure ({dir}/{appType}/cf/).
 // Strips " (N)" suffixes that were added by the old cross-app collision handling.
 // Idempotent — no-op if old directory doesn't exist.
-func (s *customCFStore) migrateFromFlatDir(oldDir string) {
+func (cs *CustomCFStore) MigrateFromFlatDir(oldDir string) {
 	entries, err := os.ReadDir(oldDir)
 	if err != nil {
 		return // old dir doesn't exist — nothing to migrate
@@ -183,7 +183,7 @@ func (s *customCFStore) migrateFromFlatDir(oldDir string) {
 		// Strip "(N)" collision suffix from name
 		cf.Name = stripNumericSuffix(cf.Name)
 
-		store := s.storeFor(cf.AppType)
+		store := cs.storeFor(cf.AppType)
 		if store == nil {
 			log.Printf("custom-cf migration: skipping %s (unknown appType %q)", e.Name(), cf.AppType)
 			continue

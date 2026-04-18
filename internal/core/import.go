@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"encoding/json"
@@ -70,8 +70,8 @@ type recyclarrScoreAssignment struct {
 
 // v8: custom_format_groups
 type recyclarrCFGroups struct {
-	Skip []string               `yaml:"skip"`
-	Add  []recyclarrCFGroupAdd  `yaml:"add"`
+	Skip []string              `yaml:"skip"`
+	Add  []recyclarrCFGroupAdd `yaml:"add"`
 }
 
 type recyclarrCFGroupAdd struct {
@@ -87,34 +87,34 @@ type recyclarrCFGroupAdd struct {
 type ImportedProfile struct {
 	ID                    string            `json:"id"`
 	Name                  string            `json:"name"`
-	AppType               string            `json:"appType"`                         // "radarr" or "sonarr"
-	Source                string            `json:"source,omitempty"`                // "import" or "custom" (empty = import for backwards compat)
-	QualityType           string            `json:"qualityType,omitempty"`           // quality definition type (e.g. "movie", "series")
-	TrashProfileID        string            `json:"trashProfileId,omitempty"`        // v8: guide-backed profile trash_id
-	ScoreSet              string            `json:"scoreSet,omitempty"`              // v8: named score set from TRaSH (e.g. "sqp-1-1080p")
+	AppType               string            `json:"appType"`                  // "radarr" or "sonarr"
+	Source                string            `json:"source,omitempty"`         // "import" or "custom" (empty = import for backwards compat)
+	QualityType           string            `json:"qualityType,omitempty"`    // quality definition type (e.g. "movie", "series")
+	TrashProfileID        string            `json:"trashProfileId,omitempty"` // v8: guide-backed profile trash_id
+	ScoreSet              string            `json:"scoreSet,omitempty"`       // v8: named score set from TRaSH (e.g. "sqp-1-1080p")
 	UpgradeAllowed        bool              `json:"upgradeAllowed"`
-	Cutoff                string            `json:"cutoff,omitempty"`                // until_quality name
-	CutoffScore           int               `json:"cutoffScore"`                     // until_score
+	Cutoff                string            `json:"cutoff,omitempty"` // until_quality name
+	CutoffScore           int               `json:"cutoffScore"`      // until_score
 	MinFormatScore        int               `json:"minFormatScore"`
 	MinUpgradeFormatScore int               `json:"minUpgradeFormatScore,omitempty"` // v8: min score delta for upgrade
 	ResetUnmatchedScores  bool              `json:"resetUnmatchedScores,omitempty"`
-	ResetExcept           []string          `json:"resetExcept,omitempty"`           // CF names excluded from score reset
-	Language              string            `json:"language,omitempty"`              // preferred language
+	ResetExcept           []string          `json:"resetExcept,omitempty"` // CF names excluded from score reset
+	Language              string            `json:"language,omitempty"`    // preferred language
 	Qualities             []QualityItem     `json:"qualities,omitempty"`
-	FormatItems           map[string]int    `json:"formatItems"`                     // trash_id -> score
-	FormatComments        map[string]string `json:"formatComments,omitempty"`        // trash_id -> CF name
-	FormatGroups          map[string]string `json:"formatGroups,omitempty"`          // trash_id -> group name (TRaSH CF group membership)
-	RequiredCFs           []string          `json:"requiredCFs,omitempty"`           // trash_ids marked as required
-	DefaultOnCFs          []string          `json:"defaultOnCFs,omitempty"`          // trash_ids that are optional but default-on (recommended)
-	BaselineCFs           []string          `json:"baselineCFs,omitempty"`           // CFs from TRaSH template defaults (core + default groups)
-	CoreCFIds             []string          `json:"coreCFIds,omitempty"`             // CFs from TRaSH profile coreCFs (for TRaSH JSON export)
-	FormatItemCFs         map[string]bool   `json:"formatItemCFs,omitempty"`         // CFs in formatItems (required/mandatory)
-	EnabledGroups         map[string]bool   `json:"enabledGroups,omitempty"`         // group trash_ids that are included
-	CfStateOverrides      map[string]string `json:"cfStateOverrides,omitempty"`      // per-CF state overrides (required/optional)
-	VariantGoldenRule     string            `json:"variantGoldenRule,omitempty"`     // builder: HD/UHD/none
-	VariantMisc           string            `json:"variantMisc,omitempty"`           // builder: Standard/SQP/none
-	TrashDescription      string            `json:"trashDescription,omitempty"`      // dev mode: profile description for TRaSH export
-	GroupNum              int               `json:"groupNum,omitempty"`              // dev mode: profile group number
+	FormatItems           map[string]int    `json:"formatItems"`                 // trash_id -> score
+	FormatComments        map[string]string `json:"formatComments,omitempty"`    // trash_id -> CF name
+	FormatGroups          map[string]string `json:"formatGroups,omitempty"`      // trash_id -> group name (TRaSH CF group membership)
+	RequiredCFs           []string          `json:"requiredCFs,omitempty"`       // trash_ids marked as required
+	DefaultOnCFs          []string          `json:"defaultOnCFs,omitempty"`      // trash_ids that are optional but default-on (recommended)
+	BaselineCFs           []string          `json:"baselineCFs,omitempty"`       // CFs from TRaSH template defaults (core + default groups)
+	CoreCFIds             []string          `json:"coreCFIds,omitempty"`         // CFs from TRaSH profile coreCFs (for TRaSH JSON export)
+	FormatItemCFs         map[string]bool   `json:"formatItemCFs,omitempty"`     // CFs in formatItems (required/mandatory)
+	EnabledGroups         map[string]bool   `json:"enabledGroups,omitempty"`     // group trash_ids that are included
+	CfStateOverrides      map[string]string `json:"cfStateOverrides,omitempty"`  // per-CF state overrides (required/optional)
+	VariantGoldenRule     string            `json:"variantGoldenRule,omitempty"` // builder: HD/UHD/none
+	VariantMisc           string            `json:"variantMisc,omitempty"`       // builder: Standard/SQP/none
+	TrashDescription      string            `json:"trashDescription,omitempty"`  // dev mode: profile description for TRaSH export
+	GroupNum              int               `json:"groupNum,omitempty"`          // dev mode: profile group number
 	ImportedAt            string            `json:"importedAt"`
 }
 
@@ -158,7 +158,7 @@ func detectAppType(inst recyclarrInstance, hint string) string {
 // mergeRecyclarrIncludes resolves `include: - config: filename` references in Recyclarr YAML.
 // Uses semantic YAML merge: parses both main and include files, merges quality_profiles and
 // custom_formats arrays per instance. Returns the merged YAML as a string.
-func mergeRecyclarrIncludes(mainYAML string, includeFiles map[string]string) string {
+func MergeRecyclarrIncludes(mainYAML string, includeFiles map[string]string) string {
 	// Parse main config to find instances and their includes
 	var raw map[string]map[string]map[string]interface{} // sonarr/radarr → instance → fields
 	if err := yaml.Unmarshal([]byte(mainYAML), &raw); err != nil {
@@ -166,8 +166,7 @@ func mergeRecyclarrIncludes(mainYAML string, includeFiles map[string]string) str
 	}
 
 	// For each instance, find its include list and merge the referenced files
-	for appType, instances := range raw {
-		_ = appType
+	for _, instances := range raw {
 		for instName, inst := range instances {
 			includeList, ok := inst["include"]
 			if !ok {
@@ -230,7 +229,7 @@ func mergeRecyclarrIncludes(mainYAML string, includeFiles map[string]string) str
 	return string(merged)
 }
 
-func parseRecyclarrYAML(yamlContent []byte, trashData map[string]*AppData, hintAppType string) ([]ImportedProfile, error) {
+func ParseRecyclarrYAML(yamlContent []byte, trashData map[string]*AppData, hintAppType string) ([]ImportedProfile, error) {
 	// --- Layout 1: full config with radarr/sonarr top-level keys ---
 	var cfg recyclarrConfig
 	if err := yaml.Unmarshal(yamlContent, &cfg); err != nil {
@@ -371,7 +370,7 @@ func extractProfiles(inst recyclarrInstance, appType string, ad *AppData) []Impo
 	profileFormatGroups := make(map[string]map[string]string) // profileName → trash_id → group name
 
 	// Resolve v8 custom_format_groups (requires TRaSH data)
-	resolveCustomFormatGroups(inst, appType, ad, profileScores, profileComments, profileFormatGroups)
+	resolveCustomFormatGroups(inst, ad, profileScores, profileComments, profileFormatGroups)
 
 	// Resolve group membership for CFs from custom_formats section (using TRaSH data)
 	if ad != nil {
@@ -466,7 +465,7 @@ func extractProfiles(inst recyclarrInstance, appType string, ad *AppData) []Impo
 		}
 
 		p := ImportedProfile{
-			ID:             generateID(),
+			ID:             GenerateID(),
 			Name:           sanitizeName(name),
 			AppType:        appType,
 			QualityType:    inst.QualityDefinition.Type,
@@ -475,7 +474,7 @@ func extractProfiles(inst recyclarrInstance, appType string, ad *AppData) []Impo
 			Qualities:      qualities,
 			FormatItems:    scores,
 		}
-		if comments != nil && len(comments) > 0 {
+		if len(comments) > 0 {
 			p.FormatComments = comments
 		}
 		if fg := profileFormatGroups[name]; len(fg) > 0 {
@@ -547,7 +546,7 @@ func resolveAssignName(assign recyclarrScoreAssignment, trashProfileByID map[str
 // resolveCustomFormatGroups expands v8 custom_format_groups references into
 // individual CF scores using TRaSH group data. Must be called after parsing
 // when TRaSH data is available.
-func resolveCustomFormatGroups(inst recyclarrInstance, appType string, ad *AppData, profileScores map[string]map[string]int, profileComments map[string]map[string]string, profileFormatGroups map[string]map[string]string) {
+func resolveCustomFormatGroups(inst recyclarrInstance, ad *AppData, profileScores map[string]map[string]int, profileComments map[string]map[string]string, profileFormatGroups map[string]map[string]string) {
 	if inst.CustomFormatGroups == nil || ad == nil {
 		return
 	}
@@ -660,7 +659,7 @@ func resolveCustomFormatGroups(inst recyclarrInstance, appType string, ad *AppDa
 //
 // Detection: TRaSH profiles have "trash_id" + "formatItems" as map[string]string (name→trashId).
 // Clonarr exports have "id" + "formatItems" as map[string]int (trashId→score).
-func parseProfileJSON(data []byte, appType string, ad *AppData, trashData map[string]*AppData) (*ImportedProfile, error) {
+func ParseProfileJSON(data []byte, appType string, ad *AppData, trashData map[string]*AppData) (*ImportedProfile, error) {
 	// Probe the JSON to detect format
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(data, &probe); err != nil {
@@ -760,7 +759,7 @@ func parseTrashProfileJSON(data []byte, appType string, ad *AppData) (*ImportedP
 	}
 
 	profile := &ImportedProfile{
-		ID:                    generateID(),
+		ID:                    GenerateID(),
 		Name:                  sanitizeName(tp.Name),
 		AppType:               appType,
 		Source:                "import",
@@ -793,7 +792,7 @@ func parseClonarrExportJSON(data []byte, ad *AppData) (*ImportedProfile, error) 
 		return nil, fmt.Errorf("Clonarr export missing name")
 	}
 	// Generate new ID to avoid collisions
-	profile.ID = generateID()
+	profile.ID = GenerateID()
 	profile.Name = sanitizeName(profile.Name)
 	profile.Source = "import"
 

@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bufio"
@@ -129,9 +129,9 @@ type TrashNaming struct {
 	Folder map[string]string `json:"folder,omitempty"`
 	File   map[string]string `json:"file,omitempty"`
 	// Sonarr fields
-	Season   map[string]string                       `json:"season,omitempty"`
-	Series   map[string]string                       `json:"series,omitempty"`
-	Episodes map[string]map[string]string             `json:"episodes,omitempty"`
+	Season   map[string]string            `json:"season,omitempty"`
+	Series   map[string]string            `json:"series,omitempty"`
+	Episodes map[string]map[string]string `json:"episodes,omitempty"`
 }
 
 // --- Aggregated Data ---
@@ -209,19 +209,26 @@ type TrashData struct {
 
 // --- Trash Store ---
 
-// trashStore manages the TRaSH repo and parsed data.
-type trashStore struct {
+// TrashStore manages the TRaSH repo and parsed data.
+type TrashStore struct {
 	mu                sync.RWMutex // protects data
 	pullMu            sync.Mutex   // serializes clone/pull operations (C4)
 	data              *TrashData
-	dataDir           string                        // path to TRaSH repo clone
-	pullError         string                        // last pull error (empty = OK)
-	lastChangelogDate string                        // tracks last seen changelog date for new-section detection
+	dataDir           string                         // path to TRaSH repo clone
+	pullError         string                         // last pull error (empty = OK)
+	lastChangelogDate string                         // tracks last seen changelog date for new-section detection
 	onNewChangelog    func(section ChangelogSection) // called when updates.txt has a new date section
 }
 
-func newTrashStore(dir string) *trashStore {
-	ts := &trashStore{
+// SetOnNewChangelog sets the callback for when updates.txt has a new date section.
+func (ts *TrashStore) SetOnNewChangelog(cb func(section ChangelogSection)) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.onNewChangelog = cb
+}
+
+func NewTrashStore(dir string) *TrashStore {
+	ts := &TrashStore{
 		data:    &TrashData{},
 		dataDir: filepath.Join(dir, "trash-guides"),
 	}
@@ -237,34 +244,34 @@ func newTrashStore(dir string) *trashStore {
 }
 
 // Snapshot returns an immutable snapshot of current TRaSH data (C1: safe for long-running operations).
-func (ts *trashStore) Snapshot() *TrashData {
+func (ts *TrashStore) Snapshot() *TrashData {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 	return ts.data // immutable: CloneOrPull builds a new *TrashData and swaps the pointer
 }
 
 // SetPullError records a pull failure message for the status API.
-func (ts *trashStore) SetPullError(err string) {
+func (ts *TrashStore) SetPullError(err string) {
 	ts.mu.Lock()
 	ts.pullError = err
 	ts.mu.Unlock()
 }
 
 // CurrentCommit returns the current HEAD commit hash (safe for concurrent reads).
-func (ts *trashStore) CurrentCommit() string {
+func (ts *TrashStore) CurrentCommit() string {
 	snap := ts.Snapshot()
 	return snap.CommitHash
 }
 
 // DataDir returns the path to the TRaSH repo clone directory.
-func (ts *trashStore) DataDir() string {
+func (ts *TrashStore) DataDir() string {
 	return ts.dataDir
 }
 
 // DiffChangedFiles returns a human-readable summary of files changed between two commits.
 // Groups changes by app type (Radarr/Sonarr) and category (CFs, Profiles, Groups, etc).
 // Uses git diff --name-status to show Added/Modified/Deleted per file.
-func (ts *trashStore) DiffChangedFiles(prevCommit, newCommit string) string {
+func (ts *TrashStore) DiffChangedFiles(prevCommit, newCommit string) string {
 	cmd := exec.Command("git", "-C", ts.dataDir, "diff", "--name-status", prevCommit, newCommit)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -386,7 +393,7 @@ func (ts *trashStore) DiffChangedFiles(prevCommit, newCommit string) string {
 }
 
 // readJSONName reads the "name" field from a JSON file, returns empty string on failure.
-func (ts *trashStore) readJSONName(path string) string {
+func (ts *TrashStore) readJSONName(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
@@ -402,9 +409,9 @@ func (ts *trashStore) readJSONName(path string) string {
 
 // ChangelogEntry represents one change from updates.txt.
 type ChangelogEntry struct {
-	Type  string `json:"type"`  // "feat", "fix", "refactor", etc.
-	Scope string `json:"scope"` // e.g. "starr-german", "radarr"
-	Msg   string `json:"msg"`   // description
+	Type  string `json:"type"`         // "feat", "fix", "refactor", etc.
+	Scope string `json:"scope"`        // e.g. "starr-german", "radarr"
+	Msg   string `json:"msg"`          // description
 	PR    string `json:"pr,omitempty"` // PR number (e.g. "2646")
 }
 
@@ -419,8 +426,8 @@ type TrashStatus struct {
 	LastPull     string             `json:"lastPull"`
 	CommitHash   string             `json:"commitHash"`
 	CommitDate   string             `json:"commitDate,omitempty"`
-	LastDiff     *PullDiff          `json:"lastDiff,omitempty"`     // what changed in last pull
-	Changelog    []ChangelogSection `json:"changelog,omitempty"`    // recent updates from updates.txt
+	LastDiff     *PullDiff          `json:"lastDiff,omitempty"`  // what changed in last pull
+	Changelog    []ChangelogSection `json:"changelog,omitempty"` // recent updates from updates.txt
 	RadarrCFs    int                `json:"radarrCFs"`
 	SonarrCFs    int                `json:"sonarrCFs"`
 	RadarrGroups int                `json:"radarrGroups"`
@@ -432,7 +439,7 @@ type TrashStatus struct {
 	Pulling      bool               `json:"pulling"`
 }
 
-func (ts *trashStore) Status() TrashStatus {
+func (ts *TrashStore) Status() TrashStatus {
 	// Check pulling status outside the RLock to avoid lock-ordering issues
 	pulling := true
 	if ts.pullMu.TryLock() {
@@ -444,11 +451,11 @@ func (ts *trashStore) Status() TrashStatus {
 	defer ts.mu.RUnlock()
 
 	st := TrashStatus{
-		CommitHash: ts.data.CommitHash,
-		CommitDate: ts.data.CommitDate,
-		LastDiff:   ts.data.LastDiff,
-		Changelog:  ts.data.Changelog,
-		Cloned:     ts.data.CommitHash != "",
+		CommitHash:   ts.data.CommitHash,
+		CommitDate:   ts.data.CommitDate,
+		LastDiff:     ts.data.LastDiff,
+		Changelog:    ts.data.Changelog,
+		Cloned:       ts.data.CommitHash != "",
 		RadarrCFs:    len(ts.data.Radarr.CustomFormats),
 		SonarrCFs:    len(ts.data.Sonarr.CustomFormats),
 		RadarrGroups: len(ts.data.Radarr.CFGroups),
@@ -531,7 +538,7 @@ func parseChangelog(path string, maxSections int) []ChangelogSection {
 
 // CloneOrPull clones or pulls the TRaSH repo, then re-parses all data.
 // Serialized via pullMu (C4: prevents concurrent git operations).
-func (ts *trashStore) CloneOrPull(repoURL, branch string) error {
+func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 	// C3: Validate inputs to prevent git flag injection
 	if strings.HasPrefix(branch, "-") {
 		return fmt.Errorf("invalid branch name: %q", branch)
@@ -694,7 +701,7 @@ func (ts *trashStore) CloneOrPull(repoURL, branch string) error {
 }
 
 // parseAll parses all TRaSH JSON data for both radarr and sonarr.
-func (ts *trashStore) parseAll() (*TrashData, error) {
+func (ts *TrashStore) parseAll() (*TrashData, error) {
 	data := &TrashData{}
 
 	radarr, err := ts.parseAppData("radarr")
@@ -713,7 +720,7 @@ func (ts *trashStore) parseAll() (*TrashData, error) {
 }
 
 // parseAppData parses all JSON for a single app (radarr or sonarr).
-func (ts *trashStore) parseAppData(app string) (AppData, error) {
+func (ts *TrashStore) parseAppData(app string) (AppData, error) {
 	base := filepath.Join(ts.dataDir, "docs", "json", app)
 	ad := AppData{
 		CustomFormats: make(map[string]*TrashCF),
@@ -961,8 +968,8 @@ type CategorizedCF struct {
 	TrashScores map[string]int `json:"trashScores"`
 	Description string         `json:"description,omitempty"`
 	IsCustom    bool           `json:"isCustom,omitempty"`
-	Required    bool           `json:"required,omitempty"`    // from CF group: required=true means must-include
-	CFDefault   *bool          `json:"cfDefault,omitempty"`   // from CF group: per-CF default override
+	Required    bool           `json:"required,omitempty"`  // from CF group: required=true means must-include
+	CFDefault   *bool          `json:"cfDefault,omitempty"` // from CF group: per-CF default override
 }
 
 // CFPickerGroup is a CF group within a picker category, carrying group metadata + all score contexts.
@@ -979,8 +986,8 @@ type CFPickerGroup struct {
 
 // CFPickerCategory groups CF groups by category for the profile builder.
 type CFPickerCategory struct {
-	Category string           `json:"category"`
-	Groups   []CFPickerGroup  `json:"groups"`
+	Category string          `json:"category"`
+	Groups   []CFPickerGroup `json:"groups"`
 }
 
 // CFPickerData is the full response for the CF picker endpoint.
@@ -1009,7 +1016,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 	catGroupMap := make(map[string][]CFPickerGroup) // category → groups
 
 	for _, group := range ad.CFGroups {
-		category, shortName := parseCategoryPrefix(group.Name)
+		category, shortName := ParseCategoryPrefix(group.Name)
 
 		// Same defaultEnabled logic as ProfileCFCategories
 		defaultEnabled := group.Default == "true"
@@ -1125,7 +1132,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 		})
 	}
 	sort.Slice(categories, func(i, j int) bool {
-		return getCategoryOrder(categories[i].Category) < getCategoryOrder(categories[j].Category)
+		return GetCategoryOrder(categories[i].Category) < GetCategoryOrder(categories[j].Category)
 	})
 
 	var sets []string
@@ -1254,7 +1261,7 @@ func parseJSON[T any](path string) (*T, error) {
 }
 
 // GetAppData returns AppData from a stable snapshot (safe for use after call returns).
-func (ts *trashStore) GetAppData(app string) *AppData {
+func (ts *TrashStore) GetAppData(app string) *AppData {
 	snap := ts.Snapshot()
 	return SnapshotAppData(snap, app)
 }
@@ -1440,12 +1447,12 @@ func ProfileCFGroups(ad *AppData, profileTrashID string) (required []ProfileCFGr
 
 // CategoryCFGroup is a CF group with its category parsed from the name prefix.
 type CategoryCFGroup struct {
-	Name             string                `json:"name"`             // "[Audio] Audio Formats"
-	ShortName        string                `json:"shortName"`        // "Audio Formats"
-	Category         string                `json:"category"`         // "Audio"
+	Name             string                `json:"name"`      // "[Audio] Audio Formats"
+	ShortName        string                `json:"shortName"` // "Audio Formats"
+	Category         string                `json:"category"`  // "Audio"
 	TrashDescription string                `json:"trashDescription"`
-	DefaultEnabled   bool                  `json:"defaultEnabled"`   // group.Default == "true"
-	Exclusive        bool                  `json:"exclusive"`        // only one CF can be active (Golden Rule)
+	DefaultEnabled   bool                  `json:"defaultEnabled"` // group.Default == "true"
+	Exclusive        bool                  `json:"exclusive"`      // only one CF can be active (Golden Rule)
 	CFs              []ProfileCFGroupEntry `json:"cfs"`
 }
 
@@ -1457,7 +1464,7 @@ type CFCategory struct {
 
 // parseCategoryPrefix extracts "[Category] Short Name" from a group name.
 // Returns (category, shortName). If no prefix found, returns ("Other", fullName).
-func parseCategoryPrefix(name string) (string, string) {
+func ParseCategoryPrefix(name string) (string, string) {
 	if !strings.HasPrefix(name, "[") {
 		return "Other", name
 	}
@@ -1487,7 +1494,7 @@ func parseCategoryPrefix(name string) (string, string) {
 }
 
 // getCategoryOrder returns the display order for a CF category.
-func getCategoryOrder(cat string) int {
+func GetCategoryOrder(cat string) int {
 	switch cat {
 	case "Golden Rule":
 		return 0
@@ -1577,7 +1584,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 			continue
 		}
 
-		category, shortName := parseCategoryPrefix(group.Name)
+		category, shortName := ParseCategoryPrefix(group.Name)
 
 		// For Streaming Services, only "General" is enabled by default
 		defaultEnabled := group.Default == "true"
@@ -1652,7 +1659,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 	}
 
 	sort.Slice(categories, func(i, j int) bool {
-		return getCategoryOrder(categories[i].Category) < getCategoryOrder(categories[j].Category)
+		return GetCategoryOrder(categories[i].Category) < GetCategoryOrder(categories[j].Category)
 	})
 
 	return categories
@@ -1716,7 +1723,7 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 			continue
 		}
 
-		category, shortName := parseCategoryPrefix(group.Name)
+		category, shortName := ParseCategoryPrefix(group.Name)
 
 		defaultEnabled := group.Default == "true"
 		if category == "Streaming Services" && shortName != "General" {
@@ -1773,8 +1780,8 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 
 	// Sort groups by category order, then defaultEnabled first, then name
 	sort.Slice(groups, func(i, j int) bool {
-		oi := getCategoryOrder(groups[i].Category)
-		oj := getCategoryOrder(groups[j].Category)
+		oi := GetCategoryOrder(groups[i].Category)
+		oj := GetCategoryOrder(groups[j].Category)
 		if oi != oj {
 			return oi < oj
 		}
@@ -1899,7 +1906,7 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 			}
 		}
 
-		category, shortName := parseCategoryPrefix(group.Name)
+		category, shortName := ParseCategoryPrefix(group.Name)
 
 		exclusive := strings.Contains(strings.ToLower(group.TrashDescription), "only score or enable one") ||
 			strings.Contains(strings.ToLower(group.TrashDescription), "only enable one")
@@ -1954,8 +1961,8 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 
 	// Sort groups by category order, then name
 	sort.Slice(groups, func(i, j int) bool {
-		oi := getCategoryOrder(groups[i].Category)
-		oj := getCategoryOrder(groups[j].Category)
+		oi := GetCategoryOrder(groups[i].Category)
+		oj := GetCategoryOrder(groups[j].Category)
 		if oi != oj {
 			return oi < oj
 		}
@@ -2053,7 +2060,6 @@ func ResolveProfileCFs(ad *AppData, profileTrashID string) ([]ResolvedCF, string
 
 	return resolved, scoreCtx
 }
-
 
 // categorizeCFByName returns a category for a CF based on its name,
 // matching TRaSH's collection-of-custom-formats page structure.
@@ -2156,4 +2162,3 @@ func categorizeCFByName(name string) string {
 
 	return "Other"
 }
-

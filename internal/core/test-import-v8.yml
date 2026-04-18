@@ -1,0 +1,21 @@
+# V8 Recyclarr YAML
+radarr:
+  my_instance:
+    quality_profiles:
+      - name: "V8 Profile"
+        reset_unmatched_scores:
+          enabled: true
+        upgrade:
+          allowed: true
+          until_quality: "Bluray-1080p"
+          until_score: 1000
+        min_format_score: 10
+        qualities:
+          - name: "Bluray-1080p"
+          - name: "WEBDL-1080p"
+    custom_formats:
+      - trash_ids:
+          - 496f35551f19a02d59ad0c18d1f2a36b # Audio: FLAC
+        assign_scores_to:
+          - name: "V8 Profile"
+            score: 10

@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"encoding/json"
@@ -237,4 +237,3 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 	}
 	return os.Rename(tmp, path)
 }
-

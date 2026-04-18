@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"fmt"
@@ -7,11 +7,11 @@ import (
 )
 
 func TestParseRecyclarrClassic(t *testing.T) {
-	data, err := os.ReadFile("../test-import-classic.yml")
+	data, err := os.ReadFile("test-import-classic.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	profiles, err := parseRecyclarrYAML(data, nil, "")
+	profiles, err := ParseRecyclarrYAML(data, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,11 +32,11 @@ func TestParseRecyclarrClassic(t *testing.T) {
 }
 
 func TestParseRecyclarrV8(t *testing.T) {
-	data, err := os.ReadFile("../test-import-v8.yml")
+	data, err := os.ReadFile("test-import-v8.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	profiles, err := parseRecyclarrYAML(data, nil, "")
+	profiles, err := ParseRecyclarrYAML(data, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

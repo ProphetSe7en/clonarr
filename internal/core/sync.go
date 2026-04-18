@@ -1,6 +1,7 @@
-package main
+package core
 
 import (
+	"clonarr/internal/arr"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,8 +9,33 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// C5: Per-instance sync mutex prevents parallel applies creating duplicates
+var syncMutexes sync.Map // instance ID → *sync.Mutex
+
+func (app *App) GetSyncMutex(instanceID string) *sync.Mutex {
+	v, _ := syncMutexes.LoadOrStore(instanceID, &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
+// GetLastSyncedCFs returns the CF snapshot from the previous sync for "add_new" mode.
+// Returns nil if not needed (behavior is not "add_new") or no history exists.
+func (app *App) GetLastSyncedCFs(instanceID string, arrProfileID int, behavior *SyncBehavior) []string {
+	b := ResolveSyncBehavior(behavior)
+	if b.AddMode != "add_new" {
+		return nil
+	}
+	history := app.Config.GetSyncHistory(instanceID)
+	for _, h := range history {
+		if h.ArrProfileID == arrProfileID {
+			return h.SyncedCFs
+		}
+	}
+	return nil // no history = first sync, all CFs are "new"
+}
 
 // --- Sync Plan Types ---
 
@@ -63,22 +89,22 @@ type SyncSummary struct {
 	CFsToCreate     int  `json:"cfsToCreate"`
 	CFsToUpdate     int  `json:"cfsToUpdate"`
 	QualityChanged  bool `json:"qualityChanged,omitempty"` // quality items differ from TRaSH
-	CFsUnchanged    int `json:"cfsUnchanged"`
-	ScoresToSet     int `json:"scoresToSet"`
-	ScoresUnchanged int `json:"scoresUnchanged"`
-	ScoresToZero    int `json:"scoresToZero"` // extra CFs that will be zeroed out
+	CFsUnchanged    int  `json:"cfsUnchanged"`
+	ScoresToSet     int  `json:"scoresToSet"`
+	ScoresUnchanged int  `json:"scoresUnchanged"`
+	ScoresToZero    int  `json:"scoresToZero"` // extra CFs that will be zeroed out
 }
 
 // --- Sync Request ---
 
 // SyncRequest is the input for a dry-run or apply operation.
 type SyncRequest struct {
-	InstanceID        string         `json:"instanceId"`
-	ProfileTrashID    string         `json:"profileTrashId"`
-	ImportedProfileID string         `json:"importedProfileId,omitempty"` // alternative: sync from imported/custom profile
-	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
-	ProfileName       string         `json:"profileName"`                 // custom name for new profile (optional)
-	SelectedCFs       []string       `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
+	InstanceID        string          `json:"instanceId"`
+	ProfileTrashID    string          `json:"profileTrashId"`
+	ImportedProfileID string          `json:"importedProfileId,omitempty"` // alternative: sync from imported/custom profile
+	ArrProfileID      int             `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
+	ProfileName       string          `json:"profileName"`                 // custom name for new profile (optional)
+	SelectedCFs       []string        `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
 	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
 	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
 	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
@@ -196,7 +222,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	}
 
 	// Connect to Arr instance
-	client := NewArrClient(instance.URL, instance.APIKey, httpClient)
+	client := arr.NewArrClient(instance.URL, instance.APIKey, httpClient)
 
 	// Fetch existing CFs
 	existingCFs, err := client.ListCustomFormats()
@@ -205,7 +231,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	}
 
 	// Build name → existing CF map (case-insensitive keys for matching)
-	existingByName := make(map[string]*ArrCF)
+	existingByName := make(map[string]*arr.ArrCF)
 	for i := range existingCFs {
 		existingByName[strings.ToLower(existingCFs[i].Name)] = &existingCFs[i]
 	}
@@ -235,15 +261,15 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	// Compare each CF in the merged set
 	for cfTrashID := range allCFTrashIDs {
 		var cfName string
-		var specsMatch func(existing *ArrCF) bool
+		var specsMatch func(existing *arr.ArrCF) bool
 
 		if trashCF, ok := ad.CustomFormats[cfTrashID]; ok {
 			cfName = trashCF.Name
-			specsMatch = func(existing *ArrCF) bool { return cfSpecsMatch(trashCF, existing) }
+			specsMatch = func(existing *arr.ArrCF) bool { return cfSpecsMatch(trashCF, existing) }
 		} else if ccf, ok := customCFMap[cfTrashID]; ok {
 			cfName = ccf.Name
 			arrCF := customCFToArr(ccf)
-			specsMatch = func(existing *ArrCF) bool { return arrCFSpecsMatch(arrCF, existing) }
+			specsMatch = func(existing *arr.ArrCF) bool { return arrCFSpecsMatch(arrCF, existing) }
 		} else {
 			log.Printf("Warning: CF %s referenced by profile but not found", cfTrashID)
 			continue
@@ -298,7 +324,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			return nil, fmt.Errorf("list profiles: %w", err)
 		}
 
-		var targetProfile *ArrQualityProfile
+		var targetProfile *arr.ArrQualityProfile
 		for i := range arrProfiles {
 			if arrProfiles[i].ID == req.ArrProfileID {
 				targetProfile = &arrProfiles[i]
@@ -450,7 +476,9 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			}
 			if req.Overrides.MinUpgradeFormatScore != nil {
 				v := *req.Overrides.MinUpgradeFormatScore
-				if v < 1 { v = 1 }
+				if v < 1 {
+					v = 1
+				}
 				desiredMinUpgradeFormatScore = v
 			}
 			if req.Overrides.CutoffFormatScore != nil {
@@ -498,13 +526,17 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			oldAllowed := make(map[string]bool)
 			for _, item := range targetProfile.Items {
 				name := item.Name
-				if name == "" && item.Quality != nil { name = item.Quality.Name }
-				if name != "" { oldAllowed[name] = item.Allowed }
+				if name == "" && item.Quality != nil {
+					name = item.Quality.Name
+				}
+				if name != "" {
+					oldAllowed[name] = item.Allowed
+				}
 			}
 			// Resolve desired quality items to get Allowed state
 			qualityDefs, err := client.ListQualityDefinitions()
 			if err == nil {
-				qualityByName := make(map[string]*ArrQualityDefinition)
+				qualityByName := make(map[string]*arr.ArrQualityDefinition)
 				for i := range qualityDefs {
 					qualityByName[qualityDefs[i].Quality.Name] = &qualityDefs[i]
 				}
@@ -514,7 +546,9 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 					if len(req.QualityStructure) == 0 && len(req.QualityOverrides) > 0 {
 						for i := range newItems {
 							name := newItems[i].Name
-							if name == "" && newItems[i].Quality != nil { name = newItems[i].Quality.Name }
+							if name == "" && newItems[i].Quality != nil {
+								name = newItems[i].Quality.Name
+							}
 							if override, ok := req.QualityOverrides[name]; ok {
 								newItems[i].Allowed = override
 							}
@@ -522,8 +556,12 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 					}
 					for _, item := range newItems {
 						name := item.Name
-						if name == "" && item.Quality != nil { name = item.Quality.Name }
-						if name == "" { continue }
+						if name == "" && item.Quality != nil {
+							name = item.Quality.Name
+						}
+						if name == "" {
+							continue
+						}
 						oldState, exists := oldAllowed[name]
 						if exists && oldState != item.Allowed {
 							suffix := ""
@@ -672,7 +710,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 	}
 
-	client := NewArrClient(instance.URL, instance.APIKey, httpClient)
+	client := arr.NewArrClient(instance.URL, instance.APIKey, httpClient)
 	result := &SyncResult{Errors: []string{}}
 
 	// Track created CF name → Arr ID for score assignment
@@ -680,9 +718,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 
 	// Apply CF creates/updates
 	for _, action := range plan.CFActions {
-		var arrCF *ArrCF
+		var arrCF *arr.ArrCF
 		if trashCF, ok := ad.CustomFormats[action.TrashID]; ok {
-			arrCF = trashCFToArr(trashCF)
+			arrCF = TrashCFToArr(trashCF)
 		} else if ccf, ok := customCFMap[action.TrashID]; ok {
 			arrCF = customCFToArr(ccf)
 		} else {
@@ -749,7 +787,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			return result, nil
 		}
 
-		var languages []ArrLanguage
+		var languages []arr.ArrLanguage
 		if instance.Type == "radarr" {
 			languages, err = client.ListLanguages()
 			if err != nil {
@@ -771,7 +809,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 
 		// Apply user overrides to created profile
 		if req.Overrides != nil {
-			log.Printf("Sync: applying overrides to new profile — %s", overrideSummary(req.Overrides))
+			log.Printf("Sync: applying overrides to new profile — %s", OverrideSummary(req.Overrides))
 			if req.Overrides.UpgradeAllowed != nil {
 				arrProfile.UpgradeAllowed = *req.Overrides.UpgradeAllowed
 			}
@@ -870,7 +908,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			return result, nil
 		}
 
-		var targetProfile *ArrQualityProfile
+		var targetProfile *arr.ArrQualityProfile
 		for i := range arrProfiles {
 			if arrProfiles[i].ID == req.ArrProfileID {
 				targetProfile = &arrProfiles[i]
@@ -915,7 +953,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 		// Apply user overrides (if any)
 		if req.Overrides != nil {
-			log.Printf("Sync: applying overrides — %s", overrideSummary(req.Overrides))
+			log.Printf("Sync: applying overrides — %s", OverrideSummary(req.Overrides))
 			if req.Overrides.UpgradeAllowed != nil {
 				targetProfile.UpgradeAllowed = *req.Overrides.UpgradeAllowed
 			}
@@ -1032,7 +1070,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					break
 				}
 			}
-			targetProfile.FormatItems = append(targetProfile.FormatItems, ArrProfileFormatItem{
+			targetProfile.FormatItems = append(targetProfile.FormatItems, arr.ArrProfileFormatItem{
 				Format: cfID,
 				Name:   name,
 				Score:  score,
@@ -1075,7 +1113,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 				log.Printf("Sync: failed to fetch quality defs: %v", err)
 				result.Errors = append(result.Errors, fmt.Sprintf("fetch quality defs: %v", err))
 			} else {
-				qualityByName := make(map[string]*ArrQualityDefinition)
+				qualityByName := make(map[string]*arr.ArrQualityDefinition)
 				for i := range qualityDefs {
 					qualityByName[qualityDefs[i].Quality.Name] = &qualityDefs[i]
 				}
@@ -1083,8 +1121,12 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 				oldAllowed := make(map[string]bool)
 				for _, item := range targetProfile.Items {
 					name := item.Name
-					if name == "" && item.Quality != nil { name = item.Quality.Name }
-					if name != "" { oldAllowed[name] = item.Allowed }
+					if name == "" && item.Quality != nil {
+						name = item.Quality.Name
+					}
+					if name != "" {
+						oldAllowed[name] = item.Allowed
+					}
 				}
 
 				// Source: structure override trumps TRaSH items.
@@ -1103,7 +1145,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					if !usingStructureOverride && len(req.QualityOverrides) > 0 {
 						for i := range newItems {
 							name := newItems[i].Name
-							if name == "" && newItems[i].Quality != nil { name = newItems[i].Quality.Name }
+							if name == "" && newItems[i].Quality != nil {
+								name = newItems[i].Quality.Name
+							}
 							if override, ok := req.QualityOverrides[name]; ok {
 								newItems[i].Allowed = override
 							}
@@ -1113,8 +1157,12 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					// Track quality changes (comparing Arr state vs desired final state)
 					for _, item := range newItems {
 						name := item.Name
-						if name == "" && item.Quality != nil { name = item.Quality.Name }
-						if name == "" { continue }
+						if name == "" && item.Quality != nil {
+							name = item.Quality.Name
+						}
+						if name == "" {
+							continue
+						}
 						oldState, exists := oldAllowed[name]
 						if exists && oldState != item.Allowed {
 							suffix := ""
@@ -1130,12 +1178,12 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					}
 					usedQualities := make(map[int]bool)
 					collectUsedQualities(newItems, usedQualities)
-					unused := make([]ArrQualityItem, 0)
+					unused := make([]arr.ArrQualityItem, 0)
 					for _, def := range qualityDefs {
 						if !usedQualities[def.Quality.ID] {
-							unused = append(unused, ArrQualityItem{
-								Quality: &ArrQualityRef{ID: def.Quality.ID, Name: def.Quality.Name},
-								Items:   []ArrQualityItem{},
+							unused = append(unused, arr.ArrQualityItem{
+								Quality: &arr.ArrQualityRef{ID: def.Quality.ID, Name: def.Quality.Name},
+								Items:   []arr.ArrQualityItem{},
 								Allowed: false,
 							})
 						}
@@ -1196,7 +1244,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			if cutoffName != "" {
 				for _, item := range targetProfile.Items {
 					name := item.Name
-					if name == "" && item.Quality != nil { name = item.Quality.Name }
+					if name == "" && item.Quality != nil {
+						name = item.Quality.Name
+					}
 					if name == cutoffName && item.Allowed {
 						cutoffAllowed = true
 						break
@@ -1294,17 +1344,17 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 func BuildArrProfile(
 	profile *TrashQualityProfile,
 	ad *AppData,
-	qualityDefs []ArrQualityDefinition,
-	languages []ArrLanguage,
+	qualityDefs []arr.ArrQualityDefinition,
+	languages []arr.ArrLanguage,
 	cfNameToID map[string]int,
 	selectedCFs map[string]bool,
 	profileName string,
 	cfScoreOverrides map[string]int,
 	customCFs []CustomCF,
 	qualityStructureOverride []QualityItem,
-) (*ArrQualityProfile, error) {
+) (*arr.ArrQualityProfile, error) {
 	// Build quality name → definition map
-	qualityByName := make(map[string]*ArrQualityDefinition)
+	qualityByName := make(map[string]*arr.ArrQualityDefinition)
 	for i := range qualityDefs {
 		qualityByName[qualityDefs[i].Quality.Name] = &qualityDefs[i]
 	}
@@ -1326,18 +1376,18 @@ func BuildArrProfile(
 	// So: unused qualities first, then profile items in reverse order (highest priority last)
 	usedQualities := make(map[int]bool)
 	collectUsedQualities(items, usedQualities)
-	unused := make([]ArrQualityItem, 0)
+	unused := make([]arr.ArrQualityItem, 0)
 	for _, def := range qualityDefs {
 		if !usedQualities[def.Quality.ID] {
-			unused = append(unused, ArrQualityItem{
-				Quality: &ArrQualityRef{
+			unused = append(unused, arr.ArrQualityItem{
+				Quality: &arr.ArrQualityRef{
 					ID:         def.Quality.ID,
 					Name:       def.Quality.Name,
 					Source:     def.Quality.Source,
 					Resolution: def.Quality.Resolution,
 					Modifier:   def.Quality.Modifier,
 				},
-				Items:   []ArrQualityItem{},
+				Items:   []arr.ArrQualityItem{},
 				Allowed: false,
 			})
 		}
@@ -1408,7 +1458,7 @@ func BuildArrProfile(
 
 	customCFMap := buildCustomCFMap(customCFs)
 
-	formatItems := make([]ArrProfileFormatItem, 0)
+	formatItems := make([]arr.ArrProfileFormatItem, 0)
 	for trashID := range allTrashIDs {
 		var cfName string
 		var score int
@@ -1427,7 +1477,7 @@ func BuildArrProfile(
 		if !ok {
 			continue
 		}
-		formatItems = append(formatItems, ArrProfileFormatItem{
+		formatItems = append(formatItems, arr.ArrProfileFormatItem{
 			Format: arrID,
 			Name:   cfName,
 			Score:  score,
@@ -1441,7 +1491,7 @@ func BuildArrProfile(
 	}
 	for cfName, cfID := range cfNameToID {
 		if !includedCFs[cfID] {
-			formatItems = append(formatItems, ArrProfileFormatItem{
+			formatItems = append(formatItems, arr.ArrProfileFormatItem{
 				Format: cfID,
 				Name:   cfName,
 				Score:  0,
@@ -1450,9 +1500,9 @@ func BuildArrProfile(
 	}
 
 	// Resolve language (Radarr only)
-	var lang *ArrLanguage
+	var lang *arr.ArrLanguage
 	if languages != nil {
-		langByName := make(map[string]*ArrLanguage)
+		langByName := make(map[string]*arr.ArrLanguage)
 		for i := range languages {
 			langByName[strings.ToLower(languages[i].Name)] = &languages[i]
 		}
@@ -1482,7 +1532,7 @@ func BuildArrProfile(
 		minUpgrade = 1 // Arr requires minimum 1
 	}
 
-	return &ArrQualityProfile{
+	return &arr.ArrQualityProfile{
 		Name:                  name,
 		UpgradeAllowed:        profile.UpgradeAllowed,
 		Cutoff:                cutoffID,
@@ -1499,8 +1549,8 @@ func BuildArrProfile(
 // Unknown quality names are skipped with a log warning instead of failing the entire sync —
 // this handles cases like group names ("WEB 2160p") appearing without sub-items, or
 // cross-type quality names (Radarr quality in a Sonarr profile). Fixes GitHub issue #10.
-func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*ArrQualityDefinition) ([]ArrQualityItem, error) {
-	items := make([]ArrQualityItem, 0, len(trashItems))
+func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*arr.ArrQualityDefinition) ([]arr.ArrQualityItem, error) {
+	items := make([]arr.ArrQualityItem, 0, len(trashItems))
 	groupID := 1000
 
 	for _, ti := range trashItems {
@@ -1511,40 +1561,40 @@ func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*Arr
 				log.Printf("Quality %q not found in definitions — skipping (may be a group name without sub-items or wrong app type)", ti.Name)
 				continue
 			}
-			items = append(items, ArrQualityItem{
-				Quality: &ArrQualityRef{
+			items = append(items, arr.ArrQualityItem{
+				Quality: &arr.ArrQualityRef{
 					ID:         def.Quality.ID,
 					Name:       def.Quality.Name,
 					Source:     def.Quality.Source,
 					Resolution: def.Quality.Resolution,
 					Modifier:   def.Quality.Modifier,
 				},
-				Items:   []ArrQualityItem{},
+				Items:   []arr.ArrQualityItem{},
 				Allowed: ti.Allowed,
 			})
 		} else {
 			// Quality group — resolve each sub-item, skip unknowns
-			nested := make([]ArrQualityItem, 0, len(ti.Items))
+			nested := make([]arr.ArrQualityItem, 0, len(ti.Items))
 			for _, subName := range ti.Items {
 				def, ok := qualityByName[subName]
 				if !ok {
 					log.Printf("Quality %q not found in definitions (group %q) — skipping member", subName, ti.Name)
 					continue
 				}
-				nested = append(nested, ArrQualityItem{
-					Quality: &ArrQualityRef{
+				nested = append(nested, arr.ArrQualityItem{
+					Quality: &arr.ArrQualityRef{
 						ID:         def.Quality.ID,
 						Name:       def.Quality.Name,
 						Source:     def.Quality.Source,
 						Resolution: def.Quality.Resolution,
 						Modifier:   def.Quality.Modifier,
 					},
-					Items:   []ArrQualityItem{},
+					Items:   []arr.ArrQualityItem{},
 					Allowed: true,
 				})
 			}
 			if len(nested) > 0 {
-				items = append(items, ArrQualityItem{
+				items = append(items, arr.ArrQualityItem{
 					ID:      groupID,
 					Name:    ti.Name,
 					Items:   nested,
@@ -1561,7 +1611,7 @@ func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*Arr
 }
 
 // collectUsedQualities recursively collects all quality IDs from resolved items.
-func collectUsedQualities(items []ArrQualityItem, used map[int]bool) {
+func collectUsedQualities(items []arr.ArrQualityItem, used map[int]bool) {
 	for _, item := range items {
 		if item.Quality != nil {
 			used[item.Quality.ID] = true
@@ -1572,7 +1622,7 @@ func collectUsedQualities(items []ArrQualityItem, used map[int]bool) {
 
 // resolveCutoff finds the numeric ID for a cutoff name within resolved quality items.
 // For groups: returns the group ID. For singles: returns the quality ID.
-func resolveCutoff(cutoffName string, items []ArrQualityItem) (int, error) {
+func resolveCutoff(cutoffName string, items []arr.ArrQualityItem) (int, error) {
 	for _, item := range items {
 		if item.Name == cutoffName && item.ID > 0 {
 			return item.ID, nil
@@ -1586,7 +1636,7 @@ func resolveCutoff(cutoffName string, items []ArrQualityItem) (int, error) {
 
 // cutoffIDToName reverse-resolves a cutoff ID to its display name.
 // Returns "#<id>" if no match is found.
-func cutoffIDToName(id int, items []ArrQualityItem) string {
+func cutoffIDToName(id int, items []arr.ArrQualityItem) string {
 	if id == 0 {
 		return "(none)"
 	}
@@ -1604,7 +1654,7 @@ func cutoffIDToName(id int, items []ArrQualityItem) string {
 // arrItemName returns the display name for an Arr quality item — group name if
 // it's a group, quality name if it's a flat item. Encapsulates the
 // "fall through to Quality.Name when Name is empty" pattern.
-func arrItemName(it ArrQualityItem) string {
+func arrItemName(it arr.ArrQualityItem) string {
 	if it.Name != "" {
 		return it.Name
 	}
@@ -1633,7 +1683,7 @@ func fpGroup(name string, allowed bool, members []string) string {
 // Arr quality-item tree capturing ordering, group structure, and allowed state.
 // This is what lets the sync detect drift the set-based diff misses: reorders,
 // regroups, and moving a quality in/out of a group with the same allowed state.
-func fingerprintArrItems(items []ArrQualityItem) string {
+func fingerprintArrItems(items []arr.ArrQualityItem) string {
 	parts := make([]string, 0, len(items))
 	for _, it := range items {
 		if len(it.Items) > 0 || (it.Name != "" && it.Quality == nil) {
@@ -1668,7 +1718,7 @@ func fingerprintTrashItems(items []QualityItem) string {
 // groups (always kept — a stale group surfaces as drift), plus flat qualities
 // whose name appears in the desired set. Drops the "unused" tail so fingerprint
 // comparisons are insensitive to Radarr's API response ordering of unused items.
-func filterArrItemsToDesired(arrItems []ArrQualityItem, desired []QualityItem) []ArrQualityItem {
+func filterArrItemsToDesired(arrItems []arr.ArrQualityItem, desired []QualityItem) []arr.ArrQualityItem {
 	desiredNames := make(map[string]bool, len(desired)*2)
 	for _, it := range desired {
 		if it.Name != "" {
@@ -1678,7 +1728,7 @@ func filterArrItemsToDesired(arrItems []ArrQualityItem, desired []QualityItem) [
 			desiredNames[sub] = true
 		}
 	}
-	out := make([]ArrQualityItem, 0, len(arrItems))
+	out := make([]arr.ArrQualityItem, 0, len(arrItems))
 	for _, it := range arrItems {
 		if len(it.Items) > 0 {
 			out = append(out, it)
@@ -1695,21 +1745,21 @@ func filterArrItemsToDesired(arrItems []ArrQualityItem, desired []QualityItem) [
 
 // cfSpecsMatch compares a TRaSH CF against an existing Arr CF.
 // Returns true if they're functionally equivalent.
-func cfSpecsMatch(trash *TrashCF, arr *ArrCF) bool {
-	if trash.Name != arr.Name {
+func cfSpecsMatch(trash *TrashCF, arrCF *arr.ArrCF) bool {
+	if trash.Name != arrCF.Name {
 		return false
 	}
-	if trash.IncludeInRename != arr.IncludeCustomFormatWhenRenaming {
+	if trash.IncludeInRename != arrCF.IncludeCustomFormatWhenRenaming {
 		return false
 	}
-	if len(trash.Specifications) != len(arr.Specifications) {
+	if len(trash.Specifications) != len(arrCF.Specifications) {
 		return false
 	}
 
 	// Build map of arr specs by name for matching
-	arrSpecs := make(map[string]*ArrSpecification)
-	for i := range arr.Specifications {
-		arrSpecs[arr.Specifications[i].Name] = &arr.Specifications[i]
+	arrSpecs := make(map[string]*arr.ArrSpecification)
+	for i := range arrCF.Specifications {
+		arrSpecs[arrCF.Specifications[i].Name] = &arrCF.Specifications[i]
 	}
 
 	for _, trashSpec := range trash.Specifications {
@@ -1728,8 +1778,8 @@ func cfSpecsMatch(trash *TrashCF, arr *ArrCF) bool {
 		}
 
 		// Compare field values
-		trashVal := extractFieldValue(trashSpec.Fields)
-		arrVal := extractFieldValue(arrSpec.Fields)
+		trashVal := ExtractFieldValue(trashSpec.Fields)
+		arrVal := ExtractFieldValue(arrSpec.Fields)
 		if !valuesEqual(trashVal, arrVal) {
 			return false
 		}
@@ -1789,20 +1839,20 @@ func findProfile(ad *AppData, trashID string) *TrashQualityProfile {
 
 // --- Custom CF helpers for sync ---
 
-// customCFToArr converts a CustomCF (specs already in Arr format) to an ArrCF for create/update.
-func customCFToArr(cf *CustomCF) *ArrCF {
+// customCFToArr converts a CustomCF (specs already in Arr format) to an arr.ArrCF for create/update.
+func customCFToArr(cf *CustomCF) *arr.ArrCF {
 	// Convert specification fields to Arr format (TRaSH {"value":X} → Arr [{"name":"value","value":X}])
-	specs := make([]ArrSpecification, len(cf.Specifications))
+	specs := make([]arr.ArrSpecification, len(cf.Specifications))
 	for i, spec := range cf.Specifications {
-		specs[i] = ArrSpecification{
+		specs[i] = arr.ArrSpecification{
 			Name:           spec.Name,
 			Implementation: spec.Implementation,
 			Negate:         spec.Negate,
 			Required:       spec.Required,
-			Fields:         convertFieldsToArr(spec.Fields),
+			Fields:         ConvertFieldsToArr(spec.Fields),
 		}
 	}
-	return &ArrCF{
+	return &arr.ArrCF{
 		Name:                            cf.Name,
 		IncludeCustomFormatWhenRenaming: cf.IncludeInRename,
 		Specifications:                  specs,
@@ -1810,7 +1860,7 @@ func customCFToArr(cf *CustomCF) *ArrCF {
 }
 
 // arrCFSpecsMatch compares two ArrCFs for functional equivalence (for custom CF comparison).
-func arrCFSpecsMatch(a, b *ArrCF) bool {
+func arrCFSpecsMatch(a, b *arr.ArrCF) bool {
 	if a.Name != b.Name {
 		return false
 	}
@@ -1821,7 +1871,7 @@ func arrCFSpecsMatch(a, b *ArrCF) bool {
 		return false
 	}
 
-	bSpecs := make(map[string]*ArrSpecification)
+	bSpecs := make(map[string]*arr.ArrSpecification)
 	for i := range b.Specifications {
 		bSpecs[b.Specifications[i].Name] = &b.Specifications[i]
 	}
@@ -1840,8 +1890,8 @@ func arrCFSpecsMatch(a, b *ArrCF) bool {
 		if aSpec.Required != bSpec.Required {
 			return false
 		}
-		aVal := extractFieldValue(aSpec.Fields)
-		bVal := extractFieldValue(bSpec.Fields)
+		aVal := ExtractFieldValue(aSpec.Fields)
+		bVal := ExtractFieldValue(bSpec.Fields)
 		if !valuesEqual(aVal, bVal) {
 			return false
 		}

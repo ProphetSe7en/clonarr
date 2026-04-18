@@ -1,0 +1,18 @@
+# Classic Recyclarr YAML
+radarr:
+  my_instance:
+    quality_profiles:
+      - name: "Classic Profile"
+        upgrade:
+          allowed: true
+          until_quality: "Bluray-1080p"
+        min_format_score: 10
+        qualities:
+          - name: "Bluray-1080p"
+    custom_formats:
+      - trash_ids:
+          - 496f35551f19a02d59ad0c18d1f2a36b # Audio: FLAC
+          - d48721c5dbcd6c6cd8ba6dbcfb7fc76f # Audio: Opus
+        assign_scores_to:
+          - name: "Classic Profile"
+            score: 10

@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"crypto/rand"
@@ -14,11 +14,11 @@ import (
 type Config struct {
 	Instances            []Instance                       `json:"instances"`
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
-	PullInterval         string                           `json:"pullInterval"` // Go duration (e.g. "24h", "1h", "0" to disable)
-	DevMode              bool                             `json:"devMode"`      // Enable TRaSH developer tools (TRaSH JSON export)
-	DebugLogging         bool                             `json:"debugLogging"` // Write detailed operations to /config/debug.log
+	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h", "0" to disable)
+	DevMode              bool                             `json:"devMode"`                        // Enable TRaSH developer tools (TRaSH JSON export)
+	DebugLogging         bool                             `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
 	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
-	QualitySizeAutoSync  map[string]QSAutoSync             `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
+	QualitySizeAutoSync  map[string]QSAutoSync            `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
 	SyncHistory          []SyncHistoryEntry               `json:"syncHistory,omitempty"`
 	CleanupKeep          map[string][]string              `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
 	AutoSync             AutoSyncConfig                   `json:"autoSync,omitempty"`
@@ -40,13 +40,13 @@ type ProwlarrConfig struct {
 
 // AutoSyncConfig holds global auto-sync settings and rules.
 type AutoSyncConfig struct {
-	Enabled            bool           `json:"enabled"`
-	NotifyOnSuccess       bool           `json:"notifyOnSuccess"`
-	NotifyOnFailure       bool           `json:"notifyOnFailure"`
-	NotifyOnRepoUpdate    bool           `json:"notifyOnRepoUpdate"`
-	DiscordEnabled        *bool          `json:"discordEnabled,omitempty"` // pointer: nil = not yet set, defaults to true
-	DiscordWebhook        string         `json:"discordWebhook,omitempty"`
-	DiscordWebhookUpdates string         `json:"discordWebhookUpdates,omitempty"` // separate webhook for TRaSH repo updates (falls back to main if empty)
+	Enabled               bool   `json:"enabled"`
+	NotifyOnSuccess       bool   `json:"notifyOnSuccess"`
+	NotifyOnFailure       bool   `json:"notifyOnFailure"`
+	NotifyOnRepoUpdate    bool   `json:"notifyOnRepoUpdate"`
+	DiscordEnabled        *bool  `json:"discordEnabled,omitempty"` // pointer: nil = not yet set, defaults to true
+	DiscordWebhook        string `json:"discordWebhook,omitempty"`
+	DiscordWebhookUpdates string `json:"discordWebhookUpdates,omitempty"` // separate webhook for TRaSH repo updates (falls back to main if empty)
 	// Gotify
 	GotifyEnabled          bool   `json:"gotifyEnabled"`
 	GotifyURL              string `json:"gotifyUrl,omitempty"`
@@ -58,30 +58,30 @@ type AutoSyncConfig struct {
 	GotifyWarningValue     *int   `json:"gotifyWarningValue,omitempty"`
 	GotifyInfoValue        *int   `json:"gotifyInfoValue,omitempty"`
 	// Pushover
-	PushoverEnabled  bool   `json:"pushoverEnabled"`
-	PushoverUserKey  string `json:"pushoverUserKey,omitempty"`
-	PushoverAppToken string `json:"pushoverAppToken,omitempty"`
-	Rules                    []AutoSyncRule `json:"rules,omitempty"`
+	PushoverEnabled  bool           `json:"pushoverEnabled"`
+	PushoverUserKey  string         `json:"pushoverUserKey,omitempty"`
+	PushoverAppToken string         `json:"pushoverAppToken,omitempty"`
+	Rules            []AutoSyncRule `json:"rules,omitempty"`
 }
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
-	ID                string         `json:"id"`
-	Enabled           bool           `json:"enabled"`
-	InstanceID        string         `json:"instanceId"`
-	ProfileSource     string         `json:"profileSource"`               // "trash" or "imported"
-	TrashProfileID    string         `json:"trashProfileId,omitempty"`
-	ImportedProfileID string         `json:"importedProfileId,omitempty"`
-	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to update
-	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
-	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
-	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
-	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
-	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
-	LastSyncError     string         `json:"lastSyncError,omitempty"`
+	ID                string          `json:"id"`
+	Enabled           bool            `json:"enabled"`
+	InstanceID        string          `json:"instanceId"`
+	ProfileSource     string          `json:"profileSource"` // "trash" or "imported"
+	TrashProfileID    string          `json:"trashProfileId,omitempty"`
+	ImportedProfileID string          `json:"importedProfileId,omitempty"`
+	ArrProfileID      int             `json:"arrProfileId"`               // target Arr profile to update
+	SelectedCFs       []string        `json:"selectedCFs,omitempty"`      // user's optional CF selections
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
+	Behavior          *SyncBehavior   `json:"behavior,omitempty"`         // sync behavior rules (nil = defaults)
+	Overrides         *SyncOverrides  `json:"overrides,omitempty"`        // user overrides (min score, language, cutoff, etc.)
+	LastSyncCommit    string          `json:"lastSyncCommit,omitempty"`
+	LastSyncTime      string          `json:"lastSyncTime,omitempty"`
+	LastSyncError     string          `json:"lastSyncError,omitempty"`
 }
 
 // SyncBehavior controls how the sync engine handles CF additions, score overrides, and removals.
@@ -150,25 +150,25 @@ func (c *SyncChanges) HasChanges() bool {
 
 // SyncHistoryEntry records a completed sync operation.
 type SyncHistoryEntry struct {
-	InstanceID        string            `json:"instanceId"`
-	InstanceType      string            `json:"instanceType,omitempty"` // "radarr" or "sonarr" — for orphan migration
-	ProfileTrashID    string            `json:"profileTrashId"`
-	ImportedProfileID string            `json:"importedProfileId,omitempty"`
-	ProfileName       string            `json:"profileName"`
-	ArrProfileID   int               `json:"arrProfileId"`
-	ArrProfileName string            `json:"arrProfileName"`
-	SyncedCFs      []string          `json:"syncedCFs"`
-	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
-	ScoreOverrides   map[string]int    `json:"scoreOverrides,omitempty"`
-	QualityOverrides map[string]bool   `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
-	QualityStructure []QualityItem     `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
-	Overrides        *SyncOverrides    `json:"overrides,omitempty"`
-	Behavior         *SyncBehavior     `json:"behavior,omitempty"`
-	CFsCreated       int               `json:"cfsCreated"`
-	CFsUpdated     int               `json:"cfsUpdated"`
-	ScoresUpdated  int               `json:"scoresUpdated"`
-	LastSync       string            `json:"lastSync"`
-	Changes        *SyncChanges      `json:"changes,omitempty"`
+	InstanceID        string          `json:"instanceId"`
+	InstanceType      string          `json:"instanceType,omitempty"` // "radarr" or "sonarr" — for orphan migration
+	ProfileTrashID    string          `json:"profileTrashId"`
+	ImportedProfileID string          `json:"importedProfileId,omitempty"`
+	ProfileName       string          `json:"profileName"`
+	ArrProfileID      int             `json:"arrProfileId"`
+	ArrProfileName    string          `json:"arrProfileName"`
+	SyncedCFs         []string        `json:"syncedCFs"`
+	SelectedCFs       map[string]bool `json:"selectedCFs,omitempty"`
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
+	Overrides         *SyncOverrides  `json:"overrides,omitempty"`
+	Behavior          *SyncBehavior   `json:"behavior,omitempty"`
+	CFsCreated        int             `json:"cfsCreated"`
+	CFsUpdated        int             `json:"cfsUpdated"`
+	ScoresUpdated     int             `json:"scoresUpdated"`
+	LastSync          string          `json:"lastSync"`
+	Changes           *SyncChanges    `json:"changes,omitempty"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.
@@ -198,22 +198,22 @@ func DefaultConfig() *Config {
 	}
 }
 
-// configStore manages thread-safe config access and persistence.
-type configStore struct {
+// ConfigStore manages thread-safe config access and persistence.
+type ConfigStore struct {
 	mu       sync.Mutex // single mutex for all reads, writes, and saves
 	config   *Config
 	filePath string
 }
 
-func newConfigStore(dir string) *configStore {
-	return &configStore{
+func NewConfigStore(dir string) *ConfigStore {
+	return &ConfigStore{
 		config:   DefaultConfig(),
 		filePath: filepath.Join(dir, "clonarr.json"),
 	}
 }
 
 // Load reads config from disk. If the file doesn't exist, keeps defaults.
-func (cs *configStore) Load() error {
+func (cs *ConfigStore) Load() error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -252,7 +252,7 @@ func (cs *configStore) Load() error {
 }
 
 // saveLocked writes config to disk. Must be called with mu held.
-func (cs *configStore) saveLocked() error {
+func (cs *ConfigStore) saveLocked() error {
 	data, err := json.MarshalIndent(cs.config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
@@ -272,7 +272,7 @@ func (cs *configStore) saveLocked() error {
 }
 
 // Get returns a deep copy of the current config.
-func (cs *configStore) Get() Config {
+func (cs *ConfigStore) Get() Config {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	cfg := *cs.config
@@ -398,7 +398,7 @@ func (cs *configStore) Get() Config {
 }
 
 // Set replaces the config and saves to disk.
-func (cs *configStore) Set(cfg *Config) error {
+func (cs *ConfigStore) Set(cfg *Config) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	cs.config = cfg
@@ -407,7 +407,7 @@ func (cs *configStore) Set(cfg *Config) error {
 
 // Update atomically reads, modifies, and saves the config.
 // The fn callback receives the live config pointer under the lock.
-func (cs *configStore) Update(fn func(*Config)) error {
+func (cs *ConfigStore) Update(fn func(*Config)) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	fn(cs.config)
@@ -415,7 +415,7 @@ func (cs *configStore) Update(fn func(*Config)) error {
 }
 
 // GetInstance returns an instance by ID.
-func (cs *configStore) GetInstance(id string) (Instance, bool) {
+func (cs *ConfigStore) GetInstance(id string) (Instance, bool) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for _, inst := range cs.config.Instances {
@@ -429,10 +429,10 @@ func (cs *configStore) GetInstance(id string) (Instance, bool) {
 // AddInstance adds a new instance with a generated ID.
 // If orphaned sync history/rules exist from a deleted instance with the same URL and type,
 // they are migrated to the new instance ID (preserves data across instance re-creation).
-func (cs *configStore) AddInstance(inst Instance) (Instance, error) {
+func (cs *ConfigStore) AddInstance(inst Instance) (Instance, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	inst.ID = generateID()
+	inst.ID = GenerateID()
 	// Find orphaned data from a deleted instance.
 	// Only migrate if exactly ONE orphan group exists (avoids cross-type contamination).
 	activeIDs := make(map[string]bool)
@@ -510,7 +510,7 @@ func (cs *configStore) AddInstance(inst Instance) (Instance, error) {
 }
 
 // UpdateInstance replaces an existing instance.
-func (cs *configStore) UpdateInstance(id string, inst Instance) (Instance, error) {
+func (cs *ConfigStore) UpdateInstance(id string, inst Instance) (Instance, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for i, existing := range cs.config.Instances {
@@ -524,7 +524,7 @@ func (cs *configStore) UpdateInstance(id string, inst Instance) (Instance, error
 }
 
 // DeleteInstance removes an instance by ID and cleans up associated sync history.
-func (cs *configStore) DeleteInstance(id string) error {
+func (cs *ConfigStore) DeleteInstance(id string) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	found := false
@@ -555,7 +555,7 @@ const maxSyncHistoryPerProfile = 10
 // LastSync timestamp on the most recent entry for that profile is updated (no new
 // entry created). Entries are stored newest-first so existing code that iterates
 // and breaks on first match automatically gets the latest.
-func (cs *configStore) UpsertSyncHistory(entry SyncHistoryEntry) error {
+func (cs *ConfigStore) UpsertSyncHistory(entry SyncHistoryEntry) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -594,7 +594,7 @@ func (cs *configStore) UpsertSyncHistory(entry SyncHistoryEntry) error {
 }
 
 // GetSyncHistory returns all sync history entries for an instance (newest-first).
-func (cs *configStore) GetSyncHistory(instanceID string) []SyncHistoryEntry {
+func (cs *ConfigStore) GetSyncHistory(instanceID string) []SyncHistoryEntry {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	var entries []SyncHistoryEntry
@@ -609,7 +609,7 @@ func (cs *configStore) GetSyncHistory(instanceID string) []SyncHistoryEntry {
 // GetLatestSyncEntry returns the most recent sync history entry for a specific
 // instance + arrProfile. Returns nil if no entry exists. Used by Compare, Builder
 // import, and other consumers that only need the current state.
-func (cs *configStore) GetLatestSyncEntry(instanceID string, arrProfileID int) *SyncHistoryEntry {
+func (cs *ConfigStore) GetLatestSyncEntry(instanceID string, arrProfileID int) *SyncHistoryEntry {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for _, sh := range cs.config.SyncHistory {
@@ -624,7 +624,7 @@ func (cs *configStore) GetLatestSyncEntry(instanceID string, arrProfileID int) *
 // GetProfileChangeHistory returns all history entries for a specific instance +
 // arrProfile pair, newest-first (includes the baseline no-change entry if present).
 // Used by the History tab.
-func (cs *configStore) GetProfileChangeHistory(instanceID string, arrProfileID int) []SyncHistoryEntry {
+func (cs *ConfigStore) GetProfileChangeHistory(instanceID string, arrProfileID int) []SyncHistoryEntry {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	var entries []SyncHistoryEntry
@@ -637,7 +637,7 @@ func (cs *configStore) GetProfileChangeHistory(instanceID string, arrProfileID i
 }
 
 // DeleteSyncHistory removes a sync history entry by instanceId + arrProfileId.
-func (cs *configStore) DeleteSyncHistory(instanceID string, arrProfileID int) error {
+func (cs *ConfigStore) DeleteSyncHistory(instanceID string, arrProfileID int) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for i, sh := range cs.config.SyncHistory {
@@ -651,7 +651,7 @@ func (cs *configStore) DeleteSyncHistory(instanceID string, arrProfileID int) er
 
 // migrateImportedProfiles moves any imported profiles from the old config
 // file (clonarr.json) to per-file storage in /config/profiles/.
-func migrateImportedProfiles(cs *configStore, ps *profileStore) {
+func MigrateImportedProfiles(cs *ConfigStore, ps *ProfileStore) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 
@@ -702,7 +702,7 @@ func migrateImportedProfiles(cs *configStore, ps *profileStore) {
 }
 
 // generateID creates a random hex string.
-func generateID() string {
+func GenerateID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return fmt.Sprintf("%x", b)

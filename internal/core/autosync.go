@@ -1,7 +1,8 @@
-package main
+package core
 
 import (
 	"bytes"
+	"clonarr/internal/arr"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,16 +14,16 @@ import (
 // autoSyncAfterPull runs after a successful TRaSH repo pull.
 // For each enabled rule, checks if the repo commit changed since last sync,
 // builds a dry-run plan, and applies if there are actual changes.
-func (app *App) autoSyncAfterPull() {
+func (app *App) AutoSyncAfterPull() {
 	// Clean up stale rules/history for Arr profiles that no longer exist
 	app.cleanupStaleRules()
 
-	cfg := app.config.Get()
+	cfg := app.Config.Get()
 	if len(cfg.AutoSync.Rules) == 0 {
 		return
 	}
 
-	currentCommit := app.trash.CurrentCommit()
+	currentCommit := app.Trash.CurrentCommit()
 	if currentCommit == "" {
 		return
 	}
@@ -45,7 +46,7 @@ func (app *App) autoSyncAfterPull() {
 // runAutoSyncRule evaluates and applies a single auto-sync rule.
 func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	// Re-check rule still exists (may have been deleted since snapshot was taken)
-	cfg := app.config.Get()
+	cfg := app.Config.Get()
 	ruleExists := false
 	for _, r := range cfg.AutoSync.Rules {
 		if r.ID == rule.ID && r.Enabled {
@@ -55,31 +56,31 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	}
 	if !ruleExists {
 		log.Printf("Auto-sync: skipping rule %s — removed or disabled since pull started", rule.ID)
-		app.debugLog.Logf(LogAutoSync, "Rule %s: skipped — removed or disabled since pull started", rule.ID)
+		app.DebugLog.Logf(LogAutoSync, "Rule %s: skipped — removed or disabled since pull started", rule.ID)
 		return
 	}
 
-	inst, ok := app.config.GetInstance(rule.InstanceID)
+	inst, ok := app.Config.GetInstance(rule.InstanceID)
 	if !ok {
 		log.Printf("Auto-sync: skipping rule %s — instance %s not found", rule.ID, rule.InstanceID)
-		app.debugLog.Logf(LogAutoSync, "Rule %s: skipped — instance %s not found", rule.ID, rule.InstanceID)
+		app.DebugLog.Logf(LogAutoSync, "Rule %s: skipped — instance %s not found", rule.ID, rule.InstanceID)
 		return
 	}
 
 	// Per-instance mutex — skip if manual sync is running
-	mu := getSyncMutex(inst.ID)
+	mu := app.GetSyncMutex(inst.ID)
 	if !mu.TryLock() {
 		log.Printf("Auto-sync: skipping rule %s — sync already in progress for %s", rule.ID, inst.Name)
-		app.debugLog.Logf(LogAutoSync, "Rule %s: skipped — sync already in progress for %s", rule.ID, inst.Name)
+		app.DebugLog.Logf(LogAutoSync, "Rule %s: skipped — sync already in progress for %s", rule.ID, inst.Name)
 		return
 	}
 	defer mu.Unlock()
 
 	log.Printf("Auto-sync: evaluating rule %s (instance=%s, profile=%s)", rule.ID, inst.Name, rule.TrashProfileID)
-	app.debugLog.Logf(LogAutoSync, "Rule %s: evaluating %q → %s (arrProfileId=%d, overrides=%v)",
+	app.DebugLog.Logf(LogAutoSync, "Rule %s: evaluating %q → %s (arrProfileId=%d, overrides=%v)",
 		rule.ID, rule.TrashProfileID, inst.Name, rule.ArrProfileID, rule.Overrides != nil)
 
-	ad := app.trash.GetAppData(inst.Type)
+	ad := app.Trash.GetAppData(inst.Type)
 	if ad == nil {
 		app.updateAutoSyncRuleError(rule.ID, "no TRaSH data for "+inst.Type)
 		return
@@ -87,15 +88,15 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 
 	// Build sync request from rule
 	req := SyncRequest{
-		InstanceID:     rule.InstanceID,
-		ProfileTrashID: rule.TrashProfileID,
-		ArrProfileID:   rule.ArrProfileID,
-		SelectedCFs:    rule.SelectedCFs,
+		InstanceID:       rule.InstanceID,
+		ProfileTrashID:   rule.TrashProfileID,
+		ArrProfileID:     rule.ArrProfileID,
+		SelectedCFs:      rule.SelectedCFs,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
 		QualityStructure: rule.QualityStructure,
-		Behavior:       rule.Behavior,
-		Overrides:      rule.Overrides,
+		Behavior:         rule.Behavior,
+		Overrides:        rule.Overrides,
 	}
 	if rule.ProfileSource == "imported" {
 		req.ImportedProfileID = rule.ImportedProfileID
@@ -104,7 +105,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	// Resolve imported profile if needed
 	var imported *ImportedProfile
 	if req.ImportedProfileID != "" {
-		p, ok := app.profiles.Get(req.ImportedProfileID)
+		p, ok := app.Profiles.Get(req.ImportedProfileID)
 		if !ok {
 			app.updateAutoSyncRuleError(rule.ID, "imported profile not found: "+req.ImportedProfileID)
 			return
@@ -113,22 +114,24 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	}
 
 	// Dry-run plan
-	customCFs := app.customCFs.List(inst.Type)
-	lastSyncedCFs := app.getLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
-	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.httpClient)
+	customCFs := app.CustomCFs.List(inst.Type)
+	lastSyncedCFs := app.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
+	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.HTTPClient)
 	if err != nil {
 		errMsg := fmt.Sprintf("plan failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
-		app.debugLog.Logf(LogError, "Auto-sync rule %s: plan failed: %s", rule.ID, errMsg)
+		app.DebugLog.Logf(LogError, "Auto-sync rule %s: plan failed: %s", rule.ID, errMsg)
 
 		// Connection error — instance unreachable: send user-friendly message (not internal stack trace)
-		if isConnectionError(err) {
+		if IsConnectionError(err) {
 			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
 			log.Printf("Auto-sync: rule %s — %s is not reachable", rule.ID, inst.Name)
-			app.debugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable: %v", rule.ID, inst.Name, err)
+			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable: %v", rule.ID, inst.Name, err)
 			app.updateAutoSyncRuleError(rule.ID, friendlyMsg)
 			profileName := rule.TrashProfileID
-			if p := findProfile(ad, rule.TrashProfileID); p != nil { profileName = p.Name }
+			if p := findProfile(ad, rule.TrashProfileID); p != nil {
+				profileName = p.Name
+			}
 			app.notifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", friendlyMsg))
 			return
 		}
@@ -137,8 +140,8 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		// Auto-disable rule if Arr profile no longer exists
 		if strings.Contains(err.Error(), "no longer exists") || strings.Contains(err.Error(), "not found") {
 			log.Printf("Auto-sync: disabling rule %s — target profile no longer exists", rule.ID)
-			app.debugLog.Logf(LogAutoSync, "Rule %s: auto-disabled — target Arr profile no longer exists (ID %d)", rule.ID, rule.ArrProfileID)
-			app.config.Update(func(cfg *Config) {
+			app.DebugLog.Logf(LogAutoSync, "Rule %s: auto-disabled — target Arr profile no longer exists (ID %d)", rule.ID, rule.ArrProfileID)
+			app.Config.Update(func(cfg *Config) {
 				for i := range cfg.AutoSync.Rules {
 					if cfg.AutoSync.Rules[i].ID == rule.ID {
 						cfg.AutoSync.Rules[i].Enabled = false
@@ -148,7 +151,9 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			})
 		}
 		profileName := rule.TrashProfileID
-		if p := findProfile(ad, rule.TrashProfileID); p != nil { profileName = p.Name }
+		if p := findProfile(ad, rule.TrashProfileID); p != nil {
+			profileName = p.Name
+		}
 		app.notifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", errMsg))
 		return
 	}
@@ -156,25 +161,25 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	if !plan.HasChanges() {
 		// No actual changes — update commit hash, clear error
 		log.Printf("Auto-sync: rule %s — no changes for %s", rule.ID, inst.Name)
-		app.debugLog.Logf(LogAutoSync, "Rule %s: no changes for %s", rule.ID, inst.Name)
+		app.DebugLog.Logf(LogAutoSync, "Rule %s: no changes for %s", rule.ID, inst.Name)
 		app.updateAutoSyncRuleCommit(rule.ID, currentCommit)
 		return
 	}
 
 	// Apply
-	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.httpClient)
+	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.HTTPClient)
 	if err != nil {
-		if isConnectionError(err) {
+		if IsConnectionError(err) {
 			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
 			log.Printf("Auto-sync: rule %s apply — %s is not reachable", rule.ID, inst.Name)
-			app.debugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable during apply: %v", rule.ID, inst.Name, err)
+			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable during apply: %v", rule.ID, inst.Name, err)
 			app.updateAutoSyncRuleError(rule.ID, friendlyMsg)
 			app.notifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", friendlyMsg))
 			return
 		}
 		errMsg := fmt.Sprintf("apply failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
-		app.debugLog.Logf(LogError, "Auto-sync rule %s: apply failed: %s", rule.ID, errMsg)
+		app.DebugLog.Logf(LogError, "Auto-sync rule %s: apply failed: %s", rule.ID, errMsg)
 		app.updateAutoSyncRuleError(rule.ID, errMsg)
 		app.notifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", errMsg))
 		return
@@ -182,7 +187,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 
 	log.Printf("Auto-sync: rule %s applied — %d CFs created, %d updated, %d scores on %s",
 		rule.ID, result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, inst.Name)
-	app.debugLog.Logf(LogAutoSync, "Rule %s: applied — %d created, %d updated, %d scores on %s",
+	app.DebugLog.Logf(LogAutoSync, "Rule %s: applied — %d created, %d updated, %d scores on %s",
 		rule.ID, result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, inst.Name)
 
 	app.updateAutoSyncRuleCommit(rule.ID, currentCommit)
@@ -203,25 +208,25 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		ProfileTrashID:    req.ProfileTrashID,
 		ImportedProfileID: req.ImportedProfileID,
 		ProfileName:       plan.ProfileName,
-		ArrProfileID:   req.ArrProfileID,
-		ArrProfileName: plan.ArrProfileName,
-		SyncedCFs:      allCFIDs,
-		SelectedCFs:    selectedCFMap,
-		ScoreOverrides:   rule.ScoreOverrides,
-		QualityOverrides: rule.QualityOverrides,
-		QualityStructure: rule.QualityStructure,
-		Overrides:      rule.Overrides,
-		Behavior:       rule.Behavior,
-		CFsCreated:     result.CFsCreated,
-		CFsUpdated:     result.CFsUpdated,
-		ScoresUpdated:  result.ScoresUpdated,
-		LastSync:       time.Now().Format(time.RFC3339),
+		ArrProfileID:      req.ArrProfileID,
+		ArrProfileName:    plan.ArrProfileName,
+		SyncedCFs:         allCFIDs,
+		SelectedCFs:       selectedCFMap,
+		ScoreOverrides:    rule.ScoreOverrides,
+		QualityOverrides:  rule.QualityOverrides,
+		QualityStructure:  rule.QualityStructure,
+		Overrides:         rule.Overrides,
+		Behavior:          rule.Behavior,
+		CFsCreated:        result.CFsCreated,
+		CFsUpdated:        result.CFsUpdated,
+		ScoresUpdated:     result.ScoresUpdated,
+		LastSync:          time.Now().Format(time.RFC3339),
 	}
 	if result.ProfileCreated {
 		entry.ArrProfileID = result.ArrProfileID
 		entry.ArrProfileName = result.ArrProfileName
 		// Update rule with new Arr profile ID
-		app.config.Update(func(cfg *Config) {
+		app.Config.Update(func(cfg *Config) {
 			for i := range cfg.AutoSync.Rules {
 				if cfg.AutoSync.Rules[i].ID == rule.ID {
 					log.Printf("Auto-sync: updating rule %s with new Arr profile ID %d", rule.ID, result.ArrProfileID)
@@ -231,7 +236,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			}
 		})
 	}
-	if err := app.config.UpsertSyncHistory(entry); err != nil {
+	if err := app.Config.UpsertSyncHistory(entry); err != nil {
 		log.Printf("Auto-sync: failed to save sync history: %v", err)
 	}
 
@@ -248,8 +253,8 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		if len(details) > 5 {
 			details = append(details[:4], fmt.Sprintf("...and %d more", len(details)-4))
 		}
-		app.autoSyncMu.Lock()
-		app.autoSyncEvents = append(app.autoSyncEvents, AutoSyncEvent{
+		app.AutoSyncMu.Lock()
+		app.AutoSyncEvents = append(app.AutoSyncEvents, AutoSyncEvent{
 			InstanceName:   inst.Name,
 			ProfileName:    plan.ProfileName,
 			ArrProfileName: result.ArrProfileName,
@@ -261,35 +266,35 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			Details:        details,
 			Timestamp:      time.Now().Format(time.RFC3339),
 		})
-		if len(app.autoSyncEvents) > 50 {
+		if len(app.AutoSyncEvents) > 50 {
 			trimmed := make([]AutoSyncEvent, 50)
-			copy(trimmed, app.autoSyncEvents[len(app.autoSyncEvents)-50:])
-			app.autoSyncEvents = trimmed
+			copy(trimmed, app.AutoSyncEvents[len(app.AutoSyncEvents)-50:])
+			app.AutoSyncEvents = trimmed
 		}
-		app.autoSyncMu.Unlock()
+		app.AutoSyncMu.Unlock()
 	}
 }
 
 // cleanupStaleRules removes auto-sync rules and sync history for Arr profiles that no longer exist.
 // Only acts on instances that are reachable — unreachable instances are skipped (never deletes on connection error).
 func (app *App) cleanupStaleRules() {
-	cfg := app.config.Get()
+	cfg := app.Config.Get()
 	instNames := make(map[string]string) // instanceID → name
 
 	// Build set of valid Arr profile IDs per reachable instance
 	validProfiles := make(map[string]map[int]bool) // instanceID → set of arrProfileIDs
 	for _, inst := range cfg.Instances {
 		instNames[inst.ID] = inst.Name
-		client := NewArrClient(inst.URL, inst.APIKey, app.httpClient)
+		client := arr.NewArrClient(inst.URL, inst.APIKey, app.HTTPClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
-			app.debugLog.Logf(LogAutoSync, "Startup cleanup: skipping %s — not reachable: %v", inst.Name, err)
+			app.DebugLog.Logf(LogAutoSync, "Startup cleanup: skipping %s — not reachable: %v", inst.Name, err)
 			continue // instance unreachable — do NOT remove any rules
 		}
 		if len(profiles) == 0 {
 			log.Printf("Cleanup: skipping %s — returned 0 profiles (instance may still be starting)", inst.Name)
-			app.debugLog.Logf(LogAutoSync, "Startup cleanup: skipping %s — 0 profiles returned, likely still starting", inst.Name)
+			app.DebugLog.Logf(LogAutoSync, "Startup cleanup: skipping %s — 0 profiles returned, likely still starting", inst.Name)
 			continue // safety: Arr may be starting up and not yet serving profiles
 		}
 		ids := make(map[int]bool)
@@ -301,13 +306,13 @@ func (app *App) cleanupStaleRules() {
 
 	// Remove stale rules and sync history, collect events
 	var events []CleanupEvent
-	app.config.Update(func(cfg *Config) {
+	app.Config.Update(func(cfg *Config) {
 		cleaned := make([]AutoSyncRule, 0, len(cfg.AutoSync.Rules))
 		for _, r := range cfg.AutoSync.Rules {
 			valid, ok := validProfiles[r.InstanceID]
 			if ok && !valid[r.ArrProfileID] {
 				log.Printf("Cleanup: removing stale auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, instNames[r.InstanceID])
-				app.debugLog.Logf(LogAutoSync, "Startup cleanup: removing auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, instNames[r.InstanceID])
+				app.DebugLog.Logf(LogAutoSync, "Startup cleanup: removing auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, instNames[r.InstanceID])
 				continue
 			}
 			cleaned = append(cleaned, r)
@@ -319,7 +324,7 @@ func (app *App) cleanupStaleRules() {
 			valid, ok := validProfiles[h.InstanceID]
 			if ok && !valid[h.ArrProfileID] {
 				log.Printf("Cleanup: removing stale sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, instNames[h.InstanceID])
-				app.debugLog.Logf(LogAutoSync, "Startup cleanup: removing sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, instNames[h.InstanceID])
+				app.DebugLog.Logf(LogAutoSync, "Startup cleanup: removing sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, instNames[h.InstanceID])
 				events = append(events, CleanupEvent{
 					ProfileName:  h.ProfileName,
 					InstanceName: instNames[h.InstanceID],
@@ -335,22 +340,22 @@ func (app *App) cleanupStaleRules() {
 
 	// Store events for frontend to pick up + send Discord notification
 	if len(events) > 0 {
-		app.cleanupMu.Lock()
-		app.cleanupEvents = append(app.cleanupEvents, events...)
-		if len(app.cleanupEvents) > 50 {
+		app.CleanupMu.Lock()
+		app.CleanupEvents = append(app.CleanupEvents, events...)
+		if len(app.CleanupEvents) > 50 {
 			trimmed := make([]CleanupEvent, 50)
-			copy(trimmed, app.cleanupEvents[len(app.cleanupEvents)-50:])
-			app.cleanupEvents = trimmed
+			copy(trimmed, app.CleanupEvents[len(app.CleanupEvents)-50:])
+			app.CleanupEvents = trimmed
 		}
-		app.cleanupMu.Unlock()
-		app.notifyCleanup(events)
+		app.CleanupMu.Unlock()
+		app.NotifyCleanup(events)
 	}
 }
 
 // sendGotify sends a Gotify push notification with the given severity level.
 // level: "critical", "warning", or "info"
 func (app *App) sendGotify(title, message, level string) {
-	cfg := app.config.Get()
+	cfg := app.Config.Get()
 	if !cfg.AutoSync.GotifyEnabled || cfg.AutoSync.GotifyURL == "" || cfg.AutoSync.GotifyToken == "" {
 		return
 	}
@@ -403,7 +408,7 @@ func (app *App) sendGotify(title, message, level string) {
 	}
 	body, _ := json.Marshal(payload)
 	gotifyURL := strings.TrimRight(cfg.AutoSync.GotifyURL, "/") + "/message?token=" + url.QueryEscape(cfg.AutoSync.GotifyToken)
-	resp, err := app.notifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
+	resp, err := app.NotifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Gotify: send failed: %v", err)
 		return
@@ -413,7 +418,7 @@ func (app *App) sendGotify(title, message, level string) {
 
 // sendPushover sends a Pushover push notification at normal priority.
 func (app *App) sendPushover(title, message string) {
-	cfg := app.config.Get()
+	cfg := app.Config.Get()
 	if !cfg.AutoSync.PushoverEnabled || cfg.AutoSync.PushoverUserKey == "" || cfg.AutoSync.PushoverAppToken == "" {
 		return
 	}
@@ -426,7 +431,7 @@ func (app *App) sendPushover(title, message string) {
 		"priority": 0, // normal priority
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := app.notifyClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	resp, err := app.NotifyClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Pushover: send failed: %v", err)
 		return
@@ -435,8 +440,8 @@ func (app *App) sendPushover(title, message string) {
 }
 
 // notifyCleanup sends a Discord notification for auto-cleanup events.
-func (app *App) notifyCleanup(events []CleanupEvent) {
-	cfg := app.config.Get()
+func (app *App) NotifyCleanup(events []CleanupEvent) {
+	cfg := app.Config.Get()
 	if !cfg.AutoSync.NotifyOnFailure {
 		return
 	}
@@ -453,10 +458,10 @@ func (app *App) notifyCleanup(events []CleanupEvent) {
 			"title":       "Sync Rules Cleaned Up",
 			"description": description,
 			"color":       0xd29922, // amber
-			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+			"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Cleanup: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -471,7 +476,7 @@ func (app *App) notifyCleanup(events []CleanupEvent) {
 }
 
 // isConnectionError checks if an error is a network/connection problem (instance unreachable).
-func isConnectionError(err error) bool {
+func IsConnectionError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -486,7 +491,7 @@ func isConnectionError(err error) bool {
 
 // updateAutoSyncRuleCommit updates the last sync commit and clears error for a rule.
 func (app *App) updateAutoSyncRuleCommit(ruleID, commit string) {
-	app.config.Update(func(cfg *Config) {
+	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
 				cfg.AutoSync.Rules[i].LastSyncCommit = commit
@@ -500,7 +505,7 @@ func (app *App) updateAutoSyncRuleCommit(ruleID, commit string) {
 
 // updateAutoSyncRuleError sets the last error for a rule (does NOT update commit).
 func (app *App) updateAutoSyncRuleError(ruleID, errMsg string) {
-	app.config.Update(func(cfg *Config) {
+	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
 				cfg.AutoSync.Rules[i].LastSyncError = errMsg
@@ -513,7 +518,7 @@ func (app *App) updateAutoSyncRuleError(ruleID, errMsg string) {
 
 // notifyAutoSync sends Discord notification for auto-sync result.
 func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName string, result *SyncResult, syncErr error) {
-	cfg := app.config.Get()
+	cfg := app.Config.Get()
 	if syncErr != nil && !cfg.AutoSync.NotifyOnFailure {
 		return
 	}
@@ -540,24 +545,37 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 		if result.CFsCreated > 0 || result.CFsUpdated > 0 {
 			description += fmt.Sprintf("\n**CFs:** %d created, %d updated", result.CFsCreated, result.CFsUpdated)
 			for _, d := range result.CFDetails {
-				if len(description) > 1800 { description += "\n- ..."; break }
+				if len(description) > 1800 {
+					description += "\n- ..."
+					break
+				}
 				description += "\n- " + d
 			}
 		}
 		if result.ScoresUpdated > 0 || result.ScoresZeroed > 0 {
 			parts := []string{}
-			if result.ScoresUpdated > 0 { parts = append(parts, fmt.Sprintf("%d updated", result.ScoresUpdated)) }
-			if result.ScoresZeroed > 0 { parts = append(parts, fmt.Sprintf("%d reset to 0", result.ScoresZeroed)) }
+			if result.ScoresUpdated > 0 {
+				parts = append(parts, fmt.Sprintf("%d updated", result.ScoresUpdated))
+			}
+			if result.ScoresZeroed > 0 {
+				parts = append(parts, fmt.Sprintf("%d reset to 0", result.ScoresZeroed))
+			}
 			description += fmt.Sprintf("\n**Scores:** %s", strings.Join(parts, ", "))
 			for _, d := range result.ScoreDetails {
-				if len(description) > 1800 { description += "\n- ..."; break }
+				if len(description) > 1800 {
+					description += "\n- ..."
+					break
+				}
 				description += "\n- " + d
 			}
 		}
 		if result.QualityUpdated {
 			description += "\n**Quality:** Profile quality items updated"
 			for _, d := range result.QualityDetails {
-				if len(description) > 1800 { description += "\n- ..."; break }
+				if len(description) > 1800 {
+					description += "\n- ..."
+					break
+				}
 				description += "\n- " + d
 			}
 		}
@@ -578,10 +596,10 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 			"title":       title,
 			"description": description,
 			"color":       color,
-			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+			"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Auto-sync: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -601,8 +619,8 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 
 // notifyRepoUpdate sends a Discord notification when the TRaSH repo has new commits.
 // Shows actual file changes (CFs, profiles, groups) from the stored pull diff.
-func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
-	cfg := app.config.Get()
+func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
+	cfg := app.Config.Get()
 	if !cfg.AutoSync.NotifyOnRepoUpdate {
 		return
 	}
@@ -610,7 +628,7 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 	description := fmt.Sprintf("**Commit:** `%s` → `%s`", prevCommit, newCommit)
 
 	// Use stored diff from CloneOrPull
-	status := app.trash.Status()
+	status := app.Trash.Status()
 	if status.LastDiff != nil && status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary
 	}
@@ -626,10 +644,10 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 				"title":       "TRaSH Guides Updated",
 				"description": description,
 				"color":       0x58a6ff, // blue
-				"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+				"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
 			}
 			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+				if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 					log.Printf("Repo update: Discord notification failed: %v", err)
 				} else {
 					resp.Body.Close()
@@ -646,8 +664,8 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 }
 
 // notifyChangelog sends a separate Discord notification when updates.txt has a new date section.
-func (app *App) notifyChangelog(section ChangelogSection) {
-	cfg := app.config.Get()
+func (app *App) NotifyChangelog(section ChangelogSection) {
+	cfg := app.Config.Get()
 	if !cfg.AutoSync.NotifyOnRepoUpdate {
 		return
 	}
@@ -684,10 +702,10 @@ func (app *App) notifyChangelog(section ChangelogSection) {
 				"title":       "TRaSH Weekly Changelog",
 				"description": description,
 				"color":       0xd29922, // amber
-				"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+				"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
 			}
 			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+				if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 					log.Printf("Changelog: Discord notification failed: %v", err)
 				} else {
 					resp.Body.Close()

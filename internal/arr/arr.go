@@ -1,4 +1,4 @@
-package main
+package arr
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 )
@@ -30,8 +29,8 @@ func NewArrClient(url, apiKey string, client *http.Client) *ArrClient {
 	}
 }
 
-// doRequest performs an HTTP request with the API key header.
-func (c *ArrClient) doRequest(method, path string, body any) ([]byte, int, error) {
+// DoRequest performs an HTTP request with the API key header.
+func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -75,7 +74,7 @@ type ArrSystemStatus struct {
 
 // TestConnection verifies connectivity and returns the app version.
 func (c *ArrClient) TestConnection() (*ArrSystemStatus, error) {
-	data, status, err := c.doRequest("GET", "/system/status", nil)
+	data, status, err := c.DoRequest("GET", "/system/status", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +109,7 @@ type ArrSpecification struct {
 
 // ListCustomFormats fetches all CFs from the instance.
 func (c *ArrClient) ListCustomFormats() ([]ArrCF, error) {
-	data, status, err := c.doRequest("GET", "/customformat", nil)
+	data, status, err := c.DoRequest("GET", "/customformat", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +125,7 @@ func (c *ArrClient) ListCustomFormats() ([]ArrCF, error) {
 
 // CreateCustomFormat creates a new CF.
 func (c *ArrClient) CreateCustomFormat(cf *ArrCF) (*ArrCF, error) {
-	data, status, err := c.doRequest("POST", "/customformat", cf)
+	data, status, err := c.DoRequest("POST", "/customformat", cf)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +142,7 @@ func (c *ArrClient) CreateCustomFormat(cf *ArrCF) (*ArrCF, error) {
 // UpdateCustomFormat updates an existing CF.
 func (c *ArrClient) UpdateCustomFormat(id int, cf *ArrCF) (*ArrCF, error) {
 	cf.ID = id
-	data, status, err := c.doRequest("PUT", fmt.Sprintf("/customformat/%d", id), cf)
+	data, status, err := c.DoRequest("PUT", fmt.Sprintf("/customformat/%d", id), cf)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +158,7 @@ func (c *ArrClient) UpdateCustomFormat(id int, cf *ArrCF) (*ArrCF, error) {
 
 // DeleteCustomFormat deletes a CF by ID.
 func (c *ArrClient) DeleteCustomFormat(id int) error {
-	data, status, err := c.doRequest("DELETE", fmt.Sprintf("/customformat/%d", id), nil)
+	data, status, err := c.DoRequest("DELETE", fmt.Sprintf("/customformat/%d", id), nil)
 	if err != nil {
 		return err
 	}
@@ -209,7 +208,7 @@ type ArrProfileFormatItem struct {
 
 // ListProfiles fetches all quality profiles.
 func (c *ArrClient) ListProfiles() ([]ArrQualityProfile, error) {
-	data, status, err := c.doRequest("GET", "/qualityprofile", nil)
+	data, status, err := c.DoRequest("GET", "/qualityprofile", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +224,7 @@ func (c *ArrClient) ListProfiles() ([]ArrQualityProfile, error) {
 
 // UpdateProfile updates a quality profile (primarily for CF scores).
 func (c *ArrClient) UpdateProfile(profile *ArrQualityProfile) error {
-	data, status, err := c.doRequest("PUT", fmt.Sprintf("/qualityprofile/%d", profile.ID), profile)
+	data, status, err := c.DoRequest("PUT", fmt.Sprintf("/qualityprofile/%d", profile.ID), profile)
 	if err != nil {
 		return err
 	}
@@ -260,7 +259,7 @@ type ArrQualityRef struct {
 
 // ListQualityDefinitions fetches all quality size definitions.
 func (c *ArrClient) ListQualityDefinitions() ([]ArrQualityDefinition, error) {
-	data, status, err := c.doRequest("GET", "/qualitydefinition", nil)
+	data, status, err := c.DoRequest("GET", "/qualitydefinition", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +276,7 @@ func (c *ArrClient) ListQualityDefinitions() ([]ArrQualityDefinition, error) {
 // UpdateQualityDefinitions bulk-updates quality size definitions.
 func (c *ArrClient) UpdateQualityDefinitions(defs []ArrQualityDefinition) error {
 	for _, def := range defs {
-		data, status, err := c.doRequest("PUT", fmt.Sprintf("/qualitydefinition/%d", def.ID), &def)
+		data, status, err := c.DoRequest("PUT", fmt.Sprintf("/qualitydefinition/%d", def.ID), &def)
 		if err != nil {
 			return fmt.Errorf("update %s: %w", def.Quality.Name, err)
 		}
@@ -291,7 +290,7 @@ func (c *ArrClient) UpdateQualityDefinitions(defs []ArrQualityDefinition) error 
 
 // CreateProfile creates a new quality profile.
 func (c *ArrClient) CreateProfile(profile *ArrQualityProfile) (*ArrQualityProfile, error) {
-	data, status, err := c.doRequest("POST", "/qualityprofile", profile)
+	data, status, err := c.DoRequest("POST", "/qualityprofile", profile)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +306,7 @@ func (c *ArrClient) CreateProfile(profile *ArrQualityProfile) (*ArrQualityProfil
 
 // ListLanguages fetches available languages (Radarr only).
 func (c *ArrClient) ListLanguages() ([]ArrLanguage, error) {
-	data, status, err := c.doRequest("GET", "/language", nil)
+	data, status, err := c.DoRequest("GET", "/language", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +325,7 @@ type ArrNamingConfig map[string]any
 
 // GetNaming fetches the current naming config from the instance.
 func (c *ArrClient) GetNaming() (ArrNamingConfig, error) {
-	data, status, err := c.doRequest("GET", "/config/naming", nil)
+	data, status, err := c.DoRequest("GET", "/config/naming", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +341,7 @@ func (c *ArrClient) GetNaming() (ArrNamingConfig, error) {
 
 // UpdateNaming applies a naming config to the instance via PUT.
 func (c *ArrClient) UpdateNaming(naming ArrNamingConfig) (ArrNamingConfig, error) {
-	data, status, err := c.doRequest("PUT", "/config/naming", naming)
+	data, status, err := c.DoRequest("PUT", "/config/naming", naming)
 	if err != nil {
 		return nil, err
 	}
@@ -365,86 +364,4 @@ func truncate(s string, maxLen int) string {
 	return string(runes[:maxLen]) + "..."
 }
 
-// trashCFToArr converts a TRaSH CF definition to Arr API format.
-func trashCFToArr(cf *TrashCF) *ArrCF {
-	arr := &ArrCF{
-		Name:                            cf.Name,
-		IncludeCustomFormatWhenRenaming: cf.IncludeInRename,
-	}
 
-	for _, spec := range cf.Specifications {
-		arrSpec := ArrSpecification{
-			Name:           spec.Name,
-			Implementation: spec.Implementation,
-			Negate:         spec.Negate,
-			Required:       spec.Required,
-			Fields:         convertFieldsToArr(spec.Fields),
-		}
-		arr.Specifications = append(arr.Specifications, arrSpec)
-	}
-
-	return arr
-}
-
-// convertFieldsToArr converts TRaSH fields format {"value": X} to Arr format [{"name":"value","value":X}].
-func convertFieldsToArr(raw json.RawMessage) json.RawMessage {
-	// Try to parse as object {"value": X}
-	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &obj); err != nil {
-		return raw // return as-is if we can't parse
-	}
-
-	// Check if it's already in array format
-	var arr []json.RawMessage
-	if err := json.Unmarshal(raw, &arr); err == nil {
-		return raw // already array format
-	}
-
-	// M6: Convert object to array format with deterministic ordering
-	keys := make([]string, 0, len(obj))
-	for key := range obj {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	var fields []map[string]any
-	for _, key := range keys {
-		var v any
-		if err := json.Unmarshal(obj[key], &v); err != nil {
-			return raw // malformed field value, return original
-		}
-		fields = append(fields, map[string]any{
-			"name":  key,
-			"value": v,
-		})
-	}
-
-	result, err := json.Marshal(fields)
-	if err != nil {
-		return raw
-	}
-	return result
-}
-
-// extractFieldValue extracts the primary "value" from either TRaSH or Arr fields format.
-func extractFieldValue(raw json.RawMessage) any {
-	// Try object format: {"value": X}
-	var obj map[string]any
-	if err := json.Unmarshal(raw, &obj); err == nil {
-		if v, ok := obj["value"]; ok {
-			return v
-		}
-	}
-
-	// Try array format: [{"name":"value","value":X}]
-	var arr []map[string]any
-	if err := json.Unmarshal(raw, &arr); err == nil {
-		for _, f := range arr {
-			if f["name"] == "value" {
-				return f["value"]
-			}
-		}
-	}
-
-	return nil
-}

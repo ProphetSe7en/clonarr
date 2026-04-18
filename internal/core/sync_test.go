@@ -1,6 +1,7 @@
-package main
+package core
 
 import (
+	"clonarr/internal/arr"
 	"encoding/json"
 	"testing"
 )
@@ -53,12 +54,12 @@ func TestResolveSyncBehavior_Empty(t *testing.T) {
 	}
 }
 
-// --- convertFieldsToArr ---
+// --- ConvertFieldsToArr ---
 
 func TestConvertFieldsToArr_ObjectFormat(t *testing.T) {
 	// TRaSH format: {"value": "test123"}
 	input := json.RawMessage(`{"value": "test123"}`)
-	result := convertFieldsToArr(input)
+	result := ConvertFieldsToArr(input)
 
 	var arr []map[string]any
 	if err := json.Unmarshal(result, &arr); err != nil {
@@ -75,7 +76,7 @@ func TestConvertFieldsToArr_ObjectFormat(t *testing.T) {
 func TestConvertFieldsToArr_ArrayFormat(t *testing.T) {
 	// Already in Arr format: [{"name":"value","value":"test123"}]
 	input := json.RawMessage(`[{"name":"value","value":"test123"}]`)
-	result := convertFieldsToArr(input)
+	result := ConvertFieldsToArr(input)
 
 	// Should pass through unchanged
 	if string(result) != string(input) {
@@ -86,7 +87,7 @@ func TestConvertFieldsToArr_ArrayFormat(t *testing.T) {
 func TestConvertFieldsToArr_Malformed(t *testing.T) {
 	// Invalid JSON should return as-is
 	input := json.RawMessage(`not-json`)
-	result := convertFieldsToArr(input)
+	result := ConvertFieldsToArr(input)
 	if string(result) != string(input) {
 		t.Errorf("expected passthrough for malformed input, got %s", string(result))
 	}
@@ -95,7 +96,7 @@ func TestConvertFieldsToArr_Malformed(t *testing.T) {
 func TestConvertFieldsToArr_MultipleKeys(t *testing.T) {
 	// Object with multiple keys: should produce sorted array
 	input := json.RawMessage(`{"zeta": 1, "alpha": 2}`)
-	result := convertFieldsToArr(input)
+	result := ConvertFieldsToArr(input)
 
 	var arr []map[string]any
 	if err := json.Unmarshal(result, &arr); err != nil {
@@ -176,7 +177,7 @@ func TestCustomCFToArr_Basic(t *testing.T) {
 		ID:              "custom:abc123",
 		Name:            "Test CF",
 		IncludeInRename: true,
-		Specifications: []ArrSpecification{
+		Specifications: []arr.ArrSpecification{
 			{
 				Name:           "spec1",
 				Implementation: "ReleaseTitleSpecification",
@@ -228,17 +229,17 @@ func TestCustomCFToArr_EmptySpecs(t *testing.T) {
 // and structural changes that leave the allowed set untouched.
 
 // helper: build a flat Arr quality item
-func arrQ(id int, name string, allowed bool) ArrQualityItem {
-	return ArrQualityItem{
-		Quality: &ArrQualityRef{ID: id, Name: name},
-		Items:   []ArrQualityItem{},
+func arrQ(id int, name string, allowed bool) arr.ArrQualityItem {
+	return arr.ArrQualityItem{
+		Quality: &arr.ArrQualityRef{ID: id, Name: name},
+		Items:   []arr.ArrQualityItem{},
 		Allowed: allowed,
 	}
 }
 
 // helper: build an Arr group
-func arrG(groupID int, name string, allowed bool, members ...ArrQualityItem) ArrQualityItem {
-	return ArrQualityItem{
+func arrG(groupID int, name string, allowed bool, members ...arr.ArrQualityItem) arr.ArrQualityItem {
+	return arr.ArrQualityItem{
 		ID:      groupID,
 		Name:    name,
 		Items:   members,
@@ -247,7 +248,7 @@ func arrG(groupID int, name string, allowed bool, members ...ArrQualityItem) Arr
 }
 
 func TestFingerprintArrItems_FlatOnly(t *testing.T) {
-	items := []ArrQualityItem{
+	items := []arr.ArrQualityItem{
 		arrQ(1, "DVD", false),
 		arrQ(3, "Bluray-1080p", true),
 		arrQ(4, "WEB 1080p", true),
@@ -260,15 +261,15 @@ func TestFingerprintArrItems_FlatOnly(t *testing.T) {
 }
 
 func TestFingerprintArrItems_ReorderChangesFingerprint(t *testing.T) {
-	a := []ArrQualityItem{arrQ(1, "A", true), arrQ(2, "B", true), arrQ(3, "C", false)}
-	b := []ArrQualityItem{arrQ(3, "C", false), arrQ(1, "A", true), arrQ(2, "B", true)}
+	a := []arr.ArrQualityItem{arrQ(1, "A", true), arrQ(2, "B", true), arrQ(3, "C", false)}
+	b := []arr.ArrQualityItem{arrQ(3, "C", false), arrQ(1, "A", true), arrQ(2, "B", true)}
 	if fingerprintArrItems(a) == fingerprintArrItems(b) {
 		t.Error("reorder must produce different fingerprints (set-based diff blindspot)")
 	}
 }
 
 func TestFingerprintArrItems_WithGroup(t *testing.T) {
-	items := []ArrQualityItem{
+	items := []arr.ArrQualityItem{
 		arrQ(1, "SDTV", false),
 		arrG(1000, "WEB 1080p", true,
 			arrQ(10, "WEBDL-1080p", true),
@@ -284,13 +285,13 @@ func TestFingerprintArrItems_WithGroup(t *testing.T) {
 }
 
 func TestFingerprintArrItems_GroupMemberReorderChangesFingerprint(t *testing.T) {
-	a := []ArrQualityItem{
+	a := []arr.ArrQualityItem{
 		arrG(1000, "WEB 1080p", true,
 			arrQ(10, "WEBDL-1080p", true),
 			arrQ(11, "WEBRip-1080p", true),
 		),
 	}
-	b := []ArrQualityItem{
+	b := []arr.ArrQualityItem{
 		arrG(1000, "WEB 1080p", true,
 			arrQ(11, "WEBRip-1080p", true),
 			arrQ(10, "WEBDL-1080p", true),
@@ -305,9 +306,9 @@ func TestFingerprintArrItems_GroupMemberReorderChangesFingerprint(t *testing.T) 
 // the format's reserved delimiters must not collide with a different structure.
 func TestFingerprintArrItems_DelimiterInjectionSafe(t *testing.T) {
 	// A flat quality literally named `foo"|G:"bar=true[`
-	a := []ArrQualityItem{arrQ(1, `foo"|G:"bar=true[`, true)}
+	a := []arr.ArrQualityItem{arrQ(1, `foo"|G:"bar=true[`, true)}
 	// A group with the innocuous name `foo` containing quality `bar`
-	b := []ArrQualityItem{
+	b := []arr.ArrQualityItem{
 		arrG(1000, "foo", true, arrQ(10, "bar", true)),
 	}
 	if fingerprintArrItems(a) == fingerprintArrItems(b) {
@@ -317,7 +318,7 @@ func TestFingerprintArrItems_DelimiterInjectionSafe(t *testing.T) {
 
 func TestFingerprintArrItems_ExtractFromGroupChangesFingerprint(t *testing.T) {
 	// Before: WEBDL-1080p is inside the group, allowed=true
-	a := []ArrQualityItem{
+	a := []arr.ArrQualityItem{
 		arrG(1000, "WEB 1080p", true,
 			arrQ(10, "WEBDL-1080p", true),
 			arrQ(11, "WEBRip-1080p", true),
@@ -326,7 +327,7 @@ func TestFingerprintArrItems_ExtractFromGroupChangesFingerprint(t *testing.T) {
 	// After: WEBDL-1080p extracted from the group, still allowed=true
 	// Set-based diff sees the same {WEBDL-1080p, WEBRip-1080p, WEB 1080p}
 	// allowed set and misses this. Fingerprint must catch it.
-	b := []ArrQualityItem{
+	b := []arr.ArrQualityItem{
 		arrQ(10, "WEBDL-1080p", true),
 		arrG(1000, "WEB 1080p", true,
 			arrQ(11, "WEBRip-1080p", true),
@@ -345,7 +346,7 @@ func TestFingerprintTrashItems_MatchesArrFingerprint(t *testing.T) {
 		{Name: "WEB 1080p", Allowed: true, Items: []string{"WEBDL-1080p", "WEBRip-1080p"}},
 		{Name: "Remux-1080p", Allowed: true},
 	}
-	arr := []ArrQualityItem{
+	arr := []arr.ArrQualityItem{
 		arrQ(1, "SDTV", false),
 		arrG(1000, "WEB 1080p", true,
 			arrQ(10, "WEBDL-1080p", true),
@@ -361,12 +362,12 @@ func TestFingerprintTrashItems_MatchesArrFingerprint(t *testing.T) {
 func TestFilterArrItemsToDesired_DropsUnusedTail(t *testing.T) {
 	// Typical live Arr profile: lots of disallowed "unused" qualities at the top,
 	// followed by the actually-configured items. TRaSH only knows about the latter.
-	arr := []ArrQualityItem{
-		arrQ(1, "REGIONAL", false),      // unused
-		arrQ(2, "CAM", false),           // unused
-		arrQ(3, "TELECINE", false),      // unused
-		arrQ(10, "WEBDL-1080p", true),   // in desired
-		arrG(1000, "WEB 1080p", true,    // group always kept
+	arr := []arr.ArrQualityItem{
+		arrQ(1, "REGIONAL", false),    // unused
+		arrQ(2, "CAM", false),         // unused
+		arrQ(3, "TELECINE", false),    // unused
+		arrQ(10, "WEBDL-1080p", true), // in desired
+		arrG(1000, "WEB 1080p", true, // group always kept
 			arrQ(11, "WEBRip-1080p", true),
 		),
 	}
@@ -385,7 +386,7 @@ func TestFilterArrItemsToDesired_DropsUnusedTail(t *testing.T) {
 }
 
 func TestCutoffIDToName_FlatAndGroup(t *testing.T) {
-	items := []ArrQualityItem{
+	items := []arr.ArrQualityItem{
 		arrQ(1, "SDTV", false),
 		arrG(1000, "WEB 1080p", true, arrQ(10, "WEBDL-1080p", true)),
 		arrQ(20, "Remux-1080p", true),
