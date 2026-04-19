@@ -17,6 +17,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"clonarr/auth"
+	"clonarr/netsec"
 )
 
 // Fallback for Radarr/Sonarr's parse API returning empty ReleaseGroup when the
@@ -28,14 +31,53 @@ var numericReleaseGroupRE = regexp.MustCompile(`-(\d+)$`)
 // writeJSON encodes v as JSON and writes it to w.
 func writeJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
+	// No-store prevents shared browser caches + reverse-proxy caches from
+	// retaining /api/* responses. Even with masking, a 4+4 API-key reveal
+	// or config blob shouldn't live on a kiosk browser after logout.
+	w.Header().Set("Cache-Control", "no-store")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("writeJSON: encode error: %v", err)
 	}
 }
 
+// ==== Credential masking =====================================================
+// Discord webhook URLs and Gotify/Pushover tokens are bearer credentials —
+// whoever holds them can post messages as Clonarr. They must not appear in
+// plaintext in responses so a compromised session, local-bypass peer, or
+// leaked API call log cannot exfiltrate them. Masking pattern:
+//   - GET responses return a placeholder form
+//   - SAVE handlers detect the placeholder on input and preserve the stored
+//     value instead of overwriting with the placeholder (so "Save" without
+//     edits is a no-op for secrets).
+
+const (
+	maskedDiscordWebhook = "https://discord.com/api/webhooks/[MASKED]/[MASKED]"
+	maskedToken          = "••••••••••••••••" // 16 bullets — looks different from any real token
+)
+
+// maskSecret returns the placeholder if s is non-empty; otherwise empty.
+// Empty stays empty so the UI can distinguish "not set" from "set but hidden".
+func maskSecret(s, placeholder string) string {
+	if s == "" {
+		return ""
+	}
+	return placeholder
+}
+
+// preserveIfMasked returns existing when incoming equals the placeholder —
+// i.e. the UI returned the masked value unchanged. Otherwise returns incoming
+// (including empty string, which represents explicit deletion).
+func preserveIfMasked(incoming, existing, placeholder string) string {
+	if incoming == placeholder {
+		return existing
+	}
+	return incoming
+}
+
 // writeError writes a JSON error response.
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
@@ -77,6 +119,17 @@ func (app *App) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg.Prowlarr.APIKey != "" {
 		cfg.Prowlarr.APIKey = maskKey(cfg.Prowlarr.APIKey)
 	}
+	// Mask notification secrets embedded in AutoSync. These were being
+	// leaked in plaintext from this handler even though the dedicated
+	// /api/config/autosync endpoint masks them — session-hijack / XSS /
+	// local-bypass peer could exfiltrate every webhook + token in one
+	// call. CHANGELOG v2.0.6 advertises webhook+token masking;
+	// this handler is part of that guarantee.
+	cfg.AutoSync.DiscordWebhook = maskSecret(cfg.AutoSync.DiscordWebhook, maskedDiscordWebhook)
+	cfg.AutoSync.DiscordWebhookUpdates = maskSecret(cfg.AutoSync.DiscordWebhookUpdates, maskedDiscordWebhook)
+	cfg.AutoSync.GotifyToken = maskSecret(cfg.AutoSync.GotifyToken, maskedToken)
+	cfg.AutoSync.PushoverUserKey = maskSecret(cfg.AutoSync.PushoverUserKey, maskedToken)
+	cfg.AutoSync.PushoverAppToken = maskSecret(cfg.AutoSync.PushoverAppToken, maskedToken)
 	// Wrap config with version for frontend
 	writeJSON(w, struct {
 		Config
@@ -86,19 +139,101 @@ func (app *App) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 65536)
-	var req struct {
-		TrashRepo    *TrashRepo      `json:"trashRepo,omitempty"`
-		PullInterval *string         `json:"pullInterval,omitempty"`
-		DevMode      *bool           `json:"devMode,omitempty"`
-		DebugLogging *bool           `json:"debugLogging"`
-		Prowlarr     *ProwlarrConfig `json:"prowlarr,omitempty"`
+	// Read body once so we can decode into both the main ConfigData and a
+	// small side struct that picks up `confirm_password` (never persisted,
+	// stays out of reverse-proxy access logs unlike an HTTP header would).
+	bodyBytes, rerr := io.ReadAll(r.Body)
+	if rerr != nil {
+		writeError(w, 400, "Failed to read request body")
+		return
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var req struct {
+		TrashRepo              *TrashRepo      `json:"trashRepo,omitempty"`
+		PullInterval           *string         `json:"pullInterval,omitempty"`
+		DevMode                *bool           `json:"devMode,omitempty"`
+		DebugLogging           *bool           `json:"debugLogging"`
+		Prowlarr               *ProwlarrConfig `json:"prowlarr,omitempty"`
+		Authentication         *string         `json:"authentication,omitempty"`
+		AuthenticationRequired *string         `json:"authenticationRequired,omitempty"`
+		TrustedProxies         *string         `json:"trustedProxies,omitempty"`
+		TrustedNetworks        *string         `json:"trustedNetworks,omitempty"`
+		SessionTTLDays         *int            `json:"sessionTtlDays,omitempty"`
+	}
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		writeError(w, 400, "Invalid JSON")
 		return
 	}
+	var confirm struct {
+		ConfirmPassword string `json:"confirm_password"`
+	}
+	_ = json.Unmarshal(bodyBytes, &confirm)
+
+	// ==== Auth-field validation (before touching disk) =====================
+	if req.Authentication != nil {
+		switch *req.Authentication {
+		case "forms", "basic", "none":
+			// ok
+		default:
+			writeError(w, 400, "authentication must be one of: forms, basic, none")
+			return
+		}
+	}
+	if req.AuthenticationRequired != nil {
+		switch *req.AuthenticationRequired {
+		case "enabled", "disabled_for_local_addresses":
+			// ok
+		default:
+			writeError(w, 400, "authenticationRequired must be one of: enabled, disabled_for_local_addresses")
+			return
+		}
+	}
+	if req.SessionTTLDays != nil {
+		if *req.SessionTTLDays <= 0 || *req.SessionTTLDays > 365 {
+			writeError(w, 400, "sessionTtlDays must be an integer 1..365")
+			return
+		}
+	}
+	if req.TrustedProxies != nil {
+		if app.authStore != nil && app.authStore.TrustedProxiesLocked() {
+			writeError(w, 403, "trustedProxies is locked by the TRUSTED_PROXIES environment variable. Edit the Unraid template / docker-compose file and restart the container to change it.")
+			return
+		}
+		if *req.TrustedProxies != "" {
+			if _, perr := netsec.ParseTrustedProxies(*req.TrustedProxies); perr != nil {
+				writeError(w, 400, fmt.Sprintf("trustedProxies: %v", perr))
+				return
+			}
+		}
+	}
+	if req.TrustedNetworks != nil {
+		if app.authStore != nil && app.authStore.TrustedNetworksLocked() {
+			writeError(w, 403, "trustedNetworks is locked by the TRUSTED_NETWORKS environment variable. Edit the Unraid template / docker-compose file and restart the container to change it.")
+			return
+		}
+		if *req.TrustedNetworks != "" {
+			if _, perr := netsec.ParseTrustedNetworks(*req.TrustedNetworks); perr != nil {
+				writeError(w, 400, fmt.Sprintf("trustedNetworks: %v", perr))
+				return
+			}
+		}
+	}
+
+	// Any save that sets authentication=none requires the current admin
+	// password. Local-bypass peers can otherwise disable auth or modify
+	// security-config fields without ever proving they know the password.
+	if req.Authentication != nil && *req.Authentication == "none" && app.authStore != nil {
+		if confirm.ConfirmPassword == "" {
+			writeError(w, 400, "Saving with authentication=none requires your current password in the confirm_password field of the request body.")
+			return
+		}
+		if !app.authStore.VerifyPassword(app.authStore.Username(), confirm.ConfirmPassword) {
+			writeError(w, 401, "Current password is incorrect. Authentication change aborted.")
+			return
+		}
+	}
 
 	pullChanged := false
+	authChanged := false
 	err := app.config.Update(func(cfg *Config) {
 		if req.TrashRepo != nil {
 			if req.TrashRepo.URL != "" {
@@ -126,6 +261,26 @@ func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			}
 			cfg.Prowlarr = *req.Prowlarr
 		}
+		if req.Authentication != nil {
+			cfg.Authentication = *req.Authentication
+			authChanged = true
+		}
+		if req.AuthenticationRequired != nil {
+			cfg.AuthenticationRequired = *req.AuthenticationRequired
+			authChanged = true
+		}
+		if req.TrustedProxies != nil {
+			cfg.TrustedProxies = *req.TrustedProxies
+			authChanged = true
+		}
+		if req.TrustedNetworks != nil {
+			cfg.TrustedNetworks = *req.TrustedNetworks
+			authChanged = true
+		}
+		if req.SessionTTLDays != nil {
+			cfg.SessionTTLDays = *req.SessionTTLDays
+			authChanged = true
+		}
 	})
 	if err != nil {
 		writeError(w, 500, "Failed to save config")
@@ -138,6 +293,43 @@ func (app *App) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		select {
 		case app.pullUpdateCh <- cfg.PullInterval:
 		default:
+		}
+	}
+
+	// Live-reload auth config so the change takes effect immediately
+	// (no container restart needed).
+	if authChanged && app.authStore != nil {
+		cfg := app.config.Get()
+		newAuthCfg := app.authStore.Config()
+		if cfg.Authentication != "" {
+			newAuthCfg.Mode = auth.AuthMode(cfg.Authentication)
+		}
+		if cfg.AuthenticationRequired != "" {
+			newAuthCfg.Requirement = auth.Requirement(cfg.AuthenticationRequired)
+		}
+		if cfg.SessionTTLDays > 0 {
+			newAuthCfg.SessionTTL = time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
+		}
+		// Skip the parse-and-overwrite when env-locked: cfg.TrustedNetworks
+		// on disk is typically empty when env provides the value, and
+		// ParseTrustedNetworks("") returns (nil, nil) — which would clobber
+		// the env-derived slice on any unrelated save (SessionTTL, etc).
+		// UpdateConfig has a defense-in-depth guard too (C2 fix), but
+		// guarding here keeps the intent explicit at the call site.
+		if !app.authStore.TrustedProxiesLocked() {
+			if ips, perr := netsec.ParseTrustedProxies(cfg.TrustedProxies); perr == nil {
+				newAuthCfg.TrustedProxies = ips
+			}
+		}
+		if !app.authStore.TrustedNetworksLocked() {
+			if nets, perr := netsec.ParseTrustedNetworks(cfg.TrustedNetworks); perr == nil {
+				newAuthCfg.TrustedNetworks = nets
+			}
+		}
+		if uerr := app.authStore.UpdateConfig(newAuthCfg); uerr != nil {
+			log.Printf("auth live-reload failed: %v — will take effect on next restart", uerr)
+			writeJSON(w, map[string]any{"status": "saved", "auth_reload_error": uerr.Error()})
+			return
 		}
 	}
 
@@ -1422,7 +1614,7 @@ func (app *App) handleTrashStatus(w http.ResponseWriter, r *http.Request) {
 
 func (app *App) handleTrashPull(w http.ResponseWriter, r *http.Request) {
 	cfg := app.config.Get()
-	go func() {
+	safeGo("manual-trash-pull", func() {
 		prevCommit := app.trash.CurrentCommit()
 		if err := app.trash.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
 			log.Printf("TRaSH pull failed: %v", err)
@@ -1437,7 +1629,7 @@ func (app *App) handleTrashPull(w http.ResponseWriter, r *http.Request) {
 			app.autoSyncQualitySizes()
 			app.autoSyncAfterPull()
 		}
-	}()
+	})
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]string{"status": "pulling"})
 }
@@ -3797,28 +3989,31 @@ func (app *App) handleSaveCleanupKeep(w http.ResponseWriter, r *http.Request) {
 // --- Auto-Sync handlers ---
 
 // handleGetAutoSyncSettings returns the global auto-sync settings (without rules).
+// Credentials (webhook URLs, tokens, keys) are masked — UI re-submits the
+// placeholder on unchanged-save and the save handler preserves the stored
+// value. See maskSecret/preserveIfMasked above.
 func (app *App) handleGetAutoSyncSettings(w http.ResponseWriter, r *http.Request) {
 	cfg := app.config.Get()
 	writeJSON(w, map[string]any{
-		"enabled":               cfg.AutoSync.Enabled,
-		"notifyOnSuccess":       cfg.AutoSync.NotifyOnSuccess,
-		"notifyOnFailure":       cfg.AutoSync.NotifyOnFailure,
-		"notifyOnRepoUpdate":    cfg.AutoSync.NotifyOnRepoUpdate,
-		"discordEnabled":        cfg.AutoSync.DiscordEnabled,
-		"discordWebhook":        cfg.AutoSync.DiscordWebhook,
-		"discordWebhookUpdates": cfg.AutoSync.DiscordWebhookUpdates,
-		"gotifyEnabled":         cfg.AutoSync.GotifyEnabled,
-		"gotifyUrl":             cfg.AutoSync.GotifyURL,
-		"gotifyToken":           cfg.AutoSync.GotifyToken,
+		"enabled":                cfg.AutoSync.Enabled,
+		"notifyOnSuccess":        cfg.AutoSync.NotifyOnSuccess,
+		"notifyOnFailure":        cfg.AutoSync.NotifyOnFailure,
+		"notifyOnRepoUpdate":     cfg.AutoSync.NotifyOnRepoUpdate,
+		"discordEnabled":         cfg.AutoSync.DiscordEnabled,
+		"discordWebhook":         maskSecret(cfg.AutoSync.DiscordWebhook, maskedDiscordWebhook),
+		"discordWebhookUpdates":  maskSecret(cfg.AutoSync.DiscordWebhookUpdates, maskedDiscordWebhook),
+		"gotifyEnabled":          cfg.AutoSync.GotifyEnabled,
+		"gotifyUrl":              cfg.AutoSync.GotifyURL, // URL itself isn't a bearer — return plain
+		"gotifyToken":            maskSecret(cfg.AutoSync.GotifyToken, maskedToken),
 		"gotifyPriorityCritical": cfg.AutoSync.GotifyPriorityCritical,
 		"gotifyPriorityWarning":  cfg.AutoSync.GotifyPriorityWarning,
 		"gotifyPriorityInfo":     cfg.AutoSync.GotifyPriorityInfo,
 		"gotifyCriticalValue":    cfg.AutoSync.GotifyCriticalValue,
 		"gotifyWarningValue":     cfg.AutoSync.GotifyWarningValue,
 		"gotifyInfoValue":        cfg.AutoSync.GotifyInfoValue,
-		"pushoverEnabled":  cfg.AutoSync.PushoverEnabled,
-		"pushoverUserKey":  cfg.AutoSync.PushoverUserKey,
-		"pushoverAppToken": cfg.AutoSync.PushoverAppToken,
+		"pushoverEnabled":        cfg.AutoSync.PushoverEnabled,
+		"pushoverUserKey":        maskSecret(cfg.AutoSync.PushoverUserKey, maskedToken),
+		"pushoverAppToken":       maskSecret(cfg.AutoSync.PushoverAppToken, maskedToken),
 	})
 }
 
@@ -3851,14 +4046,23 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	webhook := strings.TrimSpace(req.DiscordWebhook)
+	existing := app.config.Get().AutoSync
+
+	// Preserve stored secret values when the UI submits the masked placeholder
+	// (i.e. user didn't edit the secret field). Actual edits — including
+	// explicit empty-string to clear a secret — are respected.
+	webhook := preserveIfMasked(strings.TrimSpace(req.DiscordWebhook), existing.DiscordWebhook, maskedDiscordWebhook)
+	webhookUpdates := preserveIfMasked(strings.TrimSpace(req.DiscordWebhookUpdates), existing.DiscordWebhookUpdates, maskedDiscordWebhook)
+	gotifyToken := preserveIfMasked(strings.TrimSpace(req.GotifyToken), existing.GotifyToken, maskedToken)
+	pushoverUserKey := preserveIfMasked(strings.TrimSpace(req.PushoverUserKey), existing.PushoverUserKey, maskedToken)
+	pushoverAppToken := preserveIfMasked(strings.TrimSpace(req.PushoverAppToken), existing.PushoverAppToken, maskedToken)
+
 	if webhook != "" &&
 		!strings.HasPrefix(webhook, "https://discord.com/api/webhooks/") &&
 		!strings.HasPrefix(webhook, "https://discordapp.com/api/webhooks/") {
 		writeError(w, 400, "Discord webhook must start with https://discord.com/api/webhooks/")
 		return
 	}
-	webhookUpdates := strings.TrimSpace(req.DiscordWebhookUpdates)
 	if webhookUpdates != "" &&
 		!strings.HasPrefix(webhookUpdates, "https://discord.com/api/webhooks/") &&
 		!strings.HasPrefix(webhookUpdates, "https://discordapp.com/api/webhooks/") {
@@ -3882,7 +4086,7 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		cfg.AutoSync.DiscordWebhookUpdates = webhookUpdates
 		cfg.AutoSync.GotifyEnabled = req.GotifyEnabled
 		cfg.AutoSync.GotifyURL = gotifyURL
-		cfg.AutoSync.GotifyToken = strings.TrimSpace(req.GotifyToken)
+		cfg.AutoSync.GotifyToken = gotifyToken
 		cfg.AutoSync.GotifyPriorityCritical = req.GotifyPriorityCritical
 		cfg.AutoSync.GotifyPriorityWarning = req.GotifyPriorityWarning
 		cfg.AutoSync.GotifyPriorityInfo = req.GotifyPriorityInfo
@@ -3891,8 +4095,8 @@ func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Reques
 		cfg.AutoSync.GotifyWarningValue = &wv
 		cfg.AutoSync.GotifyInfoValue = &iv
 		cfg.AutoSync.PushoverEnabled = req.PushoverEnabled
-		cfg.AutoSync.PushoverUserKey = strings.TrimSpace(req.PushoverUserKey)
-		cfg.AutoSync.PushoverAppToken = strings.TrimSpace(req.PushoverAppToken)
+		cfg.AutoSync.PushoverUserKey = pushoverUserKey
+		cfg.AutoSync.PushoverAppToken = pushoverAppToken
 	}); err != nil {
 		writeError(w, 500, "Failed to save settings")
 		return
@@ -3958,7 +4162,7 @@ func (app *App) handleTestDiscord(w http.ResponseWriter, r *http.Request) {
 		"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 	}
 	payload, _ := json.Marshal(map[string]any{"embeds": []any{embed}})
-	resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload))
+	resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload))
 	if err != nil {
 		writeError(w, 502, fmt.Sprintf("Failed to reach Discord: %v", err))
 		return
@@ -3989,7 +4193,7 @@ func (app *App) handleTestPushover(w http.ResponseWriter, r *http.Request) {
 		"priority": 0,
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := app.notifyClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	resp, err := app.safeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
 	if err != nil {
 		writeError(w, 502, fmt.Sprintf("Failed to reach Pushover: %v", err))
 		return
@@ -4867,6 +5071,12 @@ func (app *App) handleScoringProfileScores(w http.ResponseWriter, r *http.Reques
 }
 
 // handleDebugLog receives frontend log messages.
+//
+// Category + Message reach /config/debug.log, which admins download via
+// handleDebugDownload after incidents. An authenticated caller who can
+// inject control characters (newlines, escape sequences) could forge
+// `[TIMESTAMP] [CATEGORY] …` lines to pollute the forensic trail. We
+// whitelist Category and sanitize Message before logging.
 func (app *App) handleDebugLog(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Category string `json:"category"`
@@ -4880,8 +5090,43 @@ func (app *App) handleDebugLog(w http.ResponseWriter, r *http.Request) {
 	if req.Category == "" {
 		req.Category = "UI"
 	}
-	app.debugLog.Log(req.Category, req.Message)
+	if !isValidLogCategory(req.Category) {
+		req.Category = "UI"
+	}
+	app.debugLog.Log(req.Category, sanitizeLogField(req.Message))
 	w.WriteHeader(204)
+}
+
+// isValidLogCategory rejects Category values not in the app's known set.
+// Unknown / attacker-supplied categories fall through to "UI" rather than
+// being written to disk verbatim.
+func isValidLogCategory(c string) bool {
+	switch c {
+	case LogSync, LogCompare, LogAutoSync, LogTrash, LogError, LogUI, LogConfig:
+		return true
+	}
+	return false
+}
+
+// sanitizeLogField strips control characters (CR, LF, NUL, other < 0x20)
+// and caps length to 1024 bytes for debug-log context. Prevents log
+// forgery: an authenticated caller submitting Message with embedded \n
+// must not be able to inject fake `[TIMESTAMP] [CATEGORY] …` lines.
+func sanitizeLogField(s string) string {
+	const maxLen = 1024
+	if len(s) > maxLen {
+		s = s[:maxLen]
+	}
+	b := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c == 0x7f {
+			b = append(b, ' ')
+			continue
+		}
+		b = append(b, c)
+	}
+	return string(b)
 }
 
 // handleDebugDownload serves the debug log file for download.

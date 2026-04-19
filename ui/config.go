@@ -23,6 +23,15 @@ type Config struct {
 	CleanupKeep          map[string][]string              `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
 	AutoSync             AutoSyncConfig                   `json:"autoSync,omitempty"`
 	Prowlarr             ProwlarrConfig                   `json:"prowlarr,omitempty"`
+	// Authentication — matches Radarr/Sonarr Security panel model.
+	// Credentials (bcrypt password hash, API key) live separately in
+	// /config/auth.json, NOT here, so this file can be exported/shared
+	// without leaking secrets.
+	Authentication         string   `json:"authentication,omitempty"`         // "forms" (default) | "basic" | "none"
+	AuthenticationRequired string   `json:"authenticationRequired,omitempty"` // "enabled" | "disabled_for_local_addresses" (default)
+	TrustedProxies         string   `json:"trustedProxies,omitempty"`         // comma-separated IPs — reverse-proxy deployments
+	TrustedNetworks        string   `json:"trustedNetworks,omitempty"`        // comma-separated IPs/CIDRs for local-bypass; empty = Radarr-parity default
+	SessionTTLDays         int      `json:"sessionTtlDays,omitempty"`         // default 30
 }
 
 // ProwlarrConfig holds Prowlarr connection settings for the Scoring Sandbox.
@@ -263,9 +272,12 @@ func (cs *configStore) saveLocked() error {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
-	// Atomic write: temp file + rename
+	// Atomic write: temp file + rename. Mode 0600 — Arr API keys, webhook
+	// URLs, and Gotify/Pushover tokens live here; prevent other users on the
+	// same Docker host (or backup jobs running as other UIDs) from reading
+	// secrets just because /config/ is readable.
 	tmp := cs.filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return fmt.Errorf("write temp config: %w", err)
 	}
 	return os.Rename(tmp, cs.filePath)
@@ -687,7 +699,7 @@ func migrateImportedProfiles(cs *configStore, ps *profileStore) {
 		return
 	}
 	tmp := cs.filePath + ".tmp"
-	if err := os.WriteFile(tmp, cleaned, 0644); err != nil {
+	if err := os.WriteFile(tmp, cleaned, 0600); err != nil {
 		return
 	}
 	os.Rename(tmp, cs.filePath)

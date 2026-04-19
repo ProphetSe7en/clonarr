@@ -426,7 +426,7 @@ func (app *App) sendPushover(title, message string) {
 		"priority": 0, // normal priority
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := app.notifyClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	resp, err := app.safeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Pushover: send failed: %v", err)
 		return
@@ -456,7 +456,7 @@ func (app *App) notifyCleanup(events []CleanupEvent) {
 			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Cleanup: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -581,7 +581,7 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 		}
 		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+			if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 				log.Printf("Auto-sync: Discord notification failed: %v", err)
 			} else {
 				resp.Body.Close()
@@ -629,7 +629,7 @@ func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 				"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 			}
 			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+				if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 					log.Printf("Repo update: Discord notification failed: %v", err)
 				} else {
 					resp.Body.Close()
@@ -687,7 +687,7 @@ func (app *App) notifyChangelog(section ChangelogSection) {
 				"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
 			}
 			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.notifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
+				if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
 					log.Printf("Changelog: Discord notification failed: %v", err)
 				} else {
 					resp.Body.Close()

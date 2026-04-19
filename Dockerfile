@@ -1,16 +1,19 @@
 FROM golang:1.24-alpine AS builder
 
-ARG VERSION=2.0.5
+ARG VERSION=2.0.6
 
 RUN apk add --no-cache git
 
 WORKDIR /build
+COPY ui/go.mod ui/go.sum ./
+RUN go mod download
+
 COPY ui/ .
-RUN go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
 FROM alpine:3.21
 
-ARG VERSION=2.0.5
+ARG VERSION=2.0.6
 LABEL org.opencontainers.image.version=${VERSION}
 
 RUN apk add --no-cache git tini tzdata ca-certificates su-exec && \
@@ -31,6 +34,6 @@ ENV PORT=6060
 EXPOSE 6060
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://localhost:6060/api/trash/status || exit 1
+  CMD wget -qO- http://localhost:6060/api/health || exit 1
 
 ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]

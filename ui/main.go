@@ -14,6 +14,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"clonarr/auth"
+	"clonarr/netsec"
 )
 
 var Version = "dev" // overridden at build time via ldflags
@@ -51,8 +54,10 @@ type App struct {
 	profiles       *profileStore
 	customCFs      *customCFStore
 	debugLog       *debugLogger
-	httpClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls
-	notifyClient   *http.Client // shared HTTP client for Discord/Gotify notifications
+	httpClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls (LAN targets legit)
+	notifyClient   *http.Client // Gotify only — LAN targets legit (self-hosted Gotify)
+	safeClient     *http.Client // Discord/Pushover — always external, SSRF-blocklisted
+	authStore      *auth.Store  // exposed so handlers can live-reload auth settings
 	pullUpdateCh   chan string  // send new interval string to reschedule pull
 	cleanupEvents  []CleanupEvent
 	cleanupMu      sync.Mutex
@@ -102,6 +107,7 @@ func main() {
 		debugLog:     debugLog,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 		notifyClient: &http.Client{Timeout: 10 * time.Second},
+		safeClient:   netsec.NewSafeHTTPClient(10*time.Second, nil),
 		pullUpdateCh: make(chan string, 1),
 	}
 
@@ -131,7 +137,7 @@ func main() {
 	defer cancel()
 
 	// Background: clone/pull TRaSH repo on startup
-	go func() {
+	safeGo("startup-trash-pull", func() {
 		cfg := config.Get()
 		if err := trash.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
 			log.Printf("Startup TRaSH clone/pull failed: %v", err)
@@ -139,10 +145,10 @@ func main() {
 			app.autoSyncQualitySizes()
 			app.autoSyncAfterPull()
 		}
-	}()
+	})
 
 	// Scheduled TRaSH pull (reads interval from config, supports live rescheduling)
-	go func() {
+	safeGo("trash-pull-scheduler", func() {
 		cfg := config.Get()
 		interval := parsePullInterval(cfg.PullInterval)
 		var ticker *time.Ticker
@@ -192,7 +198,7 @@ func main() {
 				return
 			}
 		}
-	}()
+	})
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()
@@ -303,6 +309,24 @@ func main() {
 	mux.HandleFunc("POST /api/scoring/parse/batch", app.handleScoringParseBatch)
 	mux.HandleFunc("GET /api/scoring/profile-scores", app.handleScoringProfileScores)
 
+	// ==== Authentication =====================================================
+	authStore, authHandlers := initAuth(ctx, config)
+	app.authStore = authStore
+
+	mux.HandleFunc("GET /setup", authHandlers.handleSetupPage)
+	mux.HandleFunc("POST /setup", authHandlers.handleSetupSubmit)
+	mux.HandleFunc("GET /login", authHandlers.handleLoginPage)
+	mux.HandleFunc("POST /login", authHandlers.handleLoginSubmit)
+	mux.HandleFunc("POST /logout", authHandlers.handleLogout)
+	mux.HandleFunc("GET /api/auth/status", authHandlers.handleAuthStatus)
+	mux.HandleFunc("GET /api/auth/api-key", authHandlers.handleGetAPIKey)
+	mux.HandleFunc("POST /api/auth/regenerate-api-key", authHandlers.handleRegenAPIKey)
+	mux.HandleFunc("POST /api/auth/change-password", authHandlers.handleChangePassword)
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	})
+
 	// Static files
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -310,9 +334,29 @@ func main() {
 	}
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
+	// Background: reap expired sessions every 5 min
+	safeGo("session-cleanup", func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				authStore.CleanupExpiredSessions()
+			}
+		}
+	})
+
+	// Middleware chain — outermost first:
+	//   SecurityHeaders → CSRF → Auth → mux
+	var handler http.Handler = authStore.Middleware(mux)
+	handler = authStore.CSRFMiddleware(handler)
+	handler = auth.SecurityHeadersMiddleware(handler)
+
 	server := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -336,6 +380,103 @@ func main() {
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
+}
+
+// initAuth loads auth settings from the main config store (JSON), validates,
+// loads existing credentials from /config/auth.json, and returns the store
+// + handlers ready to wire into the mux.
+//
+// Refuses to start (log.Fatal) on any unsafe combination (unknown enum
+// values) or on malformed auth.json.
+func initAuth(ctx context.Context, configStore *configStore) (*auth.Store, *AuthHandlers) {
+	cfg := auth.DefaultConfig()
+
+	appCfg := configStore.Get()
+	if appCfg.Authentication != "" {
+		cfg.Mode = auth.AuthMode(appCfg.Authentication)
+	}
+	if appCfg.AuthenticationRequired != "" {
+		cfg.Requirement = auth.Requirement(appCfg.AuthenticationRequired)
+	}
+	if appCfg.SessionTTLDays > 0 {
+		cfg.SessionTTL = time.Duration(appCfg.SessionTTLDays) * 24 * time.Hour
+	}
+	// Env-var override for trust-boundary config. If the env var is set at
+	// process start, that value wins over the config-file value AND the UI
+	// cannot change it. Use this in Unraid templates / docker-compose to
+	// lock down the trust boundary against UI-takeover attacks (session
+	// hijack, local-bypass peer adding themselves to the trust list).
+	if envNets := strings.TrimSpace(os.Getenv("TRUSTED_NETWORKS")); envNets != "" {
+		nets, err := netsec.ParseTrustedNetworks(envNets)
+		if err != nil {
+			log.Fatalf("auth: invalid TRUSTED_NETWORKS env var: %v", err)
+		}
+		cfg.TrustedNetworks = nets
+		cfg.TrustedNetworksLocked = true
+		cfg.TrustedNetworksRaw = envNets
+		log.Printf("auth: trusted_networks locked by TRUSTED_NETWORKS env var (%d entries)", len(nets))
+	} else if appCfg.TrustedNetworks != "" {
+		nets, err := netsec.ParseTrustedNetworks(appCfg.TrustedNetworks)
+		if err != nil {
+			log.Fatalf("auth: invalid trustedNetworks config: %v", err)
+		}
+		cfg.TrustedNetworks = nets
+	}
+
+	if envProxies := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES")); envProxies != "" {
+		ips, err := netsec.ParseTrustedProxies(envProxies)
+		if err != nil {
+			log.Fatalf("auth: invalid TRUSTED_PROXIES env var: %v", err)
+		}
+		cfg.TrustedProxies = ips
+		cfg.TrustedProxiesLocked = true
+		cfg.TrustedProxiesRaw = envProxies
+		log.Printf("auth: trusted_proxies locked by TRUSTED_PROXIES env var (%d entries)", len(ips))
+	} else if appCfg.TrustedProxies != "" {
+		ips, err := netsec.ParseTrustedProxies(appCfg.TrustedProxies)
+		if err != nil {
+			log.Fatalf("auth: invalid trustedProxies config: %v", err)
+		}
+		cfg.TrustedProxies = ips
+	}
+
+	if err := auth.ValidateConfig(cfg); err != nil {
+		log.Fatalf("auth config refuses to start: %v", err)
+	}
+
+	store := auth.NewStore(cfg)
+	if _, err := store.Load(); err != nil {
+		log.Fatalf("auth: load credentials: %v", err)
+	}
+
+	if store.IsConfigured() {
+		log.Printf("auth: mode=%s required=%s user=%s", cfg.Mode, cfg.Requirement, store.Username())
+	} else {
+		log.Printf("auth: no credentials yet — first run, /setup wizard will prompt for admin user")
+	}
+
+	if cfg.Mode == auth.ModeNone {
+		log.Printf("auth: WARNING — authentication is DISABLED via authentication=none. Do not expose this container to untrusted networks.")
+	}
+
+	// Periodic loud warning while in none mode. Picks up live-reload
+	// transitions both ways.
+	safeGo("auth-none-warning", func() {
+		t := time.NewTicker(60 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if store.Config().Mode == auth.ModeNone {
+					log.Printf("auth: WARNING — authentication is still DISABLED. Every request is admin. Re-enable auth or restrict to 127.0.0.1.")
+				}
+			}
+		}
+	})
+
+	return store, &AuthHandlers{Store: store}
 }
 
 // parsePullInterval parses a pull interval string. Supports Go duration (1h, 30m, 24h).

@@ -1,5 +1,53 @@
 # Changelog
 
+## v2.0.6
+
+**⚠️ Breaking change:** Authentication is now enabled by default (Forms + "Disabled for Trusted Networks", matching the Radarr/Sonarr pattern). On first run after upgrade, Clonarr will redirect to `/setup` to create an admin username and password. Existing sessions are invalidated (cookie name changed from `constat_session` to `clonarr_session` as part of branding cleanup). Homepage widgets and external scripts hitting `/api/*` now need the API key (Settings → Security) — send as `X-Api-Key` header.
+
+### Added
+
+- **Authentication (Radarr/Sonarr pattern)** — `/config/auth.json` stores the bcrypt-hashed password + API key. Three modes:
+  - `forms` (default): login page + session cookie, 30-day TTL.
+  - `basic`: HTTP Basic behind a reverse proxy.
+  - `none`: auth disabled (requires password-confirm to enable — catastrophic blast radius).
+- **Authentication Required** — `enabled` (every request needs auth) or `disabled_for_local_addresses` (default — LAN bypasses).
+- **Trusted Networks** — user-configurable CIDR list of what counts as "local". Empty = Radarr-parity defaults (10/8, 172.16/12, 192.168/16, link-local, IPv6 ULA, loopback). Narrow the list (`192.168.0.0/24`, `192.168.0.5/32`) for tighter control.
+- **Trusted Proxies** — required when Clonarr sits behind a reverse proxy (SWAG, Authelia, etc.) so `X-Forwarded-For` is trusted.
+- **Env-var override for trust-boundary config** — set `TRUSTED_NETWORKS` and/or `TRUSTED_PROXIES` in the Unraid template or `docker-compose.yml` to pin the values at host level. When set, the UI shows the field as locked and rejects edits — the trust boundary can only be changed by editing the template and restarting.
+- **API key** — auto-generated on first setup, rotatable from the Security panel. Send as `X-Api-Key: <key>` header (preferred) or `?apikey=<key>` query param (legacy — leaks to access logs and browser history). For Homepage widgets, scripts, Uptime Kuma.
+- **Change password** — from the Security panel. Requires current password. Invalidates all other sessions.
+- **CSRF protection** — double-submit cookie pattern on all state-mutating requests. Transparent to browser users; scripts using the API key bypass (verified key required, not just presence).
+- **Security headers** — `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`. Radarr-parity scope.
+- **SSRF-safe notification client** — Discord and Pushover (both always external) now use a blocklisted HTTP client that refuses RFC1918/loopback/link-local/ULA/NAT64/CGN/doc-range targets with per-request IP revalidation (defeats DNS rebinding). Gotify stays on a plain client (LAN targets are legitimate for self-hosted Gotify).
+- **Webhook and notification secret masking** — Discord webhook URLs, Gotify token, Pushover user key + app token, and Arr instance API keys are masked in API responses. Empty-on-unchanged-edit preserves the stored value on save (so editing unrelated fields doesn't clobber secrets).
+
+### Fixed
+
+- **T64 — live-reload no longer clobbers env-locked trust-boundary fields.** Previously any unrelated config save (session TTL, auth mode) could silently empty the env-derived trusted-networks slice. Now guarded at every call site.
+- **T65 — `UpdateConfig` preserves all deployment-level fields.** Previously only `AuthFilePath` was preserved; `SessionsFilePath`, `MaxSessions`, and env-lock state could be silently dropped by a future caller building config from scratch. Defense-in-depth: also force-restores locked values from the internal state.
+- **T66 — data races eliminated from `Middleware` / `TrustedProxies()` / `IsRequestFromTrustedProxy()`.** Config snapshot taken via `RLock` at the top; all downstream reads use the local value. Passes `go test -race`.
+
+### Changed
+
+- **Cookie rename** — `constat_csrf` → `clonarr_csrf`, `constat_session` → `clonarr_session`. Avoids browser-scope collision when both apps sit behind the same parent domain. Existing sessions won't survive the upgrade.
+- **Basic realm** — `WWW-Authenticate: Basic realm="Clonarr"` (was `"Constat"` from initial port).
+- **Setup page footer** — GitHub link points to `prophetse7en/clonarr` (was `/constat`).
+
+### Security
+
+- First-run forces the `/setup` wizard — no default credentials.
+- bcrypt cost 12; password verify is timing-equalized (prevents user-enumeration via response timing).
+- Session persistence via atomic write to `/config/sessions.json` (survives container restart).
+- CIDR min-mask enforced (`/8` IPv4, `/16` IPv6) to reject mis-typed host bits masking as subnets.
+- See `docs/security-implementation-baseline.md` in the repo for the full trap catalogue (T1–T66) behind the implementation.
+
+### Notes for upgraders
+
+- First boot redirects to `/setup`. Choose a strong password (≥10 chars, 2+ of upper/lower/digit/symbol).
+- If you access Clonarr from the same LAN the host is on, the default "Disabled for Trusted Networks" mode will skip login for you — no change in day-to-day UX.
+- Homepage / Uptime Kuma: use the API key from Security panel, send as `X-Api-Key` header.
+- Lost your password: stop the container, delete `/config/auth.json` (credentials only — no profile data), restart. The setup wizard will run again.
+
 ## v2.0.5
 
 ### Fixed

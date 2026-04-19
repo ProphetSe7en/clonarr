@@ -211,10 +211,12 @@
   .settings-title:hover { background: #1c2128; }
   .settings-title .arrow { color: #8b949e; font-size:13px; margin-right: 8px; }
   .settings-body { padding: 16px 20px; }
-  .setting-row { display: flex; align-items: center; padding: 10px 0; }
+  .setting-row { display: flex; align-items: flex-start; padding: 10px 0; }
   .setting-row + .setting-row { border-top: 1px solid #21262d; }
-  .setting-label { width: 160px; font-size: 13px; color: #aaa; flex-shrink: 0; }
+  .setting-label { width: 160px; font-size: 13px; color: #aaa; flex-shrink: 0; padding-top: 6px; }
   .setting-value { flex: 1; }
+  .setting-help { font-size: 12px; color: #8b949e; margin-top: 6px; line-height: 1.5; }
+  .setting-help code { background: #161b22; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; color: #c9d1d9; }
 
   /* Inputs */
   .input { background: #0d1117; border: 1px solid #30363d; color: #e1e4e8; padding: 6px 10px; border-radius: 6px; font-size: 13px; width: 100%; }
@@ -597,6 +599,38 @@
         </template>
       </div>
     </div>
+    <!-- User menu: username + logout when authenticated, "Local" badge when
+         reaching via Trusted-Networks bypass, nothing when auth=none. -->
+    <div x-show="authStatus.authenticated || authStatus.localBypass" x-cloak
+         style="margin-left:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:#8b949e">
+      <template x-if="authStatus.authenticated">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span x-text="authStatus.username" :title="'Logged in as ' + authStatus.username"
+                style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <form method="POST" action="/logout" style="margin:0">
+            <input type="hidden" name="csrf_token" :value="csrfToken()">
+            <button type="submit" class="btn btn-secondary" style="padding:4px 10px;font-size:11px" title="Log out">Logout</button>
+          </form>
+        </div>
+      </template>
+      <template x-if="!authStatus.authenticated && authStatus.localBypass">
+        <span style="background:#1a2f45;color:#58a6ff;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:500;letter-spacing:0.3px;border:1px solid #1f3b5a"
+              title="Local network — authentication bypassed for this network">Local</span>
+      </template>
+    </div>
+  </div>
+
+  <!-- No-auth warning banner — dismissible per-browser via localStorage.
+       Server logs a warning every 60s regardless of dismissal. -->
+  <div x-show="authStatus.authentication === 'none' && !noAuthBannerDismissed" x-cloak
+       style="background:#5a1f1f;border-bottom:2px solid #8b2d2d;color:#ffdada;padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:13px;font-weight:500">
+    <span style="flex:1;text-align:center">
+      ⚠️ Authentication is disabled — anyone who reaches this URL is admin. Set Authentication to Forms or Basic in <strong>Settings → Security</strong>, or make sure another auth layer (reverse proxy, firewall) is in front.
+    </span>
+    <button @click="dismissNoAuthBanner()" title="Hide on this device"
+            style="background:rgba(255,255,255,0.12);color:#ffdada;border:1px solid rgba(255,218,218,0.3);padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">
+      Dismiss
+    </button>
   </div>
 
   <!-- ==================== APP PAGES (Radarr/Sonarr) ==================== -->
@@ -2777,11 +2811,15 @@
                 <div style="display:flex;flex-direction:column;gap:4px">
                   <div class="pd-row">
                     <span class="pd-label">Cutoff</span>
-                    <select class="pb-input pd-input" x-model="pb.cutoff">
-                      <option value="" disabled x-show="pb.qualityItems.filter(q => q.allowed).length === 0">No allowed qualities</option>
-                      <template x-for="(item, idx) in (pb.qualityItems || []).filter(q => q.allowed)" :key="'pb-cut-'+item.name+'-'+idx">
-                        <option :value="item.name" x-text="item.name"></option>
-                      </template>
+                    <!-- Alpine's <template x-for> inside <select> does NOT re-render options
+                         when the source array's nested fields change (e.g. item.allowed
+                         toggled inside Edit Quality Items). Same bug class that hit the CF
+                         editor dropdowns. Switch to programmatic population + x-effect so
+                         toggles refresh the cutoff list immediately, without requiring
+                         Edit Groups → Done Editing Groups as a workaround. -->
+                    <select class="pb-input pd-input"
+                            x-effect="populatePBCutoffSelect($el, pb.qualityItems, pb.cutoff)"
+                            @change="pb.cutoff = $el.value">
                     </select>
                   </div>
                   <div class="pd-row">
@@ -2896,7 +2934,15 @@
                             <span style="width:10px;display:inline-block"></span>
                           </template>
                           <label class="toggle toggle-sm" style="flex-shrink:0">
-                            <input type="checkbox" x-model="item.allowed">
+                            <!-- Same pattern as qualityStructure toggle (line 3615): reassign
+                                 pb.qualityItems by spread so x-effect on the cutoff select
+                                 (populatePBCutoffSelect) re-runs. Plain x-model mutates in
+                                 place; Alpine's reactivity through function-argument arrays
+                                 doesn't always propagate to the cutoff select without a
+                                 top-level reference change. -->
+                            <input type="checkbox"
+                                   :checked="item.allowed"
+                                   @change="item.allowed = $event.target.checked; pb.qualityItems = pb.qualityItems.slice()">
                             <span class="slider"></span>
                           </label>
                           <template x-if="qualityStructureRenaming !== item._id">
@@ -3470,7 +3516,7 @@
                   <template x-if="pdQualityActive">
                     <select class="pb-input pd-input"
                             :style="pdOverrides.cutoffQuality !== (profileDetail?.detail?.profile?.cutoff || '') && pdOverrides.cutoffQuality !== '' ? 'border-color:#d29922' : ''"
-                            x-effect="populateCutoffSelect($el, qualityStructure, profileDetail?.detail?.profile, pdOverrides.cutoffQuality)"
+                            x-effect="populateCutoffSelect($el, qualityStructure, profileDetail?.detail?.profile, pdOverrides.cutoffQuality, qualityOverrides)"
                             @change="pdOverrides.cutoffQuality = $el.value">
                     </select>
                   </template>
@@ -3578,7 +3624,15 @@
                               <span style="width:10px;display:inline-block"></span>
                             </template>
                             <label class="toggle toggle-sm" style="flex-shrink:0">
-                              <input type="checkbox" x-model="item.allowed">
+                              <!-- @change reassigns qualityStructure by spread so Alpine's
+                                   x-effect on the cutoff <select> re-runs. Plain x-model mutates
+                                   item.allowed in-place; Alpine's dependency tracking through
+                                   function-argument arrays misses the nested write and the cutoff
+                                   dropdown's populateCutoffSelect stays stale until a top-level
+                                   reassignment (e.g. Edit Groups → Done) forces a refresh. -->
+                              <input type="checkbox"
+                                     :checked="item.allowed"
+                                     @change="item.allowed = $event.target.checked; qualityStructure = qualityStructure.slice()">
                               <span class="slider"></span>
                             </label>
                             <template x-if="qualityStructureRenaming !== item._id">
@@ -3671,11 +3725,14 @@
           </div>
 
           <!-- Score Override Summary — shown when toggle is active and overrides exist -->
-          <template x-if="cfScoreOverrideActive && Object.keys(cfScoreOverrides).length > 0">
+          <!-- Render-time filter: only show entries whose score differs from TRaSH default.
+               Defense-in-depth: if any code path populates cfScoreOverrides with default-equal
+               entries (legacy bug, compare-view leak, etc.), they won't appear here. -->
+          <template x-if="cfScoreOverrideActive && Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0">
             <div style="margin-top:8px;background:#161b22;border:1px solid #d29922;border-radius:6px;padding:10px 14px">
               <div style="font-size:12px;font-weight:600;color:#d29922;margin-bottom:8px">Overridden Scores</div>
-              <div :style="'column-count:' + (Object.keys(cfScoreOverrides).length > 8 ? 2 : 1) + ';column-gap:24px'">
-                <template x-for="tid in Object.keys(cfScoreOverrides).sort((a,b) => (resolveCFName(a)).localeCompare(resolveCFName(b)))" :key="'so-'+tid">
+              <div :style="'column-count:' + (Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 8 ? 2 : 1) + ';column-gap:24px'">
+                <template x-for="tid in Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).sort((a,b) => (resolveCFName(a)).localeCompare(resolveCFName(b)))" :key="'so-'+tid">
                   <div style="break-inside:avoid;display:flex;align-items:center;padding:3px 0;font-size:12px;gap:4px">
                     <span style="color:#e1e4e8;width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="resolveCFName(tid)"></span>
                     <span style="color:#aaa;width:55px;flex-shrink:0;text-align:right;font-family:monospace" x-text="resolveCFDefaultScore(tid)"></span>
@@ -4136,6 +4193,7 @@
         <div class="settings-nav" x-show="config.devMode" :class="settingsSection === 'prowlarr' && 'settings-nav-active'" @click="settingsSection = 'prowlarr'; pushNav()">Prowlarr</div>
         <div class="settings-nav" :class="settingsSection === 'notifications' && 'settings-nav-active'" @click="settingsSection = 'notifications'; pushNav()">Notifications</div>
         <div class="settings-nav" :class="settingsSection === 'display' && 'settings-nav-active'" @click="settingsSection = 'display'; pushNav()">Display</div>
+        <div class="settings-nav" :class="settingsSection === 'security' && 'settings-nav-active'" @click="settingsSection = 'security'; pushNav(); fetchApiKey()">Security</div>
         <div class="settings-nav" :class="settingsSection === 'advanced' && 'settings-nav-active'" @click="settingsSection = 'advanced'; pushNav()">Advanced</div>
       </div>
 
@@ -4474,6 +4532,145 @@
           </div>
         </div>
 
+        <!-- ===== Security ===== -->
+        <div x-show="settingsSection === 'security'">
+          <div class="settings-section-title">Security</div>
+          <div class="settings-section-desc">Authentication, API key, and password. Same pattern as Radarr/Sonarr.</div>
+
+          <div class="setting-row">
+            <div class="setting-label">Authentication</div>
+            <div class="setting-value">
+              <select class="config-input" style="max-width:220px" x-model="config.authentication" @change="configDirty = true">
+                <option value="forms">Forms (login page)</option>
+                <option value="basic">Basic (browser popup)</option>
+                <option value="none">None (disabled — unsafe)</option>
+              </select>
+              <div class="setting-help">How users log in. <strong>Forms</strong> for most users. <strong>Basic</strong> behind a reverse proxy that handles login. <strong>None</strong> disables auth entirely — only safe behind another auth layer or on a machine not reachable from other devices.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Authentication Required</div>
+            <div class="setting-value">
+              <select class="config-input" style="max-width:280px" x-model="config.authenticationRequired" @change="configDirty = true">
+                <option value="disabled_for_local_addresses">Disabled for Trusted Networks</option>
+                <option value="enabled">Enabled (all traffic)</option>
+              </select>
+              <div class="setting-help"><strong>Enabled</strong> requires a password from every request including your LAN. <strong>Disabled for Trusted Networks</strong> lets devices on the networks listed below skip the login page.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Trusted Networks</div>
+            <div class="setting-value">
+              <input type="text" class="config-input" placeholder="e.g. 192.168.0.0/24, 10.0.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
+              <div class="setting-help" x-show="authStatus.trustedNetworksLocked" x-cloak style="color:#d29922">
+                <strong>Locked by <code>TRUSTED_NETWORKS</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container. Unsetting the env var unlocks this field.
+              </div>
+              <div class="setting-help" x-show="!authStatus.trustedNetworksLocked">
+                IPs or CIDR subnets that skip login when <em>Authentication Required</em> is "Disabled for Trusted Networks". Every address in this list gets full admin access without a password.
+                <br><br>
+                <strong>Leave empty</strong> falls back to all private networks (<code>10.x</code>, <code>172.16-31.x</code> incl. Docker bridges, <code>192.168.x</code>, link-local, IPv6 ULA). Convenient but treats any container on your Docker host and any device on your home WiFi as admin.
+                <br><br>
+                <strong>Set explicitly</strong> to narrow: <code>192.168.0.0/24</code> (home VLAN), <code>10.0.0.0/24</code> (WireGuard), <code>192.168.0.5/32</code> (one device). Loopback is always trusted so healthchecks work.
+                <br><br>
+                <strong>Lock via env var</strong> <code>TRUSTED_NETWORKS</code> (comma-separated CIDRs) in the Unraid template to prevent this field from being changed through the UI — useful if you want host-level control over the trust boundary.
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Trusted Proxies</div>
+            <div class="setting-value">
+              <input type="text" class="config-input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
+              <div class="setting-help" x-show="authStatus.trustedProxiesLocked" x-cloak style="color:#d29922">
+                <strong>Locked by <code>TRUSTED_PROXIES</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container.
+              </div>
+              <div class="setting-help" x-show="!authStatus.trustedProxiesLocked">Only needed if Clonarr runs behind a reverse proxy (SWAG, Authelia, etc). List the proxy's IP so <code>X-Forwarded-For</code> is trusted. Leave empty for direct access. Lock via env var <code>TRUSTED_PROXIES</code> in the Unraid template for host-level control.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Session TTL (days)</div>
+            <div class="setting-value">
+              <input type="number" class="config-input" style="max-width:100px" min="1" max="365" x-model.number="config.sessionTtlDays" @input="configDirty = true">
+              <div class="setting-help">How long a login stays valid before re-authentication. Default 30. Max 365.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label"></div>
+            <div class="setting-value">
+              <button class="btn btn-primary" @click="saveSecurityConfig()" :disabled="pwChangeSaving">
+                <span x-show="!pwChangeSaving">Save security settings</span>
+                <span x-show="pwChangeSaving">Saving...</span>
+              </button>
+              <span x-show="securitySaveMsg" x-text="securitySaveMsg" :style="securitySaveOk ? 'color:#3fb950;margin-left:10px;font-size:13px' : 'color:#f85149;margin-left:10px;font-size:13px'"></span>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #30363d;margin:20px 0"></div>
+
+          <!-- API Key -->
+          <div class="setting-row">
+            <div class="setting-label">API Key</div>
+            <div class="setting-value">
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="text" class="config-input" style="flex:1;font-family:monospace;font-size:12px" readonly
+                       :value="securityApiKeyVisible ? securityApiKey : (securityApiKey ? '••••••••••••••••••••••••••••••••' : 'Loading...')">
+                <button class="btn btn-secondary" @click="securityApiKeyVisible = !securityApiKeyVisible" x-text="securityApiKeyVisible ? 'Hide' : 'Show'"></button>
+                <button class="btn btn-secondary" @click="copyApiKey()" x-text="securityApiKeyCopied ? 'Copied!' : 'Copy'"></button>
+              </div>
+              <div class="setting-help">For scripts and Homepage widgets. Send as <code>X-Api-Key: &lt;key&gt;</code> header. Query parameter (<code>?apikey=</code>) also works but leaks to logs and browser history — prefer the header.</div>
+              <div style="margin-top:8px" x-show="!securityRegenConfirm">
+                <button class="btn btn-danger" style="font-size:12px" @click="securityRegenConfirm = true">Regenerate API Key</button>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px" x-show="securityRegenConfirm">
+                <button class="btn btn-danger" @click="regenerateApiKey()" :disabled="securityRegenerating">
+                  <span x-show="!securityRegenerating">Confirm regenerate (old key stops working immediately)</span>
+                  <span x-show="securityRegenerating">Regenerating...</span>
+                </button>
+                <button class="btn btn-secondary" @click="securityRegenConfirm = false">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #30363d;margin:20px 0"></div>
+
+          <!-- Password change -->
+          <div class="settings-section-title" style="font-size:14px;margin-bottom:12px">Change password</div>
+          <div class="setting-row">
+            <div class="setting-label">Current password</div>
+            <div class="setting-value">
+              <input type="password" class="config-input" style="max-width:280px" autocomplete="current-password" x-model="pwChange.current">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">New password</div>
+            <div class="setting-value">
+              <input type="password" class="config-input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.next">
+              <div class="setting-help">At least 10 characters, with at least 2 of: uppercase, lowercase, digit, symbol.</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Confirm new password</div>
+            <div class="setting-value">
+              <input type="password" class="config-input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.confirm">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"></div>
+            <div class="setting-value">
+              <button class="btn btn-primary" @click="changePassword()" :disabled="pwChangeSaving || !pwChange.current || !pwChange.next || !pwChange.confirm">
+                <span x-show="!pwChangeSaving">Change password</span>
+                <span x-show="pwChangeSaving">Saving...</span>
+              </button>
+              <span x-show="pwChangeMsg" x-text="pwChangeMsg" :style="pwChangeOk ? 'color:#3fb950;margin-left:10px;font-size:13px' : 'color:#f85149;margin-left:10px;font-size:13px'"></span>
+              <div class="setting-help">Changing your password signs out other sessions. You will remain logged in on this browser.</div>
+            </div>
+          </div>
+        </div>
+
         <!-- ===== Advanced ===== -->
         <div x-show="settingsSection === 'advanced'">
           <div class="settings-section-title">Advanced</div>
@@ -4660,7 +4857,10 @@
   </div>
 
   <!-- ==================== SYNC MODAL ==================== -->
-  <div class="modal-overlay" x-show="showSyncModal" @click.self="showSyncModal = false" x-cloak>
+  <!-- Outside-click does NOT close the modal — user requests that only Esc
+       and Cancel close it, to prevent accidental loss of a half-edited sync
+       form. Esc is bound on the wrapper via @keyup.escape.window. -->
+  <div class="modal-overlay" x-show="showSyncModal" @keyup.escape.window="showSyncModal = false" x-cloak>
     <div class="modal" style="width:560px">
       <!-- Scrollable content region so many diffs don't push Cancel/Dry Run/Apply off-screen -->
       <div style="flex:1 1 auto;overflow-y:auto;min-height:0;padding:24px">
@@ -5676,9 +5876,65 @@
     Clonarr <span x-text="config.version || ''"></span> — Built by <a href="https://github.com/ProphetSe7en" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none">ProphetSe7en</a>
   </div>
 
+  <!-- Disable-auth confirmation modal (requires password) -->
+  <div x-show="disableAuthModalOpen" x-cloak
+       style="position:fixed;top:0;right:0;bottom:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;box-sizing:border-box"
+       @keydown.escape.window="disableAuthModalOpen = false; disableAuthError = ''">
+    <div @click.outside="disableAuthModalOpen = false; disableAuthError = ''"
+         style="background:#1a1d24;border:2px solid #8b2d2d;border-radius:10px;padding:24px 28px;width:min(520px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+      <h2 style="margin:0 0 10px;font-size:20px;color:#ff7a7a">⚠️ Disable authentication?</h2>
+      <p style="font-size:13px;line-height:1.5;color:#d4d4d4;margin:10px 0 8px">
+        You are about to turn off login for <strong>Clonarr</strong>. After this change, anyone who reaches this UI will be admin — they can modify your Radarr/Sonarr/Prowlarr API keys, change Discord webhooks to their own server, and read every notification token.
+      </p>
+      <p style="font-size:13px;line-height:1.5;color:#d4d4d4;margin:8px 0">
+        Pick this only if you have <em>another</em> authentication layer in front (Authelia, Cloudflare Access) or you are running on a machine that is not reachable from other devices.
+      </p>
+      <div style="background:#281818;border:1px solid #5a2d2d;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:12px;color:#ffcaca">
+        A persistent red warning banner will be shown at the top of every page while authentication is disabled, and the server logs a warning every 60 seconds.
+      </div>
+      <label style="display:block;font-size:12px;color:#c3c7cc;margin:12px 0 6px">
+        Enter your <strong>current admin password</strong> to confirm:
+      </label>
+      <input type="password" class="config-input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
+             @keydown.enter="disableAuthPassword && (disableAuthModalOpen = false, saveSecurityConfig(true))"
+             style="width:100%;margin-bottom:8px">
+      <div x-show="disableAuthError" x-text="disableAuthError" style="color:#ff9a9a;font-size:12px;margin:0 0 10px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary"
+                @click="disableAuthModalOpen = false; disableAuthError = ''; disableAuthPassword = ''; config.authentication = authStatus.authentication || 'forms'">Cancel</button>
+        <button class="btn btn-danger"
+                :disabled="!disableAuthPassword"
+                @click="disableAuthModalOpen = false; saveSecurityConfig(true)">
+          Yes, disable authentication
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
+// CSRF protection: attach X-CSRF-Token header to every mutating fetch.
+// Server sets a clonarr_csrf cookie on GETs; the wrapper below reads the
+// cookie and echoes it as a header on POST/PUT/DELETE/PATCH. Handles all
+// current fetches and any future ones without per-call changes. Covers
+// AJAX only — <form method="POST"> uses a hidden csrf_token field
+// (see logout form in the header).
+(function() {
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      const m = document.cookie.match(/(?:^|; )clonarr_csrf=([^;]+)/);
+      if (m) {
+        init.headers = Object.assign({}, init.headers || {}, { 'X-CSRF-Token': m[1] });
+      }
+    }
+    return origFetch(input, init);
+  };
+})();
+
 // Sanitize HTML — only allow safe tags and attributes (for TRaSH descriptions)
 function sanitizeHTML(html) {
   if (!html) return '';
@@ -5746,7 +6002,27 @@ function clonarr() {
     advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'import', 'scoring'
     profileTab: 'trash-sync',    // NEW — simple variable replacing per-app profileTabs: 'trash-sync', 'compare'
     instances: [],
-    config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] } },
+    config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
+    // Security section state
+    securityApiKey: '',
+    securityApiKeyVisible: false,
+    securityApiKeyCopied: false,
+    securityRegenerating: false,
+    securityRegenConfirm: false,
+    pwChange: { current: '', next: '', confirm: '' },
+    pwChangeSaving: false,
+    pwChangeMsg: '',
+    pwChangeOk: false,
+    // Disable-auth confirmation modal
+    disableAuthModalOpen: false,
+    disableAuthPassword: '',
+    disableAuthError: '',
+    // Auth status (for logout button + no-auth banner)
+    authStatus: { configured: false, authenticated: false, username: '', localBypass: false, authentication: '', authenticationRequired: '', trustedNetworksLocked: false, trustedProxiesLocked: false, trustedNetworksEffective: '', trustedProxiesEffective: '' },
+    authStatusLoadError: false, // true after 2 fetchAuthStatus retries fail → Security save button warns
+    noAuthBannerDismissed: false,
+    securitySaveMsg: '',
+    securitySaveOk: false,
     trashStatus: {},
     _nowTick: Date.now(),
     trashProfiles: { radarr: [], sonarr: [] },
@@ -6093,6 +6369,7 @@ function clonarr() {
       // settles after one tick.
       this.$watch('pb.qualityItems', () => this.pbEnsureQualityIds());
       await this.loadConfig();
+      this.fetchAuthStatus(); // render header user-menu and banner state early
       await this.loadInstances();
       await this.loadTrashStatus();
       // Restore navigation from URL hash (browser back/forward) or localStorage fallback.
@@ -6221,6 +6498,15 @@ function clonarr() {
         // Back-fill missing arrays for configs saved before category overrides existed.
         if (!this.config.prowlarr.radarrCategories) this.config.prowlarr.radarrCategories = [];
         if (!this.config.prowlarr.sonarrCategories) this.config.prowlarr.sonarrCategories = [];
+        // If auth status has already loaded AND trust-boundary fields are
+        // env-locked, display the effective value so the user sees what's
+        // actually enforced.
+        if (this.authStatus.trustedNetworksLocked) {
+          this.config.trustedNetworks = this.authStatus.trustedNetworksEffective;
+        }
+        if (this.authStatus.trustedProxiesLocked) {
+          this.config.trustedProxies = this.authStatus.trustedProxiesEffective;
+        }
       } catch (e) { console.error('loadConfig:', e); }
     },
 
@@ -6238,6 +6524,205 @@ function clonarr() {
           body: JSON.stringify(body)
         });
       } catch (e) { console.error('saveConfig:', e); }
+    },
+
+    // CSRF token helper — reads the clonarr_csrf cookie set by the server
+    // on the first GET. Used inside <form :value="csrfToken()"> bindings
+    // for the logout form. AJAX fetches get the header attached
+    // automatically by the window.fetch wrapper at the top of this file.
+    csrfToken() {
+      const m = document.cookie.match(/(?:^|; )clonarr_csrf=([^;]+)/);
+      return m ? m[1] : '';
+    },
+
+    async fetchAuthStatus(retriesLeft = 2) {
+      try {
+        const resp = await fetch('/api/auth/status');
+        if (!resp.ok) {
+          // Retry on transient failure so locked fields render correctly.
+          if (retriesLeft > 0) {
+            setTimeout(() => this.fetchAuthStatus(retriesLeft - 1), 1000);
+          } else {
+            this.authStatusLoadError = true;
+          }
+          return;
+        }
+        this.authStatusLoadError = false;
+        const data = await resp.json();
+        const localBypass = data.configured && !data.authenticated && data.authentication !== 'none';
+        const wasNone = this.authStatus.authentication === 'none';
+        this.authStatus = {
+          configured: data.configured,
+          authenticated: data.authenticated,
+          username: data.username || '',
+          localBypass: localBypass,
+          authentication: data.authentication || '',
+          authenticationRequired: data.authentication_required || '',
+          trustedNetworksLocked: !!data.trusted_networks_locked,
+          trustedProxiesLocked: !!data.trusted_proxies_locked,
+          trustedNetworksEffective: data.trusted_networks_effective || '',
+          trustedProxiesEffective: data.trusted_proxies_effective || '',
+        };
+        // When env-locked, reflect the effective value in the disabled input
+        // so the user can see what's actually enforced. Only applies if
+        // config has been populated (post-loadConfig).
+        if (this.authStatus.trustedNetworksLocked && this.config) {
+          this.config.trustedNetworks = this.authStatus.trustedNetworksEffective;
+        }
+        if (this.authStatus.trustedProxiesLocked && this.config) {
+          this.config.trustedProxies = this.authStatus.trustedProxiesEffective;
+        }
+        if (this.authStatus.authentication === 'none') {
+          this.noAuthBannerDismissed = localStorage.getItem('clonarr_noauth_banner_dismissed') === '1';
+        } else {
+          this.noAuthBannerDismissed = false;
+          if (wasNone) localStorage.removeItem('clonarr_noauth_banner_dismissed');
+        }
+      } catch (e) {
+        console.error('fetchAuthStatus:', e);
+        if (retriesLeft > 0) {
+          setTimeout(() => this.fetchAuthStatus(retriesLeft - 1), 1000);
+        } else {
+          this.authStatusLoadError = true;
+        }
+      }
+    },
+
+    dismissNoAuthBanner() {
+      this.noAuthBannerDismissed = true;
+      localStorage.setItem('clonarr_noauth_banner_dismissed', '1');
+    },
+
+    async fetchApiKey() {
+      try {
+        const resp = await fetch('/api/auth/api-key');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        this.securityApiKey = data.api_key || '';
+      } catch (e) { console.error('fetchApiKey:', e); }
+    },
+
+    async copyApiKey() {
+      if (!this.securityApiKey) return;
+      try {
+        await navigator.clipboard.writeText(this.securityApiKey);
+        this.securityApiKeyCopied = true;
+        setTimeout(() => { this.securityApiKeyCopied = false; }, 2000);
+      } catch (e) { console.error('copyApiKey:', e); }
+    },
+
+    async regenerateApiKey() {
+      this.securityRegenerating = true;
+      try {
+        const resp = await fetch('/api/auth/regenerate-api-key', { method: 'POST' });
+        if (!resp.ok) { alert('Failed to regenerate API key'); return; }
+        const data = await resp.json();
+        this.securityApiKey = data.api_key || '';
+        this.securityApiKeyVisible = true;
+        this.securityRegenConfirm = false;
+      } catch (e) { console.error('regenerateApiKey:', e); }
+      finally { this.securityRegenerating = false; }
+    },
+
+    async changePassword() {
+      if (!this.pwChange.current || !this.pwChange.next || !this.pwChange.confirm) return;
+      if (this.pwChange.next !== this.pwChange.confirm) {
+        this.pwChangeOk = false; this.pwChangeMsg = 'New passwords do not match';
+        return;
+      }
+      this.pwChangeSaving = true; this.pwChangeMsg = '';
+      try {
+        const resp = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            current_password: this.pwChange.current,
+            new_password: this.pwChange.next,
+            new_password_confirm: this.pwChange.confirm,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          this.pwChangeOk = false;
+          this.pwChangeMsg = data.error || 'Failed to change password';
+          return;
+        }
+        this.pwChangeOk = true;
+        this.pwChangeMsg = data.reauth_required ? 'Password changed. Please log in again.' : 'Password changed.';
+        this.pwChange = { current: '', next: '', confirm: '' };
+        setTimeout(() => { this.pwChangeMsg = ''; }, 5000);
+      } catch (e) {
+        this.pwChangeOk = false;
+        this.pwChangeMsg = e.message || 'Network error';
+      } finally {
+        this.pwChangeSaving = false;
+      }
+    },
+
+    async saveSecurityConfig(confirmedNone) {
+      // Intercept auth=none transition — requires password confirmation.
+      if (this.config.authentication === 'none' && !confirmedNone) {
+        try {
+          const resp = await fetch('/api/auth/status');
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.authentication !== 'none') {
+              this.disableAuthModalOpen = true;
+              this.disableAuthPassword = '';
+              this.disableAuthError = '';
+              return;
+            }
+          }
+        } catch (_) { /* fall through */ }
+      }
+
+      this.pwChangeSaving = true; // reuse the spinner state to disable button
+      this.securitySaveMsg = '';
+      const body = {
+        authentication: this.config.authentication,
+        authenticationRequired: this.config.authenticationRequired,
+        sessionTtlDays: this.config.sessionTtlDays || 30,
+      };
+      // Omit env-locked fields from the save payload so the backend never
+      // returns a 403 for values the UI can't edit anyway.
+      if (!this.authStatus.trustedProxiesLocked) {
+        body.trustedProxies = this.config.trustedProxies || '';
+      }
+      if (!this.authStatus.trustedNetworksLocked) {
+        body.trustedNetworks = this.config.trustedNetworks || '';
+      }
+      if (confirmedNone && this.disableAuthPassword) {
+        body.confirm_password = this.disableAuthPassword;
+      }
+      try {
+        const resp = await fetch('/api/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          if (resp.status === 401 && confirmedNone) {
+            this.disableAuthError = data.error || 'Password incorrect';
+            this.disableAuthModalOpen = true;
+            this.disableAuthPassword = '';
+            return;
+          }
+          this.securitySaveOk = false;
+          this.securitySaveMsg = data.error || 'Failed to save';
+          return;
+        }
+        this.disableAuthPassword = '';
+        this.securitySaveOk = true;
+        this.securitySaveMsg = 'Saved';
+        setTimeout(() => { this.securitySaveMsg = ''; }, 3000);
+        this.fetchAuthStatus();
+      } catch (e) {
+        this.securitySaveOk = false;
+        this.securitySaveMsg = e.message || 'Network error';
+      } finally {
+        this.pwChangeSaving = false;
+      }
     },
 
     async loadInstances() {
@@ -8752,8 +9237,51 @@ function clonarr() {
       return this.cfEditorSchema[this.cfEditorForm.appType] || [];
     },
 
-    populateCutoffSelect(el, qualityStructure, profile, selectedValue) {
-      const items = (qualityStructure.length > 0 ? qualityStructure : (profile?.items || [])).filter(i => i.allowed !== false);
+    populatePBCutoffSelect(el, qualityItems, selectedValue) {
+      // Build options from items with allowed=true. When no items are allowed
+      // the select has a single disabled "No allowed qualities" option. x-for
+      // inside <select> doesn't re-render when items[].allowed toggles, hence
+      // the programmatic approach.
+      const allowed = (qualityItems || []).filter(q => q.allowed);
+      el.innerHTML = '';
+      if (allowed.length === 0) {
+        const o = document.createElement('option');
+        o.value = '';
+        o.textContent = 'No allowed qualities';
+        o.disabled = true;
+        el.appendChild(o);
+        return;
+      }
+      for (const item of allowed) {
+        const o = document.createElement('option');
+        o.value = item.name;
+        o.textContent = item.name;
+        el.appendChild(o);
+      }
+      // Preserve selection if still in allowed list; otherwise pick first.
+      const stillValid = allowed.some(q => q.name === selectedValue);
+      el.value = stillValid ? selectedValue : allowed[0].name;
+    },
+
+    populateCutoffSelect(el, qualityStructure, profile, selectedValue, qualityOverrides) {
+      // Two sources depending on mode:
+      // 1) STRUCTURE-DRIVEN: qualityStructure has entries — user has grouped or
+      //    reordered via Edit Groups. Use allowed flag on each item.
+      // 2) LEGACY FLAT-TOGGLE: qualityStructure is empty; user toggles write to
+      //    qualityOverrides map keyed by name. Here we MUST apply the overrides
+      //    on top of profile.items — otherwise a just-toggled-on resolution
+      //    won't appear in the cutoff dropdown until user opens Edit Groups
+      //    (which initializes qualityStructure). That was the v2.0.6 bug.
+      let items;
+      if (qualityStructure.length > 0) {
+        items = qualityStructure.filter(i => i.allowed !== false);
+      } else {
+        const overrides = qualityOverrides || {};
+        items = (profile?.items || []).filter(i => {
+          const effective = overrides[i.name] !== undefined ? overrides[i.name] : i.allowed;
+          return effective !== false;
+        });
+      }
       const trashDefault = profile?.cutoff || '';
       const trashValid = !trashDefault || items.some(i => i.name === trashDefault);
       const options = [];
@@ -11227,6 +11755,16 @@ function clonarr() {
           }
         }
       }
+      // Include any CF that has an active score override. Without this, a user
+      // edit in the "Overridden Scores" panel is sent in the scoreOverrides
+      // map but the backend's BuildArrProfile only processes trashIDs present
+      // in FormatItems ∪ selectedCFs — so the override is silently dropped.
+      // This matched the Clonarr bug "Overridden Scores changes don't sync".
+      if (this.cfScoreOverrideActive && this.cfScoreOverrides) {
+        for (const trashId of Object.keys(this.cfScoreOverrides)) {
+          idSet.add(trashId);
+        }
+      }
       return [...idSet];
     },
 
@@ -12002,11 +12540,46 @@ function clonarr() {
         if (anyGeneral) this.pdGeneralActive = true;
         if (ov.cutoffQuality !== undefined) { this.pdOverrides.cutoffQuality = ov.cutoffQuality; this.pdQualityActive = true; }
       }
-      // Restore per-CF score overrides
-      if (sh.scoreOverrides && Object.keys(sh.scoreOverrides).length > 0) {
-        this.cfScoreOverrides = { ...sh.scoreOverrides };
-        this.cfScoreOverrideActive = true;
+      // Determine which trashIDs are part of the TRaSH base profile. Used by
+      // both the Extra-CF split below AND the Overridden-Scores filter.
+      // Without this set, we can't tell "user overrode this profile CF's
+      // score" from "user added this CF as Extra with its default score".
+      const inProfile = new Set();
+      for (const fi of (this.profileDetail?.detail?.formatItemNames || [])) inProfile.add(fi.trashId);
+      for (const g of (this.profileDetail?.detail?.trashGroups || [])) {
+        for (const cf of g.cfs) inProfile.add(cf.trashId);
       }
+
+      // Split sh.scoreOverrides into (Extra CF) vs (base-profile override).
+      // Rule: if trashID is NOT in the base profile, it's an Extra — belongs
+      // in extraCFs, NOT cfScoreOverrides. Otherwise it's a base-profile
+      // override, and only kept if score differs from TRaSH default (prevents
+      // "false-positive" overrides with `default → default` rows that
+      // reappear after every refresh).
+      const extras = {};
+      const baseOverrides = {};
+      if (sh.scoreOverrides) {
+        for (const [tid, v] of Object.entries(sh.scoreOverrides)) {
+          if (!inProfile.has(tid)) {
+            // Only add to extras if also selected (legacy sync-history may have
+            // score entries for CFs that are no longer selected).
+            if (sh.selectedCFs && sh.selectedCFs[tid]) {
+              extras[tid] = v;
+            }
+            continue;
+          }
+          const def = this.resolveCFDefaultScore(tid);
+          // Keep only if score differs from TRaSH default. When default can't
+          // be resolved (older data, missing profile context), keep the entry
+          // — we can't prove it's redundant.
+          if (def === '?' || v !== def) {
+            baseOverrides[tid] = v;
+          }
+        }
+      }
+      this.cfScoreOverrides = baseOverrides;
+      this.cfScoreOverrideActive = Object.keys(baseOverrides).length > 0;
+
       // Restore quality overrides — prefer structure override over legacy flat map.
       // Presence of either means Quality override was active on the saved sync rule, so also
       // flip pdQualityActive so the Quality card reflects the correct override state.
@@ -12032,26 +12605,13 @@ function clonarr() {
         this.qualityOverrideActive = true;
         this.pdQualityActive = true;
       }
-      // Restore extra CFs — selectedCFs that aren't in the profile
-      if (sh.selectedCFs && sh.scoreOverrides) {
-        const inProfile = new Set();
-        for (const fi of (this.profileDetail?.detail?.formatItemNames || [])) inProfile.add(fi.trashId);
-        for (const g of (this.profileDetail?.detail?.trashGroups || [])) {
-          for (const cf of g.cfs) inProfile.add(cf.trashId);
-        }
-        const extras = {};
-        for (const tid of Object.keys(sh.selectedCFs)) {
-          if (sh.selectedCFs[tid] && !inProfile.has(tid) && sh.scoreOverrides[tid] !== undefined) {
-            extras[tid] = sh.scoreOverrides[tid];
-          }
-        }
-        if (Object.keys(extras).length > 0) {
-          this.extraCFs = extras;
-          this.extraCFsActive = true;
-          // Load all CFs for the browser
-          const appType = this.profileDetail?.instance?.type;
-          if (appType) this.loadExtraCFList();
-        }
+      // Apply the Extra CFs computed above.
+      if (Object.keys(extras).length > 0) {
+        this.extraCFs = extras;
+        this.extraCFsActive = true;
+        // Load all CFs for the browser
+        const appType = this.profileDetail?.instance?.type;
+        if (appType) this.loadExtraCFList();
       }
       // Restore behavior from sync history
       if (sh.behavior) {
