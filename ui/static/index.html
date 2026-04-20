@@ -4381,7 +4381,7 @@
                 </template>
               </div>
               <button class="btn btn-sm" style="margin-left:8px"
-                :disabled="notifAgentStatus[agent.id]?.testing"
+                :disabled="notifAgentStatus[agent.id]?.testing === true"
                 @click="testNotificationAgent(agent)">Test</button>
               <button class="btn btn-sm" style="margin-left:4px" @click="openAgentModal(agent)">Edit</button>
               <button class="btn btn-sm btn-danger" style="margin-left:4px" @click="deleteNotificationAgent(agent)">Delete</button>
