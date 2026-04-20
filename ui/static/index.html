@@ -4343,182 +4343,50 @@
 
         <!-- ===== Notifications ===== -->
         <div x-show="settingsSection === 'notifications'">
-          <div class="settings-section-title">Notifications</div>
-          <div class="settings-section-desc">Auto-sync event notifications via Discord, Gotify, and Pushover.</div>
-          <div class="setting-row">
-            <div class="setting-label">Events</div>
-            <div class="setting-value" style="display:flex;gap:16px">
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                <input type="checkbox" x-model="autoSyncSettings.notifyOnSuccess" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                On success
-              </label>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                <input type="checkbox" x-model="autoSyncSettings.notifyOnFailure" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                On failure
-              </label>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                <input type="checkbox" x-model="autoSyncSettings.notifyOnRepoUpdate" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                On TRaSH update
-              </label>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div class="settings-section-title">Notifications</div>
+              <div class="settings-section-desc">Auto-sync event notifications via Discord, Gotify, and Pushover.</div>
             </div>
+            <button class="btn btn-sm btn-primary"
+              @click="openAgentModal()">+ Add notification agent</button>
           </div>
-
-          <!-- Discord -->
-          <div style="border-top:1px solid #21262d;margin-top:12px;padding-top:12px">
-            <div class="inst-row" style="padding:8px 0;cursor:pointer" @click="notifOpen.discord = !notifOpen.discord">
-              <span class="profile-group-chevron" :class="{ open: notifOpen.discord }">&#9654;</span>
-              <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Discord</div>
-              <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="autoSyncSettings.discordWebhook ? (autoSyncSettings.discordEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
-            </div>
-            <div x-show="notifOpen.discord" style="padding-bottom:8px">
-              <div class="setting-row" style="margin-top:4px">
-                <div class="setting-label">Enable</div>
-                <div class="setting-value">
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                    <input type="checkbox" x-model="autoSyncSettings.discordEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                    Send notifications via Discord
-                  </label>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-label">Sync webhook</div>
-                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
-                  <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhook" @change="saveAutoSyncSettings()" placeholder="https://discord.com/api/webhooks/..." autocomplete="one-time-code">
-                  <button class="btn btn-sm" @click="testDiscordWebhook('sync')" :disabled="!autoSyncSettings.discordWebhook || discordSyncTesting">
-                    <span x-show="!discordSyncTesting">Test</span><span x-show="discordSyncTesting">...</span>
-                  </button>
-                  <span x-show="discordSyncTestResult" :style="discordSyncTestResult === 'Sent!' ? 'color:#3fb950;font-size:12px' : 'color:#f85149;font-size:12px'" x-text="discordSyncTestResult"></span>
-                </div>
-              </div>
-              <div style="font-size:12px;color:#8b949e;margin:-4px 0 8px 160px">Sync success, failure, and cleanup</div>
-              <div class="setting-row">
-                <div class="setting-label">Updates webhook</div>
-                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
-                  <input class="input" style="width:400px" x-model="autoSyncSettings.discordWebhookUpdates" @change="saveAutoSyncSettings()" placeholder="Optional — falls back to sync webhook if empty" autocomplete="one-time-code">
-                  <button class="btn btn-sm" @click="testDiscordWebhook('updates')" :disabled="!autoSyncSettings.discordWebhookUpdates || discordUpdatesTesting">
-                    <span x-show="!discordUpdatesTesting">Test</span><span x-show="discordUpdatesTesting">...</span>
-                  </button>
-                  <span x-show="discordUpdatesTestResult" :style="discordUpdatesTestResult === 'Sent!' ? 'color:#3fb950;font-size:12px' : 'color:#f85149;font-size:12px'" x-text="discordUpdatesTestResult"></span>
-                </div>
-              </div>
-              <div style="font-size:12px;color:#8b949e;margin:-4px 0 4px 160px">TRaSH repo updates and weekly changelog</div>
-            </div>
-          </div>
-
-          <!-- Gotify -->
-          <div style="border-top:1px solid #21262d;margin-top:4px;padding-top:4px">
-            <div class="inst-row" style="padding:8px 0;cursor:pointer" @click="notifOpen.gotify = !notifOpen.gotify">
-              <span class="profile-group-chevron" :class="{ open: notifOpen.gotify }">&#9654;</span>
-              <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Gotify</div>
-              <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="(autoSyncSettings.gotifyUrl || autoSyncSettings.gotifyToken) ? (autoSyncSettings.gotifyEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
-              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap" @click.stop>
-                <template x-if="gotifyTesting">
+          <template x-if="notificationAgents.length === 0">
+            <div style="color:#aaa;font-size:13px;padding:8px 0">No notification agents configured. Add Discord, Gotify, or Pushover to receive auto-sync alerts.</div>
+          </template>
+          <template x-for="agent in notificationAgents" :key="agent.id">
+            <div class="inst-row">
+              <img class="inst-icon" :src="agentIconSrc(agent.type)" :alt="agent.type">
+              <div style="font-size:13px;font-weight:500;min-width:120px" x-text="agent.name || agent.type"></div>
+              <div style="font-size:12px;color:#8b949e;text-transform:capitalize;margin-right:4px" x-text="agent.type"></div>
+              <!-- Enable toggle -->
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#8b949e;margin-left:4px" @click.stop>
+                <input type="checkbox" :checked="agent.enabled"
+                  @change="toggleAgentEnabled(agent)"
+                  style="accent-color:#58a6ff">
+                <span x-text="agent.enabled ? 'Enabled' : 'Disabled'"></span>
+              </label>
+              <!-- Test result -->
+              <div style="margin-left:auto;display:flex;align-items:center;gap:6px;white-space:nowrap" @click.stop>
+                <template x-if="notifAgentStatus[agent.id] && notifAgentStatus[agent.id].testing">
                   <span class="status-testing"><span class="spinner"></span></span>
                 </template>
-                <template x-if="!gotifyTesting && gotifyTestResult === 'Sent!'">
-                  <span class="status-connected">Sent!</span>
-                </template>
-                <template x-if="!gotifyTesting && gotifyTestResult && gotifyTestResult !== 'Sent!'">
-                  <span class="status-failed" x-text="gotifyTestResult"></span>
-                </template>
-                <template x-if="!gotifyTesting && !gotifyTestResult">
-                  <span style="font-size:12px;color:#aaa">Not tested</span>
+                <template x-if="notifAgentStatus[agent.id] && !notifAgentStatus[agent.id].testing && notifAgentStatus[agent.id].results.length > 0">
+                  <span style="display:inline-flex;align-items:center;gap:6px">
+                    <template x-for="r in notifAgentStatus[agent.id].results" :key="r.label">
+                      <span :class="r.status === 'ok' ? 'status-connected' : 'status-failed'"
+                        x-text="notifAgentStatus[agent.id].results.length > 1 ? r.label + ': ' + (r.status === 'ok' ? '✓' : '✗') : (r.status === 'ok' ? 'Sent!' : (r.error || 'Failed'))"></span>
+                    </template>
+                  </span>
                 </template>
               </div>
-              <button class="btn btn-sm" style="margin-left:8px" @click.stop="testGotify()" :disabled="!autoSyncSettings.gotifyUrl || !autoSyncSettings.gotifyToken || gotifyTesting">Test</button>
+              <button class="btn btn-sm" style="margin-left:8px"
+                :disabled="notifAgentStatus[agent.id]?.testing === true"
+                @click="testNotificationAgent(agent)">Test</button>
+              <button class="btn btn-sm" style="margin-left:4px" @click="openAgentModal(agent)">Edit</button>
+              <button class="btn btn-sm btn-danger" style="margin-left:4px" @click="deleteNotificationAgent(agent)">Delete</button>
             </div>
-            <div x-show="notifOpen.gotify" style="padding-bottom:8px">
-              <div class="setting-row" style="margin-top:4px">
-                <div class="setting-label">Enable</div>
-                <div class="setting-value">
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                    <input type="checkbox" x-model="autoSyncSettings.gotifyEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                    Send push notifications via Gotify
-                  </label>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-label">URL</div>
-                <div class="setting-value">
-                  <input class="input" style="width:400px" x-model="autoSyncSettings.gotifyUrl" @change="saveAutoSyncSettings()" placeholder="https://gotify.example.com" autocomplete="one-time-code">
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-label">App Token</div>
-                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
-                  <input :type="gotifyTokenVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.gotifyToken" @change="saveAutoSyncSettings()" placeholder="App token from Gotify">
-                  <button class="btn btn-sm" @click="gotifyTokenVisible = !gotifyTokenVisible" x-text="gotifyTokenVisible ? '🔒' : '👁'" style="min-width:32px"></button>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-label">Levels</div>
-                <div class="setting-value" style="display:flex;gap:16px;flex-wrap:wrap">
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                    <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityCritical" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                    Critical <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyCriticalValue" @change="saveAutoSyncSettings()">
-                  </label>
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                    <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityWarning" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                    Warning <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyWarningValue" @change="saveAutoSyncSettings()">
-                  </label>
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                    <input type="checkbox" x-model="autoSyncSettings.gotifyPriorityInfo" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                    Info <input type="number" class="input" style="width:50px;text-align:center;margin-left:4px" min="0" max="10" x-model.number="autoSyncSettings.gotifyInfoValue" @change="saveAutoSyncSettings()">
-                  </label>
-                </div>
-              </div>
-              <div style="font-size:12px;color:#8b949e;margin:4px 0 0 160px">Critical: sync failures · Warning: stale cleanup · Info: sync success, repo updates, changelog</div>
-            </div>
-          </div>
-
-          <!-- Pushover -->
-          <div style="border-top:1px solid #21262d;margin-top:4px;padding-top:4px">
-            <div class="inst-row" style="padding:8px 0;cursor:pointer" @click="notifOpen.pushover = !notifOpen.pushover">
-              <span class="profile-group-chevron" :class="{ open: notifOpen.pushover }">&#9654;</span>
-              <div style="font-size:13px;font-weight:600;color:#e1e4e8;min-width:80px;margin-left:8px">Pushover</div>
-              <div style="font-size:13px;color:#8b949e;margin-left:4px" x-text="(autoSyncSettings.pushoverUserKey || autoSyncSettings.pushoverAppToken) ? (autoSyncSettings.pushoverEnabled ? 'Enabled' : 'Disabled') : 'Not configured'"></div>
-              <div style="margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap" @click.stop>
-                <template x-if="pushoverTesting">
-                  <span class="status-testing"><span class="spinner"></span></span>
-                </template>
-                <template x-if="!pushoverTesting && pushoverTestResult === 'Sent!'">
-                  <span class="status-connected">Sent!</span>
-                </template>
-                <template x-if="!pushoverTesting && pushoverTestResult && pushoverTestResult !== 'Sent!'">
-                  <span class="status-failed" x-text="pushoverTestResult"></span>
-                </template>
-                <template x-if="!pushoverTesting && !pushoverTestResult">
-                  <span style="font-size:12px;color:#aaa">Not tested</span>
-                </template>
-              </div>
-              <button class="btn btn-sm" style="margin-left:8px" @click.stop="testPushover()" :disabled="!autoSyncSettings.pushoverUserKey || !autoSyncSettings.pushoverAppToken || pushoverTesting">Test</button>
-            </div>
-            <div x-show="notifOpen.pushover" style="padding-bottom:8px">
-              <div class="setting-row" style="margin-top:4px">
-                <div class="setting-label">Enable</div>
-                <div class="setting-value">
-                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-                    <input type="checkbox" x-model="autoSyncSettings.pushoverEnabled" @change="saveAutoSyncSettings()" style="accent-color:#58a6ff">
-                    Send push notifications via Pushover
-                  </label>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-label">User Key</div>
-                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
-                  <input :type="pushoverUserKeyVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.pushoverUserKey" @change="saveAutoSyncSettings()" placeholder="Your Pushover user key">
-                  <button class="btn btn-sm" @click="pushoverUserKeyVisible = !pushoverUserKeyVisible" x-text="pushoverUserKeyVisible ? '🔒' : '👁'" style="min-width:32px"></button>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div class="setting-label">App Token</div>
-                <div class="setting-value" style="display:flex;gap:8px;align-items:center">
-                  <input :type="pushoverAppTokenVisible ? 'text' : 'password'" autocomplete="one-time-code" class="input" style="width:300px" x-model="autoSyncSettings.pushoverAppToken" @change="saveAutoSyncSettings()" placeholder="App/API token from Pushover">
-                  <button class="btn btn-sm" @click="pushoverAppTokenVisible = !pushoverAppTokenVisible" x-text="pushoverAppTokenVisible ? '🔒' : '👁'" style="min-width:32px"></button>
-                </div>
-              </div>
-            </div>
-          </div>
+          </template>
         </div>
 
         <!-- ===== Display ===== -->
@@ -4772,6 +4640,176 @@
         <button class="btn" @click="showInstanceModal = false">Cancel</button>
         <button class="btn btn-primary" @click="saveInstance()">
           <span x-text="editingInstance ? 'Update' : 'Add'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== NOTIFICATION AGENT MODAL ==================== -->
+  <div class="modal-overlay" x-show="agentModal.show" @click.self="agentModal.show = false" x-cloak>
+    <div class="modal" style="min-width:480px;max-width:560px">
+      <div class="modal-title" x-text="agentModal.editId ? 'Edit Notification Agent' : 'Add Notification Agent'"></div>
+
+      <!-- Name -->
+      <div class="form-group">
+        <label>Name</label>
+        <input class="input" x-model="agentModal.name" placeholder="e.g. Discord #alerts" autocomplete="off">
+      </div>
+
+      <!-- Type (add only) -->
+      <div class="form-group" x-show="!agentModal.editId">
+        <label>Type</label>
+        <select class="input" x-model="agentModal.type">
+          <option value="discord">Discord</option>
+          <option value="gotify">Gotify</option>
+          <option value="pushover">Pushover</option>
+        </select>
+      </div>
+      <!-- Type display (edit) -->
+      <div class="form-group" x-show="agentModal.editId">
+        <label>Type</label>
+        <div style="font-size:13px;color:#e1e4e8;display:flex;align-items:center;gap:8px;padding:6px 0">
+          <img :src="agentIconSrc(agentModal.type)" style="width:20px;height:20px;object-fit:contain">
+          <span style="text-transform:capitalize" x-text="agentModal.type"></span>
+        </div>
+      </div>
+
+      <!-- ── Discord fields ── -->
+      <template x-if="agentModal.type === 'discord'">
+        <div>
+          <div class="form-group">
+            <label>Sync webhook</label>
+            <input class="input" x-model="agentModal.config.discordWebhook"
+              placeholder="https://discord.com/api/webhooks/..."
+              autocomplete="one-time-code">
+            <div style="font-size:12px;color:#8b949e;margin-top:4px">Sync success, failure, and cleanup</div>
+          </div>
+          <div class="form-group">
+            <label>Updates webhook <span style="font-weight:400;color:#8b949e">(optional)</span></label>
+            <input class="input" x-model="agentModal.config.discordWebhookUpdates"
+              placeholder="Falls back to sync webhook if empty"
+              autocomplete="one-time-code">
+            <div style="font-size:12px;color:#8b949e;margin-top:4px">TRaSH repo updates and weekly changelog</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Gotify fields ── -->
+      <template x-if="agentModal.type === 'gotify'">
+        <div>
+          <div class="form-group">
+            <label>URL</label>
+            <input class="input" x-model="agentModal.config.gotifyUrl"
+              placeholder="https://gotify.example.com"
+              autocomplete="one-time-code">
+          </div>
+          <div class="form-group">
+            <label>App Token</label>
+            <input type="password" class="input" x-model="agentModal.config.gotifyToken"
+              placeholder="App token from Gotify"
+              autocomplete="one-time-code">
+          </div>
+          <div class="form-group">
+            <label>Priority levels</label>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                <input type="checkbox" x-model="agentModal.config.gotifyPriorityCritical" style="accent-color:#58a6ff">
+                Critical
+                <input type="number" class="input" style="width:56px;text-align:center;margin-left:4px"
+                  min="0" max="10" x-model.number="agentModal.config.gotifyCriticalValue">
+                <span style="font-size:12px;color:#8b949e">— sync failures</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                <input type="checkbox" x-model="agentModal.config.gotifyPriorityWarning" style="accent-color:#58a6ff">
+                Warning
+                <input type="number" class="input" style="width:56px;text-align:center;margin-left:4px"
+                  min="0" max="10" x-model.number="agentModal.config.gotifyWarningValue">
+                <span style="font-size:12px;color:#8b949e">— stale cleanup</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                <input type="checkbox" x-model="agentModal.config.gotifyPriorityInfo" style="accent-color:#58a6ff">
+                Info
+                <input type="number" class="input" style="width:56px;text-align:center;margin-left:4px"
+                  min="0" max="10" x-model.number="agentModal.config.gotifyInfoValue">
+                <span style="font-size:12px;color:#8b949e">— success, updates, changelog</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Pushover fields ── -->
+      <template x-if="agentModal.type === 'pushover'">
+        <div>
+          <div class="form-group">
+            <label>User Key</label>
+            <input type="password" class="input" x-model="agentModal.config.pushoverUserKey"
+              placeholder="Your Pushover user key"
+              autocomplete="one-time-code">
+          </div>
+          <div class="form-group">
+            <label>App Token</label>
+            <input type="password" class="input" x-model="agentModal.config.pushoverAppToken"
+              placeholder="App/API token from Pushover"
+              autocomplete="one-time-code">
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Events ── -->
+      <div class="form-group">
+        <label>Events</label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+            <input type="checkbox" x-model="agentModal.events.onSyncSuccess" style="accent-color:#58a6ff">
+            Sync success
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when an auto-sync rule completes without errors')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+            <input type="checkbox" x-model="agentModal.events.onSyncFailure" style="accent-color:#58a6ff">
+            Sync failure
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when an auto-sync rule encounters an error')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+            <input type="checkbox" x-model="agentModal.events.onCleanup" style="accent-color:#58a6ff">
+            Cleanup
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when stale custom formats are removed from your instance')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+            <input type="checkbox" x-model="agentModal.events.onRepoUpdate" style="accent-color:#58a6ff">
+            TRaSH update
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when the TRaSH Guides repository receives a new commit')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+            <input type="checkbox" x-model="agentModal.events.onChangelog" style="accent-color:#58a6ff">
+            Weekly changelog
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when Clonarr downloads a new weekly TRaSH changelog')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Test results -->
+      <div x-show="agentModal.testResults.length > 0" style="margin-bottom:12px">
+        <template x-for="r in agentModal.testResults" :key="r.label">
+          <div class="test-result" :class="r.status === 'ok' ? 'ok' : 'fail'"
+            x-text="(agentModal.testResults.length > 1 ? r.label + ': ' : '') + (r.status === 'ok' ? 'Sent!' : (r.error || 'Failed'))">
+          </div>
+        </template>
+      </div>
+      <div x-show="agentModal.testing" style="margin-bottom:12px">
+        <div class="test-result" style="color:#d29922">
+          <span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Testing...
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn"
+          :disabled="agentModal.testing || !agentModalCanTest()"
+          @click="testAgentInModal()">Test</button>
+        <div style="flex:1"></div>
+        <button class="btn" @click="agentModal.show = false">Cancel</button>
+        <button class="btn btn-primary" :disabled="agentModal.saving || !agentModal.testPassed || !agentModal.name.trim()" @click="saveNotificationAgent()">
+          <span x-text="agentModal.editId ? 'Update' : 'Add'"></span>
         </button>
       </div>
     </div>
@@ -6318,22 +6356,25 @@ function clonarr() {
     syncPreviewLoading: false,
 
     // Auto-Sync
-    autoSyncSettings: { enabled: false, notifyOnSuccess: true, notifyOnFailure: true, notifyOnRepoUpdate: false, discordEnabled: true, discordWebhook: '', discordWebhookUpdates: '', gotifyEnabled: false, gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverEnabled: false, pushoverUserKey: '', pushoverAppToken: '' },
-    notifOpen: { discord: false, gotify: false, pushover: false },
-    gotifyTokenVisible: false,
-    pushoverUserKeyVisible: false,
-    pushoverAppTokenVisible: false,
+    autoSyncSettings: { enabled: false },
+    notificationAgents: [],
+    agentModal: {
+      show: false,
+      editId: null,
+      name: '',
+      type: 'discord',
+      enabled: true,
+      events: { onSyncSuccess: true, onSyncFailure: true, onCleanup: true, onRepoUpdate: false, onChangelog: false },
+      config: { discordWebhook: '', discordWebhookUpdates: '', gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverUserKey: '', pushoverAppToken: '' },
+      testing: false,
+      testResults: [],
+      testPassed: false,
+      saving: false,
+    },
+    notifAgentStatus: {},
     settingsOpen: 'instances',  // legacy accordion (unused after sidebar redesign)
     settingsSection: 'instances',
     uiScale: localStorage.getItem('clonarr-ui-scale') || '1',
-    discordSyncTesting: false,
-    discordSyncTestResult: '',
-    discordUpdatesTesting: false,
-    discordUpdatesTestResult: '',
-    gotifyTesting: false,
-    gotifyTestResult: '',
-    pushoverTesting: false,
-    pushoverTestResult: '',
     autoSyncRules: [],
     autoSyncRuleForSync: null, // existing rule that matches current syncForm (if any)
 
@@ -6422,6 +6463,7 @@ function clonarr() {
       this.loadImportedProfiles('radarr');
       this.loadImportedProfiles('sonarr');
       this.loadAutoSyncSettings();
+      this.loadNotificationAgents();
       this.loadAutoSyncRules();
       this.loadSandboxResults('radarr');
       this.loadSandboxResults('sonarr');
@@ -12787,75 +12829,185 @@ function clonarr() {
       } catch (e) { console.error('saveAutoSyncSettings:', e); }
     },
 
-    async testDiscordWebhook(type) {
-      const webhook = type === 'updates' ? this.autoSyncSettings.discordWebhookUpdates : this.autoSyncSettings.discordWebhook;
-      if (!webhook) return;
-      const testingKey = type === 'updates' ? 'discordUpdatesTesting' : 'discordSyncTesting';
-      const resultKey = type === 'updates' ? 'discordUpdatesTestResult' : 'discordSyncTestResult';
-      this[testingKey] = true;
-      this[resultKey] = '';
+    // --- Notification Agents ---
+
+    async loadNotificationAgents() {
       try {
-        const resp = await fetch('/api/auto-sync/test-discord', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ webhook }),
-        });
-        if (!resp.ok) {
-          const err = await resp.json();
-          this[resultKey] = err.error || 'Failed';
+        const r = await fetch('/api/auto-sync/notification-agents');
+        if (r.ok) this.notificationAgents = await r.json();
+      } catch (e) { console.error('loadNotificationAgents:', e); }
+    },
+
+    openAgentModal(agent = null) {
+      this.agentModal.testResults = [];
+      this.agentModal.testing = false;
+      this.agentModal.testPassed = false;
+      this.agentModal.saving = false;
+      if (agent) {
+        this.agentModal.editId = agent.id;
+        this.agentModal.name = agent.name || '';
+        this.agentModal.type = agent.type;
+        this.agentModal.enabled = agent.enabled;
+        this.agentModal.events = { ...agent.events };
+        this.agentModal.config = { ...agent.config };
+      } else {
+        this.agentModal.editId = null;
+        this.agentModal.name = '';
+        this.agentModal.type = 'discord';
+        this.agentModal.enabled = true;
+        this.agentModal.events = { onSyncSuccess: true, onSyncFailure: true, onCleanup: true, onRepoUpdate: false, onChangelog: false };
+        this.agentModal.config = { discordWebhook: '', discordWebhookUpdates: '', gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverUserKey: '', pushoverAppToken: '' };
+      }
+      this.agentModal.show = true;
+    },
+
+    async saveNotificationAgent() {
+      this.agentModal.saving = true;
+      const payload = {
+        name: this.agentModal.name.trim(),
+        type: this.agentModal.type,
+        enabled: this.agentModal.enabled,
+        events: { ...this.agentModal.events },
+        config: { ...this.agentModal.config },
+      };
+      try {
+        let r;
+        if (this.agentModal.editId) {
+          r = await fetch(`/api/auto-sync/notification-agents/${this.agentModal.editId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
         } else {
-          this[resultKey] = 'Sent!';
+          r = await fetch('/api/auto-sync/notification-agents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
         }
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          this.showToast(err.error || 'Failed to save notification agent', 'error', 8000);
+          return;
+        }
+        this.agentModal.show = false;
+        await this.loadNotificationAgents();
       } catch (e) {
-        this[resultKey] = e.message;
+        this.showToast('Failed to save notification agent: ' + e.message, 'error', 8000);
       } finally {
-        this[testingKey] = false;
+        this.agentModal.saving = false;
       }
     },
 
-    async testGotify() {
-      if (!this.autoSyncSettings.gotifyUrl || !this.autoSyncSettings.gotifyToken) return;
-      this.gotifyTesting = true;
-      this.gotifyTestResult = '';
+    async toggleAgentEnabled(agent) {
+      const updated = { ...agent, name: agent.name, config: { ...agent.config }, events: { ...agent.events }, enabled: !agent.enabled };
       try {
-        const resp = await fetch('/api/auto-sync/test-gotify', {
-          method: 'POST',
+        const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: this.autoSyncSettings.gotifyUrl, token: this.autoSyncSettings.gotifyToken }),
+          body: JSON.stringify(updated),
         });
-        if (!resp.ok) {
-          const err = await resp.json();
-          this.gotifyTestResult = err.error || 'Failed';
-        } else {
-          this.gotifyTestResult = 'Sent!';
+        if (!r.ok) {
+          this.showToast('Failed to update agent', 'error', 5000);
+          return;
         }
+        await this.loadNotificationAgents();
       } catch (e) {
-        this.gotifyTestResult = e.message;
-      } finally {
-        this.gotifyTesting = false;
+        this.showToast('Failed to update agent: ' + e.message, 'error', 5000);
       }
     },
 
-    async testPushover() {
-      if (!this.autoSyncSettings.pushoverUserKey || !this.autoSyncSettings.pushoverAppToken) return;
-      this.pushoverTesting = true;
-      this.pushoverTestResult = '';
+    async deleteNotificationAgent(agent) {
+      const displayName = agent.name || agent.type.charAt(0).toUpperCase() + agent.type.slice(1);
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Delete Notification Agent', message: `Delete "${displayName}"? This cannot be undone.`, confirmLabel: 'Delete', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
       try {
-        const resp = await fetch('/api/auto-sync/test-pushover', {
+        const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}`, { method: 'DELETE' });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          this.showToast(err.error || 'Failed to delete notification agent', 'error', 8000);
+          return;
+        }
+        const { [agent.id]: _, ...rest } = this.notifAgentStatus;
+        this.notifAgentStatus = rest;
+        await this.loadNotificationAgents();
+      } catch (e) {
+        this.showToast('Failed to delete notification agent: ' + e.message, 'error', 8000);
+      }
+    },
+
+    async testNotificationAgent(agent) {
+      this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: true, results: [] } };
+      try {
+        // Handler uses stored credentials directly — no body needed.
+        const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}/test`, {
+          method: 'POST',
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results: [{ label: 'Error', status: 'error', error: data.error || 'Test failed' }] } };
+          return;
+        }
+        this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results: data.results || [] } };
+      } catch (e) {
+        this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results: [{ label: 'Error', status: 'error', error: e.message }] } };
+      }
+    },
+
+    agentIconSrc(type) {
+      return type === 'gotify' ? '/icons/gotify.png' : `/icons/${type}.svg`;
+    },
+
+    agentModalCanTest() {
+      const c = this.agentModal.config;
+      switch (this.agentModal.type) {
+        case 'discord':   return !!c.discordWebhook;
+        case 'gotify':    return !!c.gotifyUrl && !!c.gotifyToken;
+        case 'pushover':  return !!c.pushoverUserKey && !!c.pushoverAppToken;
+        default:          return false;
+      }
+    },
+
+    async testAgentInModal() {
+      this.agentModal.testing = true;
+      this.agentModal.testResults = [];
+      this.agentModal.testPassed = false;
+      const payload = {
+        name: this.agentModal.name.trim(),
+        type: this.agentModal.type,
+        enabled: this.agentModal.enabled,
+        events: { ...this.agentModal.events },
+        config: { ...this.agentModal.config },
+      };
+      // If editing, resolve masked credentials server-side via the {id}/test route.
+      // If adding (no editId), post to the inline test endpoint with raw config.
+      const url = this.agentModal.editId
+        ? `/api/auto-sync/notification-agents/${this.agentModal.editId}/test`
+        : '/api/auto-sync/notification-agents/test';
+      try {
+        const r = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userKey: this.autoSyncSettings.pushoverUserKey, appToken: this.autoSyncSettings.pushoverAppToken }),
+          body: JSON.stringify(payload),
         });
-        if (!resp.ok) {
-          const err = await resp.json();
-          this.pushoverTestResult = err.error || 'Failed';
+        const data = await r.json();
+        if (!r.ok) {
+          this.agentModal.testResults = [{ label: 'Error', status: 'error', error: data.error || 'Failed' }];
         } else {
-          this.pushoverTestResult = 'Sent!';
+          this.agentModal.testResults = data.results || [];
+          this.agentModal.testPassed = this.agentModal.testResults.length > 0 &&
+            this.agentModal.testResults.every(res => res.status === 'ok');
+          // Sync row status for existing agents
+          if (this.agentModal.editId) {
+            this.notifAgentStatus = { ...this.notifAgentStatus, [this.agentModal.editId]: { testing: false, results: this.agentModal.testResults } };
+          }
         }
       } catch (e) {
-        this.pushoverTestResult = e.message;
+        this.agentModal.testResults = [{ label: 'Error', status: 'error', error: e.message }];
       } finally {
-        this.pushoverTesting = false;
+        this.agentModal.testing = false;
       }
     },
 

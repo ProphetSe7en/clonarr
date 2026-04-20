@@ -74,6 +74,39 @@ func preserveIfMasked(incoming, existing, placeholder string) string {
 	return incoming
 }
 
+// maskAgentConfig returns a copy of NotificationConfig with credentials masked.
+// Gotify URL is not a bearer credential and is returned as-is.
+func maskAgentConfig(agentType string, nc NotificationConfig) NotificationConfig {
+	switch agentType {
+	case "discord":
+		nc.DiscordWebhook = maskSecret(nc.DiscordWebhook, maskedDiscordWebhook)
+		nc.DiscordWebhookUpdates = maskSecret(nc.DiscordWebhookUpdates, maskedDiscordWebhook)
+	case "gotify":
+		// GotifyURL is intentionally not masked — not a bearer credential
+		nc.GotifyToken = maskSecret(nc.GotifyToken, maskedToken)
+	case "pushover":
+		nc.PushoverUserKey = maskSecret(nc.PushoverUserKey, maskedToken)
+		nc.PushoverAppToken = maskSecret(nc.PushoverAppToken, maskedToken)
+	}
+	return nc
+}
+
+// preserveAgentConfig applies preserveIfMasked to each credential field,
+// keeping the stored value when the UI returns the masked placeholder.
+func preserveAgentConfig(agentType string, incoming, existing NotificationConfig) NotificationConfig {
+	switch agentType {
+	case "discord":
+		incoming.DiscordWebhook = preserveIfMasked(strings.TrimSpace(incoming.DiscordWebhook), existing.DiscordWebhook, maskedDiscordWebhook)
+		incoming.DiscordWebhookUpdates = preserveIfMasked(strings.TrimSpace(incoming.DiscordWebhookUpdates), existing.DiscordWebhookUpdates, maskedDiscordWebhook)
+	case "gotify":
+		incoming.GotifyToken = preserveIfMasked(strings.TrimSpace(incoming.GotifyToken), existing.GotifyToken, maskedToken)
+	case "pushover":
+		incoming.PushoverUserKey = preserveIfMasked(strings.TrimSpace(incoming.PushoverUserKey), existing.PushoverUserKey, maskedToken)
+		incoming.PushoverAppToken = preserveIfMasked(strings.TrimSpace(incoming.PushoverAppToken), existing.PushoverAppToken, maskedToken)
+	}
+	return incoming
+}
+
 // writeError writes a JSON error response.
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -119,17 +152,11 @@ func (app *App) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg.Prowlarr.APIKey != "" {
 		cfg.Prowlarr.APIKey = maskKey(cfg.Prowlarr.APIKey)
 	}
-	// Mask notification secrets embedded in AutoSync. These were being
-	// leaked in plaintext from this handler even though the dedicated
-	// /api/config/autosync endpoint masks them — session-hijack / XSS /
-	// local-bypass peer could exfiltrate every webhook + token in one
-	// call. CHANGELOG v2.0.6 advertises webhook+token masking;
-	// this handler is part of that guarantee.
-	cfg.AutoSync.DiscordWebhook = maskSecret(cfg.AutoSync.DiscordWebhook, maskedDiscordWebhook)
-	cfg.AutoSync.DiscordWebhookUpdates = maskSecret(cfg.AutoSync.DiscordWebhookUpdates, maskedDiscordWebhook)
-	cfg.AutoSync.GotifyToken = maskSecret(cfg.AutoSync.GotifyToken, maskedToken)
-	cfg.AutoSync.PushoverUserKey = maskSecret(cfg.AutoSync.PushoverUserKey, maskedToken)
-	cfg.AutoSync.PushoverAppToken = maskSecret(cfg.AutoSync.PushoverAppToken, maskedToken)
+	// Mask notification secrets embedded in NotificationAgents.
+	// Credentials must not appear in plaintext in the bulk config response.
+	for i, a := range cfg.AutoSync.NotificationAgents {
+		cfg.AutoSync.NotificationAgents[i].Config = maskAgentConfig(a.Type, a.Config)
+	}
 	// Wrap config with version for frontend
 	writeJSON(w, struct {
 		Config
@@ -3988,172 +4015,244 @@ func (app *App) handleSaveCleanupKeep(w http.ResponseWriter, r *http.Request) {
 
 // --- Auto-Sync handlers ---
 
-// handleGetAutoSyncSettings returns the global auto-sync settings (without rules).
-// Credentials (webhook URLs, tokens, keys) are masked — UI re-submits the
-// placeholder on unchanged-save and the save handler preserves the stored
-// value. See maskSecret/preserveIfMasked above.
+// handleGetAutoSyncSettings returns the global auto-sync enabled flag.
+// Notification agents are managed via /api/auto-sync/notification-agents.
 func (app *App) handleGetAutoSyncSettings(w http.ResponseWriter, r *http.Request) {
 	cfg := app.config.Get()
 	writeJSON(w, map[string]any{
-		"enabled":                cfg.AutoSync.Enabled,
-		"notifyOnSuccess":        cfg.AutoSync.NotifyOnSuccess,
-		"notifyOnFailure":        cfg.AutoSync.NotifyOnFailure,
-		"notifyOnRepoUpdate":     cfg.AutoSync.NotifyOnRepoUpdate,
-		"discordEnabled":         cfg.AutoSync.DiscordEnabled,
-		"discordWebhook":         maskSecret(cfg.AutoSync.DiscordWebhook, maskedDiscordWebhook),
-		"discordWebhookUpdates":  maskSecret(cfg.AutoSync.DiscordWebhookUpdates, maskedDiscordWebhook),
-		"gotifyEnabled":          cfg.AutoSync.GotifyEnabled,
-		"gotifyUrl":              cfg.AutoSync.GotifyURL, // URL itself isn't a bearer — return plain
-		"gotifyToken":            maskSecret(cfg.AutoSync.GotifyToken, maskedToken),
-		"gotifyPriorityCritical": cfg.AutoSync.GotifyPriorityCritical,
-		"gotifyPriorityWarning":  cfg.AutoSync.GotifyPriorityWarning,
-		"gotifyPriorityInfo":     cfg.AutoSync.GotifyPriorityInfo,
-		"gotifyCriticalValue":    cfg.AutoSync.GotifyCriticalValue,
-		"gotifyWarningValue":     cfg.AutoSync.GotifyWarningValue,
-		"gotifyInfoValue":        cfg.AutoSync.GotifyInfoValue,
-		"pushoverEnabled":        cfg.AutoSync.PushoverEnabled,
-		"pushoverUserKey":        maskSecret(cfg.AutoSync.PushoverUserKey, maskedToken),
-		"pushoverAppToken":       maskSecret(cfg.AutoSync.PushoverAppToken, maskedToken),
+		"enabled": cfg.AutoSync.Enabled,
 	})
 }
 
-// handleSaveAutoSyncSettings updates global auto-sync settings.
+// handleSaveAutoSyncSettings updates the global auto-sync enabled flag.
 func (app *App) handleSaveAutoSyncSettings(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, 512)
 	var req struct {
-		Enabled               bool   `json:"enabled"`
-		NotifyOnSuccess       bool   `json:"notifyOnSuccess"`
-		NotifyOnFailure       bool   `json:"notifyOnFailure"`
-		NotifyOnRepoUpdate    bool   `json:"notifyOnRepoUpdate"`
-		DiscordEnabled        bool   `json:"discordEnabled"`
-		DiscordWebhook        string `json:"discordWebhook"`
-		DiscordWebhookUpdates string `json:"discordWebhookUpdates"`
-		GotifyEnabled         bool   `json:"gotifyEnabled"`
-		GotifyURL             string `json:"gotifyUrl"`
-		GotifyToken           string `json:"gotifyToken"`
-		GotifyPriorityCritical bool  `json:"gotifyPriorityCritical"`
-		GotifyPriorityWarning  bool  `json:"gotifyPriorityWarning"`
-		GotifyPriorityInfo     bool  `json:"gotifyPriorityInfo"`
-		GotifyCriticalValue    int   `json:"gotifyCriticalValue"`
-		GotifyWarningValue     int   `json:"gotifyWarningValue"`
-		GotifyInfoValue        int   `json:"gotifyInfoValue"`
-		PushoverEnabled  bool   `json:"pushoverEnabled"`
-		PushoverUserKey  string `json:"pushoverUserKey"`
-		PushoverAppToken string `json:"pushoverAppToken"`
+		Enabled bool `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "Invalid JSON")
 		return
 	}
-
-	existing := app.config.Get().AutoSync
-
-	// Preserve stored secret values when the UI submits the masked placeholder
-	// (i.e. user didn't edit the secret field). Actual edits — including
-	// explicit empty-string to clear a secret — are respected.
-	webhook := preserveIfMasked(strings.TrimSpace(req.DiscordWebhook), existing.DiscordWebhook, maskedDiscordWebhook)
-	webhookUpdates := preserveIfMasked(strings.TrimSpace(req.DiscordWebhookUpdates), existing.DiscordWebhookUpdates, maskedDiscordWebhook)
-	gotifyToken := preserveIfMasked(strings.TrimSpace(req.GotifyToken), existing.GotifyToken, maskedToken)
-	pushoverUserKey := preserveIfMasked(strings.TrimSpace(req.PushoverUserKey), existing.PushoverUserKey, maskedToken)
-	pushoverAppToken := preserveIfMasked(strings.TrimSpace(req.PushoverAppToken), existing.PushoverAppToken, maskedToken)
-
-	if webhook != "" &&
-		!strings.HasPrefix(webhook, "https://discord.com/api/webhooks/") &&
-		!strings.HasPrefix(webhook, "https://discordapp.com/api/webhooks/") {
-		writeError(w, 400, "Discord webhook must start with https://discord.com/api/webhooks/")
-		return
-	}
-	if webhookUpdates != "" &&
-		!strings.HasPrefix(webhookUpdates, "https://discord.com/api/webhooks/") &&
-		!strings.HasPrefix(webhookUpdates, "https://discordapp.com/api/webhooks/") {
-		writeError(w, 400, "Discord updates webhook must start with https://discord.com/api/webhooks/")
-		return
-	}
-	gotifyURL := strings.TrimSpace(req.GotifyURL)
-	if gotifyURL != "" && !strings.HasPrefix(gotifyURL, "http://") && !strings.HasPrefix(gotifyURL, "https://") {
-		writeError(w, 400, "Gotify URL must start with http:// or https://")
-		return
-	}
-
 	if err := app.config.Update(func(cfg *Config) {
 		cfg.AutoSync.Enabled = req.Enabled
-		cfg.AutoSync.NotifyOnSuccess = req.NotifyOnSuccess
-		cfg.AutoSync.NotifyOnFailure = req.NotifyOnFailure
-		cfg.AutoSync.NotifyOnRepoUpdate = req.NotifyOnRepoUpdate
-		de := req.DiscordEnabled
-		cfg.AutoSync.DiscordEnabled = &de
-		cfg.AutoSync.DiscordWebhook = webhook
-		cfg.AutoSync.DiscordWebhookUpdates = webhookUpdates
-		cfg.AutoSync.GotifyEnabled = req.GotifyEnabled
-		cfg.AutoSync.GotifyURL = gotifyURL
-		cfg.AutoSync.GotifyToken = gotifyToken
-		cfg.AutoSync.GotifyPriorityCritical = req.GotifyPriorityCritical
-		cfg.AutoSync.GotifyPriorityWarning = req.GotifyPriorityWarning
-		cfg.AutoSync.GotifyPriorityInfo = req.GotifyPriorityInfo
-		cv, wv, iv := req.GotifyCriticalValue, req.GotifyWarningValue, req.GotifyInfoValue
-		cfg.AutoSync.GotifyCriticalValue = &cv
-		cfg.AutoSync.GotifyWarningValue = &wv
-		cfg.AutoSync.GotifyInfoValue = &iv
-		cfg.AutoSync.PushoverEnabled = req.PushoverEnabled
-		cfg.AutoSync.PushoverUserKey = pushoverUserKey
-		cfg.AutoSync.PushoverAppToken = pushoverAppToken
 	}); err != nil {
 		writeError(w, 500, "Failed to save settings")
 		return
 	}
-
 	writeJSON(w, map[string]bool{"ok": true})
 }
 
-func (app *App) handleTestGotify(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	var req struct {
-		URL   string `json:"url"`
-		Token string `json:"token"`
+// --- Notification Agent handlers ---------------------------------------------
+
+// handleListNotificationAgents returns all configured notification agents
+// with credentials masked.
+func (app *App) handleListNotificationAgents(w http.ResponseWriter, r *http.Request) {
+	cfg := app.config.Get()
+	agents := cfg.AutoSync.NotificationAgents
+	if agents == nil {
+		agents = []NotificationAgent{}
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.URL == "" || req.Token == "" {
-		writeError(w, 400, "url and token required")
-		return
+	// Mask credentials before returning
+	for i, a := range agents {
+		agents[i].Config = maskAgentConfig(a.Type, a.Config)
 	}
-	payload := map[string]any{
-		"title":   "Clonarr Test",
-		"message": "If you see this, Gotify is configured correctly!",
-		"priority": 5,
-		"extras": map[string]any{
-			"client::display": map[string]string{
-				"contentType": "text/markdown",
-			},
-		},
-	}
-	body, _ := json.Marshal(payload)
-	gotifyURL := strings.TrimRight(req.URL, "/") + "/message?token=" + url.QueryEscape(req.Token)
-	resp, err := app.notifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
-	if err != nil {
-		writeError(w, 502, fmt.Sprintf("Failed to reach Gotify: %v", err))
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		writeError(w, resp.StatusCode, fmt.Sprintf("Gotify returned %d", resp.StatusCode))
-		return
-	}
-	writeJSON(w, map[string]string{"status": "ok"})
+	writeJSON(w, agents)
 }
 
-func (app *App) handleTestDiscord(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	var req struct {
-		Webhook string `json:"webhook"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Webhook == "" {
-		writeError(w, 400, "webhook required")
+// handleCreateNotificationAgent adds a new notification agent.
+func (app *App) handleCreateNotificationAgent(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	var agent NotificationAgent
+	if err := json.NewDecoder(r.Body).Decode(&agent); err != nil {
+		writeError(w, 400, "Invalid JSON")
 		return
 	}
-	webhook := strings.TrimSpace(req.Webhook)
+	if err := validateAgentConfig(agent); err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
+	created, err := app.config.AddNotificationAgent(agent)
+	if err != nil {
+		writeError(w, 409, err.Error())
+		return
+	}
+	created.Config = maskAgentConfig(created.Type, created.Config)
+	writeJSON(w, created)
+}
+
+// handleUpdateNotificationAgent replaces a notification agent by ID.
+func (app *App) handleUpdateNotificationAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	var agent NotificationAgent
+	if err := json.NewDecoder(r.Body).Decode(&agent); err != nil {
+		writeError(w, 400, "Invalid JSON")
+		return
+	}
+	// Resolve masked credentials against stored values
+	existing, ok := app.config.GetNotificationAgent(id)
+	if !ok {
+		writeError(w, 404, "Notification agent not found")
+		return
+	}
+	agent.Config = preserveAgentConfig(agent.Type, agent.Config, existing.Config)
+	if err := validateAgentConfig(agent); err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
+	updated, err := app.config.UpdateNotificationAgent(id, agent)
+	if err != nil {
+		writeError(w, 404, err.Error())
+		return
+	}
+	updated.Config = maskAgentConfig(updated.Type, updated.Config)
+	writeJSON(w, updated)
+}
+
+// handleDeleteNotificationAgent removes a notification agent by ID.
+func (app *App) handleDeleteNotificationAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := app.config.DeleteNotificationAgent(id); err != nil {
+		writeError(w, 404, err.Error())
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+// testResult holds the outcome of testing one endpoint within an agent.
+type testResult struct {
+	Label  string `json:"label"`
+	Status string `json:"status"`          // "ok" or "error"
+	Error  string `json:"error,omitempty"` // set when status == "error"
+}
+
+// handleTestNotificationAgentInline tests agent credentials sent inline in the
+// request body without requiring a saved agent ID. Used by the add-agent modal.
+func (app *App) handleTestNotificationAgentInline(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var req NotificationAgent
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "Invalid JSON")
+		return
+	}
+	app.runNotificationAgentTest(w, req)
+}
+
+// handleTestNotificationAgent fires test messages for an existing saved agent.
+// Uses the stored agent config directly — no body parsing needed — so tests
+// always use the real (unmasked) credentials regardless of enabled state.
+func (app *App) handleTestNotificationAgent(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	existing, ok := app.config.GetNotificationAgent(id)
+	if !ok {
+		writeError(w, 404, "Notification agent not found")
+		return
+	}
+	app.runNotificationAgentTest(w, existing)
+}
+
+// runNotificationAgentTest executes the test logic for any notification agent
+// and writes the JSON response. Shared by both the inline and saved-agent test handlers.
+func (app *App) runNotificationAgentTest(w http.ResponseWriter, req NotificationAgent) {
+	var results []testResult
+
+	switch req.Type {
+	case "discord":
+		nc := req.Config
+		// Test sync webhook
+		if nc.DiscordWebhook != "" {
+			res := testResult{Label: "Sync webhook", Status: "ok"}
+			if err := app.testDiscordWebhook(nc.DiscordWebhook); err != nil {
+				res.Status = "error"
+				res.Error = err.Error()
+			}
+			results = append(results, res)
+		}
+		// Test updates webhook (only if set and different from sync)
+		if nc.DiscordWebhookUpdates != "" && nc.DiscordWebhookUpdates != nc.DiscordWebhook {
+			res := testResult{Label: "Updates webhook", Status: "ok"}
+			if err := app.testDiscordWebhook(nc.DiscordWebhookUpdates); err != nil {
+				res.Status = "error"
+				res.Error = err.Error()
+			}
+			results = append(results, res)
+		}
+		if len(results) == 0 {
+			writeError(w, 400, "At least one webhook URL is required")
+			return
+		}
+
+	case "gotify":
+		nc := req.Config
+		if nc.GotifyURL == "" || nc.GotifyToken == "" {
+			writeError(w, 400, "URL and token are required")
+			return
+		}
+		res := testResult{Label: "Gotify", Status: "ok"}
+		payload := map[string]any{
+			"title":    "Clonarr Test",
+			"message":  "If you see this, Gotify is configured correctly!",
+			"priority": 5,
+			"extras":   map[string]any{"client::display": map[string]string{"contentType": "text/markdown"}},
+		}
+		body, _ := json.Marshal(payload)
+		gotifyURL := strings.TrimRight(nc.GotifyURL, "/") + "/message?token=" + url.QueryEscape(nc.GotifyToken)
+		resp, err := app.notifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
+		if err != nil {
+			res.Status = "error"
+			res.Error = fmt.Sprintf("Failed to reach Gotify: %v", err)
+		} else {
+			resp.Body.Close()
+			if resp.StatusCode >= 400 {
+				res.Status = "error"
+				res.Error = fmt.Sprintf("Gotify returned %d", resp.StatusCode)
+			}
+		}
+		results = append(results, res)
+
+	case "pushover":
+		nc := req.Config
+		if nc.PushoverUserKey == "" || nc.PushoverAppToken == "" {
+			writeError(w, 400, "User key and app token are required")
+			return
+		}
+		res := testResult{Label: "Pushover", Status: "ok"}
+		payload := map[string]any{
+			"token":    nc.PushoverAppToken,
+			"user":     nc.PushoverUserKey,
+			"title":    "Clonarr Test",
+			"message":  "If you see this, Pushover is configured correctly!",
+			"priority": 0,
+		}
+		body, _ := json.Marshal(payload)
+		resp, err := app.safeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+		if err != nil {
+			res.Status = "error"
+			res.Error = fmt.Sprintf("Failed to reach Pushover: %v", err)
+		} else {
+			resp.Body.Close()
+			if resp.StatusCode >= 400 {
+				res.Status = "error"
+				res.Error = fmt.Sprintf("Pushover returned %d", resp.StatusCode)
+			}
+		}
+		results = append(results, res)
+
+	default:
+		writeError(w, 400, "Unknown agent type: "+req.Type)
+		return
+	}
+
+	writeJSON(w, map[string]any{"results": results})
+}
+
+// testDiscordWebhook sends a test embed to a Discord webhook and returns any error.
+func (app *App) testDiscordWebhook(webhook string) error {
+	webhook = strings.TrimSpace(webhook)
 	if !strings.HasPrefix(webhook, "https://discord.com/api/webhooks/") &&
 		!strings.HasPrefix(webhook, "https://discordapp.com/api/webhooks/") {
-		writeError(w, 400, "Discord webhook must start with https://discord.com/api/webhooks/")
-		return
+		return fmt.Errorf("must start with https://discord.com/api/webhooks/")
 	}
 	embed := map[string]any{
 		"title":       "Clonarr Test",
@@ -4164,48 +4263,50 @@ func (app *App) handleTestDiscord(w http.ResponseWriter, r *http.Request) {
 	payload, _ := json.Marshal(map[string]any{"embeds": []any{embed}})
 	resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload))
 	if err != nil {
-		writeError(w, 502, fmt.Sprintf("Failed to reach Discord: %v", err))
-		return
+		return fmt.Errorf("failed to reach Discord: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		writeError(w, resp.StatusCode, fmt.Sprintf("Discord returned %d", resp.StatusCode))
-		return
+		return fmt.Errorf("Discord returned %d", resp.StatusCode)
 	}
-	writeJSON(w, map[string]string{"status": "ok"})
+	return nil
 }
 
-func (app *App) handleTestPushover(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	var req struct {
-		UserKey  string `json:"userKey"`
-		AppToken string `json:"appToken"`
+// validateAgentConfig checks that required fields are present for the agent type.
+func validateAgentConfig(agent NotificationAgent) error {
+	if strings.TrimSpace(agent.Name) == "" {
+		return fmt.Errorf("name is required")
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserKey == "" || req.AppToken == "" {
-		writeError(w, 400, "userKey and appToken required")
-		return
+	switch agent.Type {
+	case "discord":
+		wh := strings.TrimSpace(agent.Config.DiscordWebhook)
+		if wh == "" {
+			return fmt.Errorf("sync webhook is required")
+		}
+		if !strings.HasPrefix(wh, "https://discord.com/api/webhooks/") &&
+			!strings.HasPrefix(wh, "https://discordapp.com/api/webhooks/") {
+			return fmt.Errorf("Discord webhook must start with https://discord.com/api/webhooks/")
+		}
+		if wu := strings.TrimSpace(agent.Config.DiscordWebhookUpdates); wu != "" {
+			if !strings.HasPrefix(wu, "https://discord.com/api/webhooks/") &&
+				!strings.HasPrefix(wu, "https://discordapp.com/api/webhooks/") {
+				return fmt.Errorf("Discord updates webhook must start with https://discord.com/api/webhooks/")
+			}
+		}
+	case "gotify":
+		u := strings.TrimSpace(agent.Config.GotifyURL)
+		if u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+			return fmt.Errorf("Gotify URL must start with http:// or https://")
+		}
+	case "pushover":
+		// No URL validation needed
+	default:
+		return fmt.Errorf("unknown agent type: %s", agent.Type)
 	}
-	payload := map[string]any{
-		"token":    strings.TrimSpace(req.AppToken),
-		"user":     strings.TrimSpace(req.UserKey),
-		"title":    "Clonarr Test",
-		"message":  "If you see this, Pushover is configured correctly!",
-		"priority": 0,
-	}
-	body, _ := json.Marshal(payload)
-	resp, err := app.safeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
-	if err != nil {
-		writeError(w, 502, fmt.Sprintf("Failed to reach Pushover: %v", err))
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		writeError(w, resp.StatusCode, fmt.Sprintf("Pushover returned %d", resp.StatusCode))
-		return
-	}
-	writeJSON(w, map[string]string{"status": "ok"})
+	return nil
 }
 
+// placeholder so the last handler below still compiles cleanly
 // handleListAutoSyncRules returns all auto-sync rules with instance names resolved.
 func (app *App) handleListAutoSyncRules(w http.ResponseWriter, r *http.Request) {
 	cfg := app.config.Get()

@@ -279,9 +279,13 @@ func main() {
 	// Auto-Sync
 	mux.HandleFunc("GET /api/auto-sync/settings", app.handleGetAutoSyncSettings)
 	mux.HandleFunc("PUT /api/auto-sync/settings", app.handleSaveAutoSyncSettings)
-	mux.HandleFunc("POST /api/auto-sync/test-gotify", app.handleTestGotify)
-	mux.HandleFunc("POST /api/auto-sync/test-discord", app.handleTestDiscord)
-	mux.HandleFunc("POST /api/auto-sync/test-pushover", app.handleTestPushover)
+	// Notification agents
+	mux.HandleFunc("GET /api/auto-sync/notification-agents", app.handleListNotificationAgents)
+	mux.HandleFunc("POST /api/auto-sync/notification-agents", app.handleCreateNotificationAgent)
+	mux.HandleFunc("PUT /api/auto-sync/notification-agents/{id}", app.handleUpdateNotificationAgent)
+	mux.HandleFunc("DELETE /api/auto-sync/notification-agents/{id}", app.handleDeleteNotificationAgent)
+	mux.HandleFunc("POST /api/auto-sync/notification-agents/test", app.handleTestNotificationAgentInline)
+	mux.HandleFunc("POST /api/auto-sync/notification-agents/{id}/test", app.handleTestNotificationAgent)
 	mux.HandleFunc("GET /api/auto-sync/rules", app.handleListAutoSyncRules)
 	mux.HandleFunc("POST /api/auto-sync/rules", app.handleCreateAutoSyncRule)
 	mux.HandleFunc("PUT /api/auto-sync/rules/{id}", app.handleUpdateAutoSyncRule)

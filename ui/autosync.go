@@ -347,36 +347,60 @@ func (app *App) cleanupStaleRules() {
 	}
 }
 
+// sendDiscord sends a Discord embed to the given webhook URL.
+func (app *App) sendDiscord(webhook, title, description string, color int) error {
+	embed := map[string]any{
+		"title":       title,
+		"description": description,
+		"color":       color,
+		"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+	}
+	payload, err := json.Marshal(map[string]any{"embeds": []any{embed}})
+	if err != nil {
+		return err
+	}
+	resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("discord returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // sendGotify sends a Gotify push notification with the given severity level.
 // level: "critical", "warning", or "info"
-func (app *App) sendGotify(title, message, level string) {
-	cfg := app.config.Get()
-	if !cfg.AutoSync.GotifyEnabled || cfg.AutoSync.GotifyURL == "" || cfg.AutoSync.GotifyToken == "" {
+// agent provides the credentials and priority configuration.
+func (app *App) sendGotify(agent NotificationAgent, title, message, level string) {
+	nc := agent.Config
+	if nc.GotifyURL == "" || nc.GotifyToken == "" {
 		return
 	}
 
 	var priority int
 	switch level {
 	case "critical":
-		if !cfg.AutoSync.GotifyPriorityCritical {
+		if !nc.GotifyPriorityCritical {
 			return
 		}
-		if cfg.AutoSync.GotifyCriticalValue != nil {
-			priority = *cfg.AutoSync.GotifyCriticalValue
+		if nc.GotifyCriticalValue != nil {
+			priority = *nc.GotifyCriticalValue
 		}
 	case "warning":
-		if !cfg.AutoSync.GotifyPriorityWarning {
+		if !nc.GotifyPriorityWarning {
 			return
 		}
-		if cfg.AutoSync.GotifyWarningValue != nil {
-			priority = *cfg.AutoSync.GotifyWarningValue
+		if nc.GotifyWarningValue != nil {
+			priority = *nc.GotifyWarningValue
 		}
 	default:
-		if !cfg.AutoSync.GotifyPriorityInfo {
+		if !nc.GotifyPriorityInfo {
 			return
 		}
-		if cfg.AutoSync.GotifyInfoValue != nil {
-			priority = *cfg.AutoSync.GotifyInfoValue
+		if nc.GotifyInfoValue != nil {
+			priority = *nc.GotifyInfoValue
 		}
 	}
 
@@ -402,7 +426,7 @@ func (app *App) sendGotify(title, message, level string) {
 		},
 	}
 	body, _ := json.Marshal(payload)
-	gotifyURL := strings.TrimRight(cfg.AutoSync.GotifyURL, "/") + "/message?token=" + url.QueryEscape(cfg.AutoSync.GotifyToken)
+	gotifyURL := strings.TrimRight(nc.GotifyURL, "/") + "/message?token=" + url.QueryEscape(nc.GotifyToken)
 	resp, err := app.notifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Gotify: send failed: %v", err)
@@ -412,15 +436,15 @@ func (app *App) sendGotify(title, message, level string) {
 }
 
 // sendPushover sends a Pushover push notification at normal priority.
-func (app *App) sendPushover(title, message string) {
-	cfg := app.config.Get()
-	if !cfg.AutoSync.PushoverEnabled || cfg.AutoSync.PushoverUserKey == "" || cfg.AutoSync.PushoverAppToken == "" {
+func (app *App) sendPushover(agent NotificationAgent, title, message string) {
+	nc := agent.Config
+	if nc.PushoverUserKey == "" || nc.PushoverAppToken == "" {
 		return
 	}
 
 	payload := map[string]any{
-		"token":    cfg.AutoSync.PushoverAppToken,
-		"user":     cfg.AutoSync.PushoverUserKey,
+		"token":    nc.PushoverAppToken,
+		"user":     nc.PushoverUserKey,
 		"title":    title,
 		"message":  message,
 		"priority": 0, // normal priority
@@ -434,12 +458,42 @@ func (app *App) sendPushover(title, message string) {
 	resp.Body.Close()
 }
 
-// notifyCleanup sends a Discord notification for auto-cleanup events.
-func (app *App) notifyCleanup(events []CleanupEvent) {
-	cfg := app.config.Get()
-	if !cfg.AutoSync.NotifyOnFailure {
+// dispatchNotification fires the appropriate send function for one agent.
+// discordMsg and gotifyMsg allow per-provider message formatting.
+// discordWebhook overrides which webhook to use (for updates/changelog events).
+func (app *App) dispatchNotification(agent NotificationAgent, title, discordMsg, gotifyMsg string, color int, discordWebhook string) {
+	if !agent.Enabled {
 		return
 	}
+	switch agent.Type {
+	case "discord":
+		webhook := discordWebhook
+		if webhook == "" {
+			webhook = agent.Config.DiscordWebhook
+		}
+		if webhook == "" {
+			return
+		}
+		if err := app.sendDiscord(webhook, title, discordMsg, color); err != nil {
+			log.Printf("Discord: send failed: %v", err)
+		}
+	case "gotify":
+		// Map color to Gotify level
+		level := "info"
+		if color == 0xf85149 { // red = failure/critical
+			level = "critical"
+		} else if color == 0xd29922 { // amber = warning/cleanup
+			level = "warning"
+		}
+		safeGo("notify-gotify", func() { app.sendGotify(agent, title, gotifyMsg, level) })
+	case "pushover":
+		safeGo("notify-pushover", func() { app.sendPushover(agent, title, discordMsg) })
+	}
+}
+
+// notifyCleanup sends notifications for auto-cleanup events.
+func (app *App) notifyCleanup(events []CleanupEvent) {
+	cfg := app.config.Get()
 
 	description := ""
 	for _, ev := range events {
@@ -447,27 +501,13 @@ func (app *App) notifyCleanup(events []CleanupEvent) {
 	}
 	description = strings.TrimSpace(description)
 
-	// Discord notification
-	if webhook := cfg.AutoSync.DiscordWebhook; webhook != "" && (cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled) {
-		embed := map[string]any{
-			"title":       "Sync Rules Cleaned Up",
-			"description": description,
-			"color":       0xd29922, // amber
-			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+	title := "Clonarr: Sync Rules Cleaned Up"
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnCleanup {
+			continue
 		}
-		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-				log.Printf("Cleanup: Discord notification failed: %v", err)
-			} else {
-				resp.Body.Close()
-			}
-		}
+		app.dispatchNotification(agent, title, description, description, 0xd29922, "")
 	}
-
-	// Gotify notification
-	go app.sendGotify("Clonarr: Sync Rules Cleaned Up", description, "warning")
-	// Pushover notification
-	go app.sendPushover("Clonarr: Sync Rules Cleaned Up", description)
 }
 
 // isConnectionError checks if an error is a network/connection problem (instance unreachable).
@@ -511,15 +551,9 @@ func (app *App) updateAutoSyncRuleError(ruleID, errMsg string) {
 	})
 }
 
-// notifyAutoSync sends Discord notification for auto-sync result.
+// notifyAutoSync sends notifications for an auto-sync result.
 func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName string, result *SyncResult, syncErr error) {
 	cfg := app.config.Get()
-	if syncErr != nil && !cfg.AutoSync.NotifyOnFailure {
-		return
-	}
-	if syncErr == nil && !cfg.AutoSync.NotifyOnSuccess {
-		return
-	}
 
 	var color int
 	var title, description string
@@ -572,87 +606,53 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 		}
 	}
 
-	// Discord notification
-	if webhook := cfg.AutoSync.DiscordWebhook; webhook != "" && (cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled) {
-		embed := map[string]any{
-			"title":       title,
-			"description": description,
-			"color":       color,
-			"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
+	fullTitle := "Clonarr: " + title
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if syncErr != nil && !agent.Events.OnSyncFailure {
+			continue
 		}
-		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-				log.Printf("Auto-sync: Discord notification failed: %v", err)
-			} else {
-				resp.Body.Close()
-			}
+		if syncErr == nil && !agent.Events.OnSyncSuccess {
+			continue
 		}
+		app.dispatchNotification(agent, fullTitle, description, description, color, "")
 	}
-
-	// Gotify notification
-	level := "info"
-	if syncErr != nil {
-		level = "critical"
-	}
-	go app.sendGotify("Clonarr: "+title, description, level)
-	// Pushover notification
-	go app.sendPushover("Clonarr: "+title, description)
 }
 
-// notifyRepoUpdate sends a Discord notification when the TRaSH repo has new commits.
+// notifyRepoUpdate sends notifications when the TRaSH repo has new commits.
 // Shows actual file changes (CFs, profiles, groups) from the stored pull diff.
 func (app *App) notifyRepoUpdate(prevCommit, newCommit string) {
 	cfg := app.config.Get()
-	if !cfg.AutoSync.NotifyOnRepoUpdate {
-		return
-	}
 
 	description := fmt.Sprintf("**Commit:** `%s` → `%s`", prevCommit, newCommit)
-
-	// Use stored diff from CloneOrPull
 	status := app.trash.Status()
 	if status.LastDiff != nil && status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary
 	}
 
-	// Discord notification — use updates webhook if set, otherwise fall back to main
-	if cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled {
-		webhook := cfg.AutoSync.DiscordWebhookUpdates
-		if webhook == "" {
-			webhook = cfg.AutoSync.DiscordWebhook
+	title := "Clonarr: TRaSH Guides Updated"
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnRepoUpdate {
+			continue
 		}
-		if webhook != "" {
-			embed := map[string]any{
-				"title":       "TRaSH Guides Updated",
-				"description": description,
-				"color":       0x58a6ff, // blue
-				"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
-			}
-			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-					log.Printf("Repo update: Discord notification failed: %v", err)
-				} else {
-					resp.Body.Close()
-					log.Printf("Repo update: Discord notification sent (%s → %s)", prevCommit, newCommit)
-				}
+		// For Discord: use the updates webhook if set, fall back to main webhook
+		discordWebhook := ""
+		if agent.Type == "discord" {
+			discordWebhook = agent.Config.DiscordWebhookUpdates
+			if discordWebhook == "" {
+				discordWebhook = agent.Config.DiscordWebhook
 			}
 		}
+		app.dispatchNotification(agent, title, description, description, 0x58a6ff, discordWebhook)
 	}
-
-	// Gotify notification
-	go app.sendGotify("Clonarr: TRaSH Guides Updated", description, "info")
-	// Pushover notification
-	go app.sendPushover("Clonarr: TRaSH Guides Updated", description)
+	log.Printf("Repo update: notifications dispatched (%s → %s)", prevCommit, newCommit)
 }
 
-// notifyChangelog sends a separate Discord notification when updates.txt has a new date section.
+// notifyChangelog sends notifications when updates.txt has a new date section.
 func (app *App) notifyChangelog(section ChangelogSection) {
 	cfg := app.config.Get()
-	if !cfg.AutoSync.NotifyOnRepoUpdate {
-		return
-	}
-	// Build Discord description
-	description := fmt.Sprintf("**Week of %s** — %d changes", section.Date, len(section.Entries))
+
+	// Build Discord/Pushover description
+	discordMsg := fmt.Sprintf("**Week of %s** — %d changes", section.Date, len(section.Entries))
 	for _, e := range section.Entries {
 		icon := "🔧"
 		if e.Type == "feat" {
@@ -666,38 +666,14 @@ func (app *App) notifyChangelog(section ChangelogSection) {
 		if e.PR != "" {
 			line += fmt.Sprintf(" ([#%s](https://github.com/TRaSH-Guides/Guides/pull/%s))", e.PR, e.PR)
 		}
-		if len(description) > 1800 {
-			description += "\n- ..."
+		if len(discordMsg) > 1800 {
+			discordMsg += "\n- ..."
 			break
 		}
-		description += line
+		discordMsg += line
 	}
 
-	// Discord notification — use updates webhook if set, otherwise fall back to main
-	if cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled {
-		webhook := cfg.AutoSync.DiscordWebhookUpdates
-		if webhook == "" {
-			webhook = cfg.AutoSync.DiscordWebhook
-		}
-		if webhook != "" {
-			embed := map[string]any{
-				"title":       "TRaSH Weekly Changelog",
-				"description": description,
-				"color":       0xd29922, // amber
-				"footer":      map[string]string{"text": "Clonarr " + Version + " by ProphetSe7en"},
-			}
-			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.safeClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-					log.Printf("Changelog: Discord notification failed: %v", err)
-				} else {
-					resp.Body.Close()
-					log.Printf("Changelog: Discord notification sent (week of %s)", section.Date)
-				}
-			}
-		}
-	}
-
-	// Gotify notification — use markdown bullet list for proper line breaks
+	// Gotify uses markdown bullet list for proper line breaks
 	gotifyMsg := fmt.Sprintf("**Week of %s** — %d changes\n\n", section.Date, len(section.Entries))
 	for _, e := range section.Entries {
 		icon := "🔧"
@@ -718,7 +694,26 @@ func (app *App) notifyChangelog(section ChangelogSection) {
 		}
 		gotifyMsg += line + "\n"
 	}
-	go app.sendGotify("Clonarr: TRaSH Weekly Changelog", gotifyMsg, "info")
-	// Pushover notification
-	go app.sendPushover("Clonarr: TRaSH Weekly Changelog", gotifyMsg)
+
+	title := "Clonarr: TRaSH Weekly Changelog"
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnChangelog {
+			continue
+		}
+		// For Discord: use the updates webhook if set, fall back to main webhook
+		discordWebhook := ""
+		if agent.Type == "discord" {
+			discordWebhook = agent.Config.DiscordWebhookUpdates
+			if discordWebhook == "" {
+				discordWebhook = agent.Config.DiscordWebhook
+			}
+		}
+		// Gotify gets its own formatted message; Discord/Pushover get discordMsg
+		msg := discordMsg
+		if agent.Type == "gotify" {
+			msg = gotifyMsg
+		}
+		app.dispatchNotification(agent, title, msg, gotifyMsg, 0xd29922, discordWebhook)
+	}
+	log.Printf("Changelog: notifications dispatched (week of %s)", section.Date)
 }
