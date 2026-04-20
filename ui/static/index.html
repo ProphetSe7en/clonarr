@@ -4379,12 +4379,9 @@
                     </template>
                   </span>
                 </template>
-                <template x-if="!notifAgentStatus[agent.id] || (!notifAgentStatus[agent.id].testing && notifAgentStatus[agent.id].results.length === 0)">
-                  <span style="font-size:12px;color:#aaa">Not tested</span>
-                </template>
               </div>
               <button class="btn btn-sm" style="margin-left:8px"
-                :disabled="notifAgentStatus[agent.id] && notifAgentStatus[agent.id].testing"
+                :disabled="notifAgentStatus[agent.id]?.testing"
                 @click="testNotificationAgent(agent)">Test</button>
               <button class="btn btn-sm" style="margin-left:4px" @click="openAgentModal(agent)">Edit</button>
               <button class="btn btn-sm btn-danger" style="margin-left:4px" @click="deleteNotificationAgent(agent)">Delete</button>
@@ -12944,12 +12941,9 @@ function clonarr() {
     async testNotificationAgent(agent) {
       this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: true, results: [] } };
       try {
-        // Send the agent's current (masked) config as the body so the handler
-        // can resolve credentials server-side via preserveAgentConfig.
+        // Handler uses stored credentials directly — no body needed.
         const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}/test`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: agent.type, config: { ...agent.config } }),
         });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) {
