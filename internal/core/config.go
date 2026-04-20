@@ -14,20 +14,24 @@ import (
 type Config struct {
 	Instances            []Instance                       `json:"instances"`
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
-	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h", "0" to disable)
-	DevMode              bool                             `json:"devMode"`                        // Enable TRaSH developer tools (TRaSH JSON export)
-	DebugLogging         bool                             `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
+	PullInterval         string                           `json:"pullInterval"` // Go duration (e.g. "24h", "1h", "0" to disable)
+	DevMode              bool                             `json:"devMode"`      // Enable TRaSH developer tools (TRaSH JSON export)
+	DebugLogging         bool                             `json:"debugLogging"` // Write detailed operations to /config/debug.log
 	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
-	QualitySizeAutoSync  map[string]QSAutoSync            `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
+	QualitySizeAutoSync  map[string]QSAutoSync             `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
 	SyncHistory          []SyncHistoryEntry               `json:"syncHistory,omitempty"`
 	CleanupKeep          map[string][]string              `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
-	AutoSync               AutoSyncConfig                   `json:"autoSync,omitempty"`
-	Prowlarr               ProwlarrConfig                   `json:"prowlarr,omitempty"`
-	Authentication         string                           `json:"authentication,omitempty"`
-	AuthenticationRequired string                           `json:"authenticationRequired,omitempty"`
-	SessionTTLDays         int                              `json:"sessionTtlDays,omitempty"`
-	TrustedNetworks        string                           `json:"trustedNetworks,omitempty"`
-	TrustedProxies         string                           `json:"trustedProxies,omitempty"`
+	AutoSync             AutoSyncConfig                   `json:"autoSync,omitempty"`
+	Prowlarr             ProwlarrConfig                   `json:"prowlarr,omitempty"`
+	// Authentication — matches Radarr/Sonarr Security panel model.
+	// Credentials (bcrypt password hash, API key) live separately in
+	// /config/auth.json, NOT here, so this file can be exported/shared
+	// without leaking secrets.
+	Authentication         string   `json:"authentication,omitempty"`         // "forms" (default) | "basic" | "none"
+	AuthenticationRequired string   `json:"authenticationRequired,omitempty"` // "enabled" | "disabled_for_local_addresses" (default)
+	TrustedProxies         string   `json:"trustedProxies,omitempty"`         // comma-separated IPs — reverse-proxy deployments
+	TrustedNetworks        string   `json:"trustedNetworks,omitempty"`        // comma-separated IPs/CIDRs for local-bypass; empty = Radarr-parity default
+	SessionTTLDays         int      `json:"sessionTtlDays,omitempty"`         // default 30
 }
 
 // ProwlarrConfig holds Prowlarr connection settings for the Scoring Sandbox.
@@ -45,48 +49,69 @@ type ProwlarrConfig struct {
 
 // AutoSyncConfig holds global auto-sync settings and rules.
 type AutoSyncConfig struct {
-	Enabled               bool   `json:"enabled"`
-	NotifyOnSuccess       bool   `json:"notifyOnSuccess"`
-	NotifyOnFailure       bool   `json:"notifyOnFailure"`
-	NotifyOnRepoUpdate    bool   `json:"notifyOnRepoUpdate"`
-	DiscordEnabled        *bool  `json:"discordEnabled,omitempty"` // pointer: nil = not yet set, defaults to true
+	Enabled            bool                 `json:"enabled"`
+	NotificationAgents []NotificationAgent  `json:"notificationAgents,omitempty"`
+	Rules              []AutoSyncRule        `json:"rules,omitempty"`
+}
+
+// NotificationAgent is a configured notification provider instance.
+type NotificationAgent struct {
+	ID      string             `json:"id"`
+	Name    string             `json:"name"`    // user-defined label, e.g. "Discord #alerts"
+	Type    string             `json:"type"`    // "discord" | "gotify" | "pushover"
+	Enabled bool               `json:"enabled"`
+	Events  AgentEvents        `json:"events"`
+	Config  NotificationConfig `json:"config"`
+}
+
+// AgentEvents controls which auto-sync events trigger this agent.
+type AgentEvents struct {
+	OnSyncSuccess bool `json:"onSyncSuccess"`
+	OnSyncFailure bool `json:"onSyncFailure"`
+	OnCleanup     bool `json:"onCleanup"`
+	OnRepoUpdate  bool `json:"onRepoUpdate"`
+	OnChangelog   bool `json:"onChangelog"`
+}
+
+// NotificationConfig holds provider-specific credentials and settings.
+// Fields are omitempty so unused providers add no JSON bloat.
+// Adding a new provider = append fields here + new case in send dispatch.
+type NotificationConfig struct {
+	// Discord
 	DiscordWebhook        string `json:"discordWebhook,omitempty"`
-	DiscordWebhookUpdates string `json:"discordWebhookUpdates,omitempty"` // separate webhook for TRaSH repo updates (falls back to main if empty)
+	DiscordWebhookUpdates string `json:"discordWebhookUpdates,omitempty"`
 	// Gotify
-	GotifyEnabled          bool   `json:"gotifyEnabled"`
 	GotifyURL              string `json:"gotifyUrl,omitempty"`
 	GotifyToken            string `json:"gotifyToken,omitempty"`
-	GotifyPriorityCritical bool   `json:"gotifyPriorityCritical"`
-	GotifyPriorityWarning  bool   `json:"gotifyPriorityWarning"`
-	GotifyPriorityInfo     bool   `json:"gotifyPriorityInfo"`
+	GotifyPriorityCritical bool   `json:"gotifyPriorityCritical,omitempty"`
+	GotifyPriorityWarning  bool   `json:"gotifyPriorityWarning,omitempty"`
+	GotifyPriorityInfo     bool   `json:"gotifyPriorityInfo,omitempty"`
 	GotifyCriticalValue    *int   `json:"gotifyCriticalValue,omitempty"`
 	GotifyWarningValue     *int   `json:"gotifyWarningValue,omitempty"`
 	GotifyInfoValue        *int   `json:"gotifyInfoValue,omitempty"`
 	// Pushover
-	PushoverEnabled  bool           `json:"pushoverEnabled"`
-	PushoverUserKey  string         `json:"pushoverUserKey,omitempty"`
-	PushoverAppToken string         `json:"pushoverAppToken,omitempty"`
-	Rules            []AutoSyncRule `json:"rules,omitempty"`
+	PushoverUserKey  string `json:"pushoverUserKey,omitempty"`
+	PushoverAppToken string `json:"pushoverAppToken,omitempty"`
 }
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
-	ID                string          `json:"id"`
-	Enabled           bool            `json:"enabled"`
-	InstanceID        string          `json:"instanceId"`
-	ProfileSource     string          `json:"profileSource"` // "trash" or "imported"
-	TrashProfileID    string          `json:"trashProfileId,omitempty"`
-	ImportedProfileID string          `json:"importedProfileId,omitempty"`
-	ArrProfileID      int             `json:"arrProfileId"`               // target Arr profile to update
-	SelectedCFs       []string        `json:"selectedCFs,omitempty"`      // user's optional CF selections
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
-	Behavior          *SyncBehavior   `json:"behavior,omitempty"`         // sync behavior rules (nil = defaults)
-	Overrides         *SyncOverrides  `json:"overrides,omitempty"`        // user overrides (min score, language, cutoff, etc.)
-	LastSyncCommit    string          `json:"lastSyncCommit,omitempty"`
-	LastSyncTime      string          `json:"lastSyncTime,omitempty"`
-	LastSyncError     string          `json:"lastSyncError,omitempty"`
+	ID                string         `json:"id"`
+	Enabled           bool           `json:"enabled"`
+	InstanceID        string         `json:"instanceId"`
+	ProfileSource     string         `json:"profileSource"`               // "trash" or "imported"
+	TrashProfileID    string         `json:"trashProfileId,omitempty"`
+	ImportedProfileID string         `json:"importedProfileId,omitempty"`
+	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to update
+	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
+	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
+	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
+	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
+	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
+	LastSyncError     string         `json:"lastSyncError,omitempty"`
 }
 
 // SyncBehavior controls how the sync engine handles CF additions, score overrides, and removals.
@@ -155,25 +180,25 @@ func (c *SyncChanges) HasChanges() bool {
 
 // SyncHistoryEntry records a completed sync operation.
 type SyncHistoryEntry struct {
-	InstanceID        string          `json:"instanceId"`
-	InstanceType      string          `json:"instanceType,omitempty"` // "radarr" or "sonarr" — for orphan migration
-	ProfileTrashID    string          `json:"profileTrashId"`
-	ImportedProfileID string          `json:"importedProfileId,omitempty"`
-	ProfileName       string          `json:"profileName"`
-	ArrProfileID      int             `json:"arrProfileId"`
-	ArrProfileName    string          `json:"arrProfileName"`
-	SyncedCFs         []string        `json:"syncedCFs"`
-	SelectedCFs       map[string]bool `json:"selectedCFs,omitempty"`
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
-	Overrides         *SyncOverrides  `json:"overrides,omitempty"`
-	Behavior          *SyncBehavior   `json:"behavior,omitempty"`
-	CFsCreated        int             `json:"cfsCreated"`
-	CFsUpdated        int             `json:"cfsUpdated"`
-	ScoresUpdated     int             `json:"scoresUpdated"`
-	LastSync          string          `json:"lastSync"`
-	Changes           *SyncChanges    `json:"changes,omitempty"`
+	InstanceID        string            `json:"instanceId"`
+	InstanceType      string            `json:"instanceType,omitempty"` // "radarr" or "sonarr" — for orphan migration
+	ProfileTrashID    string            `json:"profileTrashId"`
+	ImportedProfileID string            `json:"importedProfileId,omitempty"`
+	ProfileName       string            `json:"profileName"`
+	ArrProfileID   int               `json:"arrProfileId"`
+	ArrProfileName string            `json:"arrProfileName"`
+	SyncedCFs      []string          `json:"syncedCFs"`
+	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
+	ScoreOverrides   map[string]int    `json:"scoreOverrides,omitempty"`
+	QualityOverrides map[string]bool   `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
+	QualityStructure []QualityItem     `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
+	Overrides        *SyncOverrides    `json:"overrides,omitempty"`
+	Behavior         *SyncBehavior     `json:"behavior,omitempty"`
+	CFsCreated       int               `json:"cfsCreated"`
+	CFsUpdated     int               `json:"cfsUpdated"`
+	ScoresUpdated  int               `json:"scoresUpdated"`
+	LastSync       string            `json:"lastSync"`
+	Changes        *SyncChanges      `json:"changes,omitempty"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.
@@ -234,25 +259,11 @@ func (cs *ConfigStore) Load() error {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("parse config: %w", err)
 	}
-	// DiscordEnabled defaults to true (preserves existing behaviour for users who already have a webhook)
-	if cfg.AutoSync.DiscordEnabled == nil {
-		v := true
-		cfg.AutoSync.DiscordEnabled = &v
-	}
-	// Apply defaults for Gotify priority values (nil = never set by user)
-	if cfg.AutoSync.GotifyCriticalValue == nil {
-		v := 8
-		cfg.AutoSync.GotifyCriticalValue = &v
-	}
-	if cfg.AutoSync.GotifyWarningValue == nil {
-		v := 5
-		cfg.AutoSync.GotifyWarningValue = &v
-	}
-	if cfg.AutoSync.GotifyInfoValue == nil {
-		v := 3
-		cfg.AutoSync.GotifyInfoValue = &v
-	}
 	cs.config = &cfg
+
+	// Migrate old flat notification fields to NotificationAgents slice.
+	// Safe to call under lock — migrateFlatNotifications reads cs.filePath directly.
+	cs.migrateFlatNotifications(data)
 	return nil
 }
 
@@ -268,9 +279,12 @@ func (cs *ConfigStore) saveLocked() error {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
-	// Atomic write: temp file + rename
+	// Atomic write: temp file + rename. Mode 0600 — Arr API keys, webhook
+	// URLs, and Gotify/Pushover tokens live here; prevent other users on the
+	// same Docker host (or backup jobs running as other UIDs) from reading
+	// secrets just because /config/ is readable.
 	tmp := cs.filePath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return fmt.Errorf("write temp config: %w", err)
 	}
 	return os.Rename(tmp, cs.filePath)
@@ -365,6 +379,28 @@ func (cs *ConfigStore) Get() Config {
 			cfg.CleanupKeep[k] = cp
 		}
 	}
+	// Deep-copy NotificationAgents
+	if len(cs.config.AutoSync.NotificationAgents) > 0 {
+		cfg.AutoSync.NotificationAgents = make([]NotificationAgent, len(cs.config.AutoSync.NotificationAgents))
+		for i, a := range cs.config.AutoSync.NotificationAgents {
+			cfg.AutoSync.NotificationAgents[i] = a
+			// NotificationConfig contains only scalars and *int pointers — copy the pointers
+			nc := a.Config
+			if a.Config.GotifyCriticalValue != nil {
+				v := *a.Config.GotifyCriticalValue
+				nc.GotifyCriticalValue = &v
+			}
+			if a.Config.GotifyWarningValue != nil {
+				v := *a.Config.GotifyWarningValue
+				nc.GotifyWarningValue = &v
+			}
+			if a.Config.GotifyInfoValue != nil {
+				v := *a.Config.GotifyInfoValue
+				nc.GotifyInfoValue = &v
+			}
+			cfg.AutoSync.NotificationAgents[i].Config = nc
+		}
+	}
 	// Deep-copy AutoSync rules
 	if len(cs.config.AutoSync.Rules) > 0 {
 		cfg.AutoSync.Rules = make([]AutoSyncRule, len(cs.config.AutoSync.Rules))
@@ -417,6 +453,213 @@ func (cs *ConfigStore) Update(fn func(*Config)) error {
 	defer cs.mu.Unlock()
 	fn(cs.config)
 	return cs.saveLocked()
+}
+
+// migrateFlatNotifications converts legacy flat notification fields in AutoSyncConfig
+// to the new NotificationAgents slice. Called once on Load with the raw file bytes.
+// Skips silently if NotificationAgents already has entries.
+func (cs *ConfigStore) migrateFlatNotifications(raw []byte) {
+	// Already migrated?
+	if len(cs.config.AutoSync.NotificationAgents) > 0 {
+		return
+	}
+
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return
+	}
+	autoSyncRaw, ok := root["autoSync"]
+	if !ok {
+		return
+	}
+	var as map[string]json.RawMessage
+	if err := json.Unmarshal(autoSyncRaw, &as); err != nil {
+		return
+	}
+
+	// Helper: unmarshal a field if present.
+	str := func(key string) string {
+		v, ok := as[key]
+		if !ok {
+			return ""
+		}
+		var s string
+		json.Unmarshal(v, &s)
+		return s
+	}
+	boolVal := func(key string, def bool) bool {
+		v, ok := as[key]
+		if !ok {
+			return def
+		}
+		var b bool
+		if json.Unmarshal(v, &b) != nil {
+			return def
+		}
+		return b
+	}
+	intPtr := func(key string, def int) *int {
+		v, ok := as[key]
+		if !ok {
+			return &def
+		}
+		var n int
+		if json.Unmarshal(v, &n) != nil {
+			return &def
+		}
+		return &n
+	}
+
+	notifySuccess := boolVal("notifyOnSuccess", true)
+	notifyFailure := boolVal("notifyOnFailure", true)
+	notifyRepo := boolVal("notifyOnRepoUpdate", false)
+
+	var agents []NotificationAgent
+
+	// Discord
+	discordWebhook := str("discordWebhook")
+	if discordWebhook != "" {
+		cv, wv, iv := 8, 5, 3
+		_ = cv; _ = wv; _ = iv
+		agents = append(agents, NotificationAgent{
+			ID:      GenerateID(),
+			Name:    "Discord",
+			Type:    "discord",
+			Enabled: boolVal("discordEnabled", true),
+			Events: AgentEvents{
+				OnSyncSuccess: notifySuccess,
+				OnSyncFailure: notifyFailure,
+				OnCleanup:     notifyFailure,
+				OnRepoUpdate:  notifyRepo,
+				OnChangelog:   notifyRepo,
+			},
+			Config: NotificationConfig{
+				DiscordWebhook:        discordWebhook,
+				DiscordWebhookUpdates: str("discordWebhookUpdates"),
+			},
+		})
+	}
+
+	// Gotify
+	gotifyURL := str("gotifyUrl")
+	gotifyToken := str("gotifyToken")
+	if gotifyURL != "" || gotifyToken != "" {
+		agents = append(agents, NotificationAgent{
+			ID:      GenerateID(),
+			Name:    "Gotify",
+			Type:    "gotify",
+			Enabled: boolVal("gotifyEnabled", false),
+			Events: AgentEvents{
+				OnSyncSuccess: notifySuccess,
+				OnSyncFailure: notifyFailure,
+				OnCleanup:     notifyFailure,
+				OnRepoUpdate:  notifyRepo,
+				OnChangelog:   notifyRepo,
+			},
+			Config: NotificationConfig{
+				GotifyURL:              gotifyURL,
+				GotifyToken:            gotifyToken,
+				GotifyPriorityCritical: boolVal("gotifyPriorityCritical", true),
+				GotifyPriorityWarning:  boolVal("gotifyPriorityWarning", true),
+				GotifyPriorityInfo:     boolVal("gotifyPriorityInfo", false),
+				GotifyCriticalValue:    intPtr("gotifyCriticalValue", 8),
+				GotifyWarningValue:     intPtr("gotifyWarningValue", 5),
+				GotifyInfoValue:        intPtr("gotifyInfoValue", 3),
+			},
+		})
+	}
+
+	// Pushover
+	pushoverKey := str("pushoverUserKey")
+	pushoverToken := str("pushoverAppToken")
+	if pushoverKey != "" || pushoverToken != "" {
+		agents = append(agents, NotificationAgent{
+			ID:      GenerateID(),
+			Name:    "Pushover",
+			Type:    "pushover",
+			Enabled: boolVal("pushoverEnabled", false),
+			Events: AgentEvents{
+				OnSyncSuccess: notifySuccess,
+				OnSyncFailure: notifyFailure,
+				OnCleanup:     notifyFailure,
+				OnRepoUpdate:  notifyRepo,
+				OnChangelog:   notifyRepo,
+			},
+			Config: NotificationConfig{
+				PushoverUserKey:  pushoverKey,
+				PushoverAppToken: pushoverToken,
+			},
+		})
+	}
+
+	if len(agents) == 0 {
+		return
+	}
+
+	cs.config.AutoSync.NotificationAgents = agents
+	log.Printf("Migrated %d notification provider(s) to NotificationAgents", len(agents))
+
+	// Persist migration (strip old flat keys from JSON, write new agents field).
+	// saveLocked expects mu to be held by the caller — this is safe because
+	// migrateFlatNotifications is only ever called from Load(), which holds mu
+	// for its entire duration. saveLocked itself does not re-acquire the lock.
+	if err := cs.saveLocked(); err != nil {
+		log.Printf("Warning: failed to persist notification migration: %v", err)
+	}
+}
+
+// --- Notification Agent CRUD --------------------------------------------------
+
+// GetNotificationAgent returns a notification agent by ID.
+func (cs *ConfigStore) GetNotificationAgent(id string) (NotificationAgent, bool) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	for _, a := range cs.config.AutoSync.NotificationAgents {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return NotificationAgent{}, false
+}
+
+// AddNotificationAgent appends a new notification agent with a generated ID.
+// Multiple agents of the same type are permitted (e.g. two Discord channels).
+func (cs *ConfigStore) AddNotificationAgent(agent NotificationAgent) (NotificationAgent, error) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	agent.ID = GenerateID()
+	cs.config.AutoSync.NotificationAgents = append(cs.config.AutoSync.NotificationAgents, agent)
+	return agent, cs.saveLocked()
+}
+
+// UpdateNotificationAgent replaces an existing notification agent by ID.
+func (cs *ConfigStore) UpdateNotificationAgent(id string, agent NotificationAgent) (NotificationAgent, error) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	for i, a := range cs.config.AutoSync.NotificationAgents {
+		if a.ID == id {
+			agent.ID = id
+			cs.config.AutoSync.NotificationAgents[i] = agent
+			return agent, cs.saveLocked()
+		}
+	}
+	return NotificationAgent{}, fmt.Errorf("notification agent %s not found", id)
+}
+
+// DeleteNotificationAgent removes a notification agent by ID.
+func (cs *ConfigStore) DeleteNotificationAgent(id string) error {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	for i, a := range cs.config.AutoSync.NotificationAgents {
+		if a.ID == id {
+			cs.config.AutoSync.NotificationAgents = append(
+				cs.config.AutoSync.NotificationAgents[:i],
+				cs.config.AutoSync.NotificationAgents[i+1:]...,
+			)
+			return cs.saveLocked()
+		}
+	}
+	return fmt.Errorf("notification agent %s not found", id)
 }
 
 // GetInstance returns an instance by ID.
@@ -654,7 +897,7 @@ func (cs *ConfigStore) DeleteSyncHistory(instanceID string, arrProfileID int) er
 	return fmt.Errorf("sync history entry not found")
 }
 
-// migrateImportedProfiles moves any imported profiles from the old config
+// MigrateImportedProfiles moves any imported profiles from the old config
 // file (clonarr.json) to per-file storage in /config/profiles/.
 func MigrateImportedProfiles(cs *ConfigStore, ps *ProfileStore) {
 	cs.mu.Lock()
@@ -692,7 +935,7 @@ func MigrateImportedProfiles(cs *ConfigStore, ps *ProfileStore) {
 		return
 	}
 	tmp := cs.filePath + ".tmp"
-	if err := os.WriteFile(tmp, cleaned, 0644); err != nil {
+	if err := os.WriteFile(tmp, cleaned, 0600); err != nil {
 		return
 	}
 	os.Rename(tmp, cs.filePath)

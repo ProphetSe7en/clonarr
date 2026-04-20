@@ -1,11 +1,21 @@
 # Changelog
 
-## v2.0.8
+## v2.1.0
 
 ### Changed
 
-- **Architecture Improvements**: Complete refactoring of backend packages from the root `ui/` directory to standard Go layout `internal/api/`, `internal/core/`, `internal/auth/`, and `internal/netsec/`.
-- **Background Panic Recovery**: Standardized asynchronous routines using `utils.SafeGo` to prevent complete application crashes from unexpected panics.
+- **Architecture refactor** — backend restructured from flat `ui/*.go` to standard Go layout: `internal/api/` (HTTP handlers split by domain — instances, cleanup, sync, autosync, trash, custom_cfs, custom_profiles, import, scoring, notifications, config, auth_handlers, routes, server, utils), `internal/core/` (models, config store, sync engine, TRaSH integration), `internal/arr/` (Radarr/Sonarr API clients), `internal/auth/` + `internal/netsec/` (security primitives unchanged), `internal/utils/` (`SafeGo`). `ui/` is now only the `//go:embed static` wrapper. Contributed by @ColeSpringer via revived PR #14. No user-facing behavior change — pure reorganization for maintainability.
+- **Background panic recovery everywhere** — every goroutine wrapped via `utils.SafeGo`. One bad notifier/poller can no longer crash the whole process.
+
+### Added
+
+- **Notification Agents** — replaces the flat per-provider toggles under Auto-Sync → Notifications with an Instances-style list. Each notification channel (Discord, Gotify, Pushover) is an independent agent with its own enable flag, credentials, severity routing, and optional `Name` (run multiple agents of the same type — e.g. "Discord #main" + "Discord #trash"). Migration auto-converts existing v2.0.x flat config on first startup; no manual intervention needed. Per-agent inline test button verifies credentials end-to-end. Contributed by @xFlawless11x via PR #15.
+
+### Security
+
+- Notification agent credentials masked in all `/api/config` responses (Discord webhooks, Gotify token, Pushover user key + app token). `preserveIfMasked` on update restores stored values when the UI round-trips the placeholder.
+- `dispatchNotification` wraps `sendGotify` / `sendPushover` goroutines via `safeGo` — a panic in one notifier cannot kill the process.
+- Inline notification-agent test endpoint hardened: `MaxBytesReader` 4096, unknown agent types return 400, `Cache-Control: no-store` on all responses.
 
 ## v2.0.7
 

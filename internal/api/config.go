@@ -26,12 +26,10 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg.Prowlarr.APIKey != "" {
 		cfg.Prowlarr.APIKey = maskKey(cfg.Prowlarr.APIKey)
 	}
-	// Mask notification secrets embedded in AutoSync.
-	cfg.AutoSync.DiscordWebhook = maskSecret(cfg.AutoSync.DiscordWebhook, maskedDiscordWebhook)
-	cfg.AutoSync.DiscordWebhookUpdates = maskSecret(cfg.AutoSync.DiscordWebhookUpdates, maskedDiscordWebhook)
-	cfg.AutoSync.GotifyToken = maskSecret(cfg.AutoSync.GotifyToken, maskedToken)
-	cfg.AutoSync.PushoverUserKey = maskSecret(cfg.AutoSync.PushoverUserKey, maskedToken)
-	cfg.AutoSync.PushoverAppToken = maskSecret(cfg.AutoSync.PushoverAppToken, maskedToken)
+	// Mask notification secrets embedded in NotificationAgents (PR #15 layout).
+	for i, a := range cfg.AutoSync.NotificationAgents {
+		cfg.AutoSync.NotificationAgents[i].Config = maskAgentConfig(a.Type, a.Config)
+	}
 	// Wrap config with version for frontend
 	writeJSON(w, struct {
 		core.Config

@@ -2,21 +2,24 @@ package core
 
 import (
 	"bytes"
-	"clonarr/internal/arr"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
 	"strings"
 	"time"
+
+	"clonarr/internal/arr"
+	"clonarr/internal/utils"
 )
+
 
 // autoSyncAfterPull runs after a successful TRaSH repo pull.
 // For each enabled rule, checks if the repo commit changed since last sync,
 // builds a dry-run plan, and applies if there are actual changes.
 func (app *App) AutoSyncAfterPull() {
 	// Clean up stale rules/history for Arr profiles that no longer exist
-	app.cleanupStaleRules()
+	app.CleanupStaleRules()
 
 	cfg := app.Config.Get()
 	if len(cfg.AutoSync.Rules) == 0 {
@@ -82,21 +85,21 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 
 	ad := app.Trash.GetAppData(inst.Type)
 	if ad == nil {
-		app.updateAutoSyncRuleError(rule.ID, "no TRaSH data for "+inst.Type)
+		app.UpdateAutoSyncRuleError(rule.ID, "no TRaSH data for "+inst.Type)
 		return
 	}
 
 	// Build sync request from rule
 	req := SyncRequest{
-		InstanceID:       rule.InstanceID,
-		ProfileTrashID:   rule.TrashProfileID,
-		ArrProfileID:     rule.ArrProfileID,
-		SelectedCFs:      rule.SelectedCFs,
+		InstanceID:     rule.InstanceID,
+		ProfileTrashID: rule.TrashProfileID,
+		ArrProfileID:   rule.ArrProfileID,
+		SelectedCFs:    rule.SelectedCFs,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
 		QualityStructure: rule.QualityStructure,
-		Behavior:         rule.Behavior,
-		Overrides:        rule.Overrides,
+		Behavior:       rule.Behavior,
+		Overrides:      rule.Overrides,
 	}
 	if rule.ProfileSource == "imported" {
 		req.ImportedProfileID = rule.ImportedProfileID
@@ -107,7 +110,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	if req.ImportedProfileID != "" {
 		p, ok := app.Profiles.Get(req.ImportedProfileID)
 		if !ok {
-			app.updateAutoSyncRuleError(rule.ID, "imported profile not found: "+req.ImportedProfileID)
+			app.UpdateAutoSyncRuleError(rule.ID, "imported profile not found: "+req.ImportedProfileID)
 			return
 		}
 		imported = &p
@@ -127,16 +130,14 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
 			log.Printf("Auto-sync: rule %s — %s is not reachable", rule.ID, inst.Name)
 			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable: %v", rule.ID, inst.Name, err)
-			app.updateAutoSyncRuleError(rule.ID, friendlyMsg)
+			app.UpdateAutoSyncRuleError(rule.ID, friendlyMsg)
 			profileName := rule.TrashProfileID
-			if p := findProfile(ad, rule.TrashProfileID); p != nil {
-				profileName = p.Name
-			}
-			app.notifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", friendlyMsg))
+			if p := findProfile(ad, rule.TrashProfileID); p != nil { profileName = p.Name }
+			app.NotifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", friendlyMsg))
 			return
 		}
 
-		app.updateAutoSyncRuleError(rule.ID, errMsg)
+		app.UpdateAutoSyncRuleError(rule.ID, errMsg)
 		// Auto-disable rule if Arr profile no longer exists
 		if strings.Contains(err.Error(), "no longer exists") || strings.Contains(err.Error(), "not found") {
 			log.Printf("Auto-sync: disabling rule %s — target profile no longer exists", rule.ID)
@@ -151,10 +152,8 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			})
 		}
 		profileName := rule.TrashProfileID
-		if p := findProfile(ad, rule.TrashProfileID); p != nil {
-			profileName = p.Name
-		}
-		app.notifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", errMsg))
+		if p := findProfile(ad, rule.TrashProfileID); p != nil { profileName = p.Name }
+		app.NotifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", errMsg))
 		return
 	}
 
@@ -162,7 +161,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		// No actual changes — update commit hash, clear error
 		log.Printf("Auto-sync: rule %s — no changes for %s", rule.ID, inst.Name)
 		app.DebugLog.Logf(LogAutoSync, "Rule %s: no changes for %s", rule.ID, inst.Name)
-		app.updateAutoSyncRuleCommit(rule.ID, currentCommit)
+		app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
 		return
 	}
 
@@ -173,15 +172,15 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
 			log.Printf("Auto-sync: rule %s apply — %s is not reachable", rule.ID, inst.Name)
 			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable during apply: %v", rule.ID, inst.Name, err)
-			app.updateAutoSyncRuleError(rule.ID, friendlyMsg)
-			app.notifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", friendlyMsg))
+			app.UpdateAutoSyncRuleError(rule.ID, friendlyMsg)
+			app.NotifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", friendlyMsg))
 			return
 		}
 		errMsg := fmt.Sprintf("apply failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
 		app.DebugLog.Logf(LogError, "Auto-sync rule %s: apply failed: %s", rule.ID, errMsg)
-		app.updateAutoSyncRuleError(rule.ID, errMsg)
-		app.notifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", errMsg))
+		app.UpdateAutoSyncRuleError(rule.ID, errMsg)
+		app.NotifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", errMsg))
 		return
 	}
 
@@ -190,7 +189,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	app.DebugLog.Logf(LogAutoSync, "Rule %s: applied — %d created, %d updated, %d scores on %s",
 		rule.ID, result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, inst.Name)
 
-	app.updateAutoSyncRuleCommit(rule.ID, currentCommit)
+	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
 
 	// Update sync history (same as manual sync)
 	allCFIDs := make([]string, 0)
@@ -208,19 +207,19 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		ProfileTrashID:    req.ProfileTrashID,
 		ImportedProfileID: req.ImportedProfileID,
 		ProfileName:       plan.ProfileName,
-		ArrProfileID:      req.ArrProfileID,
-		ArrProfileName:    plan.ArrProfileName,
-		SyncedCFs:         allCFIDs,
-		SelectedCFs:       selectedCFMap,
-		ScoreOverrides:    rule.ScoreOverrides,
-		QualityOverrides:  rule.QualityOverrides,
-		QualityStructure:  rule.QualityStructure,
-		Overrides:         rule.Overrides,
-		Behavior:          rule.Behavior,
-		CFsCreated:        result.CFsCreated,
-		CFsUpdated:        result.CFsUpdated,
-		ScoresUpdated:     result.ScoresUpdated,
-		LastSync:          time.Now().Format(time.RFC3339),
+		ArrProfileID:   req.ArrProfileID,
+		ArrProfileName: plan.ArrProfileName,
+		SyncedCFs:      allCFIDs,
+		SelectedCFs:    selectedCFMap,
+		ScoreOverrides:   rule.ScoreOverrides,
+		QualityOverrides: rule.QualityOverrides,
+		QualityStructure: rule.QualityStructure,
+		Overrides:      rule.Overrides,
+		Behavior:       rule.Behavior,
+		CFsCreated:     result.CFsCreated,
+		CFsUpdated:     result.CFsUpdated,
+		ScoresUpdated:  result.ScoresUpdated,
+		LastSync:       time.Now().Format(time.RFC3339),
 	}
 	if result.ProfileCreated {
 		entry.ArrProfileID = result.ArrProfileID
@@ -240,7 +239,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		log.Printf("Auto-sync: failed to save sync history: %v", err)
 	}
 
-	app.notifyAutoSync(rule, inst, plan.ProfileName, result, nil)
+	app.NotifyAutoSync(rule, inst, plan.ProfileName, result, nil)
 
 	// Push event to frontend toast queue (only when there are actual changes)
 	if result.CFsCreated > 0 || result.CFsUpdated > 0 || result.ScoresUpdated > 0 || result.QualityUpdated || len(result.SettingsDetails) > 0 {
@@ -277,7 +276,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 
 // cleanupStaleRules removes auto-sync rules and sync history for Arr profiles that no longer exist.
 // Only acts on instances that are reachable — unreachable instances are skipped (never deletes on connection error).
-func (app *App) cleanupStaleRules() {
+func (app *App) CleanupStaleRules() {
 	cfg := app.Config.Get()
 	instNames := make(map[string]string) // instanceID → name
 
@@ -352,36 +351,60 @@ func (app *App) cleanupStaleRules() {
 	}
 }
 
+// sendDiscord sends a Discord embed to the given webhook URL.
+func (app *App) sendDiscord(webhook, title, description string, color int) error {
+	embed := map[string]any{
+		"title":       title,
+		"description": description,
+		"color":       color,
+		"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
+	}
+	payload, err := json.Marshal(map[string]any{"embeds": []any{embed}})
+	if err != nil {
+		return err
+	}
+	resp, err := app.SafeClient.Post(webhook, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("discord returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // sendGotify sends a Gotify push notification with the given severity level.
 // level: "critical", "warning", or "info"
-func (app *App) sendGotify(title, message, level string) {
-	cfg := app.Config.Get()
-	if !cfg.AutoSync.GotifyEnabled || cfg.AutoSync.GotifyURL == "" || cfg.AutoSync.GotifyToken == "" {
+// agent provides the credentials and priority configuration.
+func (app *App) sendGotify(agent NotificationAgent, title, message, level string) {
+	nc := agent.Config
+	if nc.GotifyURL == "" || nc.GotifyToken == "" {
 		return
 	}
 
 	var priority int
 	switch level {
 	case "critical":
-		if !cfg.AutoSync.GotifyPriorityCritical {
+		if !nc.GotifyPriorityCritical {
 			return
 		}
-		if cfg.AutoSync.GotifyCriticalValue != nil {
-			priority = *cfg.AutoSync.GotifyCriticalValue
+		if nc.GotifyCriticalValue != nil {
+			priority = *nc.GotifyCriticalValue
 		}
 	case "warning":
-		if !cfg.AutoSync.GotifyPriorityWarning {
+		if !nc.GotifyPriorityWarning {
 			return
 		}
-		if cfg.AutoSync.GotifyWarningValue != nil {
-			priority = *cfg.AutoSync.GotifyWarningValue
+		if nc.GotifyWarningValue != nil {
+			priority = *nc.GotifyWarningValue
 		}
 	default:
-		if !cfg.AutoSync.GotifyPriorityInfo {
+		if !nc.GotifyPriorityInfo {
 			return
 		}
-		if cfg.AutoSync.GotifyInfoValue != nil {
-			priority = *cfg.AutoSync.GotifyInfoValue
+		if nc.GotifyInfoValue != nil {
+			priority = *nc.GotifyInfoValue
 		}
 	}
 
@@ -407,7 +430,7 @@ func (app *App) sendGotify(title, message, level string) {
 		},
 	}
 	body, _ := json.Marshal(payload)
-	gotifyURL := strings.TrimRight(cfg.AutoSync.GotifyURL, "/") + "/message?token=" + url.QueryEscape(cfg.AutoSync.GotifyToken)
+	gotifyURL := strings.TrimRight(nc.GotifyURL, "/") + "/message?token=" + url.QueryEscape(nc.GotifyToken)
 	resp, err := app.NotifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Gotify: send failed: %v", err)
@@ -417,21 +440,21 @@ func (app *App) sendGotify(title, message, level string) {
 }
 
 // sendPushover sends a Pushover push notification at normal priority.
-func (app *App) sendPushover(title, message string) {
-	cfg := app.Config.Get()
-	if !cfg.AutoSync.PushoverEnabled || cfg.AutoSync.PushoverUserKey == "" || cfg.AutoSync.PushoverAppToken == "" {
+func (app *App) sendPushover(agent NotificationAgent, title, message string) {
+	nc := agent.Config
+	if nc.PushoverUserKey == "" || nc.PushoverAppToken == "" {
 		return
 	}
 
 	payload := map[string]any{
-		"token":    cfg.AutoSync.PushoverAppToken,
-		"user":     cfg.AutoSync.PushoverUserKey,
+		"token":    nc.PushoverAppToken,
+		"user":     nc.PushoverUserKey,
 		"title":    title,
 		"message":  message,
 		"priority": 0, // normal priority
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := app.NotifyClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	resp, err := app.SafeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("Pushover: send failed: %v", err)
 		return
@@ -439,12 +462,42 @@ func (app *App) sendPushover(title, message string) {
 	resp.Body.Close()
 }
 
-// notifyCleanup sends a Discord notification for auto-cleanup events.
-func (app *App) NotifyCleanup(events []CleanupEvent) {
-	cfg := app.Config.Get()
-	if !cfg.AutoSync.NotifyOnFailure {
+// dispatchNotification fires the appropriate send function for one agent.
+// discordMsg and gotifyMsg allow per-provider message formatting.
+// discordWebhook overrides which webhook to use (for updates/changelog events).
+func (app *App) dispatchNotification(agent NotificationAgent, title, discordMsg, gotifyMsg string, color int, discordWebhook string) {
+	if !agent.Enabled {
 		return
 	}
+	switch agent.Type {
+	case "discord":
+		webhook := discordWebhook
+		if webhook == "" {
+			webhook = agent.Config.DiscordWebhook
+		}
+		if webhook == "" {
+			return
+		}
+		if err := app.sendDiscord(webhook, title, discordMsg, color); err != nil {
+			log.Printf("Discord: send failed: %v", err)
+		}
+	case "gotify":
+		// Map color to Gotify level
+		level := "info"
+		if color == 0xf85149 { // red = failure/critical
+			level = "critical"
+		} else if color == 0xd29922 { // amber = warning/cleanup
+			level = "warning"
+		}
+		utils.SafeGo("notify-gotify", func() { app.sendGotify(agent, title, gotifyMsg, level) })
+	case "pushover":
+		utils.SafeGo("notify-pushover", func() { app.sendPushover(agent, title, discordMsg) })
+	}
+}
+
+// notifyCleanup sends notifications for auto-cleanup events.
+func (app *App) NotifyCleanup(events []CleanupEvent) {
+	cfg := app.Config.Get()
 
 	description := ""
 	for _, ev := range events {
@@ -452,30 +505,16 @@ func (app *App) NotifyCleanup(events []CleanupEvent) {
 	}
 	description = strings.TrimSpace(description)
 
-	// Discord notification
-	if webhook := cfg.AutoSync.DiscordWebhook; webhook != "" && (cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled) {
-		embed := map[string]any{
-			"title":       "Sync Rules Cleaned Up",
-			"description": description,
-			"color":       0xd29922, // amber
-			"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
+	title := "Clonarr: Sync Rules Cleaned Up"
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnCleanup {
+			continue
 		}
-		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-				log.Printf("Cleanup: Discord notification failed: %v", err)
-			} else {
-				resp.Body.Close()
-			}
-		}
+		app.dispatchNotification(agent, title, description, description, 0xd29922, "")
 	}
-
-	// Gotify notification
-	go app.sendGotify("Clonarr: Sync Rules Cleaned Up", description, "warning")
-	// Pushover notification
-	go app.sendPushover("Clonarr: Sync Rules Cleaned Up", description)
 }
 
-// isConnectionError checks if an error is a network/connection problem (instance unreachable).
+// IsConnectionError checks if an error is a network/connection problem (instance unreachable).
 func IsConnectionError(err error) bool {
 	if err == nil {
 		return false
@@ -490,7 +529,7 @@ func IsConnectionError(err error) bool {
 }
 
 // updateAutoSyncRuleCommit updates the last sync commit and clears error for a rule.
-func (app *App) updateAutoSyncRuleCommit(ruleID, commit string) {
+func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string) {
 	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
@@ -504,7 +543,7 @@ func (app *App) updateAutoSyncRuleCommit(ruleID, commit string) {
 }
 
 // updateAutoSyncRuleError sets the last error for a rule (does NOT update commit).
-func (app *App) updateAutoSyncRuleError(ruleID, errMsg string) {
+func (app *App) UpdateAutoSyncRuleError(ruleID, errMsg string) {
 	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
@@ -516,15 +555,9 @@ func (app *App) updateAutoSyncRuleError(ruleID, errMsg string) {
 	})
 }
 
-// notifyAutoSync sends Discord notification for auto-sync result.
-func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName string, result *SyncResult, syncErr error) {
+// notifyAutoSync sends notifications for an auto-sync result.
+func (app *App) NotifyAutoSync(rule AutoSyncRule, inst Instance, profileName string, result *SyncResult, syncErr error) {
 	cfg := app.Config.Get()
-	if syncErr != nil && !cfg.AutoSync.NotifyOnFailure {
-		return
-	}
-	if syncErr == nil && !cfg.AutoSync.NotifyOnSuccess {
-		return
-	}
 
 	var color int
 	var title, description string
@@ -545,37 +578,24 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 		if result.CFsCreated > 0 || result.CFsUpdated > 0 {
 			description += fmt.Sprintf("\n**CFs:** %d created, %d updated", result.CFsCreated, result.CFsUpdated)
 			for _, d := range result.CFDetails {
-				if len(description) > 1800 {
-					description += "\n- ..."
-					break
-				}
+				if len(description) > 1800 { description += "\n- ..."; break }
 				description += "\n- " + d
 			}
 		}
 		if result.ScoresUpdated > 0 || result.ScoresZeroed > 0 {
 			parts := []string{}
-			if result.ScoresUpdated > 0 {
-				parts = append(parts, fmt.Sprintf("%d updated", result.ScoresUpdated))
-			}
-			if result.ScoresZeroed > 0 {
-				parts = append(parts, fmt.Sprintf("%d reset to 0", result.ScoresZeroed))
-			}
+			if result.ScoresUpdated > 0 { parts = append(parts, fmt.Sprintf("%d updated", result.ScoresUpdated)) }
+			if result.ScoresZeroed > 0 { parts = append(parts, fmt.Sprintf("%d reset to 0", result.ScoresZeroed)) }
 			description += fmt.Sprintf("\n**Scores:** %s", strings.Join(parts, ", "))
 			for _, d := range result.ScoreDetails {
-				if len(description) > 1800 {
-					description += "\n- ..."
-					break
-				}
+				if len(description) > 1800 { description += "\n- ..."; break }
 				description += "\n- " + d
 			}
 		}
 		if result.QualityUpdated {
 			description += "\n**Quality:** Profile quality items updated"
 			for _, d := range result.QualityDetails {
-				if len(description) > 1800 {
-					description += "\n- ..."
-					break
-				}
+				if len(description) > 1800 { description += "\n- ..."; break }
 				description += "\n- " + d
 			}
 		}
@@ -590,87 +610,53 @@ func (app *App) notifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 		}
 	}
 
-	// Discord notification
-	if webhook := cfg.AutoSync.DiscordWebhook; webhook != "" && (cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled) {
-		embed := map[string]any{
-			"title":       title,
-			"description": description,
-			"color":       color,
-			"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
+	fullTitle := "Clonarr: " + title
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if syncErr != nil && !agent.Events.OnSyncFailure {
+			continue
 		}
-		if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-			if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-				log.Printf("Auto-sync: Discord notification failed: %v", err)
-			} else {
-				resp.Body.Close()
-			}
+		if syncErr == nil && !agent.Events.OnSyncSuccess {
+			continue
 		}
+		app.dispatchNotification(agent, fullTitle, description, description, color, "")
 	}
-
-	// Gotify notification
-	level := "info"
-	if syncErr != nil {
-		level = "critical"
-	}
-	go app.sendGotify("Clonarr: "+title, description, level)
-	// Pushover notification
-	go app.sendPushover("Clonarr: "+title, description)
 }
 
-// notifyRepoUpdate sends a Discord notification when the TRaSH repo has new commits.
+// notifyRepoUpdate sends notifications when the TRaSH repo has new commits.
 // Shows actual file changes (CFs, profiles, groups) from the stored pull diff.
 func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 	cfg := app.Config.Get()
-	if !cfg.AutoSync.NotifyOnRepoUpdate {
-		return
-	}
 
 	description := fmt.Sprintf("**Commit:** `%s` → `%s`", prevCommit, newCommit)
-
-	// Use stored diff from CloneOrPull
 	status := app.Trash.Status()
 	if status.LastDiff != nil && status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary
 	}
 
-	// Discord notification — use updates webhook if set, otherwise fall back to main
-	if cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled {
-		webhook := cfg.AutoSync.DiscordWebhookUpdates
-		if webhook == "" {
-			webhook = cfg.AutoSync.DiscordWebhook
+	title := "Clonarr: TRaSH Guides Updated"
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnRepoUpdate {
+			continue
 		}
-		if webhook != "" {
-			embed := map[string]any{
-				"title":       "TRaSH Guides Updated",
-				"description": description,
-				"color":       0x58a6ff, // blue
-				"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
-			}
-			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-					log.Printf("Repo update: Discord notification failed: %v", err)
-				} else {
-					resp.Body.Close()
-					log.Printf("Repo update: Discord notification sent (%s → %s)", prevCommit, newCommit)
-				}
+		// For Discord: use the updates webhook if set, fall back to main webhook
+		discordWebhook := ""
+		if agent.Type == "discord" {
+			discordWebhook = agent.Config.DiscordWebhookUpdates
+			if discordWebhook == "" {
+				discordWebhook = agent.Config.DiscordWebhook
 			}
 		}
+		app.dispatchNotification(agent, title, description, description, 0x58a6ff, discordWebhook)
 	}
-
-	// Gotify notification
-	go app.sendGotify("Clonarr: TRaSH Guides Updated", description, "info")
-	// Pushover notification
-	go app.sendPushover("Clonarr: TRaSH Guides Updated", description)
+	log.Printf("Repo update: notifications dispatched (%s → %s)", prevCommit, newCommit)
 }
 
-// notifyChangelog sends a separate Discord notification when updates.txt has a new date section.
+// notifyChangelog sends notifications when updates.txt has a new date section.
 func (app *App) NotifyChangelog(section ChangelogSection) {
 	cfg := app.Config.Get()
-	if !cfg.AutoSync.NotifyOnRepoUpdate {
-		return
-	}
-	// Build Discord description
-	description := fmt.Sprintf("**Week of %s** — %d changes", section.Date, len(section.Entries))
+
+	// Build Discord/Pushover description
+	discordMsg := fmt.Sprintf("**Week of %s** — %d changes", section.Date, len(section.Entries))
 	for _, e := range section.Entries {
 		icon := "🔧"
 		if e.Type == "feat" {
@@ -684,38 +670,14 @@ func (app *App) NotifyChangelog(section ChangelogSection) {
 		if e.PR != "" {
 			line += fmt.Sprintf(" ([#%s](https://github.com/TRaSH-Guides/Guides/pull/%s))", e.PR, e.PR)
 		}
-		if len(description) > 1800 {
-			description += "\n- ..."
+		if len(discordMsg) > 1800 {
+			discordMsg += "\n- ..."
 			break
 		}
-		description += line
+		discordMsg += line
 	}
 
-	// Discord notification — use updates webhook if set, otherwise fall back to main
-	if cfg.AutoSync.DiscordEnabled == nil || *cfg.AutoSync.DiscordEnabled {
-		webhook := cfg.AutoSync.DiscordWebhookUpdates
-		if webhook == "" {
-			webhook = cfg.AutoSync.DiscordWebhook
-		}
-		if webhook != "" {
-			embed := map[string]any{
-				"title":       "TRaSH Weekly Changelog",
-				"description": description,
-				"color":       0xd29922, // amber
-				"footer":      map[string]string{"text": "Clonarr " + app.Version + " by ProphetSe7en"},
-			}
-			if payload, err := json.Marshal(map[string]any{"embeds": []any{embed}}); err == nil {
-				if resp, err := app.NotifyClient.Post(webhook, "application/json", bytes.NewReader(payload)); err != nil {
-					log.Printf("Changelog: Discord notification failed: %v", err)
-				} else {
-					resp.Body.Close()
-					log.Printf("Changelog: Discord notification sent (week of %s)", section.Date)
-				}
-			}
-		}
-	}
-
-	// Gotify notification — use markdown bullet list for proper line breaks
+	// Gotify uses markdown bullet list for proper line breaks
 	gotifyMsg := fmt.Sprintf("**Week of %s** — %d changes\n\n", section.Date, len(section.Entries))
 	for _, e := range section.Entries {
 		icon := "🔧"
@@ -736,7 +698,26 @@ func (app *App) NotifyChangelog(section ChangelogSection) {
 		}
 		gotifyMsg += line + "\n"
 	}
-	go app.sendGotify("Clonarr: TRaSH Weekly Changelog", gotifyMsg, "info")
-	// Pushover notification
-	go app.sendPushover("Clonarr: TRaSH Weekly Changelog", gotifyMsg)
+
+	title := "Clonarr: TRaSH Weekly Changelog"
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnChangelog {
+			continue
+		}
+		// For Discord: use the updates webhook if set, fall back to main webhook
+		discordWebhook := ""
+		if agent.Type == "discord" {
+			discordWebhook = agent.Config.DiscordWebhookUpdates
+			if discordWebhook == "" {
+				discordWebhook = agent.Config.DiscordWebhook
+			}
+		}
+		// Gotify gets its own formatted message; Discord/Pushover get discordMsg
+		msg := discordMsg
+		if agent.Type == "gotify" {
+			msg = gotifyMsg
+		}
+		app.dispatchNotification(agent, title, msg, gotifyMsg, 0xd29922, discordWebhook)
+	}
+	log.Printf("Changelog: notifications dispatched (week of %s)", section.Date)
 }
