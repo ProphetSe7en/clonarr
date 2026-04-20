@@ -4007,11 +4007,18 @@
                   <template x-if="!group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
                     <span style="margin-right:auto"></span>
                   </template>
-                  <!-- Group toggle (not for exclusive/pick-one groups) -->
-                  <label class="toggle toggle-sm" @click.stop x-show="!group.exclusive">
+                  <!-- Group toggle — shown for every group, including exclusive pick-one groups
+                       (Golden Rule). TRaSH's schema marks those CFs `required: false`, so the
+                       group itself is optional; "exclusive" only describes picking at most one
+                       INSIDE the group once it's enabled. Hiding the group-toggle conflated the
+                       two concepts and made Golden Rule feel more forced than e.g. HDR Formats.
+                       On group-enable: only auto-check CFs for non-exclusive groups; exclusive
+                       groups leave the pick to the user (x265 HD vs x265 no HDR/DV, etc). On
+                       group-disable: clear all CFs in the group either way. -->
+                  <label class="toggle toggle-sm" @click.stop>
                     <input type="checkbox"
                            :checked="selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled"
-                           @change="selectedOptionalCFs['__grp_' + group.name] = $event.target.checked; group.cfs.forEach(cf => { if (!cf.required) selectedOptionalCFs[cf.trashId] = $event.target.checked }); selectedOptionalCFs = {...selectedOptionalCFs}">
+                           @change="selectedOptionalCFs['__grp_' + group.name] = $event.target.checked; if ($event.target.checked) { if (!group.exclusive) { group.cfs.forEach(cf => { if (!cf.required) selectedOptionalCFs[cf.trashId] = true }); } } else { group.cfs.forEach(cf => { selectedOptionalCFs[cf.trashId] = false }); } selectedOptionalCFs = {...selectedOptionalCFs}">
                     <span class="slider"></span>
                   </label>
                 </div>

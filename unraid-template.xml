@@ -21,8 +21,10 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/icon.png</Icon>
-  <Date>2026-04-19</Date>
+  <Date>2026-04-20</Date>
   <Changes>
+### 2026-04-20
+- v2.0.7: Fix — Golden Rule and other exclusive CF groups can now be disabled at the group level (matches behavior of HDR Formats / Optional Movie Versions). Previously the group toggle was hidden for exclusive pick-one groups, which was stricter than TRaSH's own schema.
 ### 2026-04-19
 - v2.0.6: **Breaking change** — authentication now required, first boot redirects to /setup. Login + password (bcrypt), API key for Homepage/scripts, CSRF, SSRF guards on Discord/Pushover, security headers, env-var lock for Trusted Networks/Proxies. Cookie names renamed clonarr_*. Full changelog in GitHub repo.
 - v2.0.5: Fix Extra CFs showing hex IDs instead of names in Overridden Scores panel after Save &amp; Sync.

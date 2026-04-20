@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.0.7
+
+### Fixed
+
+- **Golden Rule (and other exclusive CF groups) can now be disabled at the group level.** Previously, groups that TRaSH marks with a "pick one" exclusivity hint in their description (like `[Required] Golden Rule UHD`) had their group-level toggle hidden in the profile detail / TRaSH-sync view — users had no way to say "I don't want this group at all", only "enable / disable each CF individually". That was inconsistent with how equivalent optional groups (HDR Formats, Optional Movie Versions, Audio Formats) behave, and stricter than what TRaSH's own schema supports (both Golden Rule CFs are `required: false`). The group toggle is now shown for every group including exclusive ones. Behavior:
+  - Group ON + not exclusive → all non-required CFs auto-enabled (unchanged).
+  - Group ON + exclusive → no CFs auto-enabled; user picks one via pick-one logic.
+  - Group OFF → all CFs in the group cleared regardless.
+  - The "only enable one" warning still shows when the group is expanded.
+
 ## v2.0.6
 
 **⚠️ Breaking change:** Authentication is now enabled by default (Forms + "Disabled for Trusted Networks", matching the Radarr/Sonarr pattern). On first run after upgrade, Clonarr will redirect to `/setup` to create an admin username and password. Existing sessions are invalidated (cookie name changed from `constat_session` to `clonarr_session` as part of branding cleanup). Homepage widgets and external scripts hitting `/api/*` now need the API key (Settings → Security) — send as `X-Api-Key` header.

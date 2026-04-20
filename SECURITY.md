@@ -4,7 +4,8 @@
 
 | Version | Security updates |
 |---------|------------------|
-| `v2.0.6` and later | ✅ Yes |
+| `v2.0.7` (latest) and later | ✅ Yes |
+| `v2.0.6` | ✅ Yes (bugfix candidate) |
 | Earlier `v2.x` releases | ❌ No — please upgrade |
 
 ## Reporting a vulnerability
