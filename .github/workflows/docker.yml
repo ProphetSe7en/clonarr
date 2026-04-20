@@ -21,6 +21,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # Promote to job env so we can reference it in `if:` conditions.
+      # The secrets context is unavailable to the workflow validator, causing
+      # "Unrecognized named-value: 'secrets'" if used directly in `if:`.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout
@@ -42,7 +47,7 @@ jobs:
       # Only runs when DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets are configured.
       # Forks without Docker Hub credentials skip this step gracefully.
       - name: Log in to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: env.DOCKERHUB_USERNAME != ''
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -54,7 +59,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}
-            ${{ secrets.DOCKERHUB_USERNAME != '' && format('docker.io/{0}/{1}', secrets.DOCKERHUB_USERNAME, env.IMAGE_NAME) || '' }}
+            ${{ env.DOCKERHUB_USERNAME != '' && format('docker.io/{0}/{1}', env.DOCKERHUB_USERNAME, env.IMAGE_NAME) || '' }}
           tags: |
             type=raw,value=dev,enable={{is_default_branch}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
