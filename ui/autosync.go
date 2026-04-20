@@ -485,9 +485,9 @@ func (app *App) dispatchNotification(agent NotificationAgent, title, discordMsg,
 		} else if color == 0xd29922 { // amber = warning/cleanup
 			level = "warning"
 		}
-		go app.sendGotify(agent, title, gotifyMsg, level)
+		safeGo("notify-gotify", func() { app.sendGotify(agent, title, gotifyMsg, level) })
 	case "pushover":
-		go app.sendPushover(agent, title, discordMsg)
+		safeGo("notify-pushover", func() { app.sendPushover(agent, title, discordMsg) })
 	}
 }
 

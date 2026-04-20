@@ -57,6 +57,7 @@ type AutoSyncConfig struct {
 // NotificationAgent is a configured notification provider instance.
 type NotificationAgent struct {
 	ID      string             `json:"id"`
+	Name    string             `json:"name"`    // user-defined label, e.g. "Discord #alerts"
 	Type    string             `json:"type"`    // "discord" | "gotify" | "pushover"
 	Enabled bool               `json:"enabled"`
 	Events  AgentEvents        `json:"events"`
@@ -522,6 +523,7 @@ func (cs *configStore) migrateFlatNotifications(raw []byte) {
 		_ = cv; _ = wv; _ = iv
 		agents = append(agents, NotificationAgent{
 			ID:      generateID(),
+			Name:    "Discord",
 			Type:    "discord",
 			Enabled: boolVal("discordEnabled", true),
 			Events: AgentEvents{
@@ -544,6 +546,7 @@ func (cs *configStore) migrateFlatNotifications(raw []byte) {
 	if gotifyURL != "" || gotifyToken != "" {
 		agents = append(agents, NotificationAgent{
 			ID:      generateID(),
+			Name:    "Gotify",
 			Type:    "gotify",
 			Enabled: boolVal("gotifyEnabled", false),
 			Events: AgentEvents{
@@ -572,6 +575,7 @@ func (cs *configStore) migrateFlatNotifications(raw []byte) {
 	if pushoverKey != "" || pushoverToken != "" {
 		agents = append(agents, NotificationAgent{
 			ID:      generateID(),
+			Name:    "Pushover",
 			Type:    "pushover",
 			Enabled: boolVal("pushoverEnabled", false),
 			Events: AgentEvents{
@@ -596,6 +600,9 @@ func (cs *configStore) migrateFlatNotifications(raw []byte) {
 	log.Printf("Migrated %d notification provider(s) to NotificationAgents", len(agents))
 
 	// Persist migration (strip old flat keys from JSON, write new agents field).
+	// saveLocked expects mu to be held by the caller — this is safe because
+	// migrateFlatNotifications is only ever called from Load(), which holds mu
+	// for its entire duration. saveLocked itself does not re-acquire the lock.
 	if err := cs.saveLocked(); err != nil {
 		log.Printf("Warning: failed to persist notification migration: %v", err)
 	}
@@ -616,15 +623,10 @@ func (cs *configStore) GetNotificationAgent(id string) (NotificationAgent, bool)
 }
 
 // AddNotificationAgent appends a new notification agent with a generated ID.
-// Returns an error if an agent of the same type already exists.
+// Multiple agents of the same type are permitted (e.g. two Discord channels).
 func (cs *configStore) AddNotificationAgent(agent NotificationAgent) (NotificationAgent, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	for _, a := range cs.config.AutoSync.NotificationAgents {
-		if a.Type == agent.Type {
-			return NotificationAgent{}, fmt.Errorf("a %s notification agent already exists", agent.Type)
-		}
-	}
 	agent.ID = generateID()
 	cs.config.AutoSync.NotificationAgents = append(cs.config.AutoSync.NotificationAgents, agent)
 	return agent, cs.saveLocked()

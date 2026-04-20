@@ -4349,8 +4349,6 @@
               <div class="settings-section-desc">Auto-sync event notifications via Discord, Gotify, and Pushover.</div>
             </div>
             <button class="btn btn-sm btn-primary"
-              :disabled="notificationAgents.length >= 3"
-              :title="notificationAgents.length >= 3 ? 'All agent types already configured' : ''"
               @click="openAgentModal()">+ Add notification agent</button>
           </div>
           <template x-if="notificationAgents.length === 0">
@@ -4359,7 +4357,8 @@
           <template x-for="agent in notificationAgents" :key="agent.id">
             <div class="inst-row">
               <img class="inst-icon" :src="agentIconSrc(agent.type)" :alt="agent.type">
-              <div style="font-size:13px;font-weight:500;min-width:90px;text-transform:capitalize" x-text="agent.type"></div>
+              <div style="font-size:13px;font-weight:500;min-width:120px" x-text="agent.name || agent.type"></div>
+              <div style="font-size:12px;color:#8b949e;text-transform:capitalize;margin-right:4px" x-text="agent.type"></div>
               <!-- Enable toggle -->
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#8b949e;margin-left:4px" @click.stop>
                 <input type="checkbox" :checked="agent.enabled"
@@ -4654,13 +4653,19 @@
     <div class="modal" style="min-width:480px;max-width:560px">
       <div class="modal-title" x-text="agentModal.editId ? 'Edit Notification Agent' : 'Add Notification Agent'"></div>
 
+      <!-- Name -->
+      <div class="form-group">
+        <label>Name</label>
+        <input class="input" x-model="agentModal.name" placeholder="e.g. Discord #alerts" autocomplete="off">
+      </div>
+
       <!-- Type (add only) -->
       <div class="form-group" x-show="!agentModal.editId">
         <label>Type</label>
         <select class="input" x-model="agentModal.type">
-          <template x-for="t in availableAgentTypes()" :key="t.value">
-            <option :value="t.value" x-text="t.label"></option>
-          </template>
+          <option value="discord">Discord</option>
+          <option value="gotify">Gotify</option>
+          <option value="pushover">Pushover</option>
         </select>
       </div>
       <!-- Type display (edit) -->
@@ -4806,7 +4811,7 @@
           @click="testAgentInModal()">Test</button>
         <div style="flex:1"></div>
         <button class="btn" @click="agentModal.show = false">Cancel</button>
-        <button class="btn btn-primary" :disabled="agentModal.saving || !agentModal.testPassed" @click="saveNotificationAgent()">
+        <button class="btn btn-primary" :disabled="agentModal.saving || !agentModal.testPassed || !agentModal.name.trim()" @click="saveNotificationAgent()">
           <span x-text="agentModal.editId ? 'Update' : 'Add'"></span>
         </button>
       </div>
@@ -6359,6 +6364,7 @@ function clonarr() {
     agentModal: {
       show: false,
       editId: null,
+      name: '',
       type: 'discord',
       enabled: true,
       events: { onSyncSuccess: true, onSyncFailure: true, onCleanup: true, onRepoUpdate: false, onChangelog: false },
@@ -12835,19 +12841,6 @@ function clonarr() {
       } catch (e) { console.error('loadNotificationAgents:', e); }
     },
 
-    availableAgentTypes() {
-      const used = new Set(this.notificationAgents.map(a => a.type));
-      if (this.agentModal.editId) {
-        // editing — only show the current type
-        return [{ value: this.agentModal.type, label: this.agentModal.type.charAt(0).toUpperCase() + this.agentModal.type.slice(1) }];
-      }
-      return [
-        { value: 'discord', label: 'Discord' },
-        { value: 'gotify', label: 'Gotify' },
-        { value: 'pushover', label: 'Pushover' },
-      ].filter(t => !used.has(t.value));
-    },
-
     openAgentModal(agent = null) {
       this.agentModal.testResults = [];
       this.agentModal.testing = false;
@@ -12855,15 +12848,15 @@ function clonarr() {
       this.agentModal.saving = false;
       if (agent) {
         this.agentModal.editId = agent.id;
+        this.agentModal.name = agent.name || '';
         this.agentModal.type = agent.type;
         this.agentModal.enabled = agent.enabled;
         this.agentModal.events = { ...agent.events };
         this.agentModal.config = { ...agent.config };
       } else {
-        const usedTypes = new Set(this.notificationAgents.map(a => a.type));
-        const firstAvailable = ['discord', 'gotify', 'pushover'].find(t => !usedTypes.has(t)) || 'discord';
         this.agentModal.editId = null;
-        this.agentModal.type = firstAvailable;
+        this.agentModal.name = '';
+        this.agentModal.type = 'discord';
         this.agentModal.enabled = true;
         this.agentModal.events = { onSyncSuccess: true, onSyncFailure: true, onCleanup: true, onRepoUpdate: false, onChangelog: false };
         this.agentModal.config = { discordWebhook: '', discordWebhookUpdates: '', gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverUserKey: '', pushoverAppToken: '' };
@@ -12874,6 +12867,7 @@ function clonarr() {
     async saveNotificationAgent() {
       this.agentModal.saving = true;
       const payload = {
+        name: this.agentModal.name.trim(),
         type: this.agentModal.type,
         enabled: this.agentModal.enabled,
         events: { ...this.agentModal.events },
@@ -12909,7 +12903,7 @@ function clonarr() {
     },
 
     async toggleAgentEnabled(agent) {
-      const updated = { ...agent, config: { ...agent.config }, events: { ...agent.events }, enabled: !agent.enabled };
+      const updated = { ...agent, name: agent.name, config: { ...agent.config }, events: { ...agent.events }, enabled: !agent.enabled };
       try {
         const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}`, {
           method: 'PUT',
@@ -12927,9 +12921,9 @@ function clonarr() {
     },
 
     async deleteNotificationAgent(agent) {
-      const typeName = agent.type.charAt(0).toUpperCase() + agent.type.slice(1);
+      const displayName = agent.name || agent.type.charAt(0).toUpperCase() + agent.type.slice(1);
       const confirmed = await new Promise(resolve => {
-        this.confirmModal = { show: true, title: 'Delete Notification Agent', message: `Delete the ${typeName} notification agent?`, confirmLabel: 'Delete', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+        this.confirmModal = { show: true, title: 'Delete Notification Agent', message: `Delete "${displayName}"? This cannot be undone.`, confirmLabel: 'Delete', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
       });
       if (!confirmed) return;
       try {
@@ -12978,6 +12972,7 @@ function clonarr() {
       this.agentModal.testResults = [];
       this.agentModal.testPassed = false;
       const payload = {
+        name: this.agentModal.name.trim(),
         type: this.agentModal.type,
         enabled: this.agentModal.enabled,
         events: { ...this.agentModal.events },

@@ -4130,7 +4130,7 @@ type testResult struct {
 // handleTestNotificationAgentInline tests agent credentials sent inline in the
 // request body without requiring a saved agent ID. Used by the add-agent modal.
 func (app *App) handleTestNotificationAgentInline(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var req NotificationAgent
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "Invalid JSON")
@@ -4282,6 +4282,9 @@ func (app *App) testDiscordWebhook(webhook string) error {
 
 // validateAgentConfig checks that required fields are present for the agent type.
 func validateAgentConfig(agent NotificationAgent) error {
+	if strings.TrimSpace(agent.Name) == "" {
+		return fmt.Errorf("name is required")
+	}
 	switch agent.Type {
 	case "discord":
 		wh := strings.TrimSpace(agent.Config.DiscordWebhook)
