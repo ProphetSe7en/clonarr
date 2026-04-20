@@ -4140,24 +4140,16 @@ func (app *App) handleTestNotificationAgentInline(w http.ResponseWriter, r *http
 }
 
 // handleTestNotificationAgent fires test messages for an existing saved agent.
-// Resolves masked credentials against the stored config before testing.
+// Uses the stored agent config directly — no body parsing needed — so tests
+// always use the real (unmasked) credentials regardless of enabled state.
 func (app *App) handleTestNotificationAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
-
-	var req NotificationAgent
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, 400, "Invalid JSON")
+	existing, ok := app.config.GetNotificationAgent(id)
+	if !ok {
+		writeError(w, 404, "Notification agent not found")
 		return
 	}
-
-	// Resolve masked credentials against the stored config.
-	if existing, ok := app.config.GetNotificationAgent(id); ok {
-		req.Config = preserveAgentConfig(existing.Type, req.Config, existing.Config)
-		req.Type = existing.Type
-	}
-
-	app.runNotificationAgentTest(w, req)
+	app.runNotificationAgentTest(w, existing)
 }
 
 // runNotificationAgentTest executes the test logic for any notification agent
