@@ -284,6 +284,7 @@ func main() {
 	mux.HandleFunc("POST /api/auto-sync/notification-agents", app.handleCreateNotificationAgent)
 	mux.HandleFunc("PUT /api/auto-sync/notification-agents/{id}", app.handleUpdateNotificationAgent)
 	mux.HandleFunc("DELETE /api/auto-sync/notification-agents/{id}", app.handleDeleteNotificationAgent)
+	mux.HandleFunc("POST /api/auto-sync/notification-agents/test", app.handleTestNotificationAgentInline)
 	mux.HandleFunc("POST /api/auto-sync/notification-agents/{id}/test", app.handleTestNotificationAgent)
 	mux.HandleFunc("GET /api/auto-sync/rules", app.handleListAutoSyncRules)
 	mux.HandleFunc("POST /api/auto-sync/rules", app.handleCreateAutoSyncRule)

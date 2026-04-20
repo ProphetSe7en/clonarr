@@ -4358,7 +4358,7 @@
           </template>
           <template x-for="agent in notificationAgents" :key="agent.id">
             <div class="inst-row">
-              <img :src="'/icons/' + agent.type + '.svg'" :alt="agent.type"
+              <img :src="agentIconSrc(agent.type)" :alt="agent.type"
                 style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
               <div style="font-size:13px;font-weight:500;min-width:90px;text-transform:capitalize" x-text="agent.type"></div>
               <!-- Enable toggle -->
@@ -4668,7 +4668,7 @@
       <div class="form-group" x-show="agentModal.editId">
         <label>Type</label>
         <div style="font-size:13px;color:#e1e4e8;display:flex;align-items:center;gap:8px;padding:6px 0">
-          <img :src="'/icons/' + agentModal.type + '.svg'" style="width:20px;height:20px;object-fit:contain">
+          <img :src="agentIconSrc(agentModal.type)" style="width:20px;height:20px;object-fit:contain">
           <span style="text-transform:capitalize" x-text="agentModal.type"></span>
         </div>
       </div>
@@ -4803,12 +4803,11 @@
 
       <div class="modal-actions">
         <button class="btn"
-          :disabled="agentModal.testing || !agentModal.editId"
-          :title="!agentModal.editId ? 'Save the agent first to enable testing' : ''"
+          :disabled="agentModal.testing || !agentModalCanTest()"
           @click="testAgentInModal()">Test</button>
         <div style="flex:1"></div>
         <button class="btn" @click="agentModal.show = false">Cancel</button>
-        <button class="btn btn-primary" :disabled="agentModal.saving" @click="saveNotificationAgent()">
+        <button class="btn btn-primary" :disabled="agentModal.saving || !agentModal.testPassed" @click="saveNotificationAgent()">
           <span x-text="agentModal.editId ? 'Update' : 'Add'"></span>
         </button>
       </div>
@@ -6367,6 +6366,7 @@ function clonarr() {
       config: { discordWebhook: '', discordWebhookUpdates: '', gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverUserKey: '', pushoverAppToken: '' },
       testing: false,
       testResults: [],
+      testPassed: false,
       saving: false,
     },
     notifAgentStatus: {},
@@ -12852,6 +12852,7 @@ function clonarr() {
     openAgentModal(agent = null) {
       this.agentModal.testResults = [];
       this.agentModal.testing = false;
+      this.agentModal.testPassed = false;
       this.agentModal.saving = false;
       if (agent) {
         this.agentModal.editId = agent.id;
@@ -12959,16 +12960,53 @@ function clonarr() {
       }
     },
 
+    agentIconSrc(type) {
+      return type === 'gotify' ? '/icons/gotify.png' : `/icons/${type}.svg`;
+    },
+
+    agentModalCanTest() {
+      const c = this.agentModal.config;
+      switch (this.agentModal.type) {
+        case 'discord':   return !!c.discordWebhook;
+        case 'gotify':    return !!c.gotifyUrl && !!c.gotifyToken;
+        case 'pushover':  return !!c.pushoverUserKey && !!c.pushoverAppToken;
+        default:          return false;
+      }
+    },
+
     async testAgentInModal() {
-      if (!this.agentModal.editId) return;
       this.agentModal.testing = true;
       this.agentModal.testResults = [];
+      this.agentModal.testPassed = false;
+      const payload = {
+        type: this.agentModal.type,
+        enabled: this.agentModal.enabled,
+        events: { ...this.agentModal.events },
+        config: { ...this.agentModal.config },
+      };
+      // If editing, resolve masked credentials server-side via the {id}/test route.
+      // If adding (no editId), post to the inline test endpoint with raw config.
+      const url = this.agentModal.editId
+        ? `/api/auto-sync/notification-agents/${this.agentModal.editId}/test`
+        : '/api/auto-sync/notification-agents/test';
       try {
-        const r = await fetch(`/api/auto-sync/notification-agents/${this.agentModal.editId}/test`, { method: 'POST' });
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
         const data = await r.json();
-        this.agentModal.testResults = data.results || [];
-        // Also update the row status
-        this.notifAgentStatus = { ...this.notifAgentStatus, [this.agentModal.editId]: { testing: false, results: this.agentModal.testResults } };
+        if (!r.ok) {
+          this.agentModal.testResults = [{ label: 'Error', status: 'error', error: data.error || 'Failed' }];
+        } else {
+          this.agentModal.testResults = data.results || [];
+          this.agentModal.testPassed = this.agentModal.testResults.length > 0 &&
+            this.agentModal.testResults.every(res => res.status === 'ok');
+          // Sync row status for existing agents
+          if (this.agentModal.editId) {
+            this.notifAgentStatus = { ...this.notifAgentStatus, [this.agentModal.editId]: { testing: false, results: this.agentModal.testResults } };
+          }
+        }
       } catch (e) {
         this.agentModal.testResults = [{ label: 'Error', status: 'error', error: e.message }];
       } finally {

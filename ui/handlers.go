@@ -4127,10 +4127,20 @@ type testResult struct {
 	Error  string `json:"error,omitempty"` // set when status == "error"
 }
 
-// handleTestNotificationAgent fires test messages for a notification agent.
-// Accepts an optional agentId so the handler can resolve masked credentials
-// against the stored config (edit-modal flow). Without agentId the raw
-// form values are used (new-agent flow).
+// handleTestNotificationAgentInline tests agent credentials sent inline in the
+// request body without requiring a saved agent ID. Used by the add-agent modal.
+func (app *App) handleTestNotificationAgentInline(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	var req NotificationAgent
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, 400, "Invalid JSON")
+		return
+	}
+	app.runNotificationAgentTest(w, req)
+}
+
+// handleTestNotificationAgent fires test messages for an existing saved agent.
+// Resolves masked credentials against the stored config before testing.
 func (app *App) handleTestNotificationAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
@@ -4141,12 +4151,18 @@ func (app *App) handleTestNotificationAgent(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// If testing an existing agent, resolve masked credentials.
+	// Resolve masked credentials against the stored config.
 	if existing, ok := app.config.GetNotificationAgent(id); ok {
 		req.Config = preserveAgentConfig(existing.Type, req.Config, existing.Config)
 		req.Type = existing.Type
 	}
 
+	app.runNotificationAgentTest(w, req)
+}
+
+// runNotificationAgentTest executes the test logic for any notification agent
+// and writes the JSON response. Shared by both the inline and saved-agent test handlers.
+func (app *App) runNotificationAgentTest(w http.ResponseWriter, req NotificationAgent) {
 	var results []testResult
 
 	switch req.Type {
