@@ -7,15 +7,23 @@
 - **Architecture refactor** — backend restructured from flat `ui/*.go` to standard Go layout: `internal/api/` (HTTP handlers split by domain — instances, cleanup, sync, autosync, trash, custom_cfs, custom_profiles, import, scoring, notifications, config, auth_handlers, routes, server, utils), `internal/core/` (models, config store, sync engine, TRaSH integration), `internal/arr/` (Radarr/Sonarr API clients), `internal/auth/` + `internal/netsec/` (security primitives unchanged), `internal/utils/` (`SafeGo`). `ui/` is now only the `//go:embed static` wrapper. Contributed by @ColeSpringer via revived PR #14. No user-facing behavior change — pure reorganization for maintainability.
 - **Background panic recovery everywhere** — every goroutine wrapped via `utils.SafeGo`. One bad notifier/poller can no longer crash the whole process.
 
+## v2.0.8
+
 ### Added
 
-- **Notification Agents** — replaces the flat per-provider toggles under Auto-Sync → Notifications with an Instances-style list. Each notification channel (Discord, Gotify, Pushover) is an independent agent with its own enable flag, credentials, severity routing, and optional `Name` (run multiple agents of the same type — e.g. "Discord #main" + "Discord #trash"). Migration auto-converts existing v2.0.x flat config on first startup; no manual intervention needed. Per-agent inline test button verifies credentials end-to-end. Contributed by @xFlawless11x via PR #15.
+- **Notification Agents** — replaces the flat per-provider toggles under Auto-Sync → Notifications with an Instances-style list. Each notification channel (Discord, Gotify, Pushover) is now an independent agent with its own enable flag, credentials, severity routing, and optional `Name` field so you can run multiple agents of the same type (e.g. "Discord #main" + "Discord #trash" to separate sync alerts from TRaSH repo updates). Per-agent inline test button verifies credentials end-to-end. Migration auto-converts existing v2.0.x flat config on first startup — nothing to do manually. Contributed by @xFlawless11x via PR #15.
 
 ### Security
 
 - Notification agent credentials masked in all `/api/config` responses (Discord webhooks, Gotify token, Pushover user key + app token). `preserveIfMasked` on update restores stored values when the UI round-trips the placeholder.
 - `dispatchNotification` wraps `sendGotify` / `sendPushover` goroutines via `safeGo` — a panic in one notifier cannot kill the process.
 - Inline notification-agent test endpoint hardened: `MaxBytesReader` 4096, unknown agent types return 400, `Cache-Control: no-store` on all responses.
+- **T70 fix:** the session-persistence goroutine in `ui/auth/auth.go` is now wrapped in a panic-recovery helper. A theoretical panic inside `writeSessionsSnapshot` (e.g. an unexpected `os.WriteFile` error path) would previously have crashed the container. No known impact in production — defense in depth.
+
+### CI
+
+- `.github/workflows/ci.yml` gains `workflow_dispatch` trigger so the test matrix can be re-run manually from the Actions tab.
+- `.github/workflows/docker.yml` now supports forks and self-hosted setups without Docker Hub credentials: Docker Hub login step is conditional on `DOCKERHUB_USERNAME` secret being set. `setup-qemu-action` pinned to v4.0.0. From PR #16.
 
 ## v2.0.7
 
