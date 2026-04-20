@@ -58,6 +58,13 @@ func validateAgentConfig(agent core.NotificationAgent) error {
 			!strings.HasPrefix(webhook, "https://discordapp.com/api/webhooks/") {
 			return fmt.Errorf("discord webhook must start with https://discord.com/api/webhooks/")
 		}
+		// Validate the optional updates webhook only when it has been provided.
+		if u := strings.TrimSpace(agent.Config.DiscordWebhookUpdates); u != "" {
+			if !strings.HasPrefix(u, "https://discord.com/api/webhooks/") &&
+				!strings.HasPrefix(u, "https://discordapp.com/api/webhooks/") {
+				return fmt.Errorf("discord updates webhook must start with https://discord.com/api/webhooks/")
+			}
+		}
 	case "gotify":
 		if strings.TrimSpace(agent.Config.GotifyURL) == "" || strings.TrimSpace(agent.Config.GotifyToken) == "" {
 			return fmt.Errorf("gotify URL and token are required")
