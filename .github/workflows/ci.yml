@@ -36,8 +36,8 @@ jobs:
           cache-dependency-path: go.sum
       - name: install govulncheck
         # Pinned — govulncheck@latest may require newer Go than our go.mod
-        # declares. v1.1.4 is the last release that works with Go 1.24.
-        # Bump together with the go.mod toolchain.
+        # declares. Bump together with the go.mod toolchain when Go version
+        # changes. v1.1.4 works with Go 1.25.
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
       - name: scan
         run: govulncheck ./...

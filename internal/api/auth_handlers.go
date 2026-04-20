@@ -23,6 +23,7 @@ import (
 	"clonarr/internal/auth"
 	"clonarr/internal/core"
 	"clonarr/internal/netsec"
+	"clonarr/internal/utils"
 )
 
 // AuthHandlers bundles the dependencies needed by each handler.
@@ -545,8 +546,10 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 		log.Printf("auth: WARNING — authentication is DISABLED via authentication=none. Do not expose this container to untrusted networks.")
 	}
 
-	// Periodic loud warning while in none mode.
-	go func() {
+	// Periodic loud warning while in none mode. Wrapped in utils.SafeGo so
+	// a panic in store.Config() (shouldn't happen, but defense in depth)
+	// can't take down the container.
+	utils.SafeGo("auth-none-warning", func() {
 		t := time.NewTicker(60 * time.Second)
 		defer t.Stop()
 		for {
@@ -559,7 +562,7 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 				}
 			}
 		}
-	}()
+	})
 
 	authHandlers := &AuthHandlers{Store: store, Version: version}
 

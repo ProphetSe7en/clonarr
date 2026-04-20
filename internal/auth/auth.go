@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,21 @@ import (
 
 	"clonarr/internal/netsec"
 )
+
+// safeGoAuth runs fn in a new goroutine with panic recovery. Kept local
+// to the auth package so this self-contained security core stays import-
+// compatible across containers (Constat / vpn-gateway / cole-revive) that
+// live in their own modules. Duplicate of internal/utils/SafeGo by design.
+func safeGoAuth(name string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("auth: panic in %s: %v\n%s", name, r, debug.Stack())
+			}
+		}()
+		fn()
+	}()
+}
 
 // AuthMode controls HOW a user authenticates.
 type AuthMode string
@@ -243,8 +259,11 @@ func (s *Store) persistSessionsLocked() {
 	path := s.cfg.SessionsFilePath
 	// Write off the critical path. Don't wait for it to finish — eventual
 	// consistency is fine; worst case a restart drops the last few seconds
-	// of sessions (user re-logs in).
-	go s.writeSessionsSnapshot(path, entries)
+	// of sessions (user re-logs in). Wrapped in safeGoAuth so a panic in
+	// MarshalIndent / os.WriteFile can't crash the container.
+	safeGoAuth("writeSessionsSnapshot", func() {
+		s.writeSessionsSnapshot(path, entries)
+	})
 }
 
 // writeSessionsSnapshot is a method (not a free function) so it can take
