@@ -12944,10 +12944,19 @@ function clonarr() {
     async testNotificationAgent(agent) {
       this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: true, results: [] } };
       try {
-        const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}/test`, { method: 'POST' });
-        const data = await r.json();
-        const results = data.results || [];
-        this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results } };
+        // Send the agent's current (masked) config as the body so the handler
+        // can resolve credentials server-side via preserveAgentConfig.
+        const r = await fetch(`/api/auto-sync/notification-agents/${agent.id}/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: agent.type, config: { ...agent.config } }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results: [{ label: 'Error', status: 'error', error: data.error || 'Test failed' }] } };
+          return;
+        }
+        this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results: data.results || [] } };
       } catch (e) {
         this.notifAgentStatus = { ...this.notifAgentStatus, [agent.id]: { testing: false, results: [{ label: 'Error', status: 'error', error: e.message }] } };
       }
