@@ -43,7 +43,7 @@ import (
 
 // safeGoAuth runs fn in a new goroutine with panic recovery. Kept local
 // to the auth package so this self-contained security core stays import-
-// compatible across containers (Constat / vpn-gateway / cole-revive) that
+// compatible across containers (Constat / vpn-gateway) that
 // live in their own modules. Duplicate of internal/utils/SafeGo by design.
 func safeGoAuth(name string, fn func()) {
 	go func() {
