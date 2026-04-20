@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: go test -race
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+      - name: vet
+        working-directory: ui
+        run: go vet ./...
+      - name: test with race detector
+        working-directory: ui
+        run: go test -race -count=1 ./...
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ui/go.mod
+          cache-dependency-path: ui/go.sum
+      - name: install govulncheck
+        # Pinned — govulncheck@latest may require newer Go than our go.mod
+        # declares. v1.1.4 is the last release that works with Go 1.24.
+        # Bump together with the go.mod toolchain.
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - name: scan
+        working-directory: ui
+        run: govulncheck ./...

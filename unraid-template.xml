@@ -21,8 +21,16 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/icon.png</Icon>
-  <Date>2026-04-17</Date>
+  <Date>2026-04-20</Date>
   <Changes>
+### 2026-04-20
+- v2.0.8: Architecture Improvements — Refactors the backend into a modular layout (`internal/api/`, `internal/core/`, `internal/auth/`, and `internal/netsec/`). Includes background panic recovery using `utils.SafeGo`.
+- v2.0.7: Fix — Golden Rule and other exclusive CF groups can now be disabled at the group level (matches behavior of HDR Formats / Optional Movie Versions). Previously the group toggle was hidden for exclusive pick-one groups, which was stricter than TRaSH's own schema.
+### 2026-04-19
+- v2.0.6: **Breaking change** — authentication now required, first boot redirects to /setup. Login + password (bcrypt), API key for Homepage/scripts, CSRF, SSRF guards on Discord/Pushover, security headers, env-var lock for Trusted Networks/Proxies. Cookie names renamed clonarr_*. Full changelog in GitHub repo.
+- v2.0.5: Fix Extra CFs showing hex IDs instead of names in Overridden Scores panel after Save &amp; Sync.
+### 2026-04-18
+- v2.0.4: Quality size null fix, Sync All oscillation fix, CF editor dropdown fixes, Keep List redesign, score override UX improvements, per-webhook Discord test.
 ### 2026-04-17
 - v2.0.1: Fix dry-run Apply button showing wrong instance when multiple instances configured.
 - v2.0.0: Compare redesign, Sync History and Rollback, Profile Builder overhaul, Settings sidebar, Scoring Sandbox improvements, browser navigation, Sonarr language fix, Profile Detail redesign.
@@ -40,4 +48,6 @@
   <Config Name="Config Path" Target="/config" Default="/mnt/user/appdata/clonarr" Mode="rw" Description="Configuration, profiles, sync history, and TRaSH Guides cache" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/clonarr</Config>
   <Config Name="PUID" Target="PUID" Default="99" Description="User ID for file ownership" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Description="Group ID for file ownership" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="TRUSTED_NETWORKS" Target="TRUSTED_NETWORKS" Default="" Description="Optional: lock Trusted Networks at host level. Comma-separated IPs/CIDRs (e.g. 192.168.0.0/24, 10.0.0.0/24). When set, the UI field becomes read-only and can only be changed by editing this template and restarting. Leave empty to configure via the Security panel in the web UI. Loopback is always trusted regardless." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="TRUSTED_PROXIES" Target="TRUSTED_PROXIES" Default="" Description="Optional: lock Trusted Proxies at host level. Comma-separated reverse-proxy IPs (e.g. 172.17.0.1). Only needed when Clonarr sits behind SWAG, Authelia, Traefik, etc. When set, the UI field becomes read-only. Leave empty for direct access." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
 </Container>

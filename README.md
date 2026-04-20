@@ -123,8 +123,8 @@ Open the Web UI at `http://your-host:6060`.
 
 ### 2. Initial Setup
 
-1. Open `http://your-host:6060` — the UI is available immediately
-2. Go to **Settings** and add your Radarr/Sonarr instance (URL + API key)
+1. Open `http://your-host:6060` — you'll be redirected to `/setup` on first run to create an admin account (see [Authentication](#authentication) below)
+2. After login, go to **Settings** and add your Radarr/Sonarr instance (URL + API key)
 3. Click **Pull** in the header to clone the TRaSH Guides repository
 4. Browse profiles on the **Radarr** or **Sonarr** tab and click **Sync** to deploy
 
@@ -140,6 +140,8 @@ The TRaSH repository is cloned to `/config/data/trash-guides/` and updated autom
 | `PUID` | No | `99` | User ID for file ownership |
 | `PGID` | No | `100` | Group ID for file ownership |
 | `PORT` | No | `6060` | Web UI port (inside container) |
+| `TRUSTED_NETWORKS` | No | *(empty — uses Radarr-parity defaults)* | Lock **Trusted Networks** at host level. Comma-separated IPs/CIDRs (`192.168.0.0/24, 10.0.0.0/24`). When set, the UI field is disabled and cannot be changed via the web interface — only by editing the template and restarting. Useful for defense-in-depth: prevents a UI-takeover attacker from expanding the trust boundary. |
+| `TRUSTED_PROXIES` | No | *(empty)* | Lock **Trusted Proxies** at host level. Comma-separated IPs. Same UI-disabled behavior as `TRUSTED_NETWORKS`. Only needed when Clonarr sits behind a reverse proxy that terminates TLS (SWAG, Authelia, Traefik). |
 
 ### Volumes
 
@@ -218,13 +220,83 @@ Clonarr is built on the work of several projects:
 - **[Notifiarr](https://notifiarr.com/)** — Inspiration for the sync behavior rules (Add/Remove/Reset) and profile sync workflow.
 - **[Radarr](https://radarr.video/) / [Sonarr](https://sonarr.tv/)** — API v3 integration for CF management, profile sync, quality sizes, naming, and the Parse API used by the Scoring Sandbox.
 
+## Authentication
+
+As of `v2.0.6`, Clonarr requires a login before you can reach the web UI. The model mirrors Radarr/Sonarr's Security panel:
+
+**Authentication** — how users log in:
+- **Forms (login page)** *(default)* — standard username/password form + session cookie (30-day TTL).
+- **Basic** — HTTP Basic Auth (browser popup). Use this only when a reverse proxy in front is already handling login.
+- **None** — disables auth entirely. **Requires password confirmation to enable** because the blast radius is catastrophic: anyone who reaches the port is admin. Only safe on a host not reachable from other devices.
+
+**Authentication Required** — who must log in:
+- **Disabled for Trusted Networks** *(default)* — devices on the "trusted" CIDR list skip the login page. Convenient for LAN-only deployments.
+- **Enabled (all traffic)** — every request needs credentials, even from your own LAN.
+
+### First-run setup
+
+1. Open `http://your-host:6060` — you'll be redirected to `/setup`
+2. Create an admin username and password (min 10 characters, 2+ of upper/lower/digit/symbol)
+3. You're logged in automatically and land in the main UI
+
+Credentials are bcrypt-hashed (cost 12) and stored in `/config/auth.json`. Sessions persist across container restarts via `/config/sessions.json`.
+
+### Trusted Networks
+
+By default "trusted" means all private IPv4 + IPv6 ranges (RFC1918, link-local, ULA, loopback — Radarr-parity). **Anything in this list gets full admin access without a password** — that includes every other container on your Docker host and every device on your home WiFi.
+
+To tighten: go to **Settings → Security** and list specific IPs/CIDRs:
+- `192.168.0.0/24` — whole home VLAN
+- `10.0.0.0/24` — WireGuard tunnel
+- `192.168.0.5/32` — a single device
+
+Loopback (`127.x`) is always trusted so Docker healthchecks work regardless of this list.
+
+**Host-level lockdown:** set the `TRUSTED_NETWORKS` env var in your Unraid template or `docker-compose.yml`. When set, the UI field is disabled — the trust boundary can only be changed by editing the template and restarting the container. Defends against UI-takeover attackers (session hijack, XSS, local-bypass peer). See [Environment Variables](#environment-variables) above.
+
+### API Key
+
+Every install gets an API key (visible in **Settings → Security**, rotatable). Send it on requests as:
+
+```
+X-Api-Key: <your-key>
+```
+
+or as a query parameter (legacy — leaks to access logs and browser history):
+
+```
+?apikey=<your-key>
+```
+
+Use this for Homepage widgets, Uptime Kuma, and scripts. API-key auth bypasses both the login requirement and CSRF protection.
+
+### Reverse-proxy deployment
+
+Behind SWAG / Authelia / Traefik / Caddy that terminates TLS:
+1. Set **Trusted Proxies** to the proxy's IP (or use `TRUSTED_PROXIES` env var to lock at host level).
+2. Ensure the proxy sends `X-Forwarded-For` and `X-Forwarded-Proto: https`.
+3. Pick either **Forms** (Clonarr handles login) or **Basic** (reverse proxy handles login upstream).
+
+Clonarr will only trust `X-Forwarded-*` headers when the direct peer IP matches a configured Trusted Proxy — prevents header spoofing from other containers on the same bridge network.
+
+### Lost password recovery
+
+No email reset flow — by design, `/config/auth.json` is authoritative. To recover:
+
+1. Stop the container
+2. Delete `/config/auth.json` (credentials only — profiles, sync history, TRaSH data all live elsewhere)
+3. Start the container
+4. Open the web UI — you'll be redirected to `/setup` again to create new credentials
+
+This is safe on a machine where you have `/config` access. If someone ELSE can delete that file, they can also take over your Clonarr — which is expected behavior for a local admin tool.
+
 ## Security Notes
 
-The Web UI has no authentication — anyone with network access to port 6060 can view and modify your configuration, including Radarr/Sonarr API keys. This is standard for homelab tools but you should:
-
-- Only expose port 6060 on your local network
-- Use a reverse proxy with authentication if exposing externally
-- API keys are masked in all UI responses but stored in plaintext in `/config/clonarr.json`
+- Radarr/Sonarr instance API keys, Discord webhooks, Gotify tokens, and Pushover credentials are stored in plaintext in `/config/clonarr.json`. Protect that file the same way you protect Radarr/Sonarr's `config.xml`.
+- Admin credentials are bcrypt-hashed in `/config/auth.json` — never in plaintext on disk.
+- All state-changing API calls are CSRF-protected (double-submit cookie). Scripts using the API key bypass CSRF automatically.
+- The app sets `X-Frame-Options: DENY` (prevents clickjacking), `X-Content-Type-Options: nosniff`, and `Referrer-Policy: same-origin`.
+- Discord and Pushover outbound calls run through an SSRF-safe HTTP client that refuses internal IP targets with per-request revalidation (defeats DNS rebinding). Gotify uses a plain client since self-hosted Gotify on LAN is legitimate.
 
 ## Disclaimer
 
