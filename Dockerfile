@@ -5,8 +5,11 @@ ARG VERSION=2.1.0
 RUN apk add --no-cache git
 
 WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
-RUN go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
 FROM alpine:3.21
 
