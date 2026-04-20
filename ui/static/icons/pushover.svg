@@ -1,0 +1,9 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="10" fill="#E64E00"/>
+  <!-- Bell body -->
+  <path d="M24 8C19.5 8 16 12 16 17V28H14V31H34V28H32V17C32 12 28.5 8 24 8Z" fill="white"/>
+  <!-- Bell clapper -->
+  <ellipse cx="24" cy="33" rx="3" ry="3" fill="white"/>
+  <!-- Bell top dot -->
+  <circle cx="24" cy="8" r="2" fill="white"/>
+</svg>
