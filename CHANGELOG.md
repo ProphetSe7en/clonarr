@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.0.8
+
+### Added
+
+- **Notification Agents** — replaces the flat per-provider toggles under Auto-Sync → Notifications with an Instances-style list. Each notification channel (Discord, Gotify, Pushover) is now an independent agent with its own enable flag, credentials, severity routing, and optional `Name` field so you can run multiple agents of the same type (e.g. "Discord #main" + "Discord #trash" to separate sync alerts from TRaSH repo updates). Per-agent inline test button verifies credentials end-to-end. Migration auto-converts existing v2.0.x flat config on first startup — nothing to do manually. Contributed by @xFlawless11x via PR #15.
+
+### Security
+
+- Notification agent credentials masked in all `/api/config` responses (Discord webhooks, Gotify token, Pushover user key + app token). `preserveIfMasked` on update restores stored values when the UI round-trips the placeholder.
+- `dispatchNotification` wraps `sendGotify` / `sendPushover` goroutines via `safeGo` — a panic in one notifier cannot kill the process.
+- Inline notification-agent test endpoint hardened: `MaxBytesReader` 4096, unknown agent types return 400, `Cache-Control: no-store` on all responses.
+- **T70 fix:** the session-persistence goroutine in `ui/auth/auth.go` is now wrapped in a panic-recovery helper. A theoretical panic inside `writeSessionsSnapshot` (e.g. an unexpected `os.WriteFile` error path) would previously have crashed the container. No known impact in production — defense in depth.
+
+### CI
+
+- `.github/workflows/ci.yml` gains `workflow_dispatch` trigger so the test matrix can be re-run manually from the Actions tab.
+- `.github/workflows/docker.yml` now supports forks and self-hosted setups without Docker Hub credentials: Docker Hub login step is conditional on `DOCKERHUB_USERNAME` secret being set. `setup-qemu-action` pinned to v4.0.0. From PR #16.
+
 ## v2.0.7
 
 ### Fixed
