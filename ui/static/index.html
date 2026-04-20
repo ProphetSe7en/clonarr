@@ -4358,8 +4358,7 @@
           </template>
           <template x-for="agent in notificationAgents" :key="agent.id">
             <div class="inst-row">
-              <img :src="agentIconSrc(agent.type)" :alt="agent.type"
-                style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
+              <img class="inst-icon" :src="agentIconSrc(agent.type)" :alt="agent.type">
               <div style="font-size:13px;font-weight:500;min-width:90px;text-transform:capitalize" x-text="agent.type"></div>
               <!-- Enable toggle -->
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#8b949e;margin-left:4px" @click.stop>
