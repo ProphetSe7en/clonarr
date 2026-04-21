@@ -15112,10 +15112,18 @@ function clonarr() {
         .filter(c => this.cfgbSelectedCFs[c.trashId])
         .slice()
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      // Sanitize description — users often paste the whole JSON line
+      // ("...text...",) including outer quotes and the trailing comma; strip
+      // them so the emitted field holds only the inner text.
+      let desc = (this.cfgbDescription || '').trim();
+      while (desc.endsWith(',')) desc = desc.slice(0, -1).trim();
+      if (desc.startsWith('"') && desc.endsWith('"') && desc.length >= 2) {
+        desc = desc.slice(1, -1);
+      }
       return {
         name: this.cfgbName.trim(),
         trash_id: this.cfgbTrashID,
-        trash_description: (this.cfgbDescription || '').trim(),
+        trash_description: desc,
         default: this.cfgbDefault ? 'true' : 'false',
         custom_formats: selectedCFs.map(c => ({
           name: c.name,
