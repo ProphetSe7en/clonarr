@@ -10542,15 +10542,24 @@ function clonarr() {
     },
 
     groupedProfiles(type) {
+      // TRaSH convention: sort cards by the `group` integer from profile.json
+      // (ascending), then alpha by card name as tiebreak. A card can contain
+      // profiles with different group ints (Standard has 1 and 2); use the
+      // minimum as the card's sort key so it still lands in the right slot.
+      // User-created "Other" profiles without a group int drift to the end.
       const profiles = this.trashProfiles[type] || [];
       const groups = {};
-      const order = { 'Standard': 0, 'Anime': 1, 'French': 2, 'German': 3, 'SQP': 99 };
       for (const p of profiles) {
         const g = p.groupName || 'Other';
-        if (!groups[g]) groups[g] = { name: g, profiles: [] };
+        if (!groups[g]) groups[g] = { name: g, profiles: [], minGroup: Infinity };
         groups[g].profiles.push(p);
+        const gnum = typeof p.group === 'number' ? p.group : Infinity;
+        if (gnum < groups[g].minGroup) groups[g].minGroup = gnum;
       }
-      return Object.values(groups).sort((a, b) => (order[a.name] ?? 50) - (order[b.name] ?? 50));
+      return Object.values(groups).sort((a, b) => {
+        if (a.minGroup !== b.minGroup) return a.minGroup - b.minGroup;
+        return a.name.localeCompare(b.name);
+      });
     },
 
     toggleInstance(id) {
@@ -15157,21 +15166,26 @@ function clonarr() {
     },
 
     // Group profiles into the same cards the Profiles tab uses (Standard,
-    // Anime, French, German, SQP, Other). Reuses groupedProfiles()'s ordering
-    // table so the two pages stay visually consistent.
+    // Anime, French, German, SQP, Other). Sorted by the `group` integer
+    // from profile.json (ascending) with alpha tiebreak on the card name,
+    // matching TRaSH's convention for profile ordering.
     cfgbGroupedProfiles() {
       const profiles = this.cfgbProfiles;
       const groups = {};
-      const order = { 'Standard': 0, 'Anime': 1, 'French': 2, 'German': 3, 'SQP': 99 };
       for (const p of profiles) {
         const g = p.groupName || 'Other';
-        if (!groups[g]) groups[g] = { name: g, profiles: [], groupId: p.group };
+        if (!groups[g]) groups[g] = { name: g, profiles: [], groupId: p.group, minGroup: Infinity };
         groups[g].profiles.push(p);
+        const gnum = typeof p.group === 'number' ? p.group : Infinity;
+        if (gnum < groups[g].minGroup) groups[g].minGroup = gnum;
       }
       for (const g of Object.values(groups)) {
         g.profiles.sort((a, b) => a.name.localeCompare(b.name));
       }
-      return Object.values(groups).sort((a, b) => (order[a.name] ?? 50) - (order[b.name] ?? 50));
+      return Object.values(groups).sort((a, b) => {
+        if (a.minGroup !== b.minGroup) return a.minGroup - b.minGroup;
+        return a.name.localeCompare(b.name);
+      });
     },
 
     cfgbToggleProfileGroupCard(name) {
