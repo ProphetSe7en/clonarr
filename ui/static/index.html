@@ -9679,7 +9679,17 @@ function clonarr() {
         if (opt.disabled) o.disabled = true;
         el.appendChild(o);
       }
-      if (el.value !== (selectedValue || trashDefault)) el.value = selectedValue || trashDefault;
+      const targetValue = selectedValue || trashDefault;
+      if (el.value !== targetValue) el.value = targetValue;
+      // Same class of bug populatePBCutoffSelect fixed: programmatic
+      // el.value doesn't fire @change, so pdOverrides.cutoffQuality stays
+      // at a stale value when the dropdown auto-corrects (e.g. user
+      // toggles off the quality that was the cutoff, the list rebuilds,
+      // el.value falls back to TRaSH default, but the override state
+      // never updates). Dispatch so the @change binding runs.
+      if (targetValue !== selectedValue) {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     },
 
     populateSelectField(el, options, selectedValue) {
