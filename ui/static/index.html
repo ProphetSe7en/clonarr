@@ -2751,7 +2751,7 @@
                 <button type="button" @click="cfgbSetCFSortMode('manual')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;border-left:1px solid #30363d;' + (cfgbCFSortMode === 'manual' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Manual</button>
               </div>
               <select x-model="cfgbGroupFilter" x-show="cfgbCFSortMode === 'alpha'" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
-                <option value="all">All cf-groups</option>
+                <option value="all">All CFs (no filter)</option>
                 <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
                 <option value="other" x-show="cfgbHasOther">— Ungrouped</option>
                 <template x-for="gr in cfgbGroups" :key="gr.groupTrashId">
@@ -2819,7 +2819,7 @@
                         <span x-text="cf.name"></span>
                         <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
                       </label>
-                      <span x-show="cfgbGroupFilter === 'all' && cf.groupName" style="font-size:10px;color:#6a6e76" x-text="cf.groupName"></span>
+                      <span x-show="cfgbGroupFilter === 'all' && cf.groupNames && cf.groupNames.length > 0" style="font-size:10px;color:#6a6e76" x-text="cf.groupNames.join(' · ')" :title="cf.groupNames.join('\n')"></span>
                       <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
                         <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
                         required
@@ -14854,27 +14854,50 @@ function clonarr() {
         // Synthetic "Custom" and "Other" groups (emitted by the backend for
         // user-custom CFs and ungrouped CFs) have no groupTrashId — we treat
         // those as two special filter modes instead of real groups.
+        // The /all-cfs endpoint lists each CF once per containing cf-group.
+        // ~18 TRaSH CFs live in multiple groups (HDR10+, DV-related, a few
+        // anime ones). A naive flatten produced duplicate rows — Alpine's
+        // <template x-for> with :key="cf.trashId" silently drops rendering
+        // at the first duplicate, which truncated the alpha-sorted list
+        // around its first repeat (e.g. stopped just past "AV1").
+        //
+        // Dedup by trashId, but accumulate every groupTrashId the CF appears
+        // under. The cf-group dropdown filter walks groupTrashIds (array
+        // membership), so a shared CF surfaces under each of its groups.
+        // The group count tally counts every appearance so the "(N)" badges
+        // in the dropdown reflect real TRaSH group membership.
         const flat = [];
+        const byTid = new Map(); // trashId → entry in flat[]
         const groupMap = new Map(); // groupTrashId → {groupTrashId, name, count}
         let hasCustom = false, hasOther = false;
         for (const cat of (allCfsRes.categories || [])) {
           for (const group of (cat.groups || [])) {
             const gid = group.groupTrashId || '';
+            const gname = group.name || group.shortName || '';
             if (gid && !groupMap.has(gid)) {
-              groupMap.set(gid, { groupTrashId: gid, name: group.name || group.shortName || '', count: 0 });
+              groupMap.set(gid, { groupTrashId: gid, name: gname, count: 0 });
             }
             for (const cf of (group.cfs || [])) {
               if (!cf.trashId || !cf.name) continue;
-              flat.push({
-                trashId: cf.trashId,
-                name: cf.name,
-                groupTrashId: gid,
-                groupName: group.name || group.shortName || '',
-                isCustom: !!cf.isCustom,
-              });
               if (gid) groupMap.get(gid).count++;
               if (cf.isCustom) hasCustom = true;
               if (!gid && !cf.isCustom) hasOther = true;
+              let row = byTid.get(cf.trashId);
+              if (!row) {
+                row = {
+                  trashId: cf.trashId,
+                  name: cf.name,
+                  groupTrashIds: [],
+                  groupNames: [],
+                  isCustom: !!cf.isCustom,
+                };
+                flat.push(row);
+                byTid.set(cf.trashId, row);
+              }
+              if (gid && !row.groupTrashIds.includes(gid)) {
+                row.groupTrashIds.push(gid);
+                row.groupNames.push(gname);
+              }
             }
           }
         }
@@ -14924,10 +14947,11 @@ function clonarr() {
       if (g === 'custom') {
         list = list.filter(c => c.isCustom);
       } else if (g === 'other') {
-        list = list.filter(c => !c.groupTrashId && !c.isCustom);
+        list = list.filter(c => c.groupTrashIds.length === 0 && !c.isCustom);
       } else if (g !== 'all') {
-        // Specific TRaSH cf-group by its trash_id
-        list = list.filter(c => c.groupTrashId === g);
+        // Specific TRaSH cf-group by its trash_id — a CF that lives in
+        // multiple groups (e.g. HDR10+) matches each of its groups.
+        list = list.filter(c => c.groupTrashIds.includes(g));
       }
       // Filter string supports multiple whitespace-separated terms with OR
       // semantics — "mono stereo surround" matches CFs whose name contains
