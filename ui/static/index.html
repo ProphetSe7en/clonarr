@@ -15279,10 +15279,22 @@ function clonarr() {
     },
 
     cfgbDownloadJSON() {
+      // Slug: keep the category prefix (not strip it), so
+      // "[Release Groups] Anime" → "release-groups-anime.json".
+      // Matches TRaSH's filename convention — the brackets drop but the
+      // category words remain as part of the slug, joined to the short
+      // name with hyphens.
       const slug = this.cfgbName.trim().toLowerCase()
-        .replace(/^\[.*?\]\s*/, '')      // strip leading "[Audio] " category prefix
+        .replace(/[\[\]]/g, ' ')         // brackets → space (preserves contents)
         .replace(/[^a-z0-9]+/g, '-')     // non-alphanumerics → hyphen
         .replace(/^-+|-+$/g, '')          // trim leading/trailing hyphens
+        // Collapse immediate leading duplication. "[Audio] Audio Formats"
+        // produces "audio-audio-formats"; TRaSH's convention drops the
+        // repeat so it becomes "audio-formats" (matches his existing files).
+        // Only triggers on exact back-to-back word equality at the start,
+        // so e.g. "hdr-formats-hdr" (where the category ends with "formats"
+        // but isn't doubled) stays untouched.
+        .replace(/^([a-z0-9]+)-\1(-|$)/, '$1$2')
         || 'cf-group';
       const blob = new Blob([this.cfgbGenerateJSON()], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
