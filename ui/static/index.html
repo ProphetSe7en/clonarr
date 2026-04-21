@@ -2737,6 +2737,7 @@
             <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
               <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbGroupFilter === 'all' ? '' : ' in ' + cfgbGroupFilterLabel())"></span>
+              <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbClearCFs()" title="Deselect every CF and clear required flags — profile selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear CFs</button>
               <select x-model="cfgbGroupFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
                 <option value="all">All cf-groups</option>
                 <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
@@ -2785,6 +2786,7 @@
             <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
               <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality Profiles</span>
               <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedProfileCount() + ' / ' + cfgbProfiles.length"></span>
+              <button type="button" x-show="cfgbSelectedProfileCount() > 0" x-cloak @click="cfgbClearProfiles()" title="Deselect every profile — CF selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear profiles</button>
               <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa;margin-left:auto" title="Select every profile across all groups">
                 <input type="checkbox" :checked="cfgbAllProfilesSelected()" @change="cfgbToggleAllProfiles($event.target.checked)">
                 select all
@@ -14958,6 +14960,17 @@ function clonarr() {
 
     cfgbGroupSelectedCount(group) {
       return group.profiles.filter(p => this.cfgbSelectedProfiles[p.trashId]).length;
+    },
+
+    // Per-panel clears — let the user keep profiles while starting a fresh
+    // CF selection (and vice versa). Useful for building several cf-groups
+    // that share the same quality-profile targets but differ in CF content.
+    cfgbClearCFs() {
+      this.cfgbSelectedCFs = {};
+      this.cfgbRequiredCFs = {};
+    },
+    cfgbClearProfiles() {
+      this.cfgbSelectedProfiles = {};
     },
 
     cfgbSelectedCFCount()      { return Object.values(this.cfgbSelectedCFs).filter(Boolean).length; },
