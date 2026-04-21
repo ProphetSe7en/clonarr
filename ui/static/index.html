@@ -10556,6 +10556,12 @@ function clonarr() {
         const gnum = typeof p.group === 'number' ? p.group : Infinity;
         if (gnum < groups[g].minGroup) groups[g].minGroup = gnum;
       }
+      // Alpha-sort profiles within each card so order doesn't depend on
+      // whatever filesystem read order /api/trash/{app}/profiles happened
+      // to return. Matches the CF Group Builder's within-card sort.
+      for (const g of Object.values(groups)) {
+        g.profiles.sort((a, b) => a.name.localeCompare(b.name));
+      }
       return Object.values(groups).sort((a, b) => {
         if (a.minGroup !== b.minGroup) return a.minGroup - b.minGroup;
         return a.name.localeCompare(b.name);
