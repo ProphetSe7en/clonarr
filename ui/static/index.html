@@ -2774,15 +2774,18 @@
                 select all
               </label>
             </div>
-            <div style="overflow-y:auto;flex:1">
+            <!-- Reuses the .card / .grp-* / .profile-group-header classes from
+                 the Profiles tab so colours + chevron + hover + left-border
+                 accent match. Wrapped nodes sit inside the builder panel's
+                 scrollable body; a small background tint separates them from
+                 the panel's card background. -->
+            <div style="overflow-y:auto;flex:1;padding:8px;background:#0d1117">
               <template x-for="grp in cfgbGroupedProfiles()" :key="grp.name">
-                <div>
-                  <!-- Group card header: click-to-collapse + per-card select-all -->
-                  <div style="padding:8px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;background:#161b22;user-select:none">
-                    <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }" @click="cfgbToggleProfileGroupCard(grp.name)" style="cursor:pointer">&#9654;</span>
-                    <span @click="cfgbToggleProfileGroupCard(grp.name)" style="flex:1;cursor:pointer;font-size:13px;font-weight:600" x-text="grp.name"></span>
-                    <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:11px" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
-                    <span x-show="grp.groupId" style="font-size:10px;color:#6a6e76" x-text="'group ' + grp.groupId"></span>
+                <div class="card" :class="'grp-' + grp.name.toLowerCase().replace(/[^a-z]/g, '')" style="margin-bottom:6px">
+                  <div class="profile-group-header" @click="cfgbToggleProfileGroupCard(grp.name)">
+                    <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }">&#9654;</span>
+                    <span style="flex:1" x-text="grp.name"></span>
+                    <span class="profile-group-count" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
                     <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" @click.stop :title="'Select all ' + grp.name + ' profiles'">
                       <input type="checkbox" :checked="cfgbGroupAllSelected(grp)" @change="cfgbToggleGroupAll(grp, $event.target.checked)">
                       all
@@ -2790,7 +2793,7 @@
                   </div>
                   <div x-show="cfgbIsProfileGroupExpanded(grp.name)">
                     <template x-for="p in grp.profiles" :key="p.trashId">
-                      <div style="padding:6px 16px 6px 36px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                      <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
                         <input type="checkbox" :id="'cfgb-p-' + p.trashId" x-model="cfgbSelectedProfiles[p.trashId]" @change="cfgbSelectedProfiles = {...cfgbSelectedProfiles}">
                         <label :for="'cfgb-p-' + p.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="p.name"></label>
                       </div>
@@ -14791,11 +14794,10 @@ function clonarr() {
             groupName: p.groupName || 'Other',
           }))
           .filter(p => p.trashId && p.name);
-        // Expand all profile cards by default on load so the user sees all
-        // profiles without having to click every card open.
-        const expanded = {};
-        for (const p of this.cfgbProfiles) expanded[p.groupName] = true;
-        this.cfgbProfileGroupExpanded = expanded;
+        // Collapse all profile cards by default — mirrors the Profiles /
+        // TRaSH Sync tab behaviour where the user opens the card they care
+        // about rather than scrolling past 50+ profiles up front.
+        this.cfgbProfileGroupExpanded = {};
         this.cfgbSavedGroups = Array.isArray(savedRes) ? savedRes : [];
       } catch (e) {
         console.error('cfgbLoad failed:', e);
