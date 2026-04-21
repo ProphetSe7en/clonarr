@@ -6360,6 +6360,7 @@ function clonarr() {
     cfgbEditingId: '',                       // '' = new (POST), non-empty = editing existing (PUT)
     cfgbSavingMsg: '',                       // transient save/delete feedback
     cfgbSavingOk: false,                     // whether cfgbSavingMsg is success (green) or error (red)
+    cfgbDeleting: false,                     // guard against double-fire on Delete → Confirm (modal's onConfirm could run twice under fast clicks)
     profileTab: 'trash-sync',    // NEW — simple variable replacing per-app profileTabs: 'trash-sync', 'compare'
     instances: [],
     config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
@@ -15542,6 +15543,12 @@ function clonarr() {
       };
     },
     async _cfgbDeleteConfirmed(g) {
+      // Guard against a double-fire: modal's onConfirm is a simple click
+      // handler, so a quick Delete→Confirm→Delete→Confirm sequence against
+      // two different groups could have their second DELETE land before
+      // the first finished. The flag blocks any overlapping delete.
+      if (this.cfgbDeleting) return;
+      this.cfgbDeleting = true;
       try {
         const resp = await fetch('/api/cf-groups/' + g.appType + '/' + encodeURIComponent(g.id), { method: 'DELETE' });
         if (!resp.ok) {
@@ -15557,6 +15564,8 @@ function clonarr() {
         console.error('cfgbDelete failed:', e);
         this.cfgbSavingOk = false;
         this.cfgbSavingMsg = 'Delete failed: ' + e.message;
+      } finally {
+        this.cfgbDeleting = false;
       }
     },
 
