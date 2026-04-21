@@ -2660,11 +2660,45 @@
       <div class="page">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">CF Group Builder</div>
         <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
-          Build a <code>cf-groups/*.json</code> file for TRaSH-Guides contribution. Pick custom formats, mark which are required, link to quality profiles, export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
+          Build a <code>cf-groups/*.json</code> file — for TRaSH-Guides contribution, or for your own personal use. Pick custom formats, mark which are required, link to quality profiles. Save locally to iterate on later, or export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
         </div>
 
         <!-- Load-error banner — visible when /api/trash/* calls fail -->
         <div x-show="cfgbLoadError" x-cloak style="background:#3a1a1a;border:1px solid #5a2a2a;color:#ff9a9a;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px" x-text="cfgbLoadError"></div>
+
+        <!-- Saved cf-groups list — persistent storage, scoped to current appType. -->
+        <div x-show="cfgbSavedGroups.length > 0" style="margin-bottom:20px" x-cloak>
+          <div style="font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px" x-text="'Saved ' + activeAppType + ' cf-groups (' + cfgbSavedGroups.length + ')'"></div>
+          <div class="card" style="padding:0">
+            <template x-for="(g, idx) in cfgbSavedGroups" :key="g.id">
+              <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:12px;flex-wrap:wrap" :style="idx === cfgbSavedGroups.length - 1 ? 'border-bottom:none' : ''">
+                <div style="flex:1;min-width:200px">
+                  <div style="font-size:13px;font-weight:600" x-text="g.name"></div>
+                  <div style="font-size:11px;color:#6a6e76;margin-top:2px">
+                    <span x-text="(g.custom_formats || []).length + ' CFs · ' + Object.keys(g.quality_profiles && g.quality_profiles.include || {}).length + ' profiles'"></span>
+                    <span x-show="g.default === 'true'" style="background:#30363d;color:#3fb950;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">default</span>
+                    <span x-show="g.updatedAt" style="margin-left:8px" x-text="'updated ' + g.updatedAt.slice(0,10)"></span>
+                    <span x-show="cfgbEditingId === g.id" style="background:#1f6feb;color:#fff;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">editing</span>
+                  </div>
+                </div>
+                <button class="btn" @click="cfgbLoadForEdit(g)" style="font-size:12px;padding:4px 10px" title="Load into form for editing">Edit</button>
+                <button class="btn" @click="cfgbDelete(g)" style="font-size:12px;padding:4px 10px;color:#f85149;border-color:#f85149" title="Delete saved cf-group">Delete</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Anchor so cfgbLoadForEdit can scroll the form back into view. -->
+        <div id="cfgb-form-top"></div>
+
+        <!-- Mode banner — shows whether the form is editing an existing group or creating new. -->
+        <div style="font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">
+          <span x-show="!cfgbEditingId">New cf-group</span>
+          <span x-show="cfgbEditingId" x-cloak>
+            Editing <span x-text="cfgbName || '(unnamed)'"></span>
+            <button class="btn" @click="cfgbReset()" style="font-size:11px;padding:2px 8px;margin-left:8px;text-transform:none;letter-spacing:0">Start new instead</button>
+          </span>
+        </div>
 
         <!-- Top metadata -->
         <div style="display:grid;grid-template-columns:minmax(200px,1fr) auto;gap:16px;margin-bottom:16px">
@@ -2695,16 +2729,26 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
           <!-- CFs panel -->
           <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
-            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
-              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbCFs.length"></span>
-              <input type="text" placeholder="Filter..." x-model="cfgbCFFilter" style="flex:1;margin-left:8px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px">
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbCategoryFilter === 'all' ? '' : ' in ' + cfgbCategoryFilter)"></span>
+              <select x-model="cfgbCategoryFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Narrow the list to one category">
+                <option value="all">All categories</option>
+                <template x-for="cat in cfgbCategories" :key="cat">
+                  <option :value="cat" x-text="cat"></option>
+                </template>
+              </select>
+              <input type="text" placeholder="Filter..." x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px">
             </div>
             <div style="overflow-y:auto;flex:1">
               <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
                 <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
                   <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
-                  <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="cf.name"></label>
+                  <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
+                    <span x-text="cf.name"></span>
+                    <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
+                  </label>
+                  <span x-show="cfgbCategoryFilter === 'all'" style="font-size:10px;color:#6a6e76" x-text="cf.category"></span>
                   <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
                     <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
                     required
@@ -2743,10 +2787,24 @@
         </div>
 
         <!-- Actions -->
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-          <button class="btn btn-primary" @click="cfgbCopyJSON()" :disabled="!cfgbCanExport()" title="Copy the JSON to clipboard"><span x-text="cfgbCopyLabel"></span></button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-primary" @click="cfgbSave()" :disabled="!cfgbCanExport()" :title="cfgbEditingId ? 'Update the saved cf-group' : 'Save this cf-group locally so you can edit it later'">
+            <span x-text="cfgbEditingId ? 'Update saved' : 'Save locally'"></span>
+          </button>
+          <button class="btn" @click="cfgbCopyJSON()" :disabled="!cfgbCanExport()" title="Copy the JSON to clipboard"><span x-text="cfgbCopyLabel"></span></button>
           <button class="btn" @click="cfgbDownloadJSON()" :disabled="!cfgbCanExport()" title="Download the JSON as a file">Download .json</button>
-          <button class="btn" @click="cfgbReset()" style="margin-left:auto;color:#f85149;border-color:#f85149">Reset</button>
+          <button class="btn" @click="cfgbReset()" style="margin-left:auto;color:#f85149;border-color:#f85149" x-text="cfgbEditingId ? 'Discard changes' : 'Reset'"></button>
+        </div>
+
+        <!-- Save/delete feedback -->
+        <div x-show="cfgbSavingMsg" x-cloak :style="'background:' + (cfgbSavingOk ? '#1a3a1a' : '#3a1a1a') + ';border:1px solid ' + (cfgbSavingOk ? '#2a5a2a' : '#5a2a2a') + ';color:' + (cfgbSavingOk ? '#9aff9a' : '#ff9a9a') + ';padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px'" x-text="cfgbSavingMsg"></div>
+
+        <!-- Custom-CF warning — surfaces when the selected set includes custom CFs
+             which won't resolve in the public TRaSH-Guides repo. -->
+        <div x-show="cfgbSelectedCustomCFCount() > 0" x-cloak style="background:#2a2418;border:1px solid #4a3a18;color:#ffc88a;padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px">
+          <span x-text="cfgbSelectedCustomCFCount()"></span>
+          custom CF<span x-show="cfgbSelectedCustomCFCount() !== 1">s</span>
+          selected. These have IDs starting <code>custom:</code> and won't resolve in TRaSH-Guides. Save locally for personal use, but don't include them in a Download meant for contribution.
         </div>
 
         <!-- JSON preview (collapsible — Alpine pattern, matches other Clonarr collapsibles) -->
@@ -6158,7 +6216,9 @@ function clonarr() {
     cfgbDescription: '',
     cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input
     cfgbDefault: false,
-    cfgbCFs: [],                             // [{trashId, name}] — all CFs for current appType, in API order
+    cfgbCFs: [],                             // [{trashId, name, category, isCustom}] — flattened from /api/trash/{app}/all-cfs
+    cfgbCategories: [],                      // ['Audio Advanced', 'HDR Formats', 'Custom', ...] — unique categories in display order
+    cfgbCategoryFilter: 'all',               // 'all' or a category name — filters CF list
     cfgbCFFilter: '',
     cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
     cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
@@ -6167,6 +6227,14 @@ function clonarr() {
     cfgbCopyLabel: 'Copy JSON',              // swaps to "Copied!" briefly on click
     cfgbLoadError: '',                        // user-visible error when /api/trash/* fails
     cfgbPreviewOpen: false,                   // JSON-preview collapsible state
+    // Saved cf-groups (persistent, stored in Clonarr). Loaded per app type on
+    // tab entry. Edit loads one into the form; Save writes it back (POST for
+    // new, PUT for existing). Storage is scoped per appType on disk so a
+    // Radarr and Sonarr group with the same name never overwrite each other.
+    cfgbSavedGroups: [],                     // CFGroup[] from GET /api/cf-groups/{app}
+    cfgbEditingId: '',                       // '' = new (POST), non-empty = editing existing (PUT)
+    cfgbSavingMsg: '',                       // transient save/delete feedback
+    cfgbSavingOk: false,                     // whether cfgbSavingMsg is success (green) or error (red)
     profileTab: 'trash-sync',    // NEW — simple variable replacing per-app profileTabs: 'trash-sync', 'compare'
     instances: [],
     config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
@@ -14626,19 +14694,51 @@ function clonarr() {
     // user toggles Radarr↔Sonarr (CFs + profiles are app-specific).
     async cfgbLoad(appType) {
       this.cfgbLoadError = '';
+      // When the user switches Radarr↔Sonarr the current form has to be reset
+      // (a half-built group is scoped to one app type). Refresh saved list too.
+      this.cfgbReset();
       try {
-        const [cfsResp, profResp] = await Promise.all([
-          fetch('/api/trash/' + appType + '/cfs'),
+        const [allCfsResp, profResp, savedResp] = await Promise.all([
+          fetch('/api/trash/' + appType + '/all-cfs'),
           fetch('/api/trash/' + appType + '/profiles'),
+          fetch('/api/cf-groups/' + appType),
         ]);
-        if (!cfsResp.ok || !profResp.ok) {
-          throw new Error('HTTP ' + cfsResp.status + ' / ' + profResp.status);
+        if (!allCfsResp.ok || !profResp.ok) {
+          throw new Error('HTTP ' + allCfsResp.status + ' / ' + profResp.status);
         }
-        const [cfsRes, profRes] = await Promise.all([cfsResp.json(), profResp.json()]);
-        // API returns camelCase — keep the API contract explicit, no fallback chain.
-        this.cfgbCFs = (cfsRes || [])
-          .map(c => ({ trashId: c.trashId, name: c.name || '' }))
-          .filter(c => c.trashId && c.name);
+        const [allCfsRes, profRes, savedRes] = await Promise.all([
+          allCfsResp.json(),
+          profResp.json(),
+          savedResp.ok ? savedResp.json() : Promise.resolve([]),
+        ]);
+        // /all-cfs returns { categories: [{ category, groups: [{ cfs: [...] }] }] }.
+        // Flatten into a single list and carry the category name on each CF so
+        // the filter dropdown can narrow the list to one category at a time.
+        // Custom CFs arrive with isCustom=true; we keep them in the list so the
+        // user can include them in personal groups, but flag them visually.
+        const flat = [];
+        const catSet = new Set();
+        for (const cat of (allCfsRes.categories || [])) {
+          catSet.add(cat.category);
+          for (const group of (cat.groups || [])) {
+            for (const cf of (group.cfs || [])) {
+              if (!cf.trashId || !cf.name) continue;
+              flat.push({
+                trashId: cf.trashId,
+                name: cf.name,
+                category: cat.category,
+                groupName: group.shortName || group.name || '',
+                isCustom: !!cf.isCustom,
+              });
+            }
+          }
+        }
+        this.cfgbCFs = flat;
+        // Preserve the category order returned by the backend (it already
+        // sorts by GetCategoryOrder so things like "Audio Advanced" come
+        // before "Custom"). Dropdown shows them in the same order.
+        this.cfgbCategories = Array.from(catSet);
+        // Profiles API still uses camelCase (api.ProfileListItem).
         this.cfgbProfiles = (profRes || [])
           .map(p => ({
             trashId: p.trashId,
@@ -14646,11 +14746,14 @@ function clonarr() {
             group: typeof p.group === 'number' ? p.group : 99,
           }))
           .filter(p => p.trashId && p.name);
+        this.cfgbSavedGroups = Array.isArray(savedRes) ? savedRes : [];
       } catch (e) {
         console.error('cfgbLoad failed:', e);
         this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull TRaSH in Settings → TRaSH Repo.';
         this.cfgbCFs = [];
+        this.cfgbCategories = [];
         this.cfgbProfiles = [];
+        this.cfgbSavedGroups = [];
       }
     },
 
@@ -14662,10 +14765,15 @@ function clonarr() {
 
     cfgbFilteredCFs() {
       const q = (this.cfgbCFFilter || '').toLowerCase().trim();
-      const list = q
-        ? this.cfgbCFs.filter(c => c.name.toLowerCase().includes(q))
-        : this.cfgbCFs.slice();
-      return list.sort((a, b) => a.name.localeCompare(b.name));
+      const cat = this.cfgbCategoryFilter || 'all';
+      let list = this.cfgbCFs;
+      if (cat !== 'all') list = list.filter(c => c.category === cat);
+      if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+      return list.slice().sort((a, b) => a.name.localeCompare(b.name));
+    },
+    cfgbFilteredCount() {
+      // Count matching the current filters — shows "M of N in category" style.
+      return this.cfgbFilteredCFs().length;
     },
 
     cfgbSortedProfiles() {
@@ -14695,31 +14803,13 @@ function clonarr() {
     },
 
     cfgbGenerateJSON() {
-      // Build the object in the same field order TRaSH uses so diffs against
-      // existing cf-groups stay readable. CF order preserves TRaSH's own API
-      // order (which matches the order in their source files) — not alpha
-      // sort — so exported JSON diffs against hand-written cf-groups stay
-      // minimal. UI displays alpha-sorted for discoverability; only EXPORT
-      // preserves source order.
-      const obj = {
-        name: this.cfgbName.trim(),
-        trash_id: this.cfgbTrashID,
-        trash_description: (this.cfgbDescription || '').trim(),
-        default: this.cfgbDefault ? 'true' : 'false',
-        custom_formats: this.cfgbCFs
-          .filter(c => this.cfgbSelectedCFs[c.trashId])
-          .map(c => ({
-            name: c.name,
-            trash_id: c.trashId,
-            required: !!this.cfgbRequiredCFs[c.trashId],
-          })),
-        quality_profiles: {
-          include: this.cfgbSortedProfiles()
-            .filter(p => this.cfgbSelectedProfiles[p.trashId])
-            .reduce((acc, p) => { acc[p.name] = p.trashId; return acc; }, {}),
-        },
-      };
-      return JSON.stringify(obj, null, 4) + '\n';
+      // The preview and Download JSON share one payload builder so what the
+      // user sees in the preview is exactly what lands on disk. CF order
+      // preserves the /all-cfs API order (category > group > cf) which matches
+      // how TRaSH organizes their own source files, so exported diffs against
+      // hand-written cf-groups stay minimal. The UI shows alpha-sorted for
+      // discoverability; only EXPORT preserves source order.
+      return JSON.stringify(this.cfgbBuildPayload(), null, 4) + '\n';
     },
 
     async cfgbCopyJSON() {
@@ -14755,9 +14845,150 @@ function clonarr() {
       this.cfgbTrashID = '';
       this.cfgbDefault = false;
       this.cfgbCFFilter = '';
+      this.cfgbCategoryFilter = 'all';
       this.cfgbSelectedCFs = {};
       this.cfgbRequiredCFs = {};
       this.cfgbSelectedProfiles = {};
+      this.cfgbEditingId = '';
+      this.cfgbSavingMsg = '';
+    },
+
+    // --- Saved cf-groups ---
+    // Load an existing saved group into the form for editing. Sets
+    // cfgbEditingId so Save will PUT instead of POST, keeping the same file
+    // on disk. Profile/CF lookups are by trashId which is stable.
+    cfgbLoadForEdit(g) {
+      this.cfgbName = g.name || '';
+      this.cfgbDescription = g.trash_description || '';
+      this.cfgbTrashID = g.trash_id || '';
+      this.cfgbDefault = g.default === 'true' || g.default === true;
+      this.cfgbCFFilter = '';
+      this.cfgbCategoryFilter = 'all';
+      const selCFs = {}, reqCFs = {};
+      for (const cf of (g.custom_formats || [])) {
+        if (!cf.trash_id) continue;
+        selCFs[cf.trash_id] = true;
+        if (cf.required) reqCFs[cf.trash_id] = true;
+      }
+      this.cfgbSelectedCFs = selCFs;
+      this.cfgbRequiredCFs = reqCFs;
+      const selProf = {};
+      const include = (g.quality_profiles && g.quality_profiles.include) || {};
+      for (const trashId of Object.values(include)) {
+        if (trashId) selProf[trashId] = true;
+      }
+      this.cfgbSelectedProfiles = selProf;
+      this.cfgbEditingId = g.id || '';
+      this.cfgbSavingMsg = '';
+      // Scroll the form into view so the user sees the loaded fields
+      // immediately — the saved-groups list sits above the form.
+      setTimeout(() => {
+        const el = document.getElementById('cfgb-form-top');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    },
+
+    // Build the TRaSH-schema object used by both Download JSON and Save.
+    // Keeping this separate from cfgbGenerateJSON (which returns a string)
+    // avoids round-tripping through JSON.parse on Save.
+    cfgbBuildPayload() {
+      return {
+        name: this.cfgbName.trim(),
+        trash_id: this.cfgbTrashID,
+        trash_description: (this.cfgbDescription || '').trim(),
+        default: this.cfgbDefault ? 'true' : 'false',
+        custom_formats: this.cfgbCFs
+          .filter(c => this.cfgbSelectedCFs[c.trashId])
+          .map(c => ({
+            name: c.name,
+            trash_id: c.trashId,
+            required: !!this.cfgbRequiredCFs[c.trashId],
+          })),
+        quality_profiles: {
+          include: this.cfgbSortedProfiles()
+            .filter(p => this.cfgbSelectedProfiles[p.trashId])
+            .reduce((acc, p) => { acc[p.name] = p.trashId; return acc; }, {}),
+        },
+      };
+    },
+
+    async cfgbSave() {
+      if (!this.cfgbCanExport()) return;
+      const appType = this.activeAppType;
+      const payload = this.cfgbBuildPayload();
+      const editing = !!this.cfgbEditingId;
+      const url = editing
+        ? '/api/cf-groups/' + appType + '/' + encodeURIComponent(this.cfgbEditingId)
+        : '/api/cf-groups/' + appType;
+      const method = editing ? 'PUT' : 'POST';
+      try {
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error('HTTP ' + resp.status + ': ' + text);
+        }
+        const saved = await resp.json();
+        // Refresh the saved-list and stay on the form. For creates, switch
+        // into edit-mode for the new record so the next Save is a PUT.
+        await this.cfgbRefreshSaved();
+        this.cfgbEditingId = saved.id || this.cfgbEditingId;
+        this.cfgbSavingOk = true;
+        this.cfgbSavingMsg = editing ? 'Updated.' : 'Saved.';
+        setTimeout(() => { if (this.cfgbSavingMsg === 'Updated.' || this.cfgbSavingMsg === 'Saved.') this.cfgbSavingMsg = ''; }, 2000);
+      } catch (e) {
+        console.error('cfgbSave failed:', e);
+        this.cfgbSavingOk = false;
+        this.cfgbSavingMsg = 'Save failed: ' + e.message;
+      }
+    },
+
+    async cfgbDelete(g) {
+      if (!g || !g.id) return;
+      if (!confirm('Delete saved cf-group "' + (g.name || g.id) + '"? The file is removed from /config/custom/json/' + g.appType + '/cf-groups/. Exported .json files on disk are unaffected.')) return;
+      try {
+        const resp = await fetch('/api/cf-groups/' + g.appType + '/' + encodeURIComponent(g.id), { method: 'DELETE' });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error('HTTP ' + resp.status + ': ' + text);
+        }
+        await this.cfgbRefreshSaved();
+        if (this.cfgbEditingId === g.id) this.cfgbReset();
+        this.cfgbSavingOk = true;
+        this.cfgbSavingMsg = 'Deleted.';
+        setTimeout(() => { if (this.cfgbSavingMsg === 'Deleted.') this.cfgbSavingMsg = ''; }, 2000);
+      } catch (e) {
+        console.error('cfgbDelete failed:', e);
+        this.cfgbSavingOk = false;
+        this.cfgbSavingMsg = 'Delete failed: ' + e.message;
+      }
+    },
+
+    async cfgbRefreshSaved() {
+      const appType = this.activeAppType;
+      try {
+        const resp = await fetch('/api/cf-groups/' + appType);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const list = await resp.json();
+        this.cfgbSavedGroups = Array.isArray(list) ? list : [];
+      } catch (e) {
+        console.error('cfgbRefreshSaved failed:', e);
+      }
+    },
+
+    cfgbSelectedCustomCFCount() {
+      // How many selected CFs are user-custom (IDs starting with "custom:").
+      // Surfaced in a banner next to Download JSON as a warning when the
+      // exported file is meant for TRaSH-Guides contribution — custom IDs
+      // don't resolve in the public repo.
+      let n = 0;
+      for (const cf of this.cfgbCFs) {
+        if (cf.isCustom && this.cfgbSelectedCFs[cf.trashId]) n++;
+      }
+      return n;
     },
 
     // --- Utility ---

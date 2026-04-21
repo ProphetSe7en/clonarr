@@ -49,6 +49,8 @@ func main() {
 	customCFsStore := core.NewCustomCFStore(filepath.Join(configDir, "custom", "json"))
 	customCFsStore.MigrateFromFlatDir(filepath.Join(configDir, "custom-cfs"))
 	customCFsStore.MigrateFilenames()
+	cfGroupsStore := core.NewCFGroupStore(filepath.Join(configDir, "custom", "json"))
+	cfGroupsStore.MigrateFilenames()
 
 	// Migrate any imported profiles from old config to per-file storage
 	core.MigrateImportedProfiles(cfgStore, profilesStore)
@@ -61,6 +63,7 @@ func main() {
 		Trash:        trashStore,
 		Profiles:     profilesStore,
 		CustomCFs:    customCFsStore,
+		CFGroups:     cfGroupsStore,
 		DebugLog:     debugLogStore,
 		Version:      Version,
 		HTTPClient:   &http.Client{Timeout: 30 * time.Second},
