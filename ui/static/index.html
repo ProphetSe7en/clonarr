@@ -9625,7 +9625,17 @@ function clonarr() {
       }
       // Preserve selection if still in allowed list; otherwise pick first.
       const stillValid = allowed.some(q => q.name === selectedValue);
-      el.value = stillValid ? selectedValue : allowed[0].name;
+      const targetValue = stillValid ? selectedValue : allowed[0].name;
+      el.value = targetValue;
+      // Programmatic assignment does NOT fire @change, so Alpine's
+      // `pb.cutoff = $el.value` binding never runs when we auto-pick the
+      // first allowed quality on a new profile. The dropdown looks selected
+      // but pb.cutoff stays empty — export produces `cutoff: ""`. Dispatch
+      // a change event so the binding runs. Safe from looping: x-effect's
+      // next pass sees pb.cutoff == targetValue and skips the dispatch.
+      if (targetValue !== selectedValue) {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     },
 
     populateCutoffSelect(el, qualityStructure, profile, selectedValue, qualityOverrides) {
