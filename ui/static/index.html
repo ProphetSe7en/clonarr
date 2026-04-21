@@ -2705,11 +2705,11 @@
         <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:16px">
           <div style="flex:0 1 400px;min-width:240px">
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group name</label>
-            <input type="text" class="config-input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
+            <input type="text" class="input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
           </div>
           <div style="flex:0 1 360px;min-width:240px">
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
-            <input type="text" class="config-input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e;background:#0d1117" readonly :value="cfgbTrashID || '(type a name above)'">
+            <input type="text" class="input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e" readonly :value="cfgbTrashID || '(type a name above)'">
           </div>
           <div>
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Default</label>
@@ -2722,7 +2722,7 @@
 
         <div style="margin-bottom:20px">
           <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Description</label>
-          <textarea class="config-input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
+          <textarea class="input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
         </div>
 
         <!-- Two-column layout: CFs + Profiles -->
@@ -4612,7 +4612,7 @@
           <div class="setting-row">
             <div class="setting-label">Authentication</div>
             <div class="setting-value">
-              <select class="config-input" style="max-width:220px" x-model="config.authentication" @change="configDirty = true">
+              <select class="input" style="max-width:220px" x-model="config.authentication" @change="configDirty = true">
                 <option value="forms">Forms (login page)</option>
                 <option value="basic">Basic (browser popup)</option>
                 <option value="none">None (disabled — unsafe)</option>
@@ -4624,7 +4624,7 @@
           <div class="setting-row">
             <div class="setting-label">Authentication Required</div>
             <div class="setting-value">
-              <select class="config-input" style="max-width:280px" x-model="config.authenticationRequired" @change="configDirty = true">
+              <select class="input" style="max-width:280px" x-model="config.authenticationRequired" @change="configDirty = true">
                 <option value="disabled_for_local_addresses">Disabled for Trusted Networks</option>
                 <option value="enabled">Enabled (all traffic)</option>
               </select>
@@ -4635,7 +4635,7 @@
           <div class="setting-row">
             <div class="setting-label">Trusted Networks</div>
             <div class="setting-value">
-              <input type="text" class="config-input" placeholder="e.g. 192.168.0.0/24, 10.0.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
+              <input type="text" class="input" placeholder="e.g. 192.168.0.0/24, 10.0.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
               <div class="setting-help" x-show="authStatus.trustedNetworksLocked" x-cloak style="color:#d29922">
                 <strong>Locked by <code>TRUSTED_NETWORKS</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container. Unsetting the env var unlocks this field.
               </div>
@@ -4654,7 +4654,7 @@
           <div class="setting-row">
             <div class="setting-label">Trusted Proxies</div>
             <div class="setting-value">
-              <input type="text" class="config-input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
+              <input type="text" class="input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
               <div class="setting-help" x-show="authStatus.trustedProxiesLocked" x-cloak style="color:#d29922">
                 <strong>Locked by <code>TRUSTED_PROXIES</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container.
               </div>
@@ -4665,7 +4665,7 @@
           <div class="setting-row">
             <div class="setting-label">Session TTL (days)</div>
             <div class="setting-value">
-              <input type="number" class="config-input" style="max-width:100px" min="1" max="365" x-model.number="config.sessionTtlDays" @input="configDirty = true">
+              <input type="number" class="input" style="max-width:100px" min="1" max="365" x-model.number="config.sessionTtlDays" @input="configDirty = true">
               <div class="setting-help">How long a login stays valid before re-authentication. Default 30. Max 365.</div>
             </div>
           </div>
@@ -4688,7 +4688,7 @@
             <div class="setting-label">API Key</div>
             <div class="setting-value">
               <div style="display:flex;gap:6px;align-items:center">
-                <input type="text" class="config-input" style="flex:1;font-family:monospace;font-size:12px" readonly
+                <input type="text" class="input" style="flex:1;font-family:monospace;font-size:12px" readonly
                        :value="securityApiKeyVisible ? securityApiKey : (securityApiKey ? '••••••••••••••••••••••••••••••••' : 'Loading...')">
                 <button class="btn btn-secondary" @click="securityApiKeyVisible = !securityApiKeyVisible" x-text="securityApiKeyVisible ? 'Hide' : 'Show'"></button>
                 <button class="btn btn-secondary" @click="copyApiKey()" x-text="securityApiKeyCopied ? 'Copied!' : 'Copy'"></button>
@@ -4714,20 +4714,20 @@
           <div class="setting-row">
             <div class="setting-label">Current password</div>
             <div class="setting-value">
-              <input type="password" class="config-input" style="max-width:280px" autocomplete="current-password" x-model="pwChange.current">
+              <input type="password" class="input" style="max-width:280px" autocomplete="current-password" x-model="pwChange.current">
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">New password</div>
             <div class="setting-value">
-              <input type="password" class="config-input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.next">
+              <input type="password" class="input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.next">
               <div class="setting-help">At least 10 characters, with at least 2 of: uppercase, lowercase, digit, symbol.</div>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Confirm new password</div>
             <div class="setting-value">
-              <input type="password" class="config-input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.confirm">
+              <input type="password" class="input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.confirm">
             </div>
           </div>
           <div class="setting-row">
@@ -6137,7 +6137,7 @@
       <label style="display:block;font-size:12px;color:#c3c7cc;margin:12px 0 6px">
         Enter your <strong>current admin password</strong> to confirm:
       </label>
-      <input type="password" class="config-input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
+      <input type="password" class="input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
              @keydown.enter="disableAuthPassword && (disableAuthModalOpen = false, saveSecurityConfig(true))"
              style="width:100%;margin-bottom:8px">
       <div x-show="disableAuthError" x-text="disableAuthError" style="color:#ff9a9a;font-size:12px;margin:0 0 10px"></div>
