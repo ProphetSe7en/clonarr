@@ -2753,9 +2753,12 @@
               <select x-model="cfgbGroupFilter" x-show="cfgbCFSortMode === 'alpha'" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
                 <option value="all">All CFs (no filter)</option>
                 <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
-                <option value="other" x-show="cfgbHasOther">— Ungrouped</option>
+                <option value="other-trash" x-show="cfgbUngroupedTrashCount > 0" x-text="'— Ungrouped per TRaSH (' + cfgbUngroupedTrashCount + ')'"></option>
+                <!-- Only useful when the user has built any local groups;
+                     equal to Ungrouped-per-TRaSH otherwise, so hide it then. -->
+                <option value="other-remaining" x-show="cfgbSavedGroups.length > 0 && cfgbUngroupedRemainingCount !== cfgbUngroupedTrashCount" x-text="'— Ungrouped after local work (' + cfgbUngroupedRemainingCount + ')'"></option>
                 <template x-for="gr in cfgbGroups" :key="gr.groupTrashId">
-                  <option :value="gr.groupTrashId" x-text="gr.name + ' (' + gr.count + ')'"></option>
+                  <option :value="gr.groupTrashId" x-text="(gr.isLocal ? '[local] ' : '') + gr.name + ' (' + gr.count + ')'"></option>
                 </template>
               </select>
               <input type="text" x-show="cfgbCFSortMode === 'alpha'" placeholder="Filter (multiple terms: mono stereo surround)" x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Matches any of the space-separated terms, e.g. &quot;mono stereo surround&quot; shows all three">
@@ -6314,7 +6317,11 @@ function clonarr() {
     cfgbGroups: [],                          // [{groupTrashId, name, count}] — actual TRaSH cf-groups for the dropdown
     cfgbGroupFilter: 'all',                  // 'all' | 'custom' | 'other' | a TRaSH groupTrashId
     cfgbHasCustom: false,                    // true if the list contains any user-custom CFs (toggles the Custom filter option)
-    cfgbHasOther: false,                     // true if any CF is ungrouped — toggles the Other filter option
+    // Ungrouped counts come in two flavours so TRaSH can see both the raw
+    // upstream scope ("CFs TRaSH hasn't grouped yet") and the residual
+    // after his local work ("still to do after what I've placed locally").
+    cfgbUngroupedTrashCount: 0,              // CFs with 0 TRaSH group memberships (ignores local groups)
+    cfgbUngroupedRemainingCount: 0,          // CFs with 0 memberships at all — TRaSH and local combined
     cfgbCFFilter: '',
     cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
     cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
@@ -14901,13 +14908,14 @@ function clonarr() {
             }
           }
         }
-        this.cfgbCFs = flat;
-        // Sort groups alphabetically by name. TRaSH's own [Category] prefix
-        // (e.g. "[Audio] Audio Channels") sorts naturally in English, which
-        // clusters Audio/HDR/Streaming groups together in the dropdown.
-        this.cfgbGroups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-        this.cfgbHasCustom = hasCustom;
-        this.cfgbHasOther = hasOther;
+        // Cache TRaSH-only state on the instance. cfgbApplyLocalGroups()
+        // reads this cache + cfgbSavedGroups to produce cfgbCFs / cfgbGroups /
+        // cfgbHasOther — so Save/Delete on a saved group can refresh the
+        // dropdown without re-fetching /all-cfs or resetting the form.
+        this._cfgbTrashFlat = flat;
+        this._cfgbTrashGroupMap = groupMap;
+        this._cfgbTrashHasCustom = hasCustom;
+        this.cfgbApplyLocalGroups();
         // Profiles API still uses camelCase (api.ProfileListItem).
         this.cfgbProfiles = (profRes || [])
           .map(p => ({
@@ -14929,10 +14937,72 @@ function clonarr() {
         this.cfgbCFs = [];
         this.cfgbGroups = [];
         this.cfgbHasCustom = false;
-        this.cfgbHasOther = false;
+        this.cfgbUngroupedTrashCount = 0;
+        this.cfgbUngroupedRemainingCount = 0;
+        this._cfgbTrashFlat = [];
+        this._cfgbTrashGroupMap = new Map();
+        this._cfgbTrashHasCustom = false;
         this.cfgbProfiles = [];
         this.cfgbSavedGroups = [];
       }
+    },
+
+    // Combines TRaSH-only cache (set by cfgbLoad) with the current
+    // cfgbSavedGroups to produce the CF list, dropdown, and Ungrouped
+    // counts. Callable after Save/Delete of a local group so the dropdown
+    // refreshes without another /all-cfs fetch.
+    //
+    // Each CF keeps its TRaSH group memberships in c.trashGroupTrashIds
+    // (pure) and the full combined set in c.groupTrashIds (TRaSH + local,
+    // used for rendering + filter). The "Ungrouped (TRaSH)" filter walks
+    // trashGroupTrashIds; "Ungrouped (after local)" walks groupTrashIds.
+    cfgbApplyLocalGroups() {
+      // Clone the TRaSH-only flat list so the merge doesn't mutate cache.
+      const flat = (this._cfgbTrashFlat || []).map(c => ({
+        ...c,
+        trashGroupTrashIds: c.groupTrashIds.slice(),
+        trashGroupNames: c.groupNames.slice(),
+        groupTrashIds: c.groupTrashIds.slice(),
+        groupNames: c.groupNames.slice(),
+      }));
+      const byTid = new Map(flat.map(c => [c.trashId, c]));
+      const groupMap = new Map();
+      for (const [gid, g] of (this._cfgbTrashGroupMap || new Map())) {
+        groupMap.set(gid, { ...g });
+      }
+      // Merge local cf-groups into dropdown entries + per-CF membership.
+      for (const g of (this.cfgbSavedGroups || [])) {
+        if (!g || !g.id) continue;
+        const localId = 'local:' + g.id;
+        const gname = g.name || '(unnamed local)';
+        groupMap.set(localId, {
+          groupTrashId: localId,
+          name: gname,
+          count: (g.custom_formats || []).length,
+          isLocal: true,
+        });
+        for (const cf of (g.custom_formats || [])) {
+          const tid = cf && cf.trash_id;
+          if (!tid) continue;
+          const row = byTid.get(tid);
+          if (!row) continue; // CF in saved group but not in /all-cfs (stale)
+          if (!row.groupTrashIds.includes(localId)) {
+            row.groupTrashIds.push(localId);
+            row.groupNames.push(gname);
+          }
+        }
+      }
+      this.cfgbCFs = flat;
+      // TRaSH groups first (alpha), then locals (alpha) at the bottom.
+      this.cfgbGroups = Array.from(groupMap.values()).sort((a, b) => {
+        if (!!a.isLocal !== !!b.isLocal) return a.isLocal ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+      this.cfgbHasCustom = this._cfgbTrashHasCustom;
+      this.cfgbUngroupedTrashCount =
+        flat.filter(c => !c.isCustom && c.trashGroupTrashIds.length === 0).length;
+      this.cfgbUngroupedRemainingCount =
+        flat.filter(c => !c.isCustom && c.groupTrashIds.length === 0).length;
     },
 
     cfgbUpdateHash() {
@@ -14946,11 +15016,19 @@ function clonarr() {
       let list = this.cfgbCFs;
       if (g === 'custom') {
         list = list.filter(c => c.isCustom);
-      } else if (g === 'other') {
-        list = list.filter(c => c.groupTrashIds.length === 0 && !c.isCustom);
+      } else if (g === 'other-trash') {
+        // Ungrouped per TRaSH: CF isn't in any upstream cf-group. Local
+        // groups don't subtract — useful to see the full set TRaSH still
+        // needs to categorize.
+        list = list.filter(c => !c.isCustom && c.trashGroupTrashIds.length === 0);
+      } else if (g === 'other-remaining') {
+        // Ungrouped after local work: excludes CFs already placed in any
+        // local group. This is "what's left to do" once the user has
+        // started organizing.
+        list = list.filter(c => !c.isCustom && c.groupTrashIds.length === 0);
       } else if (g !== 'all') {
-        // Specific TRaSH cf-group by its trash_id — a CF that lives in
-        // multiple groups (e.g. HDR10+) matches each of its groups.
+        // Specific cf-group (TRaSH or local) by its trash_id / localId.
+        // A CF in multiple groups matches each of its groups.
         list = list.filter(c => c.groupTrashIds.includes(g));
       }
       // Filter string supports multiple whitespace-separated terms with OR
@@ -14998,7 +15076,8 @@ function clonarr() {
       const g = this.cfgbGroupFilter;
       if (g === 'all') return '';
       if (g === 'custom') return 'Custom CFs';
-      if (g === 'other') return 'Ungrouped';
+      if (g === 'other-trash') return 'Ungrouped (TRaSH)';
+      if (g === 'other-remaining') return 'Ungrouped (after local)';
       const match = this.cfgbGroups.find(gr => gr.groupTrashId === g);
       return match ? match.name : '';
     },
@@ -15415,6 +15494,10 @@ function clonarr() {
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const list = await resp.json();
         this.cfgbSavedGroups = Array.isArray(list) ? list : [];
+        // Re-merge local groups into dropdown + CF memberships so the
+        // just-saved/deleted group shows up (or vanishes) without needing
+        // a full /all-cfs refetch or losing form state.
+        this.cfgbApplyLocalGroups();
       } catch (e) {
         console.error('cfgbRefreshSaved failed:', e);
       }
