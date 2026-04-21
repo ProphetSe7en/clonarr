@@ -2737,6 +2737,10 @@
             <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
               <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbGroupFilter === 'all' ? '' : ' in ' + cfgbGroupFilterLabel())"></span>
+              <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbToggleAllRequired(!cfgbAllSelectedRequired())"
+                      :title="cfgbAllSelectedRequired() ? 'Clear required on every selected CF' : 'Mark every selected CF as required'"
+                      style="background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline"
+                      x-text="cfgbAllSelectedRequired() ? 'Clear required' : 'Mark all required'"></button>
               <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbClearCFs()" title="Deselect every CF and clear required flags — profile selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear CFs</button>
               <select x-model="cfgbGroupFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
                 <option value="all">All cf-groups</option>
@@ -14971,6 +14975,24 @@ function clonarr() {
     },
     cfgbClearProfiles() {
       this.cfgbSelectedProfiles = {};
+    },
+
+    // True when every currently-selected CF already has required=true.
+    // Drives the bulk required toggle's label — same click always flips
+    // the whole set so the user can mass-mark then mass-unmark quickly.
+    cfgbAllSelectedRequired() {
+      const selectedIds = Object.keys(this.cfgbSelectedCFs).filter(id => this.cfgbSelectedCFs[id]);
+      if (selectedIds.length === 0) return false;
+      return selectedIds.every(id => this.cfgbRequiredCFs[id]);
+    },
+    cfgbToggleAllRequired(on) {
+      const next = { ...this.cfgbRequiredCFs };
+      for (const id of Object.keys(this.cfgbSelectedCFs)) {
+        if (!this.cfgbSelectedCFs[id]) continue;
+        if (on) next[id] = true;
+        else delete next[id];
+      }
+      this.cfgbRequiredCFs = next;
     },
 
     cfgbSelectedCFCount()      { return Object.values(this.cfgbSelectedCFs).filter(Boolean).length; },
