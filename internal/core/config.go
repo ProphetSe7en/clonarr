@@ -197,8 +197,16 @@ type SyncHistoryEntry struct {
 	CFsCreated       int               `json:"cfsCreated"`
 	CFsUpdated     int               `json:"cfsUpdated"`
 	ScoresUpdated  int               `json:"scoresUpdated"`
-	LastSync       string            `json:"lastSync"`
-	Changes        *SyncChanges      `json:"changes,omitempty"`
+	// LastSync bumps on every sync attempt for this profile (including no-op
+	// auto-syncs) so callers can show "last activity" per profile. UI surfaces
+	// it in the TRaSH Sync tab's per-profile row.
+	LastSync string `json:"lastSync"`
+	// AppliedAt is frozen at entry creation when the sync actually produced
+	// changes — a stable "when these changes landed" timestamp. Empty on
+	// baseline/no-op entries and on entries predating this field (in which
+	// case UI falls back to LastSync).
+	AppliedAt string        `json:"appliedAt,omitempty"`
+	Changes   *SyncChanges  `json:"changes,omitempty"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.

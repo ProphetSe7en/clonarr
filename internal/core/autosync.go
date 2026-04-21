@@ -191,7 +191,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 
 	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
 
-	// Update sync history (same as manual sync)
+	// Update sync history (mirror manual sync — api/sync.go handleApply).
 	allCFIDs := make([]string, 0)
 	for _, a := range plan.CFActions {
 		allCFIDs = append(allCFIDs, a.TrashID)
@@ -201,25 +201,85 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	for _, id := range rule.SelectedCFs {
 		selectedCFMap[id] = true
 	}
+	// CF-set diff against previous entry (catches group-level add/remove
+	// that score engine doesn't report when CFs had score=0).
+	cfSetDetails := []string{}
+	prevEntry := app.Config.GetLatestSyncEntry(inst.ID, req.ArrProfileID)
+	if prevEntry != nil {
+		prevSet := make(map[string]bool, len(prevEntry.SyncedCFs))
+		for _, id := range prevEntry.SyncedCFs {
+			prevSet[id] = true
+		}
+		newSet := make(map[string]bool, len(allCFIDs))
+		for _, id := range allCFIDs {
+			newSet[id] = true
+		}
+		resolveName := func(tid string) string {
+			if ad != nil {
+				if cf, ok := ad.CustomFormats[tid]; ok {
+					return cf.Name
+				}
+			}
+			for _, a := range plan.CFActions {
+				if a.TrashID == tid {
+					return a.Name
+				}
+			}
+			if len(tid) > 12 {
+				return tid[:12]
+			}
+			return tid
+		}
+		for _, tid := range allCFIDs {
+			if !prevSet[tid] {
+				cfSetDetails = append(cfSetDetails, "Added: "+resolveName(tid))
+			}
+		}
+		for _, tid := range prevEntry.SyncedCFs {
+			if !newSet[tid] {
+				cfSetDetails = append(cfSetDetails, "Removed: "+resolveName(tid))
+			}
+		}
+	}
+	allCFDetails := append(cfSetDetails, result.CFDetails...)
+	var changes *SyncChanges
+	if len(allCFDetails) > 0 || len(result.ScoreDetails) > 0 ||
+		len(result.QualityDetails) > 0 || len(result.SettingsDetails) > 0 {
+		changes = &SyncChanges{
+			CFDetails:       allCFDetails,
+			ScoreDetails:    result.ScoreDetails,
+			QualityDetails:  result.QualityDetails,
+			SettingsDetails: result.SettingsDetails,
+		}
+	}
+	now := time.Now().Format(time.RFC3339)
 	entry := SyncHistoryEntry{
 		InstanceID:        inst.ID,
 		InstanceType:      inst.Type,
 		ProfileTrashID:    req.ProfileTrashID,
 		ImportedProfileID: req.ImportedProfileID,
 		ProfileName:       plan.ProfileName,
-		ArrProfileID:   req.ArrProfileID,
-		ArrProfileName: plan.ArrProfileName,
-		SyncedCFs:      allCFIDs,
-		SelectedCFs:    selectedCFMap,
+		ArrProfileID:     req.ArrProfileID,
+		ArrProfileName:   plan.ArrProfileName,
+		SyncedCFs:        allCFIDs,
+		SelectedCFs:      selectedCFMap,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
 		QualityStructure: rule.QualityStructure,
-		Overrides:      rule.Overrides,
-		Behavior:       rule.Behavior,
-		CFsCreated:     result.CFsCreated,
-		CFsUpdated:     result.CFsUpdated,
-		ScoresUpdated:  result.ScoresUpdated,
-		LastSync:       time.Now().Format(time.RFC3339),
+		Overrides:        rule.Overrides,
+		Behavior:         rule.Behavior,
+		CFsCreated:       result.CFsCreated,
+		CFsUpdated:       result.CFsUpdated,
+		ScoresUpdated:    result.ScoresUpdated,
+		LastSync:         now,
+		Changes:          changes,
+	}
+	// Freeze AppliedAt on real-change entries so the History tab's "Last
+	// Changed" column shows when changes actually landed, not when the last
+	// no-op sync ran. Baseline / no-op entries leave it blank → UI falls
+	// back to LastSync.
+	if changes != nil {
+		entry.AppliedAt = now
 	}
 	if result.ProfileCreated {
 		entry.ArrProfileID = result.ArrProfileID

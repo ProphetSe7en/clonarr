@@ -187,6 +187,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	now := time.Now().Format(time.RFC3339)
 	entry := core.SyncHistoryEntry{
 		InstanceID:        inst.ID,
 		InstanceType:      inst.Type,
@@ -205,8 +206,14 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		CFsCreated:        result.CFsCreated,
 		CFsUpdated:        result.CFsUpdated,
 		ScoresUpdated:     result.ScoresUpdated,
-		LastSync:          time.Now().Format(time.RFC3339),
+		LastSync:          now,
 		Changes:           changes,
+	}
+	// AppliedAt freezes the "when changes landed" timestamp. Only set when
+	// the entry carries real changes — baseline / no-op entries leave it
+	// blank so UI falls back to LastSync.
+	if changes != nil {
+		entry.AppliedAt = now
 	}
 	// Use newly created profile info when available
 	if result.ProfileCreated {

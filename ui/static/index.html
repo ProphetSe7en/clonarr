@@ -850,7 +850,7 @@
                       <div style="flex:none;width:20px;color:#aaa;text-align:center;font-size:15px">&rarr;</div>
                       <div style="flex:none;width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e1e4e8" x-text="sh.arrProfileName"></div>
                       <div style="flex:none;width:100px;white-space:nowrap">
-                        <span :style="sh.changes ? 'color:#d29922' : 'color:#aaa'" x-text="sh.changes ? timeAgo(sh.lastSync) : '—'"></span>
+                        <span :style="sh.changes ? 'color:#d29922' : 'color:#aaa'" x-text="sh.changes ? timeAgo(sh.appliedAt || sh.lastSync) : '—'"></span>
                       </div>
                       <div style="flex:none;width:55px;text-align:center;white-space:nowrap">
                         <span x-show="historyEventCount(inst.id, sh.arrProfileId) > 0"
@@ -903,7 +903,7 @@
                                 <span style="color:#e1e4e8;font-weight:500;width:150px;flex-shrink:0;display:flex;align-items:center;gap:6px">
                                   <span style="color:#aaa;font-size:11px;display:inline-block;width:10px;transition:transform 0.15s"
                                         :style="historyDetailIdx === ei ? 'transform:rotate(90deg)' : ''">&#9654;</span>
-                                  <span x-text="new Date(entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
+                                  <span x-text="new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
                                   <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:#3fb950" x-text="entry.changes.cfDetails.length"></span>
@@ -13045,8 +13045,8 @@ function clonarr() {
           case 'trash': return dir * (a.profileName || '').localeCompare(b.profileName || '');
           case 'arr': return dir * (a.arrProfileName || '').localeCompare(b.arrProfileName || '');
           case 'changed': {
-            const at = a.changes ? new Date(a.lastSync).getTime() : 0;
-            const bt = b.changes ? new Date(b.lastSync).getTime() : 0;
+            const at = a.changes ? new Date(a.appliedAt || a.lastSync).getTime() : 0;
+            const bt = b.changes ? new Date(b.appliedAt || b.lastSync).getTime() : 0;
             return dir * (at - bt);
           }
           case 'events': return dir * (this.historyEventCount(instId, a.arrProfileId) - this.historyEventCount(instId, b.arrProfileId));
@@ -13075,8 +13075,8 @@ function clonarr() {
         this.showToast('No previous state to rollback to — this is the earliest recorded sync.', 'warning', 6000);
         return;
       }
-      const date = new Date(entry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-      const prevDate = new Date(prevEntry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      const date = new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      const prevDate = new Date(prevEntry.appliedAt || prevEntry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
       // Build summary of what will be undone
       const changes = entry.changes || {};
       const summary = [
