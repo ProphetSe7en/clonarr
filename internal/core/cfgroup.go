@@ -36,6 +36,11 @@ type CFGroupCF struct {
 	Name     string `json:"name"`
 	TrashID  string `json:"trash_id"`
 	Required bool   `json:"required"`
+	// Default is per-CF opt-in override, rare in TRaSH — only Golden Rule
+	// files use it today (e.g. x265 (HD) is default:true in the UHD Golden
+	// Rule group). Emitted only when true, matching TRaSH's convention of
+	// omitting the key entirely when absent.
+	Default bool `json:"default,omitempty"`
 }
 
 // CFGroupQualityProfiles mirrors TRaSH's {"include": {"Profile Name": "trashId"}}.

@@ -2806,8 +2806,12 @@
                         <input type="checkbox" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
                         required
                       </label>
+                      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Per-CF default override — rare; TRaSH only uses this on Golden Rule files (e.g. x265 (HD) is default:true in Golden Rule UHD)">
+                        <input type="checkbox" x-model="cfgbDefaultCFs[cf.trashId]" @change="cfgbDefaultCFs = {...cfgbDefaultCFs}">
+                        default
+                      </label>
                       <button type="button"
-                              @click="cfgbSelectedCFs = (() => { const { [cf.trashId]: _a, ...rest } = cfgbSelectedCFs; return rest; })(); cfgbRequiredCFs = (() => { const { [cf.trashId]: _b, ...rest } = cfgbRequiredCFs; return rest; })()"
+                              @click="cfgbSelectedCFs = (() => { const { [cf.trashId]: _a, ...rest } = cfgbSelectedCFs; return rest; })(); cfgbRequiredCFs = (() => { const { [cf.trashId]: _b, ...rest } = cfgbRequiredCFs; return rest; })(); cfgbDefaultCFs = (() => { const { [cf.trashId]: _c, ...rest } = cfgbDefaultCFs; return rest; })()"
                               title="Remove from selection"
                               style="background:none;border:none;color:#f85149;cursor:pointer;font-size:16px;line-height:1;padding:0 4px">&times;</button>
                     </div>
@@ -2831,6 +2835,10 @@
                       <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
                         <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
                         required
+                      </label>
+                      <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-def-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Per-CF default override — rare; TRaSH only uses this on Golden Rule files">
+                        <input type="checkbox" :id="'cfgb-cf-def-' + cf.trashId" x-model="cfgbDefaultCFs[cf.trashId]" @change="cfgbDefaultCFs = {...cfgbDefaultCFs}">
+                        default
                       </label>
                     </div>
                   </template>
@@ -6330,6 +6338,7 @@ function clonarr() {
     cfgbCFFilter: '',
     cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
     cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
+    cfgbDefaultCFs: {},                      // trashId → true (per-CF default override — rare; see Golden Rule UHD)
     cfgbProfiles: [],                        // [{trashId, name, group, groupName}] — all TRaSH profiles for current appType
     cfgbSelectedProfiles: {},                // trashId → true
     cfgbProfileGroupExpanded: {},            // groupName → bool — card collapse state (all expanded by default)
@@ -15178,6 +15187,7 @@ function clonarr() {
     cfgbClearCFs() {
       this.cfgbSelectedCFs = {};
       this.cfgbRequiredCFs = {};
+      this.cfgbDefaultCFs = {};
     },
     cfgbClearProfiles() {
       this.cfgbSelectedProfiles = {};
@@ -15340,6 +15350,7 @@ function clonarr() {
       this.cfgbGroupFilter = 'all';
       this.cfgbSelectedCFs = {};
       this.cfgbRequiredCFs = {};
+      this.cfgbDefaultCFs = {};
       this.cfgbSelectedProfiles = {};
       this.cfgbEditingId = '';
       this.cfgbSavingMsg = '';
@@ -15389,14 +15400,16 @@ function clonarr() {
       this.cfgbDefault = g.default === 'true' || g.default === true;
       this.cfgbCFFilter = '';
       this.cfgbGroupFilter = 'all';
-      const selCFs = {}, reqCFs = {};
+      const selCFs = {}, reqCFs = {}, defCFs = {};
       for (const cf of (g.custom_formats || [])) {
         if (!cf.trash_id) continue;
         selCFs[cf.trash_id] = true;
         if (cf.required) reqCFs[cf.trash_id] = true;
+        if (cf.default) defCFs[cf.trash_id] = true;
       }
       this.cfgbSelectedCFs = selCFs;
       this.cfgbRequiredCFs = reqCFs;
+      this.cfgbDefaultCFs = defCFs;
       // Restore CF order: if the saved CF sequence differs from alpha, flip
       // to manual mode with that exact order. Otherwise stay in alpha.
       const savedOrder = (g.custom_formats || []).map(cf => cf.trash_id).filter(Boolean);
@@ -15463,11 +15476,18 @@ function clonarr() {
         trash_description: desc,
       };
       if (this.cfgbDefault) payload.default = 'true';
-      payload.custom_formats = selectedCFs.map(c => ({
-        name: c.name,
-        trash_id: c.trashId,
-        required: !!this.cfgbRequiredCFs[c.trashId],
-      }));
+      payload.custom_formats = selectedCFs.map(c => {
+        const entry = {
+          name: c.name,
+          trash_id: c.trashId,
+          required: !!this.cfgbRequiredCFs[c.trashId],
+        };
+        // Match TRaSH's convention: per-CF `default` is emitted only when
+        // true (omitted when false). Keeps generated JSON diff-friendly
+        // against upstream Golden Rule files.
+        if (this.cfgbDefaultCFs[c.trashId]) entry.default = true;
+        return entry;
+      });
       payload.quality_profiles = {
         include: this.cfgbSortedProfiles()
           .filter(p => this.cfgbSelectedProfiles[p.trashId])
