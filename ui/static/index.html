@@ -2701,7 +2701,7 @@
           <span x-show="!cfgbEditingId">New cf-group</span>
           <span x-show="cfgbEditingId" x-cloak>
             Editing <span x-text="cfgbName || '(unnamed)'"></span>
-            <button class="btn" @click="cfgbReset()" style="font-size:11px;padding:2px 8px;margin-left:8px;text-transform:none;letter-spacing:0">Start new instead</button>
+            <button class="btn" @click="cfgbUIReset()" style="font-size:11px;padding:2px 8px;margin-left:8px;text-transform:none;letter-spacing:0">Start new instead</button>
           </span>
         </div>
 
@@ -2887,7 +2887,7 @@
           </button>
           <button class="btn" @click="cfgbCopyJSON()" :disabled="!cfgbCanExport()" title="Copy the JSON to clipboard"><span x-text="cfgbCopyLabel"></span></button>
           <button class="btn" @click="cfgbDownloadJSON()" :disabled="!cfgbCanExport()" title="Download the JSON as a file">Download .json</button>
-          <button class="btn" @click="cfgbReset()" style="margin-left:auto;color:#f85149;border-color:#f85149" x-text="cfgbEditingId ? 'Discard changes' : 'Reset'"></button>
+          <button class="btn" @click="cfgbUIReset()" style="margin-left:auto;color:#f85149;border-color:#f85149" x-text="cfgbEditingId ? 'Discard changes' : 'Reset'"></button>
         </div>
 
         <!-- Save/delete feedback -->
@@ -10561,6 +10561,21 @@ function clonarr() {
     },
 
     switchAppType(appType) {
+      // Guard unsaved CF Group Builder work: the builder is app-type-scoped,
+      // so switching triggers cfgbLoad → cfgbReset which would discard an
+      // in-flight edit. Warn before that happens. No-op when we're not on
+      // the Group Builder tab.
+      if (this.currentSection === 'advanced'
+          && this.advancedTab === 'group-builder'
+          && appType !== this.activeAppType
+          && typeof this.cfgbIsDirty === 'function' && this.cfgbIsDirty()) {
+        const label = this.cfgbEditingId
+          ? 'changes to "' + (this.cfgbName || '(unnamed)') + '"'
+          : 'the unsaved cf-group draft';
+        if (!confirm('Switch to ' + appType + ' and discard ' + label + '? The saved copy on disk (if any) is unaffected.')) {
+          return;
+        }
+      }
       this.debugLog('UI', `App type: ${appType}`);
       this.activeAppType = appType;
       localStorage.setItem('clonarr_appType', appType);
@@ -14809,12 +14824,18 @@ function clonarr() {
       // When the user switches Radarr↔Sonarr the current form has to be reset
       // (a half-built group is scoped to one app type). Refresh saved list too.
       this.cfgbReset();
+      // Race guard: if the user rapidly flips Radarr↔Sonarr↔Radarr, multiple
+      // cfgbLoad calls are in flight simultaneously. Each stores its appType
+      // on entry; on completion we re-check — if a later call has superseded
+      // ours, discard the response instead of leaking state across appTypes.
+      this._cfgbLoadFor = appType;
       try {
         const [allCfsResp, profResp, savedResp] = await Promise.all([
           fetch('/api/trash/' + appType + '/all-cfs'),
           fetch('/api/trash/' + appType + '/profiles'),
           fetch('/api/cf-groups/' + appType),
         ]);
+        if (this._cfgbLoadFor !== appType) return; // superseded
         if (!allCfsResp.ok || !profResp.ok) {
           throw new Error('HTTP ' + allCfsResp.status + ' / ' + profResp.status);
         }
@@ -14879,6 +14900,7 @@ function clonarr() {
         this.cfgbProfileGroupExpanded = {};
         this.cfgbSavedGroups = Array.isArray(savedRes) ? savedRes : [];
       } catch (e) {
+        if (this._cfgbLoadFor !== appType) return; // superseded
         console.error('cfgbLoad failed:', e);
         this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull TRaSH in Settings → TRaSH Repo.';
         this.cfgbCFs = [];
@@ -15186,6 +15208,29 @@ function clonarr() {
       this.cfgbCFManualOrder = [];
     },
 
+    // Called from the UI Reset / Discard button. Prompts when we're editing
+    // an existing saved group so a single misclick can't nuke the in-flight
+    // changes. cfgbReset itself stays prompt-free because it's called from
+    // internal flows (cfgbLoad, cfgbSave, delete-current-editing) where a
+    // prompt would be wrong.
+    cfgbUIReset() {
+      if (this.cfgbEditingId && !confirm('Discard changes to "' + (this.cfgbName || '(unnamed)') + '"? The saved copy on disk is unaffected.')) {
+        return;
+      }
+      this.cfgbReset();
+    },
+
+    // Returns true when the form has "meaningful work" that would be lost
+    // by a silent reset. Used to gate app-type switches + UI reset prompts.
+    cfgbIsDirty() {
+      if (this.cfgbEditingId) return true;
+      if ((this.cfgbName || '').trim()) return true;
+      if ((this.cfgbDescription || '').trim()) return true;
+      if (Object.keys(this.cfgbSelectedCFs).some(k => this.cfgbSelectedCFs[k])) return true;
+      if (Object.keys(this.cfgbSelectedProfiles).some(k => this.cfgbSelectedProfiles[k])) return true;
+      return false;
+    },
+
     // --- Saved cf-groups ---
     // Load an existing saved group into the form for editing. Sets
     // cfgbEditingId so Save will PUT instead of POST, keeping the same file
@@ -15208,11 +15253,17 @@ function clonarr() {
       // Restore CF order: if the saved CF sequence differs from alpha, flip
       // to manual mode with that exact order. Otherwise stay in alpha.
       const savedOrder = (g.custom_formats || []).map(cf => cf.trash_id).filter(Boolean);
-      const alphaOrder = savedOrder.slice().sort((a, b) => {
-        const nameA = (g.custom_formats.find(c => c.trash_id === a) || {}).name || '';
-        const nameB = (g.custom_formats.find(c => c.trash_id === b) || {}).name || '';
-        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-      });
+      // Name lookup so the comparator can never hit `undefined.localeCompare`
+      // when a saved trash_id is missing from custom_formats (defensive — a
+      // corrupted or older saved group might have drift).
+      const nameByTid = new Map(
+        (g.custom_formats || [])
+          .filter(cf => cf.trash_id)
+          .map(cf => [cf.trash_id, cf.name || ''])
+      );
+      const alphaOrder = savedOrder.slice().sort((a, b) =>
+        (nameByTid.get(a) || '').localeCompare(nameByTid.get(b) || '', undefined, { sensitivity: 'base' })
+      );
       const isAlpha = savedOrder.every((id, i) => id === alphaOrder[i]);
       if (isAlpha) {
         this.cfgbCFSortMode = 'alpha';
@@ -15255,22 +15306,27 @@ function clonarr() {
       if (desc.startsWith('"') && desc.endsWith('"') && desc.length >= 2) {
         desc = desc.slice(1, -1);
       }
-      return {
+      // Match TRaSH's convention: the `default` field is emitted only when
+      // the group is default-on ("true"). Opt-in groups (default unchecked)
+      // omit the field entirely, as seen in optional-*.json on disk. Emitting
+      // `"default": "false"` was a false diff against upstream files.
+      const payload = {
         name: this.cfgbName.trim(),
         trash_id: this.cfgbTrashID,
         trash_description: desc,
-        default: this.cfgbDefault ? 'true' : 'false',
-        custom_formats: selectedCFs.map(c => ({
-          name: c.name,
-          trash_id: c.trashId,
-          required: !!this.cfgbRequiredCFs[c.trashId],
-        })),
-        quality_profiles: {
-          include: this.cfgbSortedProfiles()
-            .filter(p => this.cfgbSelectedProfiles[p.trashId])
-            .reduce((acc, p) => { acc[p.name] = p.trashId; return acc; }, {}),
-        },
       };
+      if (this.cfgbDefault) payload.default = 'true';
+      payload.custom_formats = selectedCFs.map(c => ({
+        name: c.name,
+        trash_id: c.trashId,
+        required: !!this.cfgbRequiredCFs[c.trashId],
+      }));
+      payload.quality_profiles = {
+        include: this.cfgbSortedProfiles()
+          .filter(p => this.cfgbSelectedProfiles[p.trashId])
+          .reduce((acc, p) => { acc[p.name] = p.trashId; return acc; }, {}),
+      };
+      return payload;
     },
 
     async cfgbSave() {

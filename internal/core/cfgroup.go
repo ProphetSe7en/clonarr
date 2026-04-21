@@ -21,12 +21,14 @@ type CFGroup struct {
 	UpdatedAt string `json:"updatedAt,omitempty"`
 
 	// TRaSH cf-group schema fields.
-	Name             string                 `json:"name"`
-	TrashID          string                 `json:"trash_id"`
-	TrashDescription string                 `json:"trash_description"`
-	Default          string                 `json:"default"` // "true"/"false" as a string (matches TRaSH)
-	CustomFormats    []CFGroupCF            `json:"custom_formats"`
-	QualityProfiles  CFGroupQualityProfiles `json:"quality_profiles"`
+	Name             string `json:"name"`
+	TrashID          string `json:"trash_id"`
+	TrashDescription string `json:"trash_description"`
+	// "true" when the group is default-on; omitted (empty string → omitempty)
+	// when opt-in, matching TRaSH's convention in optional-*.json files.
+	Default         string                 `json:"default,omitempty"`
+	CustomFormats   []CFGroupCF            `json:"custom_formats"`
+	QualityProfiles CFGroupQualityProfiles `json:"quality_profiles"`
 }
 
 // CFGroupCF is one custom format entry inside a CFGroup.
