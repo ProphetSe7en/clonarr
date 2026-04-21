@@ -880,7 +880,12 @@
                       <template x-if="historyLoading">
                         <div style="padding:16px;text-align:center"><span class="spinner"></span></div>
                       </template>
-                      <template x-if="!historyLoading && historyEntries.length === 0">
+                      <template x-if="!historyLoading && historyEntries.filter(e => e.changes).length === 0">
+                        <!-- Covers both "no entries at all" and "entries exist
+                             but none carry changes" (baseline / no-op syncs
+                             only). Previously the latter fell through every
+                             x-if branch, rendering an empty expanded panel
+                             that looked like a click that did nothing. -->
                         <div style="font-size:12px;color:#aaa;padding:12px 16px 12px 32px">No changes recorded yet. Changes are tracked from the next sync onwards.</div>
                       </template>
                       <template x-if="!historyLoading && historyEntries.filter(e => e.changes).length > 0">
