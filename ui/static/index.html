@@ -2763,22 +2763,39 @@
             </div>
           </div>
 
-          <!-- Profiles panel -->
+          <!-- Profiles panel — card layout matching the Profiles tab, with
+               per-card select-all + a top-level select-all. -->
           <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
             <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
               <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality Profiles</span>
               <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedProfileCount() + ' / ' + cfgbProfiles.length"></span>
-              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa;margin-left:auto">
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa;margin-left:auto" title="Select every profile across all groups">
                 <input type="checkbox" :checked="cfgbAllProfilesSelected()" @change="cfgbToggleAllProfiles($event.target.checked)">
                 select all
               </label>
             </div>
             <div style="overflow-y:auto;flex:1">
-              <template x-for="p in cfgbSortedProfiles()" :key="p.trashId">
-                <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
-                  <input type="checkbox" :id="'cfgb-p-' + p.trashId" x-model="cfgbSelectedProfiles[p.trashId]" @change="cfgbSelectedProfiles = {...cfgbSelectedProfiles}">
-                  <label :for="'cfgb-p-' + p.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="p.name"></label>
-                  <span style="font-size:11px;color:#6a6e76" x-text="'group ' + (p.group || '?')"></span>
+              <template x-for="grp in cfgbGroupedProfiles()" :key="grp.name">
+                <div>
+                  <!-- Group card header: click-to-collapse + per-card select-all -->
+                  <div style="padding:8px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;background:#161b22;user-select:none">
+                    <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }" @click="cfgbToggleProfileGroupCard(grp.name)" style="cursor:pointer">&#9654;</span>
+                    <span @click="cfgbToggleProfileGroupCard(grp.name)" style="flex:1;cursor:pointer;font-size:13px;font-weight:600" x-text="grp.name"></span>
+                    <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:11px" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
+                    <span x-show="grp.groupId" style="font-size:10px;color:#6a6e76" x-text="'group ' + grp.groupId"></span>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" @click.stop :title="'Select all ' + grp.name + ' profiles'">
+                      <input type="checkbox" :checked="cfgbGroupAllSelected(grp)" @change="cfgbToggleGroupAll(grp, $event.target.checked)">
+                      all
+                    </label>
+                  </div>
+                  <div x-show="cfgbIsProfileGroupExpanded(grp.name)">
+                    <template x-for="p in grp.profiles" :key="p.trashId">
+                      <div style="padding:6px 16px 6px 36px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" :id="'cfgb-p-' + p.trashId" x-model="cfgbSelectedProfiles[p.trashId]" @change="cfgbSelectedProfiles = {...cfgbSelectedProfiles}">
+                        <label :for="'cfgb-p-' + p.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="p.name"></label>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </template>
               <template x-if="cfgbProfiles.length === 0">
@@ -6226,8 +6243,9 @@ function clonarr() {
     cfgbCFFilter: '',
     cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
     cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
-    cfgbProfiles: [],                        // [{trashId, name, group}] — all TRaSH profiles for current appType
+    cfgbProfiles: [],                        // [{trashId, name, group, groupName}] — all TRaSH profiles for current appType
     cfgbSelectedProfiles: {},                // trashId → true
+    cfgbProfileGroupExpanded: {},            // groupName → bool — card collapse state (all expanded by default)
     cfgbCopyLabel: 'Copy JSON',              // swaps to "Copied!" briefly on click
     cfgbLoadError: '',                        // user-visible error when /api/trash/* fails
     cfgbPreviewOpen: false,                   // JSON-preview collapsible state
@@ -10475,6 +10493,14 @@ function clonarr() {
         this.cleanupInstanceId = typeInsts[0].id;
         this.loadCleanupKeep();
         this.loadCleanupCFNames();
+      }
+      // Reload tab-scoped data that depends on appType. The CF Group Builder
+      // pulls CFs, profiles, and saved groups per Radarr/Sonarr — without this
+      // the Radarr list keeps showing when the user flips to Sonarr.
+      // Scoring Sandbox has the same issue; reload it too for parity.
+      if (this.currentSection === 'advanced') {
+        if (this.advancedTab === 'group-builder') this.cfgbLoad(appType);
+        else if (this.advancedTab === 'scoring') this.loadSandbox(appType);
       }
     },
 
@@ -14762,8 +14788,14 @@ function clonarr() {
             trashId: p.trashId,
             name: p.name || '',
             group: typeof p.group === 'number' ? p.group : 99,
+            groupName: p.groupName || 'Other',
           }))
           .filter(p => p.trashId && p.name);
+        // Expand all profile cards by default on load so the user sees all
+        // profiles without having to click every card open.
+        const expanded = {};
+        for (const p of this.cfgbProfiles) expanded[p.groupName] = true;
+        this.cfgbProfileGroupExpanded = expanded;
         this.cfgbSavedGroups = Array.isArray(savedRes) ? savedRes : [];
       } catch (e) {
         console.error('cfgbLoad failed:', e);
@@ -14815,10 +14847,64 @@ function clonarr() {
 
     cfgbSortedProfiles() {
       // Sort primarily by profile.group (int), then alphabetical by name.
+      // Still exposed because cfgbBuildPayload() walks profiles in display
+      // order to produce stable JSON output.
       return this.cfgbProfiles.slice().sort((a, b) => {
         if (a.group !== b.group) return a.group - b.group;
         return a.name.localeCompare(b.name);
       });
+    },
+
+    // Group profiles into the same cards the Profiles tab uses (Standard,
+    // Anime, French, German, SQP, Other). Reuses groupedProfiles()'s ordering
+    // table so the two pages stay visually consistent.
+    cfgbGroupedProfiles() {
+      const profiles = this.cfgbProfiles;
+      const groups = {};
+      const order = { 'Standard': 0, 'Anime': 1, 'French': 2, 'German': 3, 'SQP': 99 };
+      for (const p of profiles) {
+        const g = p.groupName || 'Other';
+        if (!groups[g]) groups[g] = { name: g, profiles: [], groupId: p.group };
+        groups[g].profiles.push(p);
+      }
+      for (const g of Object.values(groups)) {
+        g.profiles.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      return Object.values(groups).sort((a, b) => (order[a.name] ?? 50) - (order[b.name] ?? 50));
+    },
+
+    cfgbToggleProfileGroupCard(name) {
+      this.cfgbProfileGroupExpanded = {
+        ...this.cfgbProfileGroupExpanded,
+        [name]: !this.cfgbProfileGroupExpanded[name],
+      };
+    },
+
+    cfgbIsProfileGroupExpanded(name) {
+      return !!this.cfgbProfileGroupExpanded[name];
+    },
+
+    cfgbGroupAllSelected(group) {
+      if (!group.profiles.length) return false;
+      return group.profiles.every(p => this.cfgbSelectedProfiles[p.trashId]);
+    },
+
+    cfgbGroupSomeSelected(group) {
+      return group.profiles.some(p => this.cfgbSelectedProfiles[p.trashId])
+        && !this.cfgbGroupAllSelected(group);
+    },
+
+    cfgbToggleGroupAll(group, on) {
+      const next = { ...this.cfgbSelectedProfiles };
+      for (const p of group.profiles) {
+        if (on) next[p.trashId] = true;
+        else delete next[p.trashId];
+      }
+      this.cfgbSelectedProfiles = next;
+    },
+
+    cfgbGroupSelectedCount(group) {
+      return group.profiles.filter(p => this.cfgbSelectedProfiles[p.trashId]).length;
     },
 
     cfgbSelectedCFCount()      { return Object.values(this.cfgbSelectedCFs).filter(Boolean).length; },
