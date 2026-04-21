@@ -2740,7 +2740,18 @@
                   <option :value="gr.groupTrashId" x-text="gr.name + ' (' + gr.count + ')'"></option>
                 </template>
               </select>
-              <input type="text" placeholder="Filter..." x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px">
+              <input type="text" placeholder="Filter (multiple terms: mono stereo surround)" x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Matches any of the space-separated terms, e.g. &quot;mono stereo surround&quot; shows all three">
+              <!-- Select-all toggle: only visible when filters have narrowed
+                   the list. For "All cf-groups" with no text filter this
+                   would mean selecting every CF in TRaSH, which is almost
+                   never what the user wants — so it's hidden in that state. -->
+              <button type="button"
+                      x-show="cfgbGroupFilter !== 'all' || (cfgbCFFilter || '').trim().length > 0"
+                      x-cloak
+                      @click="cfgbToggleFilteredAll(!cfgbFilteredAllSelected())"
+                      :title="cfgbFilteredAllSelected() ? 'Deselect every visible CF' : 'Select every CF in the current filter'"
+                      style="padding:4px 8px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:11px;cursor:pointer;white-space:nowrap"
+                      x-text="cfgbFilteredAllSelected() ? 'Deselect all' : 'Select all (' + cfgbFilteredCount() + ')'"></button>
             </div>
             <div style="overflow-y:auto;flex:1">
               <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
@@ -14818,7 +14829,6 @@ function clonarr() {
     },
 
     cfgbFilteredCFs() {
-      const q = (this.cfgbCFFilter || '').toLowerCase().trim();
       const g = this.cfgbGroupFilter || 'all';
       let list = this.cfgbCFs;
       if (g === 'custom') {
@@ -14829,8 +14839,44 @@ function clonarr() {
         // Specific TRaSH cf-group by its trash_id
         list = list.filter(c => c.groupTrashId === g);
       }
-      if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+      // Filter string supports multiple whitespace-separated terms with OR
+      // semantics — "mono stereo surround" matches CFs whose name contains
+      // any of those words. Makes it easy to pull related-but-separate
+      // formats into one view without chaining filter typing.
+      const terms = (this.cfgbCFFilter || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(Boolean);
+      if (terms.length > 0) {
+        list = list.filter(c => {
+          const n = c.name.toLowerCase();
+          return terms.some(t => n.includes(t));
+        });
+      }
       return list.slice().sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    // True when every CF the user currently sees (group + text filters
+    // applied) is already selected. Drives the Select-all toggle's checked
+    // state so one click flips between select-all and deselect-all.
+    cfgbFilteredAllSelected() {
+      const list = this.cfgbFilteredCFs();
+      if (list.length === 0) return false;
+      return list.every(c => this.cfgbSelectedCFs[c.trashId]);
+    },
+
+    // Applies select-all / deselect-all to whatever the user is looking at.
+    // Scoped to cfgbFilteredCFs() so "select all Release Group Tiers" works
+    // whether the filter is a cf-group, a text match, or both combined.
+    cfgbToggleFilteredAll(on) {
+      const list = this.cfgbFilteredCFs();
+      const next = { ...this.cfgbSelectedCFs };
+      for (const c of list) {
+        if (on) next[c.trashId] = true;
+        else delete next[c.trashId];
+      }
+      this.cfgbSelectedCFs = next;
     },
     cfgbGroupFilterLabel() {
       // Short human-readable label for the current filter — used in the count
