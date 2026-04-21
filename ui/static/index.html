@@ -2700,11 +2700,16 @@
           </span>
         </div>
 
-        <!-- Top metadata -->
-        <div style="display:grid;grid-template-columns:minmax(200px,1fr) auto;gap:16px;margin-bottom:16px">
-          <div>
+        <!-- Top metadata — name + hash are short inputs so they don't need
+             full width; description keeps full width for multi-line text. -->
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:16px">
+          <div style="flex:0 1 400px;min-width:240px">
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group name</label>
             <input type="text" class="config-input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
+          </div>
+          <div style="flex:0 1 360px;min-width:240px">
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
+            <input type="text" class="config-input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e;background:#0d1117" readonly :value="cfgbTrashID || '(type a name above)'">
           </div>
           <div>
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Default</label>
@@ -2715,14 +2720,9 @@
           </div>
         </div>
 
-        <div style="margin-bottom:16px">
+        <div style="margin-bottom:20px">
           <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Description</label>
           <textarea class="config-input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
-        </div>
-
-        <div style="margin-bottom:20px">
-          <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
-          <input type="text" class="config-input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e;background:#0d1117" readonly :value="cfgbTrashID || '(type a name above)'">
         </div>
 
         <!-- Two-column layout: CFs + Profiles -->
