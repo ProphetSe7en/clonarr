@@ -2742,7 +2742,15 @@
                       style="background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline"
                       x-text="cfgbAllSelectedRequired() ? 'Clear required' : 'Mark all required'"></button>
               <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbClearCFs()" title="Deselect every CF and clear required flags — profile selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear CFs</button>
-              <select x-model="cfgbGroupFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
+              <!-- Sort-mode toggle: Alpha (TRaSH-spec default) vs Manual
+                   (user-driven order for cases where sequence matters —
+                   e.g. audio-formats sorted by quality, release-groups by
+                   tier). Applies to both Copy JSON / Download / Save. -->
+              <div style="display:inline-flex;border:1px solid #30363d;border-radius:4px;overflow:hidden" title="Sort order for exported JSON. Alpha is the TRaSH spec default; Manual lets you hand-order selected CFs.">
+                <button type="button" @click="cfgbSetCFSortMode('alpha')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;' + (cfgbCFSortMode === 'alpha' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Alpha</button>
+                <button type="button" @click="cfgbSetCFSortMode('manual')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;border-left:1px solid #30363d;' + (cfgbCFSortMode === 'manual' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Manual</button>
+              </div>
+              <select x-model="cfgbGroupFilter" x-show="cfgbCFSortMode === 'alpha'" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
                 <option value="all">All cf-groups</option>
                 <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
                 <option value="other" x-show="cfgbHasOther">— Ungrouped</option>
@@ -2750,36 +2758,78 @@
                   <option :value="gr.groupTrashId" x-text="gr.name + ' (' + gr.count + ')'"></option>
                 </template>
               </select>
-              <input type="text" placeholder="Filter (multiple terms: mono stereo surround)" x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Matches any of the space-separated terms, e.g. &quot;mono stereo surround&quot; shows all three">
+              <input type="text" x-show="cfgbCFSortMode === 'alpha'" placeholder="Filter (multiple terms: mono stereo surround)" x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Matches any of the space-separated terms, e.g. &quot;mono stereo surround&quot; shows all three">
               <!-- Select-all toggle: only visible when filters have narrowed
                    the list. For "All cf-groups" with no text filter this
                    would mean selecting every CF in TRaSH, which is almost
                    never what the user wants — so it's hidden in that state. -->
               <button type="button"
-                      x-show="cfgbGroupFilter !== 'all' || (cfgbCFFilter || '').trim().length > 0"
+                      x-show="cfgbCFSortMode === 'alpha' && (cfgbGroupFilter !== 'all' || (cfgbCFFilter || '').trim().length > 0)"
                       x-cloak
                       @click="cfgbToggleFilteredAll(!cfgbFilteredAllSelected())"
                       :title="cfgbFilteredAllSelected() ? 'Deselect every visible CF' : 'Select every CF in the current filter'"
                       style="padding:4px 8px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:11px;cursor:pointer;white-space:nowrap"
                       x-text="cfgbFilteredAllSelected() ? 'Deselect all' : 'Select all (' + cfgbFilteredCount() + ')'"></button>
             </div>
+            <!-- Manual-mode help strip — clarifies that the list below shows
+                 only selected CFs and that browsing for new ones happens in
+                 Alpha mode. -->
+            <div x-show="cfgbCFSortMode === 'manual'" x-cloak style="padding:6px 16px;background:#161b22;border-bottom:1px solid #21262d;color:#8b949e;font-size:11px">
+              Showing selected CFs in manual order. Use ▲ / ▼ to reorder. Switch to <strong>Alpha</strong> to browse and add more.
+            </div>
             <div style="overflow-y:auto;flex:1">
-              <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
-                <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
-                  <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
-                  <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
-                    <span x-text="cf.name"></span>
-                    <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
-                  </label>
-                  <span x-show="cfgbGroupFilter === 'all' && cf.groupName" style="font-size:10px;color:#6a6e76" x-text="cf.groupName"></span>
-                  <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
-                    <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
-                    required
-                  </label>
+              <!-- Manual mode: selected CFs in cfgbCFManualOrder with up/down
+                   arrows. Rows also surface the required toggle and a × to
+                   drop the CF from selection without leaving manual view. -->
+              <template x-if="cfgbCFSortMode === 'manual'">
+                <div>
+                  <template x-for="(cf, idx) in cfgbOrderedSelectedCFs()" :key="cf.trashId">
+                    <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                      <span style="min-width:26px;text-align:right;color:#6a6e76;font-size:11px;font-family:monospace" x-text="(idx + 1) + '.'"></span>
+                      <div style="display:flex;flex-direction:column;gap:1px">
+                        <button type="button" @click="cfgbMoveCF(cf.trashId, -1)" :disabled="idx === 0" :style="'background:#21262d;border:1px solid #30363d;border-radius:3px;padding:0 5px;font-size:9px;line-height:1.2;cursor:' + (idx === 0 ? 'not-allowed' : 'pointer') + ';color:' + (idx === 0 ? '#4a4f57' : '#c9d1d9')" title="Move up">&#9650;</button>
+                        <button type="button" @click="cfgbMoveCF(cf.trashId, 1)" :disabled="idx === cfgbOrderedSelectedCFs().length - 1" :style="'background:#21262d;border:1px solid #30363d;border-radius:3px;padding:0 5px;font-size:9px;line-height:1.2;cursor:' + (idx === cfgbOrderedSelectedCFs().length - 1 ? 'not-allowed' : 'pointer') + ';color:' + (idx === cfgbOrderedSelectedCFs().length - 1 ? '#4a4f57' : '#c9d1d9')" title="Move down">&#9660;</button>
+                      </div>
+                      <span style="flex:1;font-size:13px;display:flex;align-items:center;gap:6px">
+                        <span x-text="cf.name"></span>
+                        <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format">custom</span>
+                      </span>
+                      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
+                        <input type="checkbox" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
+                        required
+                      </label>
+                      <button type="button"
+                              @click="cfgbSelectedCFs = (() => { const { [cf.trashId]: _a, ...rest } = cfgbSelectedCFs; return rest; })(); cfgbRequiredCFs = (() => { const { [cf.trashId]: _b, ...rest } = cfgbRequiredCFs; return rest; })()"
+                              title="Remove from selection"
+                              style="background:none;border:none;color:#f85149;cursor:pointer;font-size:16px;line-height:1;padding:0 4px">&times;</button>
+                    </div>
+                  </template>
+                  <template x-if="cfgbOrderedSelectedCFs().length === 0">
+                    <div style="padding:24px;text-align:center;color:#aaa;font-size:13px">No CFs selected yet. Switch to <strong>Alpha</strong> to add some.</div>
+                  </template>
                 </div>
               </template>
-              <template x-if="cfgbFilteredCFs().length === 0">
-                <div style="padding:24px;text-align:center;color:#aaa;font-size:13px" x-text="cfgbCFs.length === 0 ? 'Loading CFs...' : 'No matches.'"></div>
+              <!-- Alpha mode: full list with filter/search/select-all -->
+              <template x-if="cfgbCFSortMode === 'alpha'">
+                <div>
+                  <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
+                    <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                      <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
+                      <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
+                        <span x-text="cf.name"></span>
+                        <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
+                      </label>
+                      <span x-show="cfgbGroupFilter === 'all' && cf.groupName" style="font-size:10px;color:#6a6e76" x-text="cf.groupName"></span>
+                      <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
+                        <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
+                        required
+                      </label>
+                    </div>
+                  </template>
+                  <template x-if="cfgbFilteredCFs().length === 0">
+                    <div style="padding:24px;text-align:center;color:#aaa;font-size:13px" x-text="cfgbCFs.length === 0 ? 'Loading CFs...' : 'No matches.'"></div>
+                  </template>
+                </div>
               </template>
             </div>
           </div>
@@ -6274,6 +6324,13 @@ function clonarr() {
     cfgbCopyLabel: 'Copy JSON',              // swaps to "Copied!" briefly on click
     cfgbLoadError: '',                        // user-visible error when /api/trash/* fails
     cfgbPreviewOpen: false,                   // JSON-preview collapsible state
+    // CF sort mode. 'alpha' is the TRaSH-spec default; 'manual' lets the
+    // user hand-order selected CFs (up/down arrows) for cases where a
+    // specific order matters (audio-format by quality, tier groupings, etc).
+    // cfgbCFManualOrder holds trash_ids in the chosen order; entries for
+    // deselected CFs are pruned lazily when the payload is built.
+    cfgbCFSortMode: 'alpha',
+    cfgbCFManualOrder: [],
     // Saved cf-groups (persistent, stored in Clonarr). Loaded per app type on
     // tab entry. Edit loads one into the form; Save writes it back (POST for
     // new, PUT for existing). Storage is scoped per appType on disk so a
@@ -14995,6 +15052,69 @@ function clonarr() {
       this.cfgbRequiredCFs = next;
     },
 
+    // --- CF sort mode (alpha vs manual) ---
+
+    // Returns the selected CFs in the user-chosen order. In alpha mode this
+    // is just case-insensitive alpha by name. In manual mode we follow
+    // cfgbCFManualOrder, appending any newly-selected CFs that haven't been
+    // placed yet and skipping any whose selection was revoked. Callers use
+    // this for the JSON payload AND for the manual reorder UI.
+    cfgbOrderedSelectedCFs() {
+      const selected = this.cfgbCFs.filter(c => this.cfgbSelectedCFs[c.trashId]);
+      if (this.cfgbCFSortMode !== 'manual') {
+        return selected.slice().sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+      }
+      const byId = new Map(selected.map(c => [c.trashId, c]));
+      const result = [];
+      const placed = new Set();
+      for (const id of this.cfgbCFManualOrder) {
+        const cf = byId.get(id);
+        if (cf && !placed.has(id)) {
+          result.push(cf);
+          placed.add(id);
+        }
+      }
+      for (const cf of selected) {
+        if (!placed.has(cf.trashId)) result.push(cf);
+      }
+      return result;
+    },
+
+    cfgbSetCFSortMode(mode) {
+      // When switching into manual mode, seed the order from the current
+      // visible alpha order so the user starts with a sensible baseline
+      // rather than an empty list. Switching back to alpha leaves the manual
+      // order intact in case the user flips back again.
+      if (mode === 'manual' && this.cfgbCFManualOrder.length === 0) {
+        this.cfgbCFManualOrder = this.cfgbOrderedSelectedCFs().map(c => c.trashId);
+      }
+      this.cfgbCFSortMode = mode;
+    },
+
+    cfgbMoveCF(trashId, direction) {
+      // Move a single CF up (-1) or down (+1) in the manual order. Rebuilds
+      // the order from the current selection so we never operate on a stale
+      // list that includes since-deselected CFs.
+      const current = this.cfgbOrderedSelectedCFs().map(c => c.trashId);
+      const idx = current.indexOf(trashId);
+      if (idx < 0) return;
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= current.length) return;
+      const tmp = current[idx];
+      current[idx] = current[newIdx];
+      current[newIdx] = tmp;
+      this.cfgbCFManualOrder = current;
+    },
+
+    cfgbResetManualOrder() {
+      // Drops the manual ordering — list reverts to alpha the next time
+      // manual mode is re-entered.
+      this.cfgbCFManualOrder = [];
+      this.cfgbCFSortMode = 'alpha';
+    },
+
     cfgbSelectedCFCount()      { return Object.values(this.cfgbSelectedCFs).filter(Boolean).length; },
     cfgbSelectedProfileCount() { return Object.values(this.cfgbSelectedProfiles).filter(Boolean).length; },
 
@@ -15062,6 +15182,8 @@ function clonarr() {
       this.cfgbSelectedProfiles = {};
       this.cfgbEditingId = '';
       this.cfgbSavingMsg = '';
+      this.cfgbCFSortMode = 'alpha';
+      this.cfgbCFManualOrder = [];
     },
 
     // --- Saved cf-groups ---
@@ -15083,6 +15205,22 @@ function clonarr() {
       }
       this.cfgbSelectedCFs = selCFs;
       this.cfgbRequiredCFs = reqCFs;
+      // Restore CF order: if the saved CF sequence differs from alpha, flip
+      // to manual mode with that exact order. Otherwise stay in alpha.
+      const savedOrder = (g.custom_formats || []).map(cf => cf.trash_id).filter(Boolean);
+      const alphaOrder = savedOrder.slice().sort((a, b) => {
+        const nameA = (g.custom_formats.find(c => c.trash_id === a) || {}).name || '';
+        const nameB = (g.custom_formats.find(c => c.trash_id === b) || {}).name || '';
+        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+      });
+      const isAlpha = savedOrder.every((id, i) => id === alphaOrder[i]);
+      if (isAlpha) {
+        this.cfgbCFSortMode = 'alpha';
+        this.cfgbCFManualOrder = [];
+      } else {
+        this.cfgbCFSortMode = 'manual';
+        this.cfgbCFManualOrder = savedOrder;
+      }
       const selProf = {};
       const include = (g.quality_profiles && g.quality_profiles.include) || {};
       for (const trashId of Object.values(include)) {
@@ -15108,10 +15246,7 @@ function clonarr() {
     //  - quality_profiles.include: group-number ascending, alpha within
     //    same group — produced by cfgbSortedProfiles() already.
     cfgbBuildPayload() {
-      const selectedCFs = this.cfgbCFs
-        .filter(c => this.cfgbSelectedCFs[c.trashId])
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      const selectedCFs = this.cfgbOrderedSelectedCFs();
       // Sanitize description — users often paste the whole JSON line
       // ("...text...",) including outer quotes and the trailing comma; strip
       // them so the emitted field holds only the inner text.
