@@ -15006,9 +15006,17 @@ function clonarr() {
     },
 
     cfgbUpdateHash() {
-      // MD5 of the group name becomes the trash_id. Blank name → blank hash.
+      // trash_id is MD5 of the group name, but scoped by app-type prefix so
+      // the same name ("[Release Groups] Anime") on Radarr vs Sonarr produces
+      // different hashes. TRaSH's tooling treats trash_id as a global key
+      // across both apps, so identical hashes would collide there even
+      // though our on-disk storage separates them per app-type.
+      // Existing saved groups keep their old hash (cfgbLoadForEdit restores
+      // the stored trash_id verbatim); the new formula only kicks in when
+      // the user types in the name field and the @input listener fires.
       const n = (this.cfgbName || '').trim();
-      this.cfgbTrashID = n ? cfgbMD5(n) : '';
+      const app = this.activeAppType || 'radarr';
+      this.cfgbTrashID = n ? cfgbMD5(app + ':' + n) : '';
     },
 
     cfgbFilteredCFs() {
