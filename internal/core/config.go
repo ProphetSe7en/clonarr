@@ -272,6 +272,30 @@ func (cs *ConfigStore) Load() error {
 	// Migrate old flat notification fields to NotificationAgents slice.
 	// Safe to call under lock — migrateFlatNotifications reads cs.filePath directly.
 	cs.migrateFlatNotifications(data)
+
+	// Backfill AppliedAt on sync history entries that predate the field.
+	// Without this, existing entries keep showing "just now" in the History
+	// tab (because the frontend falls back to LastSync when AppliedAt is
+	// empty, and LastSync still bumps on no-op syncs). Seeding with
+	// LastSync captures the current value and — crucially — freezes it, so
+	// subsequent no-op bumps no longer drift the displayed "Last Changed"
+	// timestamp. Best-effort: we don't know the original change time, but
+	// freezing at migration time stops the wandering. New entries created
+	// after this point set AppliedAt inline (see api/sync.go & autosync.go).
+	var migrated int
+	for i := range cs.config.SyncHistory {
+		sh := &cs.config.SyncHistory[i]
+		if sh.AppliedAt == "" && sh.Changes.HasChanges() {
+			sh.AppliedAt = sh.LastSync
+			migrated++
+		}
+	}
+	if migrated > 0 {
+		log.Printf("Migrated %d sync history entries to set AppliedAt = LastSync", migrated)
+		if err := cs.saveLocked(); err != nil {
+			log.Printf("Warning: failed to persist sync history migration: %v", err)
+		}
+	}
 	return nil
 }
 
