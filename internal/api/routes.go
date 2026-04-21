@@ -79,9 +79,10 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// Auto-Sync
 	mux.HandleFunc("GET /api/auto-sync/settings", s.handleGetAutoSyncSettings)
 	mux.HandleFunc("PUT /api/auto-sync/settings", s.handleSaveAutoSyncSettings)
-	// Notification agents (PR #15) replace the old flat test-gotify / test-discord /
-	// test-pushover endpoints. Each provider is an independent agent tested via
-	// the inline or saved-agent routes.
+	// Notification agents: each provider (Discord, Gotify, Pushover) is
+	// configured as an independent agent with its own credentials and event
+	// subscriptions. Use the inline route to test before saving, or the
+	// saved-agent route to re-test an existing agent by ID.
 	mux.HandleFunc("GET /api/auto-sync/notification-agents", s.handleListNotificationAgents)
 	mux.HandleFunc("POST /api/auto-sync/notification-agents", s.handleCreateNotificationAgent)
 	mux.HandleFunc("PUT /api/auto-sync/notification-agents/{id}", s.handleUpdateNotificationAgent)
