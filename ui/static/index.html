@@ -15067,19 +15067,26 @@ function clonarr() {
     // Build the TRaSH-schema object used by both Download JSON and Save.
     // Keeping this separate from cfgbGenerateJSON (which returns a string)
     // avoids round-tripping through JSON.parse on Save.
+    //
+    // Sort contract (per TRaSH's builder spec):
+    //  - custom_formats: alpha by name, case-insensitive
+    //  - quality_profiles.include: group-number ascending, alpha within
+    //    same group — produced by cfgbSortedProfiles() already.
     cfgbBuildPayload() {
+      const selectedCFs = this.cfgbCFs
+        .filter(c => this.cfgbSelectedCFs[c.trashId])
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       return {
         name: this.cfgbName.trim(),
         trash_id: this.cfgbTrashID,
         trash_description: (this.cfgbDescription || '').trim(),
         default: this.cfgbDefault ? 'true' : 'false',
-        custom_formats: this.cfgbCFs
-          .filter(c => this.cfgbSelectedCFs[c.trashId])
-          .map(c => ({
-            name: c.name,
-            trash_id: c.trashId,
-            required: !!this.cfgbRequiredCFs[c.trashId],
-          })),
+        custom_formats: selectedCFs.map(c => ({
+          name: c.name,
+          trash_id: c.trashId,
+          required: !!this.cfgbRequiredCFs[c.trashId],
+        })),
         quality_profiles: {
           include: this.cfgbSortedProfiles()
             .filter(p => this.cfgbSelectedProfiles[p.trashId])
