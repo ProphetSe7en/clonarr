@@ -223,6 +223,11 @@
   .input:focus { outline: none; border-color: #58a6ff; }
   .input-sm { width: 200px; }
   select.input { cursor: pointer; }
+  /* Placeholder text — browser defaults render near-black on our #0d1117
+     inputs, which is unreadable. #8b949e matches the hint-text colour we
+     use elsewhere (setting-help, instance metadata) so placeholders read
+     clearly without shouting for attention. */
+  input::placeholder, textarea::placeholder { color: #8b949e; opacity: 1; }
 
   /* Instance list in settings */
   .inst-row { display: flex; align-items: center; padding: 10px 0; }
