@@ -67,6 +67,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/custom-cfs/import-from-instance", s.handleImportCFsFromInstance)
 	mux.HandleFunc("GET /api/customformat/schema/{app}", s.handleCFSchema)
 
+	// CF Groups — user-created TRaSH-style custom-format groups saved locally
+	// so they can be iterated on (edit, duplicate, redownload). The "Download
+	// JSON" action exports a TRaSH-schema file suitable for contributing
+	// upstream; the local store keeps extra fields (id, appType, timestamps).
+	mux.HandleFunc("GET /api/cf-groups/{app}", s.handleListCFGroups)
+	mux.HandleFunc("POST /api/cf-groups/{app}", s.handleCreateCFGroup)
+	mux.HandleFunc("PUT /api/cf-groups/{app}/{id}", s.handleUpdateCFGroup)
+	mux.HandleFunc("DELETE /api/cf-groups/{app}/{id}", s.handleDeleteCFGroup)
+
 	// Sync
 	mux.HandleFunc("POST /api/sync/dry-run", s.handleDryRun)
 	mux.HandleFunc("POST /api/sync/apply", s.handleApply)
