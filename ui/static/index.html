@@ -658,6 +658,7 @@
           <div style="display:flex;gap:0;margin-left:16px;border-left:1px solid #30363d;padding-left:8px">
             <div class="profile-tab" :class="{ active: advancedTab === 'builder' }" @click="advancedTab = 'builder'; pushNav()">Profile Builder</div>
             <div class="profile-tab" :class="{ active: advancedTab === 'scoring' }" @click="advancedTab = 'scoring'; loadSandbox(activeAppType); pushNav()">Scoring Sandbox</div>
+            <div class="profile-tab" :class="{ active: advancedTab === 'group-builder' }" @click="advancedTab = 'group-builder'; cfgbLoad(activeAppType); pushNav()">CF Group Builder</div>
           </div>
         </template>
       </div>
@@ -2653,6 +2654,111 @@
 
     <!-- Scoring sub-tab: just show the existing scoring sandbox -->
     <!-- Scoring sandbox content is rendered from the main section (currentSection === 'scoring' || advancedTab === 'scoring') -->
+
+    <!-- CF Group Builder sub-tab content -->
+    <div x-show="advancedTab === 'group-builder'">
+      <div class="page">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">CF Group Builder</div>
+        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          Build a <code>cf-groups/*.json</code> file for TRaSH-Guides contribution. Pick custom formats, mark which are required, link to quality profiles, export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
+        </div>
+
+        <!-- Load-error banner — visible when /api/trash/* calls fail -->
+        <div x-show="cfgbLoadError" x-cloak style="background:#3a1a1a;border:1px solid #5a2a2a;color:#ff9a9a;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px" x-text="cfgbLoadError"></div>
+
+        <!-- Top metadata -->
+        <div style="display:grid;grid-template-columns:minmax(200px,1fr) auto;gap:16px;margin-bottom:16px">
+          <div>
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group name</label>
+            <input type="text" class="config-input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Default</label>
+            <label class="toggle" style="margin-top:6px">
+              <input type="checkbox" x-model="cfgbDefault">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Description</label>
+          <textarea class="config-input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
+          <input type="text" class="config-input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e;background:#0d1117" readonly :value="cfgbTrashID || '(type a name above)'">
+        </div>
+
+        <!-- Two-column layout: CFs + Profiles -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+          <!-- CFs panel -->
+          <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbCFs.length"></span>
+              <input type="text" placeholder="Filter..." x-model="cfgbCFFilter" style="flex:1;margin-left:8px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px">
+            </div>
+            <div style="overflow-y:auto;flex:1">
+              <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
+                <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
+                  <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="cf.name"></label>
+                  <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
+                    <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
+                    required
+                  </label>
+                </div>
+              </template>
+              <template x-if="cfgbFilteredCFs().length === 0">
+                <div style="padding:24px;text-align:center;color:#aaa;font-size:13px" x-text="cfgbCFs.length === 0 ? 'Loading CFs...' : 'No matches.'"></div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Profiles panel -->
+          <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality Profiles</span>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedProfileCount() + ' / ' + cfgbProfiles.length"></span>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa;margin-left:auto">
+                <input type="checkbox" :checked="cfgbAllProfilesSelected()" @change="cfgbToggleAllProfiles($event.target.checked)">
+                select all
+              </label>
+            </div>
+            <div style="overflow-y:auto;flex:1">
+              <template x-for="p in cfgbSortedProfiles()" :key="p.trashId">
+                <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" :id="'cfgb-p-' + p.trashId" x-model="cfgbSelectedProfiles[p.trashId]" @change="cfgbSelectedProfiles = {...cfgbSelectedProfiles}">
+                  <label :for="'cfgb-p-' + p.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="p.name"></label>
+                  <span style="font-size:11px;color:#6a6e76" x-text="'group ' + (p.group || '?')"></span>
+                </div>
+              </template>
+              <template x-if="cfgbProfiles.length === 0">
+                <div style="padding:24px;text-align:center;color:#aaa;font-size:13px">Loading profiles...</div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <button class="btn btn-primary" @click="cfgbCopyJSON()" :disabled="!cfgbCanExport()" title="Copy the JSON to clipboard"><span x-text="cfgbCopyLabel"></span></button>
+          <button class="btn" @click="cfgbDownloadJSON()" :disabled="!cfgbCanExport()" title="Download the JSON as a file">Download .json</button>
+          <button class="btn" @click="cfgbReset()" style="margin-left:auto;color:#f85149;border-color:#f85149">Reset</button>
+        </div>
+
+        <!-- JSON preview (collapsible — Alpine pattern, matches other Clonarr collapsibles) -->
+        <div style="margin-top:8px">
+          <div @click="cfgbPreviewOpen = !cfgbPreviewOpen" style="cursor:pointer;font-size:13px;color:#aaa;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
+            <span class="detail-section-chevron" :class="{ open: cfgbPreviewOpen }">▶</span>
+            <span>JSON preview</span>
+          </div>
+          <pre x-show="cfgbPreviewOpen" x-cloak style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:#c9d1d9;max-height:300px;overflow-y:auto" x-text="cfgbGenerateJSON()"></pre>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ==================== PROFILE BUILDER ==================== -->
@@ -6044,7 +6150,23 @@ function clonarr() {
     currentTab: 'settings',  // LEGACY — being replaced by currentSection + activeAppType
     currentSection: 'profiles',  // NEW — feature-first: 'profiles', 'custom-formats', 'quality-size', 'naming', 'maintenance', 'advanced', 'settings', 'about'
     activeAppType: 'radarr',     // NEW — 'radarr' or 'sonarr', independent of section
-    advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'import', 'scoring'
+    advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'scoring', 'group-builder'
+
+    // CF Group Builder state — advancedTab === 'group-builder'
+    // Mirrors the on-disk shape of TRaSH cf-groups/*.json so export is a straight serialize.
+    cfgbName: '',
+    cfgbDescription: '',
+    cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input
+    cfgbDefault: false,
+    cfgbCFs: [],                             // [{trashId, name}] — all CFs for current appType, in API order
+    cfgbCFFilter: '',
+    cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
+    cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
+    cfgbProfiles: [],                        // [{trashId, name, group}] — all TRaSH profiles for current appType
+    cfgbSelectedProfiles: {},                // trashId → true
+    cfgbCopyLabel: 'Copy JSON',              // swaps to "Copied!" briefly on click
+    cfgbLoadError: '',                        // user-visible error when /api/trash/* fails
+    cfgbPreviewOpen: false,                   // JSON-preview collapsible state
     profileTab: 'trash-sync',    // NEW — simple variable replacing per-app profileTabs: 'trash-sync', 'compare'
     instances: [],
     config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
@@ -14498,8 +14620,190 @@ function clonarr() {
       finally { this.prowlarrTesting = false; }
     },
 
+    // --- CF Group Builder ---
+    // Loads CFs + profiles for the active app so the builder UI can populate.
+    // Called on first click of the CF Group Builder sub-tab and whenever the
+    // user toggles Radarr↔Sonarr (CFs + profiles are app-specific).
+    async cfgbLoad(appType) {
+      this.cfgbLoadError = '';
+      try {
+        const [cfsResp, profResp] = await Promise.all([
+          fetch('/api/trash/' + appType + '/cfs'),
+          fetch('/api/trash/' + appType + '/profiles'),
+        ]);
+        if (!cfsResp.ok || !profResp.ok) {
+          throw new Error('HTTP ' + cfsResp.status + ' / ' + profResp.status);
+        }
+        const [cfsRes, profRes] = await Promise.all([cfsResp.json(), profResp.json()]);
+        // API returns camelCase — keep the API contract explicit, no fallback chain.
+        this.cfgbCFs = (cfsRes || [])
+          .map(c => ({ trashId: c.trashId, name: c.name || '' }))
+          .filter(c => c.trashId && c.name);
+        this.cfgbProfiles = (profRes || [])
+          .map(p => ({
+            trashId: p.trashId,
+            name: p.name || '',
+            group: typeof p.group === 'number' ? p.group : 99,
+          }))
+          .filter(p => p.trashId && p.name);
+      } catch (e) {
+        console.error('cfgbLoad failed:', e);
+        this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull TRaSH in Settings → TRaSH Repo.';
+        this.cfgbCFs = [];
+        this.cfgbProfiles = [];
+      }
+    },
+
+    cfgbUpdateHash() {
+      // MD5 of the group name becomes the trash_id. Blank name → blank hash.
+      const n = (this.cfgbName || '').trim();
+      this.cfgbTrashID = n ? cfgbMD5(n) : '';
+    },
+
+    cfgbFilteredCFs() {
+      const q = (this.cfgbCFFilter || '').toLowerCase().trim();
+      const list = q
+        ? this.cfgbCFs.filter(c => c.name.toLowerCase().includes(q))
+        : this.cfgbCFs.slice();
+      return list.sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    cfgbSortedProfiles() {
+      // Sort primarily by profile.group (int), then alphabetical by name.
+      return this.cfgbProfiles.slice().sort((a, b) => {
+        if (a.group !== b.group) return a.group - b.group;
+        return a.name.localeCompare(b.name);
+      });
+    },
+
+    cfgbSelectedCFCount()      { return Object.values(this.cfgbSelectedCFs).filter(Boolean).length; },
+    cfgbSelectedProfileCount() { return Object.values(this.cfgbSelectedProfiles).filter(Boolean).length; },
+
+    cfgbAllProfilesSelected() {
+      if (this.cfgbProfiles.length === 0) return false;
+      return this.cfgbProfiles.every(p => this.cfgbSelectedProfiles[p.trashId]);
+    },
+
+    cfgbToggleAllProfiles(on) {
+      const next = {};
+      if (on) this.cfgbProfiles.forEach(p => next[p.trashId] = true);
+      this.cfgbSelectedProfiles = next;
+    },
+
+    cfgbCanExport() {
+      return !!(this.cfgbTrashID && this.cfgbName.trim() && this.cfgbSelectedCFCount() > 0);
+    },
+
+    cfgbGenerateJSON() {
+      // Build the object in the same field order TRaSH uses so diffs against
+      // existing cf-groups stay readable. CF order preserves TRaSH's own API
+      // order (which matches the order in their source files) — not alpha
+      // sort — so exported JSON diffs against hand-written cf-groups stay
+      // minimal. UI displays alpha-sorted for discoverability; only EXPORT
+      // preserves source order.
+      const obj = {
+        name: this.cfgbName.trim(),
+        trash_id: this.cfgbTrashID,
+        trash_description: (this.cfgbDescription || '').trim(),
+        default: this.cfgbDefault ? 'true' : 'false',
+        custom_formats: this.cfgbCFs
+          .filter(c => this.cfgbSelectedCFs[c.trashId])
+          .map(c => ({
+            name: c.name,
+            trash_id: c.trashId,
+            required: !!this.cfgbRequiredCFs[c.trashId],
+          })),
+        quality_profiles: {
+          include: this.cfgbSortedProfiles()
+            .filter(p => this.cfgbSelectedProfiles[p.trashId])
+            .reduce((acc, p) => { acc[p.name] = p.trashId; return acc; }, {}),
+        },
+      };
+      return JSON.stringify(obj, null, 4) + '\n';
+    },
+
+    async cfgbCopyJSON() {
+      try {
+        await copyToClipboard(this.cfgbGenerateJSON());
+        this.cfgbCopyLabel = 'Copied!';
+        setTimeout(() => { this.cfgbCopyLabel = 'Copy JSON'; }, 1500);
+      } catch (e) {
+        alert('Copy failed: ' + e.message);
+      }
+    },
+
+    cfgbDownloadJSON() {
+      const slug = this.cfgbName.trim().toLowerCase()
+        .replace(/^\[.*?\]\s*/, '')      // strip leading "[Audio] " category prefix
+        .replace(/[^a-z0-9]+/g, '-')     // non-alphanumerics → hyphen
+        .replace(/^-+|-+$/g, '')          // trim leading/trailing hyphens
+        || 'cf-group';
+      const blob = new Blob([this.cfgbGenerateJSON()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = slug + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+
+    cfgbReset() {
+      this.cfgbName = '';
+      this.cfgbDescription = '';
+      this.cfgbTrashID = '';
+      this.cfgbDefault = false;
+      this.cfgbCFFilter = '';
+      this.cfgbSelectedCFs = {};
+      this.cfgbRequiredCFs = {};
+      this.cfgbSelectedProfiles = {};
+    },
+
     // --- Utility ---
   };
+}
+
+// MD5 — compact, public-domain implementation (based on Paul Johnston's
+// well-tested reference). Used by the CF Group Builder to compute trash_ids
+// from group names client-side. TRaSH's schema uses MD5 for identifiers so
+// we match that exactly. Takes a string, returns 32-char lowercase hex.
+function cfgbMD5(str) {
+  function rh(n) { let s = ''; for (let j = 0; j <= 3; j++) s += ((n >> (j*8+4)) & 0xf).toString(16) + ((n >> (j*8)) & 0xf).toString(16); return s; }
+  function ad(a,b) { const l = (a & 0xffff) + (b & 0xffff); return (((a >> 16) + (b >> 16) + (l >> 16)) << 16) | (l & 0xffff); }
+  function rot(n,c) { return (n << c) | (n >>> (32 - c)); }
+  function cm(q,a,b,x,s,t) { return ad(rot(ad(ad(a,q), ad(x,t)), s), b); }
+  function ff(a,b,c,d,x,s,t){return cm((b&c)|(~b&d),a,b,x,s,t);}
+  function gg(a,b,c,d,x,s,t){return cm((b&d)|(c&~d),a,b,x,s,t);}
+  function hh(a,b,c,d,x,s,t){return cm(b^c^d,a,b,x,s,t);}
+  function ii(a,b,c,d,x,s,t){return cm(c^(b|~d),a,b,x,s,t);}
+  const utf8 = unescape(encodeURIComponent(str));
+  const bl = utf8.length, nb = ((bl + 8) >> 6) + 1, x = new Array(nb*16).fill(0);
+  for (let i = 0; i < bl; i++) x[i >> 2] |= utf8.charCodeAt(i) << ((i % 4) * 8);
+  x[bl >> 2] |= 0x80 << ((bl % 4) * 8);
+  x[nb*16 - 2] = bl * 8;
+  let a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+  for (let i = 0; i < x.length; i += 16) {
+    const oa=a, ob=b, oc=c, od=d;
+    a=ff(a,b,c,d,x[i+0],7,-680876936);  d=ff(d,a,b,c,x[i+1],12,-389564586);  c=ff(c,d,a,b,x[i+2],17,606105819);    b=ff(b,c,d,a,x[i+3],22,-1044525330);
+    a=ff(a,b,c,d,x[i+4],7,-176418897);  d=ff(d,a,b,c,x[i+5],12,1200080426);  c=ff(c,d,a,b,x[i+6],17,-1473231341);  b=ff(b,c,d,a,x[i+7],22,-45705983);
+    a=ff(a,b,c,d,x[i+8],7,1770035416);  d=ff(d,a,b,c,x[i+9],12,-1958414417); c=ff(c,d,a,b,x[i+10],17,-42063);     b=ff(b,c,d,a,x[i+11],22,-1990404162);
+    a=ff(a,b,c,d,x[i+12],7,1804603682); d=ff(d,a,b,c,x[i+13],12,-40341101);  c=ff(c,d,a,b,x[i+14],17,-1502002290);b=ff(b,c,d,a,x[i+15],22,1236535329);
+    a=gg(a,b,c,d,x[i+1],5,-165796510);  d=gg(d,a,b,c,x[i+6],9,-1069501632);  c=gg(c,d,a,b,x[i+11],14,643717713);  b=gg(b,c,d,a,x[i+0],20,-373897302);
+    a=gg(a,b,c,d,x[i+5],5,-701558691);  d=gg(d,a,b,c,x[i+10],9,38016083);    c=gg(c,d,a,b,x[i+15],14,-660478335); b=gg(b,c,d,a,x[i+4],20,-405537848);
+    a=gg(a,b,c,d,x[i+9],5,568446438);   d=gg(d,a,b,c,x[i+14],9,-1019803690); c=gg(c,d,a,b,x[i+3],14,-187363961);  b=gg(b,c,d,a,x[i+8],20,1163531501);
+    a=gg(a,b,c,d,x[i+13],5,-1444681467);d=gg(d,a,b,c,x[i+2],9,-51403784);    c=gg(c,d,a,b,x[i+7],14,1735328473);  b=gg(b,c,d,a,x[i+12],20,-1926607734);
+    a=hh(a,b,c,d,x[i+5],4,-378558);     d=hh(d,a,b,c,x[i+8],11,-2022574463); c=hh(c,d,a,b,x[i+11],16,1839030562); b=hh(b,c,d,a,x[i+14],23,-35309556);
+    a=hh(a,b,c,d,x[i+1],4,-1530992060); d=hh(d,a,b,c,x[i+4],11,1272893353);  c=hh(c,d,a,b,x[i+7],16,-155497632);  b=hh(b,c,d,a,x[i+10],23,-1094730640);
+    a=hh(a,b,c,d,x[i+13],4,681279174);  d=hh(d,a,b,c,x[i+0],11,-358537222);  c=hh(c,d,a,b,x[i+3],16,-722521979);  b=hh(b,c,d,a,x[i+6],23,76029189);
+    a=hh(a,b,c,d,x[i+9],4,-640364487);  d=hh(d,a,b,c,x[i+12],11,-421815835); c=hh(c,d,a,b,x[i+15],16,530742520);  b=hh(b,c,d,a,x[i+2],23,-995338651);
+    a=ii(a,b,c,d,x[i+0],6,-198630844);  d=ii(d,a,b,c,x[i+7],10,1126891415);  c=ii(c,d,a,b,x[i+14],15,-1416354905);b=ii(b,c,d,a,x[i+5],21,-57434055);
+    a=ii(a,b,c,d,x[i+12],6,1700485571); d=ii(d,a,b,c,x[i+3],10,-1894986606); c=ii(c,d,a,b,x[i+10],15,-1051523);   b=ii(b,c,d,a,x[i+1],21,-2054922799);
+    a=ii(a,b,c,d,x[i+8],6,1873313359);  d=ii(d,a,b,c,x[i+15],10,-30611744);  c=ii(c,d,a,b,x[i+6],15,-1560198380); b=ii(b,c,d,a,x[i+13],21,1309151649);
+    a=ii(a,b,c,d,x[i+4],6,-145523070);  d=ii(d,a,b,c,x[i+11],10,-1120210379);c=ii(c,d,a,b,x[i+2],15,718787259);   b=ii(b,c,d,a,x[i+9],21,-343485551);
+    a=ad(a,oa); b=ad(b,ob); c=ad(c,oc); d=ad(d,od);
+  }
+  return rh(a) + rh(b) + rh(c) + rh(d);
 }
 </script>
 <div id="cf-tooltip-portal" onmouseenter="clearTimeout(window._tooltipHideTimer)" onmouseleave="const el=document.getElementById('cf-tooltip-portal'); window._tooltipHideTimer=setTimeout(()=>{if(el)el.style.display='none'},200)"></div>
