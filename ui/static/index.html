@@ -9292,7 +9292,13 @@ function clonarr() {
       trashProfile.minFormatScore = p.minFormatScore ?? 0;
       trashProfile.cutoffFormatScore = p.cutoffScore ?? 10000;
       trashProfile.minUpgradeFormatScore = p.minUpgradeFormatScore ?? 0;
-      trashProfile.language = p.language || 'Original';
+      // Sonarr profiles don't have a language field — the UI removed it
+      // from the General section, but the export was still emitting
+      // `"language": "Original"` for Sonarr JSON. TRaSH's actual Sonarr
+      // profile files omit the key entirely; match that convention.
+      if ((p.appType || 'radarr') === 'radarr') {
+        trashProfile.language = p.language || 'Original';
+      }
       trashProfile.items = items;
       trashProfile.formatItems = formatItems;
 
