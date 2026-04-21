@@ -10575,19 +10575,30 @@ function clonarr() {
     switchAppType(appType) {
       // Guard unsaved CF Group Builder work: the builder is app-type-scoped,
       // so switching triggers cfgbLoad → cfgbReset which would discard an
-      // in-flight edit. Warn before that happens. No-op when we're not on
-      // the Group Builder tab.
-      if (this.currentSection === 'advanced'
-          && this.advancedTab === 'group-builder'
-          && appType !== this.activeAppType
-          && typeof this.cfgbIsDirty === 'function' && this.cfgbIsDirty()) {
+      // in-flight edit. Warn via the styled confirm modal (browser's native
+      // confirm() was jarring and didn't match the rest of the app).
+      const shouldPrompt = this.currentSection === 'advanced'
+        && this.advancedTab === 'group-builder'
+        && appType !== this.activeAppType
+        && typeof this.cfgbIsDirty === 'function' && this.cfgbIsDirty();
+      if (shouldPrompt) {
         const label = this.cfgbEditingId
           ? 'changes to "' + (this.cfgbName || '(unnamed)') + '"'
           : 'the unsaved cf-group draft';
-        if (!confirm('Switch to ' + appType + ' and discard ' + label + '? The saved copy on disk (if any) is unaffected.')) {
-          return;
-        }
+        this.confirmModal = {
+          show: true,
+          title: 'Discard unsaved cf-group work?',
+          message: 'Switch to ' + appType + ' and discard ' + label + '?\n\nThe saved copy on disk (if any) is unaffected.',
+          confirmLabel: 'Switch to ' + appType,
+          onConfirm: () => this._doSwitchAppType(appType),
+          onCancel: () => {},
+        };
+        return;
       }
+      this._doSwitchAppType(appType);
+    },
+
+    _doSwitchAppType(appType) {
       this.debugLog('UI', `App type: ${appType}`);
       this.activeAppType = appType;
       localStorage.setItem('clonarr_appType', appType);
@@ -15342,10 +15353,18 @@ function clonarr() {
     // internal flows (cfgbLoad, cfgbSave, delete-current-editing) where a
     // prompt would be wrong.
     cfgbUIReset() {
-      if (this.cfgbEditingId && !confirm('Discard changes to "' + (this.cfgbName || '(unnamed)') + '"? The saved copy on disk is unaffected.')) {
+      if (!this.cfgbEditingId) {
+        this.cfgbReset();
         return;
       }
-      this.cfgbReset();
+      this.confirmModal = {
+        show: true,
+        title: 'Discard changes',
+        message: 'Discard changes to "' + (this.cfgbName || '(unnamed)') + '"?\n\nThe saved copy on disk is unaffected.',
+        confirmLabel: 'Discard',
+        onConfirm: () => this.cfgbReset(),
+        onCancel: () => {},
+      };
     },
 
     // Returns true when the form has "meaningful work" that would be lost
@@ -15491,9 +15510,18 @@ function clonarr() {
       }
     },
 
-    async cfgbDelete(g) {
+    cfgbDelete(g) {
       if (!g || !g.id) return;
-      if (!confirm('Delete saved cf-group "' + (g.name || g.id) + '"? The file is removed from /config/custom/json/' + g.appType + '/cf-groups/. Exported .json files on disk are unaffected.')) return;
+      this.confirmModal = {
+        show: true,
+        title: 'Delete saved cf-group',
+        message: 'Delete saved cf-group "' + (g.name || g.id) + '"?\n\nThe file is removed from /config/custom/json/' + g.appType + '/cf-groups/.\nExported .json files on disk are unaffected.',
+        confirmLabel: 'Delete',
+        onConfirm: () => this._cfgbDeleteConfirmed(g),
+        onCancel: () => {},
+      };
+    },
+    async _cfgbDeleteConfirmed(g) {
       try {
         const resp = await fetch('/api/cf-groups/' + g.appType + '/' + encodeURIComponent(g.id), { method: 'DELETE' });
         if (!resp.ok) {
