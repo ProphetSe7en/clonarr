@@ -2731,11 +2731,13 @@
           <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
             <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
-              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbCategoryFilter === 'all' ? '' : ' in ' + cfgbCategoryFilter)"></span>
-              <select x-model="cfgbCategoryFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Narrow the list to one category">
-                <option value="all">All categories</option>
-                <template x-for="cat in cfgbCategories" :key="cat">
-                  <option :value="cat" x-text="cat"></option>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbGroupFilter === 'all' ? '' : ' in ' + cfgbGroupFilterLabel())"></span>
+              <select x-model="cfgbGroupFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
+                <option value="all">All cf-groups</option>
+                <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
+                <option value="other" x-show="cfgbHasOther">— Ungrouped</option>
+                <template x-for="gr in cfgbGroups" :key="gr.groupTrashId">
+                  <option :value="gr.groupTrashId" x-text="gr.name + ' (' + gr.count + ')'"></option>
                 </template>
               </select>
               <input type="text" placeholder="Filter..." x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px">
@@ -2748,7 +2750,7 @@
                     <span x-text="cf.name"></span>
                     <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
                   </label>
-                  <span x-show="cfgbCategoryFilter === 'all'" style="font-size:10px;color:#6a6e76" x-text="cf.category"></span>
+                  <span x-show="cfgbGroupFilter === 'all' && cf.groupName" style="font-size:10px;color:#6a6e76" x-text="cf.groupName"></span>
                   <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
                     <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
                     required
@@ -6216,9 +6218,11 @@ function clonarr() {
     cfgbDescription: '',
     cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input
     cfgbDefault: false,
-    cfgbCFs: [],                             // [{trashId, name, category, isCustom}] — flattened from /api/trash/{app}/all-cfs
-    cfgbCategories: [],                      // ['Audio Advanced', 'HDR Formats', 'Custom', ...] — unique categories in display order
-    cfgbCategoryFilter: 'all',               // 'all' or a category name — filters CF list
+    cfgbCFs: [],                             // [{trashId, name, groupTrashId, groupName, isCustom}] — flattened from /api/trash/{app}/all-cfs
+    cfgbGroups: [],                          // [{groupTrashId, name, count}] — actual TRaSH cf-groups for the dropdown
+    cfgbGroupFilter: 'all',                  // 'all' | 'custom' | 'other' | a TRaSH groupTrashId
+    cfgbHasCustom: false,                    // true if the list contains any user-custom CFs (toggles the Custom filter option)
+    cfgbHasOther: false,                     // true if any CF is ungrouped — toggles the Other filter option
     cfgbCFFilter: '',
     cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
     cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
@@ -14712,32 +14716,46 @@ function clonarr() {
           savedResp.ok ? savedResp.json() : Promise.resolve([]),
         ]);
         // /all-cfs returns { categories: [{ category, groups: [{ cfs: [...] }] }] }.
-        // Flatten into a single list and carry the category name on each CF so
-        // the filter dropdown can narrow the list to one category at a time.
-        // Custom CFs arrive with isCustom=true; we keep them in the list so the
-        // user can include them in personal groups, but flag them visually.
+        // The "categories" layer is a Clonarr-side abstraction; TRaSH itself
+        // organizes CFs by cf-groups (the inner `groups` level). The builder
+        // filter uses those REAL TRaSH groups so new upstream groups appear
+        // automatically without any Clonarr-side mapping to maintain.
+        //
+        // Each CF carries its parent group's trashId + name for filtering.
+        // Synthetic "Custom" and "Other" groups (emitted by the backend for
+        // user-custom CFs and ungrouped CFs) have no groupTrashId — we treat
+        // those as two special filter modes instead of real groups.
         const flat = [];
-        const catSet = new Set();
+        const groupMap = new Map(); // groupTrashId → {groupTrashId, name, count}
+        let hasCustom = false, hasOther = false;
         for (const cat of (allCfsRes.categories || [])) {
-          catSet.add(cat.category);
           for (const group of (cat.groups || [])) {
+            const gid = group.groupTrashId || '';
+            if (gid && !groupMap.has(gid)) {
+              groupMap.set(gid, { groupTrashId: gid, name: group.name || group.shortName || '', count: 0 });
+            }
             for (const cf of (group.cfs || [])) {
               if (!cf.trashId || !cf.name) continue;
               flat.push({
                 trashId: cf.trashId,
                 name: cf.name,
-                category: cat.category,
-                groupName: group.shortName || group.name || '',
+                groupTrashId: gid,
+                groupName: group.name || group.shortName || '',
                 isCustom: !!cf.isCustom,
               });
+              if (gid) groupMap.get(gid).count++;
+              if (cf.isCustom) hasCustom = true;
+              if (!gid && !cf.isCustom) hasOther = true;
             }
           }
         }
         this.cfgbCFs = flat;
-        // Preserve the category order returned by the backend (it already
-        // sorts by GetCategoryOrder so things like "Audio Advanced" come
-        // before "Custom"). Dropdown shows them in the same order.
-        this.cfgbCategories = Array.from(catSet);
+        // Sort groups alphabetically by name. TRaSH's own [Category] prefix
+        // (e.g. "[Audio] Audio Channels") sorts naturally in English, which
+        // clusters Audio/HDR/Streaming groups together in the dropdown.
+        this.cfgbGroups = Array.from(groupMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+        this.cfgbHasCustom = hasCustom;
+        this.cfgbHasOther = hasOther;
         // Profiles API still uses camelCase (api.ProfileListItem).
         this.cfgbProfiles = (profRes || [])
           .map(p => ({
@@ -14751,7 +14769,9 @@ function clonarr() {
         console.error('cfgbLoad failed:', e);
         this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull TRaSH in Settings → TRaSH Repo.';
         this.cfgbCFs = [];
-        this.cfgbCategories = [];
+        this.cfgbGroups = [];
+        this.cfgbHasCustom = false;
+        this.cfgbHasOther = false;
         this.cfgbProfiles = [];
         this.cfgbSavedGroups = [];
       }
@@ -14765,11 +14785,28 @@ function clonarr() {
 
     cfgbFilteredCFs() {
       const q = (this.cfgbCFFilter || '').toLowerCase().trim();
-      const cat = this.cfgbCategoryFilter || 'all';
+      const g = this.cfgbGroupFilter || 'all';
       let list = this.cfgbCFs;
-      if (cat !== 'all') list = list.filter(c => c.category === cat);
+      if (g === 'custom') {
+        list = list.filter(c => c.isCustom);
+      } else if (g === 'other') {
+        list = list.filter(c => !c.groupTrashId && !c.isCustom);
+      } else if (g !== 'all') {
+        // Specific TRaSH cf-group by its trash_id
+        list = list.filter(c => c.groupTrashId === g);
+      }
       if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
       return list.slice().sort((a, b) => a.name.localeCompare(b.name));
+    },
+    cfgbGroupFilterLabel() {
+      // Short human-readable label for the current filter — used in the count
+      // badge so "3 / 12 in [Audio] Audio Channels" is immediately obvious.
+      const g = this.cfgbGroupFilter;
+      if (g === 'all') return '';
+      if (g === 'custom') return 'Custom CFs';
+      if (g === 'other') return 'Ungrouped';
+      const match = this.cfgbGroups.find(gr => gr.groupTrashId === g);
+      return match ? match.name : '';
     },
     cfgbFilteredCount() {
       // Count matching the current filters — shows "M of N in category" style.
@@ -14845,7 +14882,7 @@ function clonarr() {
       this.cfgbTrashID = '';
       this.cfgbDefault = false;
       this.cfgbCFFilter = '';
-      this.cfgbCategoryFilter = 'all';
+      this.cfgbGroupFilter = 'all';
       this.cfgbSelectedCFs = {};
       this.cfgbRequiredCFs = {};
       this.cfgbSelectedProfiles = {};
@@ -14863,7 +14900,7 @@ function clonarr() {
       this.cfgbTrashID = g.trash_id || '';
       this.cfgbDefault = g.default === 'true' || g.default === true;
       this.cfgbCFFilter = '';
-      this.cfgbCategoryFilter = 'all';
+      this.cfgbGroupFilter = 'all';
       const selCFs = {}, reqCFs = {};
       for (const cf of (g.custom_formats || [])) {
         if (!cf.trash_id) continue;
