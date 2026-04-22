@@ -50,6 +50,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		TrashRepo              *core.TrashRepo      `json:"trashRepo,omitempty"`
 		PullInterval           *string              `json:"pullInterval,omitempty"`
 		DevMode                *bool                `json:"devMode,omitempty"`
+		TrashSchemaFields      *bool                `json:"trashSchemaFields,omitempty"`
 		DebugLogging           *bool                `json:"debugLogging"`
 		Prowlarr               *core.ProwlarrConfig `json:"prowlarr,omitempty"`
 		Authentication         *string              `json:"authentication,omitempty"`
@@ -146,6 +147,9 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.DevMode != nil {
 			cfg.DevMode = *req.DevMode
+		}
+		if req.TrashSchemaFields != nil {
+			cfg.TrashSchemaFields = *req.TrashSchemaFields
 		}
 		if req.DebugLogging != nil {
 			cfg.DebugLogging = *req.DebugLogging

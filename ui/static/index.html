@@ -2717,7 +2717,7 @@
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group name</label>
             <input type="text" class="input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
           </div>
-          <div style="flex:0 1 360px;min-width:240px">
+          <div x-show="config.trashSchemaFields" style="flex:0 1 360px;min-width:240px">
             <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
             <input type="text" class="input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e" readonly :value="cfgbTrashID || '(type a name above)'">
           </div>
@@ -3274,8 +3274,8 @@
               </div>
             </div>
 
-            <!-- Advanced Mode — collapsible, grey stripe. Only shown when devMode is on. -->
-            <template x-if="config.devMode">
+            <!-- TRaSH schema fields — collapsible, grey stripe. Only shown when trashSchemaFields is on. -->
+            <template x-if="config.trashSchemaFields">
               <div class="pd-card" style="border-left:3px solid #6e7681;padding:10px 18px">
                 <div @click="pbAdvancedOpen = !pbAdvancedOpen" style="cursor:pointer;display:flex;align-items:center;gap:8px">
                   <span style="color:#8b949e" x-text="pbAdvancedOpen ? '▾' : '▸'"></span>
@@ -3448,7 +3448,7 @@
                       <span class="cf-info" x-show="cf.description"
                             @mouseenter="showCFTooltip($event, cf.description)"
                             @mouseleave="hideCFTooltip()">ⓘ</span>
-                      <template x-if="config.devMode">
+                      <template x-if="config.trashSchemaFields">
                         <span style="font-size:12px;color:#aaa;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
                       </template>
                     </div>
@@ -4823,15 +4823,25 @@
         <!-- ===== Advanced ===== -->
         <div x-show="settingsSection === 'advanced'">
           <div class="settings-section-title">Advanced</div>
-          <div class="settings-section-desc">Developer tools and debug logging.</div>
+          <div class="settings-section-desc">Power-user features and debug logging. Enable only what you need.</div>
           <div class="setting-row">
             <div class="setting-label">Advanced Mode</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
                 <input type="checkbox" :checked="config.devMode" @change="toggleAdvancedMode($event.target.checked)">
-                <span style="font-size:13px;color:#aaa">Profile Builder, Scoring Sandbox, and TRaSH JSON export</span>
+                <span style="font-size:13px;color:#aaa">Adds the Advanced tab (Profile Builder, Scoring Sandbox, CF Group Builder) and the Prowlarr integration settings.</span>
               </label>
               <span x-show="config.devMode" style="font-size:12px;color:#d29922">Active</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label" title="Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.">Show TRaSH schema fields</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" :checked="config.trashSchemaFields" @change="config.trashSchemaFields = $event.target.checked; saveConfig(['trashSchemaFields'])">
+                <span style="font-size:13px;color:#aaa">Surfaces trash_id, trash_scores, group number, and HTML description fields in CF editor, Profile Builder and CF Group Builder. For TRaSH-Guides contributors only.</span>
+              </label>
+              <span x-show="config.trashSchemaFields" style="font-size:12px;color:#d29922">Active</span>
             </div>
           </div>
           <div class="setting-row">
@@ -5993,10 +6003,10 @@
         </div>
       </template>
 
-      <!-- Advanced Mode fields -->
-      <template x-if="config.devMode">
+      <!-- TRaSH schema fields -->
+      <template x-if="config.trashSchemaFields">
         <div style="border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:16px;background:#1c1c24">
-          <div style="font-size:12px;color:#d29922;font-weight:600;margin-bottom:8px">Advanced Mode</div>
+          <div style="font-size:12px;color:#d29922;font-weight:600;margin-bottom:8px">TRaSH schema fields</div>
           <div class="form-group">
             <label>Trash ID</label>
             <div style="display:flex;gap:8px">
@@ -6048,7 +6058,7 @@
         <template x-if="cfEditorMode === 'edit'">
           <button class="btn" style="color:#f85149;margin-right:auto" @click="deleteCFFromEditor()">Delete</button>
         </template>
-        <template x-if="config.devMode">
+        <template x-if="config.trashSchemaFields">
           <button class="btn" style="color:#d29922" @click="exportTrashJSON()">Export TRaSH JSON</button>
         </template>
         <button class="btn" @click="showCFEditor = false">Cancel</button>
@@ -6881,6 +6891,7 @@ function clonarr() {
         if (!fields || fields.includes('trashRepo')) body.trashRepo = this.config.trashRepo;
         if (fields && fields.includes('pullInterval')) body.pullInterval = this.config.pullInterval;
         if (fields && fields.includes('devMode')) body.devMode = this.config.devMode;
+        if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
         await fetch('/api/config', {
