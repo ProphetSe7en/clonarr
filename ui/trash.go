@@ -589,16 +589,13 @@ func (ts *trashStore) CloneOrPull(repoURL, branch string) error {
 
         // Remove stale shallow.lock if left behind by a previously interrupted fetch
        // (e.g. container restart mid-pull). Git refuses to fetch if this file exists.
-shallowLock := filepath.Join(ts.dataDir, ".git", "shallow.lock")
-if _, err := os.Stat(shallowLock); err == nil {
-    log.Printf("Removing stale shallow.lock from previous interrupted fetch")
-    if err := os.Remove(shallowLock); err != nil {
+        shallowLock := filepath.Join(ts.dataDir, ".git", "shallow.lock")
+        if _, err := os.Stat(shallowLock); err == nil {
+        log.Printf("Removing stale shallow.lock from previous interrupted fetch")
+        if err := os.Remove(shallowLock); err != nil {
         log.Printf("Warning: failed to remove shallow.lock: %v", err)
-    }
-}
-
-cmd := exec.Command("git", "-C", ts.dataDir, "fetch", "--deepen=1", "origin", branch)
-
+        }
+      }
 		cmd := exec.Command("git", "-C", ts.dataDir, "fetch", "--deepen=1", "origin", branch)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
