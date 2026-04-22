@@ -38,6 +38,9 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	s.updateConfigMu.Lock()
+	defer s.updateConfigMu.Unlock()
+
 	r.Body = http.MaxBytesReader(w, r.Body, 65536)
 	// Read body once so we can decode into both the main ConfigData and a
 	// small side struct that picks up `confirm_password` (never persisted).
