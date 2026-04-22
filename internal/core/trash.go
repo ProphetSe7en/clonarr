@@ -1488,6 +1488,14 @@ func ParseCategoryPrefix(name string) (string, string) {
 	case "SQP":
 		// SQP-specific CFs (e.g. "Disable if one Radarr") belong in Miscellaneous
 		category = "Miscellaneous"
+	case "Optional":
+		// TRaSH PR #2711 renames Golden Rule groups from "[Required] Golden Rule HD/UHD"
+		// to "[Optional] Golden Rule HD/UHD" to signal they can legitimately be unset.
+		// Preserve the "Golden Rule" category so UI ordering and grouping don't break
+		// when the upstream rename lands.
+		if strings.HasPrefix(shortName, "Golden Rule") {
+			category = "Golden Rule"
+		}
 	}
 
 	return category, shortName
