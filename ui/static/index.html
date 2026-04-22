@@ -11652,11 +11652,16 @@ function clonarr() {
     toggleCompareSelect(instId, trashId, checked) {
       const sel = {...(this.instCompareSelected[instId] || {})};
       const result = this.instCompareResult[instId];
-      // Exclusive required groups: block unchecking the last variant. Matches TRaSH Sync behavior —
-      // always exactly one variant picked, no picker modal needed.
+      // Exclusive required groups other than Golden Rule: block unchecking the last variant.
+      // Golden Rule is now optional — a profile may legitimately have no HD or UHD variant active.
+      // Matches Profile Edit (imported-profile flow) and Profile Builder (variantGoldenRule: 'none').
+      // "Never both" is still enforced below when checking — so user can end with one or none,
+      // but never both active simultaneously.
       if (!checked && result) {
         for (const group of (result.groups || [])) {
           if (!group.exclusive || !group.defaultEnabled) continue;
+          // Golden Rule is optional — allow unchecking the last variant.
+          if ((group.name || '').toLowerCase().includes('golden rule')) continue;
           const cfsInGroup = group.cfs.map(c => c.trashId);
           if (cfsInGroup.includes(trashId)) {
             const otherSelected = cfsInGroup.some(tid => tid !== trashId && sel[tid]);
