@@ -6894,11 +6894,12 @@ function clonarr() {
         if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
-        await fetch('/api/config', {
+        const resp = await fetch('/api/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
+        if (resp.status === 401) { window.location.href = '/login'; return; }
       } catch (e) { console.error('saveConfig:', e); }
     },
 
@@ -6972,6 +6973,7 @@ function clonarr() {
     async fetchApiKey() {
       try {
         const resp = await fetch('/api/auth/api-key');
+        if (resp.status === 401) { window.location.href = '/login'; return; }
         if (!resp.ok) return;
         const data = await resp.json();
         this.securityApiKey = data.api_key || '';
@@ -6991,6 +6993,7 @@ function clonarr() {
       this.securityRegenerating = true;
       try {
         const resp = await fetch('/api/auth/regenerate-api-key', { method: 'POST' });
+        if (resp.status === 401) { window.location.href = '/login'; return; }
         if (!resp.ok) { alert('Failed to regenerate API key'); return; }
         const data = await resp.json();
         this.securityApiKey = data.api_key || '';
@@ -7000,10 +7003,30 @@ function clonarr() {
       finally { this.securityRegenerating = false; }
     },
 
+    // Mirror of server-side validatePassword (internal/auth/auth.go): ≥10
+    // chars and ≥2 of {upper, lower, digit, symbol}. Returns '' on valid,
+    // error message on failure. Enforced client-side for fast UX; server
+    // re-validates unconditionally — this is not a trust boundary.
+    pwComplexityError(pw) {
+      if (!pw || pw.length < 10) return 'password must be at least 10 characters';
+      let classes = 0;
+      if (/[A-Z]/.test(pw)) classes++;
+      if (/[a-z]/.test(pw)) classes++;
+      if (/[0-9]/.test(pw)) classes++;
+      if (/[^A-Za-z0-9]/.test(pw)) classes++;
+      if (classes < 2) return 'password must contain at least 2 of: uppercase, lowercase, digit, symbol';
+      return '';
+    },
+
     async changePassword() {
       if (!this.pwChange.current || !this.pwChange.next || !this.pwChange.confirm) return;
       if (this.pwChange.next !== this.pwChange.confirm) {
         this.pwChangeOk = false; this.pwChangeMsg = 'New passwords do not match';
+        return;
+      }
+      const complexityErr = this.pwComplexityError(this.pwChange.next);
+      if (complexityErr) {
+        this.pwChangeOk = false; this.pwChangeMsg = complexityErr;
         return;
       }
       this.pwChangeSaving = true; this.pwChangeMsg = '';
@@ -7017,6 +7040,7 @@ function clonarr() {
             new_password_confirm: this.pwChange.confirm,
           }),
         });
+        if (resp.status === 401) { window.location.href = '/login'; return; }
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
           this.pwChangeOk = false;
@@ -7076,6 +7100,13 @@ function clonarr() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
+        if (resp.status === 401 && !confirmedNone) {
+          // Session expired mid-edit — bounce to /login. The confirmedNone
+          // 401 is distinct (password-incorrect in disable-auth modal) and
+          // handled below.
+          window.location.href = '/login';
+          return;
+        }
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
           if (resp.status === 401 && confirmedNone) {
