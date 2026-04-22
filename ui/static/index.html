@@ -6243,24 +6243,51 @@
 </div>
 
 <script>
-// CSRF protection: attach X-CSRF-Token header to every mutating fetch.
-// Server sets a clonarr_csrf cookie on GETs; the wrapper below reads the
-// cookie and echoes it as a header on POST/PUT/DELETE/PATCH. Handles all
-// current fetches and any future ones without per-call changes. Covers
-// AJAX only — <form method="POST"> uses a hidden csrf_token field
-// (see logout form in the header).
+// Global fetch wrapper. Handles two cross-cutting concerns so call sites
+// don't have to:
+//
+// (1) CSRF — attach X-CSRF-Token header to every mutating fetch. Server
+//     sets a clonarr_csrf cookie on GETs; the wrapper reads the cookie
+//     and echoes it as a header on POST/PUT/DELETE/PATCH. AJAX only —
+//     <form method="POST"> uses a hidden csrf_token field (logout form).
+//
+// (2) 401 → /login redirect — if any auth-gated endpoint returns 401
+//     (session expired, logged out elsewhere, cookie cleared), bounce
+//     the user to the login page. Centralized so every fetch call site
+//     doesn't need `if (resp.status === 401) window.location...` boiler-
+//     plate. A never-resolving promise is returned on redirect so
+//     callers don't try to .json() a body that won't arrive before the
+//     navigation completes.
+//
+//     Skip the redirect when:
+//       - Already on /login or /setup (avoid loop — these pages probe
+//         /api/auth/status as a public endpoint).
+//       - Caller opts out via X-Skip-Login-Redirect header. The only
+//         legitimate use is the disable-auth modal, where 401 means
+//         "confirm_password incorrect" not "session expired".
 (function() {
   const origFetch = window.fetch.bind(window);
-  window.fetch = function(input, init) {
+  window.fetch = async function(input, init) {
     init = init || {};
     const method = (init.method || 'GET').toUpperCase();
+    const headers = Object.assign({}, init.headers || {});
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
       const m = document.cookie.match(/(?:^|; )clonarr_csrf=([^;]+)/);
-      if (m) {
-        init.headers = Object.assign({}, init.headers || {}, { 'X-CSRF-Token': m[1] });
+      if (m) headers['X-CSRF-Token'] = m[1];
+    }
+    const skipLoginRedirect = headers['X-Skip-Login-Redirect'] === '1';
+    // Client-side hint only — strip before sending to server.
+    delete headers['X-Skip-Login-Redirect'];
+    init.headers = headers;
+    const resp = await origFetch(input, init);
+    if (resp.status === 401 && !skipLoginRedirect) {
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/setup') {
+        window.location.href = '/login';
+        return new Promise(() => {});
       }
     }
-    return origFetch(input, init);
+    return resp;
   };
 })();
 
@@ -6894,12 +6921,12 @@ function clonarr() {
         if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
-        const resp = await fetch('/api/config', {
+        // 401 handled centrally by the fetch wrapper.
+        await fetch('/api/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
-        if (resp.status === 401) { window.location.href = '/login'; return; }
       } catch (e) { console.error('saveConfig:', e); }
     },
 
@@ -6971,9 +6998,9 @@ function clonarr() {
     },
 
     async fetchApiKey() {
+      // 401 handled centrally by the fetch wrapper.
       try {
         const resp = await fetch('/api/auth/api-key');
-        if (resp.status === 401) { window.location.href = '/login'; return; }
         if (!resp.ok) return;
         const data = await resp.json();
         this.securityApiKey = data.api_key || '';
@@ -6993,7 +7020,6 @@ function clonarr() {
       this.securityRegenerating = true;
       try {
         const resp = await fetch('/api/auth/regenerate-api-key', { method: 'POST' });
-        if (resp.status === 401) { window.location.href = '/login'; return; }
         if (!resp.ok) { alert('Failed to regenerate API key'); return; }
         const data = await resp.json();
         this.securityApiKey = data.api_key || '';
@@ -7040,7 +7066,6 @@ function clonarr() {
             new_password_confirm: this.pwChange.confirm,
           }),
         });
-        if (resp.status === 401) { window.location.href = '/login'; return; }
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
           this.pwChangeOk = false;
@@ -7095,18 +7120,17 @@ function clonarr() {
         body.confirm_password = this.disableAuthPassword;
       }
       try {
+        // Opt out of the central 401→/login redirect for confirmedNone:
+        // here a 401 means "confirm_password incorrect", not "session
+        // expired", and must surface to the modal handler below. Session
+        // expiry on the non-confirmedNone path is handled by the wrapper.
+        const headers = { 'Content-Type': 'application/json' };
+        if (confirmedNone) headers['X-Skip-Login-Redirect'] = '1';
         const resp = await fetch('/api/config', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(body),
         });
-        if (resp.status === 401 && !confirmedNone) {
-          // Session expired mid-edit — bounce to /login. The confirmedNone
-          // 401 is distinct (password-incorrect in disable-auth modal) and
-          // handled below.
-          window.location.href = '/login';
-          return;
-        }
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
           if (resp.status === 401 && confirmedNone) {
