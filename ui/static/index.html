@@ -4326,7 +4326,7 @@
                       <template x-if="!cf.required">
                         <label class="toggle toggle-sm">
                           <input type="checkbox" :checked="selectedOptionalCFs[cf.trashId]"
-                                 @change="group.exclusive ? toggleExclusiveCF(cf.trashId, group.cfs, group.name?.includes('Golden Rule')) : toggleOptionalCF(cf.trashId)">
+                                 @change="group.exclusive ? toggleExclusiveCF(cf.trashId, group.cfs) : toggleOptionalCF(cf.trashId)">
                           <span class="slider"></span>
                         </label>
                       </template>
