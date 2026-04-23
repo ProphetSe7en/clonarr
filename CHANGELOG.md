@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.1.1
+
+UX patch release. Profile Builder's "save without syncing" flow was always there — v2.1.0 just made it hard to discover and blocked for YAML-imported profiles. This release fixes both.
+
+### Fixed
+
+- **Imported profiles can now be opened in the Profile Builder for editing.** Previously, profiles created via YAML import (`Advanced → Import profile`) were rendered read-only — clicking the profile name sent you to a detail view with only "Save & Sync" / "Create New" buttons, and the Edit button was hidden. That made the "start a profile, come back to it later, finish it before pushing to Arr" workflow impossible for imported profiles. The backend always allowed edits; the frontend was gating on `source === 'custom'` in three places (`profile name click`, `Edit button`, `Edit button in detail view`). All three now accept any user-owned profile (`custom` / `import` / legacy empty source).
+- **TRaSH-imported profiles now render their required CFs in the Builder.** Opening a TRaSH profile import (e.g. `base-profile.json` with 4 mandatory blocking CFs) in the Builder showed an empty Required CFs section — the CFs existed in `formatItems` with correct scores but weren't mirrored into `formatItemCFs`, which is what the Builder UI reads to render the Required section. The TRaSH convention is that every CF in `formatItems` is a mandatory CF of the profile; `parseTrashProfileJSON` now populates `FormatItemCFs` accordingly. Profiles imported before v2.1.1 get the same treatment via a frontend fallback in `openProfileBuilder` — no re-import needed.
+
+### Changed
+
+- **Profile Builder save-button labels clarified.** `Create Profile` → `Save Profile`, `Update Profile` → `Save Changes`. The existing Save-only action always saved locally without syncing to Arr (distinct from `Save & Sync` / `Create New` which push to an Arr instance), but the old labels didn't make that separation obvious when both options were visible side-by-side. Tooltips ("Save profile changes without syncing") unchanged.
+
+### For existing users — how the save flow works
+
+Profile Builder has two-tier saving:
+
+1. **`Save Profile` / `Save Changes`** — saves locally in Clonarr only. Nothing touches Radarr/Sonarr. Perfect for drafts: start a profile, come back tomorrow, finish it, push it later.
+2. **`Save & Sync`** or **`Create New`** — saves locally AND pushes to an existing or new Arr quality profile. Only shown when editing an existing profile.
+
+This separation always existed — v2.1.1 just makes it more obvious and fixes the imported-profile gap.
+
 ## v2.1.0
 
 ### Added

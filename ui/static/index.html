@@ -2644,7 +2644,7 @@
           <template x-for="p in (importedProfiles[activeAppType] || [])" :key="p.id">
             <div class="profile-row">
               <div style="flex:1;min-width:0">
-                <a class="profile-name-link" @click.stop="p.source === 'custom' ? editCustomProfile(activeAppType, p) : openImportedProfileDetail(activeAppType, p)" x-text="p.name"></a>
+                <a class="profile-name-link" @click.stop="(p.source === 'custom' || p.source === 'import' || !p.source) ? editCustomProfile(activeAppType, p) : openImportedProfileDetail(activeAppType, p)" x-text="p.name"></a>
                 <div style="font-size:12px;color:#aaa;margin-top:2px">
                   <span x-text="Object.keys(p.formatItems || {}).length"></span> CFs
                   <span x-show="p.scoreSet"> · <span x-text="p.scoreSet"></span></span>
@@ -2652,7 +2652,7 @@
               </div>
               <div style="display:flex;gap:6px;align-items:center">
                 <button class="btn btn-sm" @click.stop="openExportModalFromList(activeAppType, p)" title="Export profile">Export</button>
-                <button x-show="p.source === 'custom'" class="btn btn-sm" @click.stop="editCustomProfile(activeAppType, p)" title="Edit profile in builder">Edit</button>
+                <button x-show="p.source === 'custom' || p.source === 'import' || !p.source" class="btn btn-sm" @click.stop="editCustomProfile(activeAppType, p)" title="Edit profile in builder">Edit</button>
                 <button class="btn btn-sm btn-danger" style="padding:2px 8px"
                         @click.stop="confirmModal = { show: true, title: 'Delete Profile', message: 'Delete this imported profile?', confirmLabel: 'Delete', onConfirm: async () => { await fetch('/api/import/profiles/' + p.id, { method: 'DELETE' }); loadImportedProfiles(activeAppType); } }">Delete</button>
               </div>
@@ -2939,7 +2939,7 @@
         <template x-if="!_resyncReturnSubTab">
           <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
             <span x-show="pbSaving" class="spinner"></span>
-            <span x-show="!pbSaving" x-text="pb.editId ? 'Update Profile' : 'Create Profile'"></span>
+            <span x-show="!pbSaving" x-text="pb.editId ? 'Save Changes' : 'Save Profile'"></span>
           </button>
         </template>
         <template x-if="pb.editId">
@@ -3497,7 +3497,7 @@
         <template x-if="!_resyncReturnSubTab">
           <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
             <span x-show="pbSaving" class="spinner"></span>
-            <span x-show="!pbSaving" x-text="pb.editId ? 'Update Profile' : 'Create Profile'"></span>
+            <span x-show="!pbSaving" x-text="pb.editId ? 'Save Changes' : 'Save Profile'"></span>
           </button>
         </template>
         <template x-if="pb.editId">
@@ -3625,7 +3625,7 @@
               </template>
             </div>
             <div style="display:flex;gap:8px;flex-shrink:0" x-show="profileDetail?.detail?.imported">
-              <button x-show="profileDetail?.detail?.importedRaw?.source === 'custom'" class="btn btn-sm" @click="editCustomProfile(profileDetail.detail.importedRaw.appType || profileDetail.instance?.type, profileDetail.detail.importedRaw)">Edit</button>
+              <button x-show="profileDetail?.detail?.importedRaw && (profileDetail.detail.importedRaw.source === 'custom' || profileDetail.detail.importedRaw.source === 'import' || !profileDetail.detail.importedRaw.source)" class="btn btn-sm" @click="editCustomProfile(profileDetail.detail.importedRaw.appType || profileDetail.instance?.type, profileDetail.detail.importedRaw)">Edit</button>
               <button class="btn btn-sm btn-blue" @click="openExportModal()">Export</button>
               <button class="btn btn-sm btn-primary" @click="openImportedSyncModal()" title="Save settings and sync to existing Arr profile">Save & Sync</button>
               <button class="btn btn-sm" style="border-color:#58a6ff;color:#58a6ff" @click="openImportedSyncModalAsNew()" title="Create a new Arr profile with these settings">Create New</button>
@@ -7713,8 +7713,17 @@ function clonarr() {
         }
       }
       // Restore new group-based state
-      if (existing?.formatItemCFs) {
+      if (existing?.formatItemCFs && Object.keys(existing.formatItemCFs).length > 0) {
         this.pb.formatItemCFs = { ...existing.formatItemCFs };
+      } else if (existing?.source === 'import' && existing?.formatItems) {
+        // Fallback for profiles imported before v2.1.1: a TRaSH profile's
+        // formatItems are, by TRaSH convention, the required CFs. Older
+        // imports don't have FormatItemCFs populated on disk — derive it
+        // here so the Builder shows the Required section correctly when
+        // opening those profiles. New imports get this from the backend.
+        for (const tid of Object.keys(existing.formatItems)) {
+          this.pb.formatItemCFs[tid] = true;
+        }
       }
       if (existing?.enabledGroups) {
         this.pb.enabledGroups = { ...existing.enabledGroups };
