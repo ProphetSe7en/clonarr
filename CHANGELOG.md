@@ -1,5 +1,42 @@
 # Changelog
 
+## v2.1.0
+
+### Added
+
+- **CF Group Builder** — client-side generator for `cf-groups/*.json` files under Settings → CF Group Builder. Loads TRaSH's real cf-groups as starting points, filters by app type (Radarr/Sonarr), supports manual and alpha CF ordering, per-CF `required` / `default` toggles, category filter, multi-term search, scoped Select-all, bulk Mark-all / Clear-required / Clear-CFs / Clear-profiles, custom CFs with MD5 trash_id scoped by app-type, deduplication across cf-groups with accumulated group memberships, and export to downloadable JSON named with category prefix. Persists locally in browser storage. Profile cards reuse the Profiles-tab styling, collapsed by default, per-card select-all, reloads on appType switch. Makes it practical to ship custom exclusivity groups without editing JSON by hand.
+- **Advanced Mode split into two toggles** — Settings now exposes "Show advanced Clonarr options" (existing) and a separate "Show TRaSH schema fields" toggle. Lets you see raw TRaSH fields (trash_id, includeCustomFormatWhenRenaming, etc.) without enabling the rest of Clonarr's advanced UI. Either, both, or neither — fully independent.
+
+### Changed
+
+- **Architecture refactor** — backend restructured from flat `ui/*.go` to standard Go layout: `internal/api/` (HTTP handlers split by domain — instances, cleanup, sync, autosync, trash, custom_cfs, custom_profiles, import, scoring, notifications, config, auth_handlers, routes, server, utils), `internal/core/` (models, config store, sync engine, TRaSH integration), `internal/arr/` (Radarr/Sonarr API clients), `internal/auth/` + `internal/netsec/` (security primitives unchanged), `internal/utils/` (`SafeGo`). `ui/` is now only the `//go:embed static` wrapper. Contributed by @ColeSpringer via revived PR #14. No user-facing behavior change — pure reorganization for maintainability.
+- **Background panic recovery everywhere** — every goroutine wrapped via `utils.SafeGo`. One bad notifier/poller can no longer crash the whole process.
+- **Golden Rule is now optional everywhere.** TRaSH renamed `[Required] Golden Rule` → `[Optional] Golden Rule` in PR #2711 upstream — both Golden Rule CFs (`Golden Rule UHD` and `Golden Rule HD`) are `required: false` in the schema and always were, but the group naming implied otherwise. Clonarr now treats the group as optional in the TRaSH-profile flow (profile detail, compare, builder) — picking zero is allowed, picking one is allowed, picking both is still forbidden (the exclusivity rule). Works with both the old and the renamed TRaSH repo name so existing installs don't break when TRaSH's PR merges upstream.
+- **CF Group Builder for CF categorization** — formerly only TRaSH's own cf-groups drove the dropdown; now the UI surfaces the user's locally-built cf-groups alongside upstream ones and splits the "Ungrouped" bucket so it's obvious what hasn't been categorized yet.
+- **Profile card sorting** — profiles within each card on the Profiles tab now alpha-sort, and cards themselves sort by their group integer (not a hardcoded name order) so new groups slot in correctly.
+- **Sync history "Last Changed" time is frozen on apply.** Previously the column could drift as entries aged; now it's backfilled for existing entries at load and preserved via a frozen `AppliedAt` field going forward. Empty-state placeholder shown when entries exist but have no changes.
+
+### Fixed
+
+- **Stale git-lock files no longer permanently break the TRaSH pull.** A container kill during `git fetch --deepen=1` (or any other git op) can leave a `.lock` file behind. Next start failed with "fatal: Unable to create lock" until manual deletion. Reported by @fiservedpi in issue #23 with a one-line `shallow.lock` patch in PR #24. Broadened the fix to cover the full catalogue of locks that the same class of interrupt can leave behind: `HEAD.lock`, `index.lock`, `config.lock`, `packed-refs.lock`, `FETCH_HEAD.lock`, `shallow.lock`, and any `refs/**/*.lock`. Runs at the top of the existing-clone branch in `CloneOrPull`, before any git invocation. Safe — Clonarr is the only writer to `/data/trash-guides/.git` (single-process `pullMu` serializes all callers), so any lock found at startup is by definition stale from our own interrupted previous run. Credit @fiservedpi for the clean reproducer + patch that started the investigation.
+- **C3 — config save no longer clobbers env-locked trust-boundary fields on no-change edits.** Unrelated setting saves could silently empty `TrustedNetworks` / `TrustedProxies` when the UI didn't touch them. Now guarded at every call site.
+- **H3 — unauthenticated `/api/*` requests redirect to `/login`** instead of returning raw 401 JSON for browser-initiated navigation. API-key paths still return JSON 401. Centralized in the fetch wrapper so every handler inherits it.
+- **H4 — `handleUpdateConfig` serialized to close a lost-update race.** Two parallel config edits could land in the wrong order; one lock per handler eliminates the interleave.
+- **H5 — password-complexity UX on the setup wizard** gives progressive hints instead of a single rejection at submit. Matches Radarr/Sonarr feel.
+- **Profile export omits the `language` field from Sonarr TRaSH JSON.** Sonarr schema doesn't include it at the profile level; previous exports added noise that round-tripped back as a dirty diff. Radarr exports unchanged (language is valid there).
+- **Profile detail — cutoff override now syncs after an auto-correct.** If the chosen cutoff was invalid and the UI auto-corrected it, the override state stayed pointing at the old value until a manual change. Now auto-correct writes through.
+- **Profile builder — auto-selected cutoff syncs to `pb.cutoff` immediately.** Same class of desync as above; the builder flow was independently affected.
+- **Sync-history display** — backfills `AppliedAt` on load for entries that pre-date the field (so they don't all show the same placeholder time).
+- **CF Group Builder** — scopes MD5 trash_id generation by app type (a Radarr CF and a Sonarr CF with identical names now get different trash_ids and don't collide when imported side-by-side). `cfgbDelete` guarded against overlapping clicks. Styled confirm modals instead of the browser-native `confirm()` dialog. Paste artefacts stripped from pasted descriptions.
+- **Notification webhook validation** restored after refactor, with migration tests covering the v2.0.x-flat → v2.0.8-agents path.
+- **UI polish** — readable placeholder text on dark inputs; renamed undefined `.config-input` class to the actual `.input` style.
+
+### Notes for upgraders
+
+Upgrading from v2.0.x is transparent — no config migration needed. If you have `cf-groups/*.json` files in `/config/custom-cfs/`, they're picked up automatically by the CF Group Builder dropdown alongside TRaSH's upstream groups. The v2.0.6 security baseline (authentication, trusted networks, API key) is unchanged.
+
+Users who were manually deleting `.git/shallow.lock` after container restarts can stop — that's now handled automatically.
+
 ## v2.0.8
 
 ### Added

@@ -223,6 +223,11 @@
   .input:focus { outline: none; border-color: #58a6ff; }
   .input-sm { width: 200px; }
   select.input { cursor: pointer; }
+  /* Placeholder text — browser defaults render near-black on our #0d1117
+     inputs, which is unreadable. #8b949e matches the hint-text colour we
+     use elsewhere (setting-help, instance metadata) so placeholders read
+     clearly without shouting for attention. */
+  input::placeholder, textarea::placeholder { color: #8b949e; opacity: 1; }
 
   /* Instance list in settings */
   .inst-row { display: flex; align-items: center; padding: 10px 0; }
@@ -658,6 +663,7 @@
           <div style="display:flex;gap:0;margin-left:16px;border-left:1px solid #30363d;padding-left:8px">
             <div class="profile-tab" :class="{ active: advancedTab === 'builder' }" @click="advancedTab = 'builder'; pushNav()">Profile Builder</div>
             <div class="profile-tab" :class="{ active: advancedTab === 'scoring' }" @click="advancedTab = 'scoring'; loadSandbox(activeAppType); pushNav()">Scoring Sandbox</div>
+            <div class="profile-tab" :class="{ active: advancedTab === 'group-builder' }" @click="advancedTab = 'group-builder'; cfgbLoad(activeAppType); pushNav()">CF Group Builder</div>
           </div>
         </template>
       </div>
@@ -844,7 +850,7 @@
                       <div style="flex:none;width:20px;color:#aaa;text-align:center;font-size:15px">&rarr;</div>
                       <div style="flex:none;width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e1e4e8" x-text="sh.arrProfileName"></div>
                       <div style="flex:none;width:100px;white-space:nowrap">
-                        <span :style="sh.changes ? 'color:#d29922' : 'color:#aaa'" x-text="sh.changes ? timeAgo(sh.lastSync) : '—'"></span>
+                        <span :style="sh.changes ? 'color:#d29922' : 'color:#aaa'" x-text="sh.changes ? timeAgo(sh.appliedAt || sh.lastSync) : '—'"></span>
                       </div>
                       <div style="flex:none;width:55px;text-align:center;white-space:nowrap">
                         <span x-show="historyEventCount(inst.id, sh.arrProfileId) > 0"
@@ -874,7 +880,12 @@
                       <template x-if="historyLoading">
                         <div style="padding:16px;text-align:center"><span class="spinner"></span></div>
                       </template>
-                      <template x-if="!historyLoading && historyEntries.length === 0">
+                      <template x-if="!historyLoading && historyEntries.filter(e => e.changes).length === 0">
+                        <!-- Covers both "no entries at all" and "entries exist
+                             but none carry changes" (baseline / no-op syncs
+                             only). Previously the latter fell through every
+                             x-if branch, rendering an empty expanded panel
+                             that looked like a click that did nothing. -->
                         <div style="font-size:12px;color:#aaa;padding:12px 16px 12px 32px">No changes recorded yet. Changes are tracked from the next sync onwards.</div>
                       </template>
                       <template x-if="!historyLoading && historyEntries.filter(e => e.changes).length > 0">
@@ -897,7 +908,7 @@
                                 <span style="color:#e1e4e8;font-weight:500;width:150px;flex-shrink:0;display:flex;align-items:center;gap:6px">
                                   <span style="color:#aaa;font-size:11px;display:inline-block;width:10px;transition:transform 0.15s"
                                         :style="historyDetailIdx === ei ? 'transform:rotate(90deg)' : ''">&#9654;</span>
-                                  <span x-text="new Date(entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
+                                  <span x-text="new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
                                   <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:#3fb950" x-text="entry.changes.cfDetails.length"></span>
@@ -2653,6 +2664,269 @@
 
     <!-- Scoring sub-tab: just show the existing scoring sandbox -->
     <!-- Scoring sandbox content is rendered from the main section (currentSection === 'scoring' || advancedTab === 'scoring') -->
+
+    <!-- CF Group Builder sub-tab content -->
+    <div x-show="advancedTab === 'group-builder'">
+      <div class="page">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">CF Group Builder</div>
+        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          Build a <code>cf-groups/*.json</code> file — for TRaSH-Guides contribution, or for your own personal use. Pick custom formats, mark which are required, link to quality profiles. Save locally to iterate on later, or export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
+        </div>
+
+        <!-- Load-error banner — visible when /api/trash/* calls fail -->
+        <div x-show="cfgbLoadError" x-cloak style="background:#3a1a1a;border:1px solid #5a2a2a;color:#ff9a9a;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px" x-text="cfgbLoadError"></div>
+
+        <!-- Saved cf-groups list — persistent storage, scoped to current appType. -->
+        <div x-show="cfgbSavedGroups.length > 0" style="margin-bottom:20px" x-cloak>
+          <div style="font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px" x-text="'Saved ' + activeAppType + ' cf-groups (' + cfgbSavedGroups.length + ')'"></div>
+          <div class="card" style="padding:0">
+            <template x-for="(g, idx) in cfgbSavedGroups" :key="g.id">
+              <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:12px;flex-wrap:wrap" :style="idx === cfgbSavedGroups.length - 1 ? 'border-bottom:none' : ''">
+                <div style="flex:1;min-width:200px">
+                  <div style="font-size:13px;font-weight:600" x-text="g.name"></div>
+                  <div style="font-size:11px;color:#6a6e76;margin-top:2px">
+                    <span x-text="(g.custom_formats || []).length + ' CFs · ' + Object.keys(g.quality_profiles && g.quality_profiles.include || {}).length + ' profiles'"></span>
+                    <span x-show="g.default === 'true'" style="background:#30363d;color:#3fb950;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">default</span>
+                    <span x-show="g.updatedAt" style="margin-left:8px" x-text="'updated ' + g.updatedAt.slice(0,10)"></span>
+                    <span x-show="cfgbEditingId === g.id" style="background:#1f6feb;color:#fff;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">editing</span>
+                  </div>
+                </div>
+                <button class="btn" @click="cfgbLoadForEdit(g)" style="font-size:12px;padding:4px 10px" title="Load into form for editing">Edit</button>
+                <button class="btn" @click="cfgbDelete(g)" style="font-size:12px;padding:4px 10px;color:#f85149;border-color:#f85149" title="Delete saved cf-group">Delete</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Anchor so cfgbLoadForEdit can scroll the form back into view. -->
+        <div id="cfgb-form-top"></div>
+
+        <!-- Mode banner — shows whether the form is editing an existing group or creating new. -->
+        <div style="font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">
+          <span x-show="!cfgbEditingId">New cf-group</span>
+          <span x-show="cfgbEditingId" x-cloak>
+            Editing <span x-text="cfgbName || '(unnamed)'"></span>
+            <button class="btn" @click="cfgbUIReset()" style="font-size:11px;padding:2px 8px;margin-left:8px;text-transform:none;letter-spacing:0">Start new instead</button>
+          </span>
+        </div>
+
+        <!-- Top metadata — name + hash are short inputs so they don't need
+             full width; description keeps full width for multi-line text. -->
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:16px">
+          <div style="flex:0 1 400px;min-width:240px">
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group name</label>
+            <input type="text" class="input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
+          </div>
+          <div x-show="config.trashSchemaFields" style="flex:0 1 360px;min-width:240px">
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
+            <input type="text" class="input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e" readonly :value="cfgbTrashID || '(type a name above)'">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Default</label>
+            <label class="toggle" style="margin-top:6px">
+              <input type="checkbox" x-model="cfgbDefault">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Description</label>
+          <textarea class="input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
+        </div>
+
+        <!-- Two-column layout: CFs + Profiles -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+          <!-- CFs panel -->
+          <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbGroupFilter === 'all' ? '' : ' in ' + cfgbGroupFilterLabel())"></span>
+              <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbToggleAllRequired(!cfgbAllSelectedRequired())"
+                      :title="cfgbAllSelectedRequired() ? 'Clear required on every selected CF' : 'Mark every selected CF as required'"
+                      style="background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline"
+                      x-text="cfgbAllSelectedRequired() ? 'Clear required' : 'Mark all required'"></button>
+              <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbClearCFs()" title="Deselect every CF and clear required flags — profile selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear CFs</button>
+              <!-- Sort-mode toggle: Alpha (TRaSH-spec default) vs Manual
+                   (user-driven order for cases where sequence matters —
+                   e.g. audio-formats sorted by quality, release-groups by
+                   tier). Applies to both Copy JSON / Download / Save. -->
+              <div style="display:inline-flex;border:1px solid #30363d;border-radius:4px;overflow:hidden" title="Sort order for exported JSON. Alpha is the TRaSH spec default; Manual lets you hand-order selected CFs.">
+                <button type="button" @click="cfgbSetCFSortMode('alpha')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;' + (cfgbCFSortMode === 'alpha' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Alpha</button>
+                <button type="button" @click="cfgbSetCFSortMode('manual')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;border-left:1px solid #30363d;' + (cfgbCFSortMode === 'manual' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Manual</button>
+              </div>
+              <select x-model="cfgbGroupFilter" x-show="cfgbCFSortMode === 'alpha'" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
+                <option value="all">All CFs (no filter)</option>
+                <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
+                <option value="other-trash" x-show="cfgbUngroupedTrashCount > 0" x-text="'— Ungrouped per TRaSH (' + cfgbUngroupedTrashCount + ')'"></option>
+                <!-- Only useful when the user has built any local groups;
+                     equal to Ungrouped-per-TRaSH otherwise, so hide it then. -->
+                <option value="other-remaining" x-show="cfgbSavedGroups.length > 0 && cfgbUngroupedRemainingCount !== cfgbUngroupedTrashCount" x-text="'— Ungrouped after local work (' + cfgbUngroupedRemainingCount + ')'"></option>
+                <template x-for="gr in cfgbGroups" :key="gr.groupTrashId">
+                  <option :value="gr.groupTrashId" x-text="(gr.isLocal ? '[local] ' : '') + gr.name + ' (' + gr.count + ')'"></option>
+                </template>
+              </select>
+              <input type="text" x-show="cfgbCFSortMode === 'alpha'" placeholder="Filter (multiple terms: mono stereo surround)" x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Matches any of the space-separated terms, e.g. &quot;mono stereo surround&quot; shows all three">
+              <!-- Select-all toggle: only visible when filters have narrowed
+                   the list. For "All cf-groups" with no text filter this
+                   would mean selecting every CF in TRaSH, which is almost
+                   never what the user wants — so it's hidden in that state. -->
+              <button type="button"
+                      x-show="cfgbCFSortMode === 'alpha' && (cfgbGroupFilter !== 'all' || (cfgbCFFilter || '').trim().length > 0)"
+                      x-cloak
+                      @click="cfgbToggleFilteredAll(!cfgbFilteredAllSelected())"
+                      :title="cfgbFilteredAllSelected() ? 'Deselect every visible CF' : 'Select every CF in the current filter'"
+                      style="padding:4px 8px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:11px;cursor:pointer;white-space:nowrap"
+                      x-text="cfgbFilteredAllSelected() ? 'Deselect all' : 'Select all (' + cfgbFilteredCount() + ')'"></button>
+            </div>
+            <!-- Manual-mode help strip — clarifies that the list below shows
+                 only selected CFs and that browsing for new ones happens in
+                 Alpha mode. -->
+            <div x-show="cfgbCFSortMode === 'manual'" x-cloak style="padding:6px 16px;background:#161b22;border-bottom:1px solid #21262d;color:#8b949e;font-size:11px">
+              Showing selected CFs in manual order. Use ▲ / ▼ to reorder. Switch to <strong>Alpha</strong> to browse and add more.
+            </div>
+            <div style="overflow-y:auto;flex:1">
+              <!-- Manual mode: selected CFs in cfgbCFManualOrder with up/down
+                   arrows. Rows also surface the required toggle and a × to
+                   drop the CF from selection without leaving manual view. -->
+              <template x-if="cfgbCFSortMode === 'manual'">
+                <div>
+                  <template x-for="(cf, idx) in cfgbOrderedSelectedCFs()" :key="cf.trashId">
+                    <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                      <span style="min-width:26px;text-align:right;color:#6a6e76;font-size:11px;font-family:monospace" x-text="(idx + 1) + '.'"></span>
+                      <div style="display:flex;flex-direction:column;gap:1px">
+                        <button type="button" @click="cfgbMoveCF(cf.trashId, -1)" :disabled="idx === 0" :style="'background:#21262d;border:1px solid #30363d;border-radius:3px;padding:0 5px;font-size:9px;line-height:1.2;cursor:' + (idx === 0 ? 'not-allowed' : 'pointer') + ';color:' + (idx === 0 ? '#4a4f57' : '#c9d1d9')" title="Move up">&#9650;</button>
+                        <button type="button" @click="cfgbMoveCF(cf.trashId, 1)" :disabled="idx === cfgbOrderedSelectedCFs().length - 1" :style="'background:#21262d;border:1px solid #30363d;border-radius:3px;padding:0 5px;font-size:9px;line-height:1.2;cursor:' + (idx === cfgbOrderedSelectedCFs().length - 1 ? 'not-allowed' : 'pointer') + ';color:' + (idx === cfgbOrderedSelectedCFs().length - 1 ? '#4a4f57' : '#c9d1d9')" title="Move down">&#9660;</button>
+                      </div>
+                      <span style="flex:1;font-size:13px;display:flex;align-items:center;gap:6px">
+                        <span x-text="cf.name"></span>
+                        <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format">custom</span>
+                      </span>
+                      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
+                        <input type="checkbox" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
+                        required
+                      </label>
+                      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Per-CF default override — rare; TRaSH only uses this on Golden Rule files (e.g. x265 (HD) is default:true in Golden Rule UHD)">
+                        <input type="checkbox" x-model="cfgbDefaultCFs[cf.trashId]" @change="cfgbDefaultCFs = {...cfgbDefaultCFs}">
+                        default
+                      </label>
+                      <button type="button"
+                              @click="cfgbSelectedCFs = (() => { const { [cf.trashId]: _a, ...rest } = cfgbSelectedCFs; return rest; })(); cfgbRequiredCFs = (() => { const { [cf.trashId]: _b, ...rest } = cfgbRequiredCFs; return rest; })(); cfgbDefaultCFs = (() => { const { [cf.trashId]: _c, ...rest } = cfgbDefaultCFs; return rest; })()"
+                              title="Remove from selection"
+                              style="background:none;border:none;color:#f85149;cursor:pointer;font-size:16px;line-height:1;padding:0 4px">&times;</button>
+                    </div>
+                  </template>
+                  <template x-if="cfgbOrderedSelectedCFs().length === 0">
+                    <div style="padding:24px;text-align:center;color:#aaa;font-size:13px">No CFs selected yet. Switch to <strong>Alpha</strong> to add some.</div>
+                  </template>
+                </div>
+              </template>
+              <!-- Alpha mode: full list with filter/search/select-all -->
+              <template x-if="cfgbCFSortMode === 'alpha'">
+                <div>
+                  <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
+                    <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                      <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
+                      <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
+                        <span x-text="cf.name"></span>
+                        <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
+                      </label>
+                      <span x-show="cfgbGroupFilter === 'all' && cf.groupNames && cf.groupNames.length > 0" style="font-size:10px;color:#6a6e76" x-text="cf.groupNames.join(' · ')" :title="cf.groupNames.join('\n')"></span>
+                      <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-req-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
+                        <input type="checkbox" :id="'cfgb-cf-req-' + cf.trashId" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
+                        required
+                      </label>
+                      <label x-show="cfgbSelectedCFs[cf.trashId]" :for="'cfgb-cf-def-' + cf.trashId" style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Per-CF default override — rare; TRaSH only uses this on Golden Rule files">
+                        <input type="checkbox" :id="'cfgb-cf-def-' + cf.trashId" x-model="cfgbDefaultCFs[cf.trashId]" @change="cfgbDefaultCFs = {...cfgbDefaultCFs}">
+                        default
+                      </label>
+                    </div>
+                  </template>
+                  <template x-if="cfgbFilteredCFs().length === 0">
+                    <div style="padding:24px;text-align:center;color:#aaa;font-size:13px" x-text="cfgbCFs.length === 0 ? 'Loading CFs...' : 'No matches.'"></div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Profiles panel — card layout matching the Profiles tab, with
+               per-card select-all + a top-level select-all. -->
+          <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality Profiles</span>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedProfileCount() + ' / ' + cfgbProfiles.length"></span>
+              <button type="button" x-show="cfgbSelectedProfileCount() > 0" x-cloak @click="cfgbClearProfiles()" title="Deselect every profile — CF selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear profiles</button>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa;margin-left:auto" title="Select every profile across all groups">
+                <input type="checkbox" :checked="cfgbAllProfilesSelected()" @change="cfgbToggleAllProfiles($event.target.checked)">
+                select all
+              </label>
+            </div>
+            <!-- Reuses the .card / .grp-* / .profile-group-header classes from
+                 the Profiles tab so colours + chevron + hover + left-border
+                 accent match. Wrapped nodes sit inside the builder panel's
+                 scrollable body; a small background tint separates them from
+                 the panel's card background. -->
+            <div style="overflow-y:auto;flex:1;padding:8px;background:#0d1117">
+              <template x-for="grp in cfgbGroupedProfiles()" :key="grp.name">
+                <div class="card" :class="'grp-' + grp.name.toLowerCase().replace(/[^a-z]/g, '')" style="margin-bottom:6px">
+                  <div class="profile-group-header" @click="cfgbToggleProfileGroupCard(grp.name)">
+                    <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }">&#9654;</span>
+                    <span style="flex:1" x-text="grp.name"></span>
+                    <span class="profile-group-count" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" @click.stop :title="'Select all ' + grp.name + ' profiles'">
+                      <input type="checkbox" :checked="cfgbGroupAllSelected(grp)" @change="cfgbToggleGroupAll(grp, $event.target.checked)">
+                      all
+                    </label>
+                  </div>
+                  <div x-show="cfgbIsProfileGroupExpanded(grp.name)">
+                    <template x-for="p in grp.profiles" :key="p.trashId">
+                      <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" :id="'cfgb-p-' + p.trashId" x-model="cfgbSelectedProfiles[p.trashId]" @change="cfgbSelectedProfiles = {...cfgbSelectedProfiles}">
+                        <label :for="'cfgb-p-' + p.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="p.name"></label>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              <template x-if="cfgbProfiles.length === 0">
+                <div style="padding:24px;text-align:center;color:#aaa;font-size:13px">Loading profiles...</div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-primary" @click="cfgbSave()" :disabled="!cfgbCanExport()" :title="cfgbEditingId ? 'Update the saved cf-group' : 'Save this cf-group locally so you can edit it later'">
+            <span x-text="cfgbEditingId ? 'Update saved' : 'Save locally'"></span>
+          </button>
+          <button class="btn" @click="cfgbCopyJSON()" :disabled="!cfgbCanExport()" title="Copy the JSON to clipboard"><span x-text="cfgbCopyLabel"></span></button>
+          <button class="btn" @click="cfgbDownloadJSON()" :disabled="!cfgbCanExport()" title="Download the JSON as a file">Download .json</button>
+          <button class="btn" @click="cfgbUIReset()" style="margin-left:auto;color:#f85149;border-color:#f85149" x-text="cfgbEditingId ? 'Discard changes' : 'Reset'"></button>
+        </div>
+
+        <!-- Save/delete feedback -->
+        <div x-show="cfgbSavingMsg" x-cloak :style="'background:' + (cfgbSavingOk ? '#1a3a1a' : '#3a1a1a') + ';border:1px solid ' + (cfgbSavingOk ? '#2a5a2a' : '#5a2a2a') + ';color:' + (cfgbSavingOk ? '#9aff9a' : '#ff9a9a') + ';padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px'" x-text="cfgbSavingMsg"></div>
+
+        <!-- Custom-CF warning — surfaces when the selected set includes custom CFs
+             which won't resolve in the public TRaSH-Guides repo. -->
+        <div x-show="cfgbSelectedCustomCFCount() > 0" x-cloak style="background:#2a2418;border:1px solid #4a3a18;color:#ffc88a;padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px">
+          <span x-text="cfgbSelectedCustomCFCount()"></span>
+          custom CF<span x-show="cfgbSelectedCustomCFCount() !== 1">s</span>
+          selected. These have IDs starting <code>custom:</code> and won't resolve in TRaSH-Guides. Save locally for personal use, but don't include them in a Download meant for contribution.
+        </div>
+
+        <!-- JSON preview (collapsible — Alpine pattern, matches other Clonarr collapsibles) -->
+        <div style="margin-top:8px">
+          <div @click="cfgbPreviewOpen = !cfgbPreviewOpen" style="cursor:pointer;font-size:13px;color:#aaa;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
+            <span class="detail-section-chevron" :class="{ open: cfgbPreviewOpen }">▶</span>
+            <span>JSON preview</span>
+          </div>
+          <pre x-show="cfgbPreviewOpen" x-cloak style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:#c9d1d9;max-height:300px;overflow-y:auto" x-text="cfgbGenerateJSON()"></pre>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ==================== PROFILE BUILDER ==================== -->
@@ -3000,8 +3274,8 @@
               </div>
             </div>
 
-            <!-- Advanced Mode — collapsible, grey stripe. Only shown when devMode is on. -->
-            <template x-if="config.devMode">
+            <!-- TRaSH schema fields — collapsible, grey stripe. Only shown when trashSchemaFields is on. -->
+            <template x-if="config.trashSchemaFields">
               <div class="pd-card" style="border-left:3px solid #6e7681;padding:10px 18px">
                 <div @click="pbAdvancedOpen = !pbAdvancedOpen" style="cursor:pointer;display:flex;align-items:center;gap:8px">
                   <span style="color:#8b949e" x-text="pbAdvancedOpen ? '▾' : '▸'"></span>
@@ -3174,7 +3448,7 @@
                       <span class="cf-info" x-show="cf.description"
                             @mouseenter="showCFTooltip($event, cf.description)"
                             @mouseleave="hideCFTooltip()">ⓘ</span>
-                      <template x-if="config.devMode">
+                      <template x-if="config.trashSchemaFields">
                         <span style="font-size:12px;color:#aaa;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
                       </template>
                     </div>
@@ -4052,7 +4326,7 @@
                       <template x-if="!cf.required">
                         <label class="toggle toggle-sm">
                           <input type="checkbox" :checked="selectedOptionalCFs[cf.trashId]"
-                                 @change="group.exclusive ? toggleExclusiveCF(cf.trashId, group.cfs, group.name?.includes('Golden Rule')) : toggleOptionalCF(cf.trashId)">
+                                 @change="group.exclusive ? toggleExclusiveCF(cf.trashId, group.cfs) : toggleOptionalCF(cf.trashId)">
                           <span class="slider"></span>
                         </label>
                       </template>
@@ -4415,7 +4689,7 @@
           <div class="setting-row">
             <div class="setting-label">Authentication</div>
             <div class="setting-value">
-              <select class="config-input" style="max-width:220px" x-model="config.authentication" @change="configDirty = true">
+              <select class="input" style="max-width:220px" x-model="config.authentication" @change="configDirty = true">
                 <option value="forms">Forms (login page)</option>
                 <option value="basic">Basic (browser popup)</option>
                 <option value="none">None (disabled — unsafe)</option>
@@ -4427,7 +4701,7 @@
           <div class="setting-row">
             <div class="setting-label">Authentication Required</div>
             <div class="setting-value">
-              <select class="config-input" style="max-width:280px" x-model="config.authenticationRequired" @change="configDirty = true">
+              <select class="input" style="max-width:280px" x-model="config.authenticationRequired" @change="configDirty = true">
                 <option value="disabled_for_local_addresses">Disabled for Trusted Networks</option>
                 <option value="enabled">Enabled (all traffic)</option>
               </select>
@@ -4438,7 +4712,7 @@
           <div class="setting-row">
             <div class="setting-label">Trusted Networks</div>
             <div class="setting-value">
-              <input type="text" class="config-input" placeholder="e.g. 192.168.0.0/24, 10.0.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
+              <input type="text" class="input" placeholder="e.g. 192.168.0.0/24, 10.0.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
               <div class="setting-help" x-show="authStatus.trustedNetworksLocked" x-cloak style="color:#d29922">
                 <strong>Locked by <code>TRUSTED_NETWORKS</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container. Unsetting the env var unlocks this field.
               </div>
@@ -4457,7 +4731,7 @@
           <div class="setting-row">
             <div class="setting-label">Trusted Proxies</div>
             <div class="setting-value">
-              <input type="text" class="config-input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
+              <input type="text" class="input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
               <div class="setting-help" x-show="authStatus.trustedProxiesLocked" x-cloak style="color:#d29922">
                 <strong>Locked by <code>TRUSTED_PROXIES</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container.
               </div>
@@ -4468,7 +4742,7 @@
           <div class="setting-row">
             <div class="setting-label">Session TTL (days)</div>
             <div class="setting-value">
-              <input type="number" class="config-input" style="max-width:100px" min="1" max="365" x-model.number="config.sessionTtlDays" @input="configDirty = true">
+              <input type="number" class="input" style="max-width:100px" min="1" max="365" x-model.number="config.sessionTtlDays" @input="configDirty = true">
               <div class="setting-help">How long a login stays valid before re-authentication. Default 30. Max 365.</div>
             </div>
           </div>
@@ -4491,7 +4765,7 @@
             <div class="setting-label">API Key</div>
             <div class="setting-value">
               <div style="display:flex;gap:6px;align-items:center">
-                <input type="text" class="config-input" style="flex:1;font-family:monospace;font-size:12px" readonly
+                <input type="text" class="input" style="flex:1;font-family:monospace;font-size:12px" readonly
                        :value="securityApiKeyVisible ? securityApiKey : (securityApiKey ? '••••••••••••••••••••••••••••••••' : 'Loading...')">
                 <button class="btn btn-secondary" @click="securityApiKeyVisible = !securityApiKeyVisible" x-text="securityApiKeyVisible ? 'Hide' : 'Show'"></button>
                 <button class="btn btn-secondary" @click="copyApiKey()" x-text="securityApiKeyCopied ? 'Copied!' : 'Copy'"></button>
@@ -4517,20 +4791,20 @@
           <div class="setting-row">
             <div class="setting-label">Current password</div>
             <div class="setting-value">
-              <input type="password" class="config-input" style="max-width:280px" autocomplete="current-password" x-model="pwChange.current">
+              <input type="password" class="input" style="max-width:280px" autocomplete="current-password" x-model="pwChange.current">
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">New password</div>
             <div class="setting-value">
-              <input type="password" class="config-input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.next">
+              <input type="password" class="input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.next">
               <div class="setting-help">At least 10 characters, with at least 2 of: uppercase, lowercase, digit, symbol.</div>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Confirm new password</div>
             <div class="setting-value">
-              <input type="password" class="config-input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.confirm">
+              <input type="password" class="input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.confirm">
             </div>
           </div>
           <div class="setting-row">
@@ -4549,15 +4823,25 @@
         <!-- ===== Advanced ===== -->
         <div x-show="settingsSection === 'advanced'">
           <div class="settings-section-title">Advanced</div>
-          <div class="settings-section-desc">Developer tools and debug logging.</div>
+          <div class="settings-section-desc">Power-user features and debug logging. Enable only what you need.</div>
           <div class="setting-row">
             <div class="setting-label">Advanced Mode</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
                 <input type="checkbox" :checked="config.devMode" @change="toggleAdvancedMode($event.target.checked)">
-                <span style="font-size:13px;color:#aaa">Profile Builder, Scoring Sandbox, and TRaSH JSON export</span>
+                <span style="font-size:13px;color:#aaa">Adds the Advanced tab (Profile Builder, Scoring Sandbox, CF Group Builder) and the Prowlarr integration settings.</span>
               </label>
               <span x-show="config.devMode" style="font-size:12px;color:#d29922">Active</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label" title="Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.">Show TRaSH schema fields</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" :checked="config.trashSchemaFields" @change="config.trashSchemaFields = $event.target.checked; saveConfig(['trashSchemaFields'])">
+                <span style="font-size:13px;color:#aaa">Surfaces trash_id, trash_scores, group number, and HTML description fields in CF editor, Profile Builder and CF Group Builder. For TRaSH-Guides contributors only.</span>
+              </label>
+              <span x-show="config.trashSchemaFields" style="font-size:12px;color:#d29922">Active</span>
             </div>
           </div>
           <div class="setting-row">
@@ -5719,10 +6003,10 @@
         </div>
       </template>
 
-      <!-- Advanced Mode fields -->
-      <template x-if="config.devMode">
+      <!-- TRaSH schema fields -->
+      <template x-if="config.trashSchemaFields">
         <div style="border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:16px;background:#1c1c24">
-          <div style="font-size:12px;color:#d29922;font-weight:600;margin-bottom:8px">Advanced Mode</div>
+          <div style="font-size:12px;color:#d29922;font-weight:600;margin-bottom:8px">TRaSH schema fields</div>
           <div class="form-group">
             <label>Trash ID</label>
             <div style="display:flex;gap:8px">
@@ -5774,7 +6058,7 @@
         <template x-if="cfEditorMode === 'edit'">
           <button class="btn" style="color:#f85149;margin-right:auto" @click="deleteCFFromEditor()">Delete</button>
         </template>
-        <template x-if="config.devMode">
+        <template x-if="config.trashSchemaFields">
           <button class="btn" style="color:#d29922" @click="exportTrashJSON()">Export TRaSH JSON</button>
         </template>
         <button class="btn" @click="showCFEditor = false">Cancel</button>
@@ -5940,7 +6224,7 @@
       <label style="display:block;font-size:12px;color:#c3c7cc;margin:12px 0 6px">
         Enter your <strong>current admin password</strong> to confirm:
       </label>
-      <input type="password" class="config-input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
+      <input type="password" class="input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
              @keydown.enter="disableAuthPassword && (disableAuthModalOpen = false, saveSecurityConfig(true))"
              style="width:100%;margin-bottom:8px">
       <div x-show="disableAuthError" x-text="disableAuthError" style="color:#ff9a9a;font-size:12px;margin:0 0 10px"></div>
@@ -5959,24 +6243,51 @@
 </div>
 
 <script>
-// CSRF protection: attach X-CSRF-Token header to every mutating fetch.
-// Server sets a clonarr_csrf cookie on GETs; the wrapper below reads the
-// cookie and echoes it as a header on POST/PUT/DELETE/PATCH. Handles all
-// current fetches and any future ones without per-call changes. Covers
-// AJAX only — <form method="POST"> uses a hidden csrf_token field
-// (see logout form in the header).
+// Global fetch wrapper. Handles two cross-cutting concerns so call sites
+// don't have to:
+//
+// (1) CSRF — attach X-CSRF-Token header to every mutating fetch. Server
+//     sets a clonarr_csrf cookie on GETs; the wrapper reads the cookie
+//     and echoes it as a header on POST/PUT/DELETE/PATCH. AJAX only —
+//     <form method="POST"> uses a hidden csrf_token field (logout form).
+//
+// (2) 401 → /login redirect — if any auth-gated endpoint returns 401
+//     (session expired, logged out elsewhere, cookie cleared), bounce
+//     the user to the login page. Centralized so every fetch call site
+//     doesn't need `if (resp.status === 401) window.location...` boiler-
+//     plate. A never-resolving promise is returned on redirect so
+//     callers don't try to .json() a body that won't arrive before the
+//     navigation completes.
+//
+//     Skip the redirect when:
+//       - Already on /login or /setup (avoid loop — these pages probe
+//         /api/auth/status as a public endpoint).
+//       - Caller opts out via X-Skip-Login-Redirect header. The only
+//         legitimate use is the disable-auth modal, where 401 means
+//         "confirm_password incorrect" not "session expired".
 (function() {
   const origFetch = window.fetch.bind(window);
-  window.fetch = function(input, init) {
+  window.fetch = async function(input, init) {
     init = init || {};
     const method = (init.method || 'GET').toUpperCase();
+    const headers = Object.assign({}, init.headers || {});
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
       const m = document.cookie.match(/(?:^|; )clonarr_csrf=([^;]+)/);
-      if (m) {
-        init.headers = Object.assign({}, init.headers || {}, { 'X-CSRF-Token': m[1] });
+      if (m) headers['X-CSRF-Token'] = m[1];
+    }
+    const skipLoginRedirect = headers['X-Skip-Login-Redirect'] === '1';
+    // Client-side hint only — strip before sending to server.
+    delete headers['X-Skip-Login-Redirect'];
+    init.headers = headers;
+    const resp = await origFetch(input, init);
+    if (resp.status === 401 && !skipLoginRedirect) {
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/setup') {
+        window.location.href = '/login';
+        return new Promise(() => {});
       }
     }
-    return origFetch(input, init);
+    return resp;
   };
 })();
 
@@ -6044,7 +6355,49 @@ function clonarr() {
     currentTab: 'settings',  // LEGACY — being replaced by currentSection + activeAppType
     currentSection: 'profiles',  // NEW — feature-first: 'profiles', 'custom-formats', 'quality-size', 'naming', 'maintenance', 'advanced', 'settings', 'about'
     activeAppType: 'radarr',     // NEW — 'radarr' or 'sonarr', independent of section
-    advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'import', 'scoring'
+    advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'scoring', 'group-builder'
+
+    // CF Group Builder state — advancedTab === 'group-builder'
+    // Mirrors the on-disk shape of TRaSH cf-groups/*.json so export is a straight serialize.
+    cfgbName: '',
+    cfgbDescription: '',
+    cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input
+    cfgbDefault: false,
+    cfgbCFs: [],                             // [{trashId, name, groupTrashId, groupName, isCustom}] — flattened from /api/trash/{app}/all-cfs
+    cfgbGroups: [],                          // [{groupTrashId, name, count}] — actual TRaSH cf-groups for the dropdown
+    cfgbGroupFilter: 'all',                  // 'all' | 'custom' | 'other' | a TRaSH groupTrashId
+    cfgbHasCustom: false,                    // true if the list contains any user-custom CFs (toggles the Custom filter option)
+    // Ungrouped counts come in two flavours so TRaSH can see both the raw
+    // upstream scope ("CFs TRaSH hasn't grouped yet") and the residual
+    // after his local work ("still to do after what I've placed locally").
+    cfgbUngroupedTrashCount: 0,              // CFs with 0 TRaSH group memberships (ignores local groups)
+    cfgbUngroupedRemainingCount: 0,          // CFs with 0 memberships at all — TRaSH and local combined
+    cfgbCFFilter: '',
+    cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
+    cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
+    cfgbDefaultCFs: {},                      // trashId → true (per-CF default override — rare; see Golden Rule UHD)
+    cfgbProfiles: [],                        // [{trashId, name, group, groupName}] — all TRaSH profiles for current appType
+    cfgbSelectedProfiles: {},                // trashId → true
+    cfgbProfileGroupExpanded: {},            // groupName → bool — card collapse state (all expanded by default)
+    cfgbCopyLabel: 'Copy JSON',              // swaps to "Copied!" briefly on click
+    cfgbLoadError: '',                        // user-visible error when /api/trash/* fails
+    cfgbPreviewOpen: false,                   // JSON-preview collapsible state
+    // CF sort mode. 'alpha' is the TRaSH-spec default; 'manual' lets the
+    // user hand-order selected CFs (up/down arrows) for cases where a
+    // specific order matters (audio-format by quality, tier groupings, etc).
+    // cfgbCFManualOrder holds trash_ids in the chosen order; entries for
+    // deselected CFs are pruned lazily when the payload is built.
+    cfgbCFSortMode: 'alpha',
+    cfgbCFManualOrder: [],
+    // Saved cf-groups (persistent, stored in Clonarr). Loaded per app type on
+    // tab entry. Edit loads one into the form; Save writes it back (POST for
+    // new, PUT for existing). Storage is scoped per appType on disk so a
+    // Radarr and Sonarr group with the same name never overwrite each other.
+    cfgbSavedGroups: [],                     // CFGroup[] from GET /api/cf-groups/{app}
+    cfgbEditingId: '',                       // '' = new (POST), non-empty = editing existing (PUT)
+    cfgbSavingMsg: '',                       // transient save/delete feedback
+    cfgbSavingOk: false,                     // whether cfgbSavingMsg is success (green) or error (red)
+    cfgbDeleting: false,                     // guard against double-fire on Delete → Confirm (modal's onConfirm could run twice under fast clicks)
     profileTab: 'trash-sync',    // NEW — simple variable replacing per-app profileTabs: 'trash-sync', 'compare'
     instances: [],
     config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
@@ -6565,8 +6918,10 @@ function clonarr() {
         if (!fields || fields.includes('trashRepo')) body.trashRepo = this.config.trashRepo;
         if (fields && fields.includes('pullInterval')) body.pullInterval = this.config.pullInterval;
         if (fields && fields.includes('devMode')) body.devMode = this.config.devMode;
+        if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
+        // 401 handled centrally by the fetch wrapper.
         await fetch('/api/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -6643,6 +6998,7 @@ function clonarr() {
     },
 
     async fetchApiKey() {
+      // 401 handled centrally by the fetch wrapper.
       try {
         const resp = await fetch('/api/auth/api-key');
         if (!resp.ok) return;
@@ -6673,10 +7029,30 @@ function clonarr() {
       finally { this.securityRegenerating = false; }
     },
 
+    // Mirror of server-side validatePassword (internal/auth/auth.go): ≥10
+    // chars and ≥2 of {upper, lower, digit, symbol}. Returns '' on valid,
+    // error message on failure. Enforced client-side for fast UX; server
+    // re-validates unconditionally — this is not a trust boundary.
+    pwComplexityError(pw) {
+      if (!pw || pw.length < 10) return 'password must be at least 10 characters';
+      let classes = 0;
+      if (/[A-Z]/.test(pw)) classes++;
+      if (/[a-z]/.test(pw)) classes++;
+      if (/[0-9]/.test(pw)) classes++;
+      if (/[^A-Za-z0-9]/.test(pw)) classes++;
+      if (classes < 2) return 'password must contain at least 2 of: uppercase, lowercase, digit, symbol';
+      return '';
+    },
+
     async changePassword() {
       if (!this.pwChange.current || !this.pwChange.next || !this.pwChange.confirm) return;
       if (this.pwChange.next !== this.pwChange.confirm) {
         this.pwChangeOk = false; this.pwChangeMsg = 'New passwords do not match';
+        return;
+      }
+      const complexityErr = this.pwComplexityError(this.pwChange.next);
+      if (complexityErr) {
+        this.pwChangeOk = false; this.pwChangeMsg = complexityErr;
         return;
       }
       this.pwChangeSaving = true; this.pwChangeMsg = '';
@@ -6744,9 +7120,15 @@ function clonarr() {
         body.confirm_password = this.disableAuthPassword;
       }
       try {
+        // Opt out of the central 401→/login redirect for confirmedNone:
+        // here a 401 means "confirm_password incorrect", not "session
+        // expired", and must surface to the modal handler below. Session
+        // expiry on the non-confirmedNone path is handled by the wrapper.
+        const headers = { 'Content-Type': 'application/json' };
+        if (confirmedNone) headers['X-Skip-Login-Redirect'] = '1';
         const resp = await fetch('/api/config', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(body),
         });
         const data = await resp.json().catch(() => ({}));
@@ -8976,7 +9358,13 @@ function clonarr() {
       trashProfile.minFormatScore = p.minFormatScore ?? 0;
       trashProfile.cutoffFormatScore = p.cutoffScore ?? 10000;
       trashProfile.minUpgradeFormatScore = p.minUpgradeFormatScore ?? 0;
-      trashProfile.language = p.language || 'Original';
+      // Sonarr profiles don't have a language field — the UI removed it
+      // from the General section, but the export was still emitting
+      // `"language": "Original"` for Sonarr JSON. TRaSH's actual Sonarr
+      // profile files omit the key entirely; match that convention.
+      if ((p.appType || 'radarr') === 'radarr') {
+        trashProfile.language = p.language || 'Original';
+      }
       trashProfile.items = items;
       trashProfile.formatItems = formatItems;
 
@@ -9309,7 +9697,17 @@ function clonarr() {
       }
       // Preserve selection if still in allowed list; otherwise pick first.
       const stillValid = allowed.some(q => q.name === selectedValue);
-      el.value = stillValid ? selectedValue : allowed[0].name;
+      const targetValue = stillValid ? selectedValue : allowed[0].name;
+      el.value = targetValue;
+      // Programmatic assignment does NOT fire @change, so Alpine's
+      // `pb.cutoff = $el.value` binding never runs when we auto-pick the
+      // first allowed quality on a new profile. The dropdown looks selected
+      // but pb.cutoff stays empty — export produces `cutoff: ""`. Dispatch
+      // a change event so the binding runs. Safe from looping: x-effect's
+      // next pass sees pb.cutoff == targetValue and skips the dispatch.
+      if (targetValue !== selectedValue) {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     },
 
     populateCutoffSelect(el, qualityStructure, profile, selectedValue, qualityOverrides) {
@@ -9353,7 +9751,17 @@ function clonarr() {
         if (opt.disabled) o.disabled = true;
         el.appendChild(o);
       }
-      if (el.value !== (selectedValue || trashDefault)) el.value = selectedValue || trashDefault;
+      const targetValue = selectedValue || trashDefault;
+      if (el.value !== targetValue) el.value = targetValue;
+      // Same class of bug populatePBCutoffSelect fixed: programmatic
+      // el.value doesn't fire @change, so pdOverrides.cutoffQuality stays
+      // at a stale value when the dropdown auto-corrects (e.g. user
+      // toggles off the quality that was the cutoff, the list rebuilds,
+      // el.value falls back to TRaSH default, but the override state
+      // never updates). Dispatch so the @change binding runs.
+      if (targetValue !== selectedValue) {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     },
 
     populateSelectField(el, options, selectedValue) {
@@ -10200,15 +10608,30 @@ function clonarr() {
     },
 
     groupedProfiles(type) {
+      // TRaSH convention: sort cards by the `group` integer from profile.json
+      // (ascending), then alpha by card name as tiebreak. A card can contain
+      // profiles with different group ints (Standard has 1 and 2); use the
+      // minimum as the card's sort key so it still lands in the right slot.
+      // User-created "Other" profiles without a group int drift to the end.
       const profiles = this.trashProfiles[type] || [];
       const groups = {};
-      const order = { 'Standard': 0, 'Anime': 1, 'French': 2, 'German': 3, 'SQP': 99 };
       for (const p of profiles) {
         const g = p.groupName || 'Other';
-        if (!groups[g]) groups[g] = { name: g, profiles: [] };
+        if (!groups[g]) groups[g] = { name: g, profiles: [], minGroup: Infinity };
         groups[g].profiles.push(p);
+        const gnum = typeof p.group === 'number' ? p.group : Infinity;
+        if (gnum < groups[g].minGroup) groups[g].minGroup = gnum;
       }
-      return Object.values(groups).sort((a, b) => (order[a.name] ?? 50) - (order[b.name] ?? 50));
+      // Alpha-sort profiles within each card so order doesn't depend on
+      // whatever filesystem read order /api/trash/{app}/profiles happened
+      // to return. Matches the CF Group Builder's within-card sort.
+      for (const g of Object.values(groups)) {
+        g.profiles.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      return Object.values(groups).sort((a, b) => {
+        if (a.minGroup !== b.minGroup) return a.minGroup - b.minGroup;
+        return a.name.localeCompare(b.name);
+      });
     },
 
     toggleInstance(id) {
@@ -10267,6 +10690,32 @@ function clonarr() {
     },
 
     switchAppType(appType) {
+      // Guard unsaved CF Group Builder work: the builder is app-type-scoped,
+      // so switching triggers cfgbLoad → cfgbReset which would discard an
+      // in-flight edit. Warn via the styled confirm modal (browser's native
+      // confirm() was jarring and didn't match the rest of the app).
+      const shouldPrompt = this.currentSection === 'advanced'
+        && this.advancedTab === 'group-builder'
+        && appType !== this.activeAppType
+        && typeof this.cfgbIsDirty === 'function' && this.cfgbIsDirty();
+      if (shouldPrompt) {
+        const label = this.cfgbEditingId
+          ? 'changes to "' + (this.cfgbName || '(unnamed)') + '"'
+          : 'the unsaved cf-group draft';
+        this.confirmModal = {
+          show: true,
+          title: 'Discard unsaved cf-group work?',
+          message: 'Switch to ' + appType + ' and discard ' + label + '?\n\nThe saved copy on disk (if any) is unaffected.',
+          confirmLabel: 'Switch to ' + appType,
+          onConfirm: () => this._doSwitchAppType(appType),
+          onCancel: () => {},
+        };
+        return;
+      }
+      this._doSwitchAppType(appType);
+    },
+
+    _doSwitchAppType(appType) {
       this.debugLog('UI', `App type: ${appType}`);
       this.activeAppType = appType;
       localStorage.setItem('clonarr_appType', appType);
@@ -10281,6 +10730,14 @@ function clonarr() {
         this.cleanupInstanceId = typeInsts[0].id;
         this.loadCleanupKeep();
         this.loadCleanupCFNames();
+      }
+      // Reload tab-scoped data that depends on appType. The CF Group Builder
+      // pulls CFs, profiles, and saved groups per Radarr/Sonarr — without this
+      // the Radarr list keeps showing when the user flips to Sonarr.
+      // Scoring Sandbox has the same issue; reload it too for parity.
+      if (this.currentSection === 'advanced') {
+        if (this.advancedTab === 'group-builder') this.cfgbLoad(appType);
+        else if (this.advancedTab === 'scoring') this.loadSandbox(appType);
       }
     },
 
@@ -11261,11 +11718,16 @@ function clonarr() {
     toggleCompareSelect(instId, trashId, checked) {
       const sel = {...(this.instCompareSelected[instId] || {})};
       const result = this.instCompareResult[instId];
-      // Exclusive required groups: block unchecking the last variant. Matches TRaSH Sync behavior —
-      // always exactly one variant picked, no picker modal needed.
+      // Exclusive required groups other than Golden Rule: block unchecking the last variant.
+      // Golden Rule is now optional — a profile may legitimately have no HD or UHD variant active.
+      // Matches Profile Edit (imported-profile flow) and Profile Builder (variantGoldenRule: 'none').
+      // "Never both" is still enforced below when checking — so user can end with one or none,
+      // but never both active simultaneously.
       if (!checked && result) {
         for (const group of (result.groups || [])) {
           if (!group.exclusive || !group.defaultEnabled) continue;
+          // Golden Rule is optional — allow unchecking the last variant.
+          if ((group.name || '').toLowerCase().includes('golden rule')) continue;
           const cfsInGroup = group.cfs.map(c => c.trashId);
           if (cfsInGroup.includes(trashId)) {
             const otherSelected = cfsInGroup.some(tid => tid !== trashId && sel[tid]);
@@ -12721,8 +13183,8 @@ function clonarr() {
           case 'trash': return dir * (a.profileName || '').localeCompare(b.profileName || '');
           case 'arr': return dir * (a.arrProfileName || '').localeCompare(b.arrProfileName || '');
           case 'changed': {
-            const at = a.changes ? new Date(a.lastSync).getTime() : 0;
-            const bt = b.changes ? new Date(b.lastSync).getTime() : 0;
+            const at = a.changes ? new Date(a.appliedAt || a.lastSync).getTime() : 0;
+            const bt = b.changes ? new Date(b.appliedAt || b.lastSync).getTime() : 0;
             return dir * (at - bt);
           }
           case 'events': return dir * (this.historyEventCount(instId, a.arrProfileId) - this.historyEventCount(instId, b.arrProfileId));
@@ -12751,8 +13213,8 @@ function clonarr() {
         this.showToast('No previous state to rollback to — this is the earliest recorded sync.', 'warning', 6000);
         return;
       }
-      const date = new Date(entry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-      const prevDate = new Date(prevEntry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      const date = new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      const prevDate = new Date(prevEntry.appliedAt || prevEntry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
       // Build summary of what will be undone
       const changes = entry.changes || {};
       const summary = [
@@ -14498,8 +14960,804 @@ function clonarr() {
       finally { this.prowlarrTesting = false; }
     },
 
+    // --- CF Group Builder ---
+    // Loads CFs + profiles for the active app so the builder UI can populate.
+    // Called on first click of the CF Group Builder sub-tab and whenever the
+    // user toggles Radarr↔Sonarr (CFs + profiles are app-specific).
+    async cfgbLoad(appType) {
+      this.cfgbLoadError = '';
+      // When the user switches Radarr↔Sonarr the current form has to be reset
+      // (a half-built group is scoped to one app type). Refresh saved list too.
+      this.cfgbReset();
+      // Race guard: if the user rapidly flips Radarr↔Sonarr↔Radarr, multiple
+      // cfgbLoad calls are in flight simultaneously. Each stores its appType
+      // on entry; on completion we re-check — if a later call has superseded
+      // ours, discard the response instead of leaking state across appTypes.
+      this._cfgbLoadFor = appType;
+      try {
+        const [allCfsResp, profResp, savedResp] = await Promise.all([
+          fetch('/api/trash/' + appType + '/all-cfs'),
+          fetch('/api/trash/' + appType + '/profiles'),
+          fetch('/api/cf-groups/' + appType),
+        ]);
+        if (this._cfgbLoadFor !== appType) return; // superseded
+        if (!allCfsResp.ok || !profResp.ok) {
+          throw new Error('HTTP ' + allCfsResp.status + ' / ' + profResp.status);
+        }
+        const [allCfsRes, profRes, savedRes] = await Promise.all([
+          allCfsResp.json(),
+          profResp.json(),
+          savedResp.ok ? savedResp.json() : Promise.resolve([]),
+        ]);
+        // /all-cfs returns { categories: [{ category, groups: [{ cfs: [...] }] }] }.
+        // The "categories" layer is a Clonarr-side abstraction; TRaSH itself
+        // organizes CFs by cf-groups (the inner `groups` level). The builder
+        // filter uses those REAL TRaSH groups so new upstream groups appear
+        // automatically without any Clonarr-side mapping to maintain.
+        //
+        // Each CF carries its parent group's trashId + name for filtering.
+        // Synthetic "Custom" and "Other" groups (emitted by the backend for
+        // user-custom CFs and ungrouped CFs) have no groupTrashId — we treat
+        // those as two special filter modes instead of real groups.
+        // The /all-cfs endpoint lists each CF once per containing cf-group.
+        // ~18 TRaSH CFs live in multiple groups (HDR10+, DV-related, a few
+        // anime ones). A naive flatten produced duplicate rows — Alpine's
+        // <template x-for> with :key="cf.trashId" silently drops rendering
+        // at the first duplicate, which truncated the alpha-sorted list
+        // around its first repeat (e.g. stopped just past "AV1").
+        //
+        // Dedup by trashId, but accumulate every groupTrashId the CF appears
+        // under. The cf-group dropdown filter walks groupTrashIds (array
+        // membership), so a shared CF surfaces under each of its groups.
+        // The group count tally counts every appearance so the "(N)" badges
+        // in the dropdown reflect real TRaSH group membership.
+        const flat = [];
+        const byTid = new Map(); // trashId → entry in flat[]
+        const groupMap = new Map(); // groupTrashId → {groupTrashId, name, count}
+        let hasCustom = false, hasOther = false;
+        for (const cat of (allCfsRes.categories || [])) {
+          for (const group of (cat.groups || [])) {
+            const gid = group.groupTrashId || '';
+            const gname = group.name || group.shortName || '';
+            if (gid && !groupMap.has(gid)) {
+              groupMap.set(gid, { groupTrashId: gid, name: gname, count: 0 });
+            }
+            for (const cf of (group.cfs || [])) {
+              if (!cf.trashId || !cf.name) continue;
+              if (gid) groupMap.get(gid).count++;
+              if (cf.isCustom) hasCustom = true;
+              if (!gid && !cf.isCustom) hasOther = true;
+              let row = byTid.get(cf.trashId);
+              if (!row) {
+                row = {
+                  trashId: cf.trashId,
+                  name: cf.name,
+                  groupTrashIds: [],
+                  groupNames: [],
+                  isCustom: !!cf.isCustom,
+                };
+                flat.push(row);
+                byTid.set(cf.trashId, row);
+              }
+              if (gid && !row.groupTrashIds.includes(gid)) {
+                row.groupTrashIds.push(gid);
+                row.groupNames.push(gname);
+              }
+            }
+          }
+        }
+        // Cache TRaSH-only state on the instance. cfgbApplyLocalGroups()
+        // reads this cache + cfgbSavedGroups to produce cfgbCFs / cfgbGroups /
+        // cfgbHasOther — so Save/Delete on a saved group can refresh the
+        // dropdown without re-fetching /all-cfs or resetting the form.
+        this._cfgbTrashFlat = flat;
+        this._cfgbTrashGroupMap = groupMap;
+        this._cfgbTrashHasCustom = hasCustom;
+        this.cfgbApplyLocalGroups();
+        // Profiles API still uses camelCase (api.ProfileListItem).
+        this.cfgbProfiles = (profRes || [])
+          .map(p => ({
+            trashId: p.trashId,
+            name: p.name || '',
+            group: typeof p.group === 'number' ? p.group : 99,
+            groupName: p.groupName || 'Other',
+          }))
+          .filter(p => p.trashId && p.name);
+        // Collapse all profile cards by default — mirrors the Profiles /
+        // TRaSH Sync tab behaviour where the user opens the card they care
+        // about rather than scrolling past 50+ profiles up front.
+        this.cfgbProfileGroupExpanded = {};
+        this.cfgbSavedGroups = Array.isArray(savedRes) ? savedRes : [];
+      } catch (e) {
+        if (this._cfgbLoadFor !== appType) return; // superseded
+        console.error('cfgbLoad failed:', e);
+        this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull TRaSH in Settings → TRaSH Repo.';
+        this.cfgbCFs = [];
+        this.cfgbGroups = [];
+        this.cfgbHasCustom = false;
+        this.cfgbUngroupedTrashCount = 0;
+        this.cfgbUngroupedRemainingCount = 0;
+        this._cfgbTrashFlat = [];
+        this._cfgbTrashGroupMap = new Map();
+        this._cfgbTrashHasCustom = false;
+        this.cfgbProfiles = [];
+        this.cfgbSavedGroups = [];
+      }
+    },
+
+    // Combines TRaSH-only cache (set by cfgbLoad) with the current
+    // cfgbSavedGroups to produce the CF list, dropdown, and Ungrouped
+    // counts. Callable after Save/Delete of a local group so the dropdown
+    // refreshes without another /all-cfs fetch.
+    //
+    // Each CF keeps its TRaSH group memberships in c.trashGroupTrashIds
+    // (pure) and the full combined set in c.groupTrashIds (TRaSH + local,
+    // used for rendering + filter). The "Ungrouped (TRaSH)" filter walks
+    // trashGroupTrashIds; "Ungrouped (after local)" walks groupTrashIds.
+    cfgbApplyLocalGroups() {
+      // Clone the TRaSH-only flat list so the merge doesn't mutate cache.
+      const flat = (this._cfgbTrashFlat || []).map(c => ({
+        ...c,
+        trashGroupTrashIds: c.groupTrashIds.slice(),
+        trashGroupNames: c.groupNames.slice(),
+        groupTrashIds: c.groupTrashIds.slice(),
+        groupNames: c.groupNames.slice(),
+      }));
+      const byTid = new Map(flat.map(c => [c.trashId, c]));
+      const groupMap = new Map();
+      for (const [gid, g] of (this._cfgbTrashGroupMap || new Map())) {
+        groupMap.set(gid, { ...g });
+      }
+      // Merge local cf-groups into dropdown entries + per-CF membership.
+      for (const g of (this.cfgbSavedGroups || [])) {
+        if (!g || !g.id) continue;
+        const localId = 'local:' + g.id;
+        const gname = g.name || '(unnamed local)';
+        groupMap.set(localId, {
+          groupTrashId: localId,
+          name: gname,
+          count: (g.custom_formats || []).length,
+          isLocal: true,
+        });
+        for (const cf of (g.custom_formats || [])) {
+          const tid = cf && cf.trash_id;
+          if (!tid) continue;
+          const row = byTid.get(tid);
+          if (!row) continue; // CF in saved group but not in /all-cfs (stale)
+          if (!row.groupTrashIds.includes(localId)) {
+            row.groupTrashIds.push(localId);
+            row.groupNames.push(gname);
+          }
+        }
+      }
+      this.cfgbCFs = flat;
+      // TRaSH groups first (alpha), then locals (alpha) at the bottom.
+      this.cfgbGroups = Array.from(groupMap.values()).sort((a, b) => {
+        if (!!a.isLocal !== !!b.isLocal) return a.isLocal ? 1 : -1;
+        return a.name.localeCompare(b.name);
+      });
+      this.cfgbHasCustom = this._cfgbTrashHasCustom;
+      this.cfgbUngroupedTrashCount =
+        flat.filter(c => !c.isCustom && c.trashGroupTrashIds.length === 0).length;
+      this.cfgbUngroupedRemainingCount =
+        flat.filter(c => !c.isCustom && c.groupTrashIds.length === 0).length;
+    },
+
+    cfgbUpdateHash() {
+      // trash_id is MD5 of the group name, but scoped by app-type prefix so
+      // the same name ("[Release Groups] Anime") on Radarr vs Sonarr produces
+      // different hashes. TRaSH's tooling treats trash_id as a global key
+      // across both apps, so identical hashes would collide there even
+      // though our on-disk storage separates them per app-type.
+      // Existing saved groups keep their old hash (cfgbLoadForEdit restores
+      // the stored trash_id verbatim); the new formula only kicks in when
+      // the user types in the name field and the @input listener fires.
+      const n = (this.cfgbName || '').trim();
+      const app = this.activeAppType || 'radarr';
+      this.cfgbTrashID = n ? cfgbMD5(app + ':' + n) : '';
+    },
+
+    cfgbFilteredCFs() {
+      const g = this.cfgbGroupFilter || 'all';
+      let list = this.cfgbCFs;
+      if (g === 'custom') {
+        list = list.filter(c => c.isCustom);
+      } else if (g === 'other-trash') {
+        // Ungrouped per TRaSH: CF isn't in any upstream cf-group. Local
+        // groups don't subtract — useful to see the full set TRaSH still
+        // needs to categorize.
+        list = list.filter(c => !c.isCustom && c.trashGroupTrashIds.length === 0);
+      } else if (g === 'other-remaining') {
+        // Ungrouped after local work: excludes CFs already placed in any
+        // local group. This is "what's left to do" once the user has
+        // started organizing.
+        list = list.filter(c => !c.isCustom && c.groupTrashIds.length === 0);
+      } else if (g !== 'all') {
+        // Specific cf-group (TRaSH or local) by its trash_id / localId.
+        // A CF in multiple groups matches each of its groups.
+        list = list.filter(c => c.groupTrashIds.includes(g));
+      }
+      // Filter string supports multiple whitespace-separated terms with OR
+      // semantics — "mono stereo surround" matches CFs whose name contains
+      // any of those words. Makes it easy to pull related-but-separate
+      // formats into one view without chaining filter typing.
+      const terms = (this.cfgbCFFilter || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(Boolean);
+      if (terms.length > 0) {
+        list = list.filter(c => {
+          const n = c.name.toLowerCase();
+          return terms.some(t => n.includes(t));
+        });
+      }
+      return list.slice().sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    // True when every CF the user currently sees (group + text filters
+    // applied) is already selected. Drives the Select-all toggle's checked
+    // state so one click flips between select-all and deselect-all.
+    cfgbFilteredAllSelected() {
+      const list = this.cfgbFilteredCFs();
+      if (list.length === 0) return false;
+      return list.every(c => this.cfgbSelectedCFs[c.trashId]);
+    },
+
+    // Applies select-all / deselect-all to whatever the user is looking at.
+    // Scoped to cfgbFilteredCFs() so "select all Release Group Tiers" works
+    // whether the filter is a cf-group, a text match, or both combined.
+    cfgbToggleFilteredAll(on) {
+      const list = this.cfgbFilteredCFs();
+      const next = { ...this.cfgbSelectedCFs };
+      for (const c of list) {
+        if (on) next[c.trashId] = true;
+        else delete next[c.trashId];
+      }
+      this.cfgbSelectedCFs = next;
+    },
+    cfgbGroupFilterLabel() {
+      // Short human-readable label for the current filter — used in the count
+      // badge so "3 / 12 in [Audio] Audio Channels" is immediately obvious.
+      const g = this.cfgbGroupFilter;
+      if (g === 'all') return '';
+      if (g === 'custom') return 'Custom CFs';
+      if (g === 'other-trash') return 'Ungrouped (TRaSH)';
+      if (g === 'other-remaining') return 'Ungrouped (after local)';
+      const match = this.cfgbGroups.find(gr => gr.groupTrashId === g);
+      return match ? match.name : '';
+    },
+    cfgbFilteredCount() {
+      // Count matching the current filters — shows "M of N in category" style.
+      return this.cfgbFilteredCFs().length;
+    },
+
+    cfgbSortedProfiles() {
+      // Sort primarily by profile.group (int), then alphabetical by name.
+      // Still exposed because cfgbBuildPayload() walks profiles in display
+      // order to produce stable JSON output.
+      return this.cfgbProfiles.slice().sort((a, b) => {
+        if (a.group !== b.group) return a.group - b.group;
+        return a.name.localeCompare(b.name);
+      });
+    },
+
+    // Group profiles into the same cards the Profiles tab uses (Standard,
+    // Anime, French, German, SQP, Other). Sorted by the `group` integer
+    // from profile.json (ascending) with alpha tiebreak on the card name,
+    // matching TRaSH's convention for profile ordering.
+    cfgbGroupedProfiles() {
+      const profiles = this.cfgbProfiles;
+      const groups = {};
+      for (const p of profiles) {
+        const g = p.groupName || 'Other';
+        if (!groups[g]) groups[g] = { name: g, profiles: [], groupId: p.group, minGroup: Infinity };
+        groups[g].profiles.push(p);
+        const gnum = typeof p.group === 'number' ? p.group : Infinity;
+        if (gnum < groups[g].minGroup) groups[g].minGroup = gnum;
+      }
+      for (const g of Object.values(groups)) {
+        g.profiles.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      return Object.values(groups).sort((a, b) => {
+        if (a.minGroup !== b.minGroup) return a.minGroup - b.minGroup;
+        return a.name.localeCompare(b.name);
+      });
+    },
+
+    cfgbToggleProfileGroupCard(name) {
+      this.cfgbProfileGroupExpanded = {
+        ...this.cfgbProfileGroupExpanded,
+        [name]: !this.cfgbProfileGroupExpanded[name],
+      };
+    },
+
+    cfgbIsProfileGroupExpanded(name) {
+      return !!this.cfgbProfileGroupExpanded[name];
+    },
+
+    cfgbGroupAllSelected(group) {
+      if (!group.profiles.length) return false;
+      return group.profiles.every(p => this.cfgbSelectedProfiles[p.trashId]);
+    },
+
+    cfgbGroupSomeSelected(group) {
+      return group.profiles.some(p => this.cfgbSelectedProfiles[p.trashId])
+        && !this.cfgbGroupAllSelected(group);
+    },
+
+    cfgbToggleGroupAll(group, on) {
+      const next = { ...this.cfgbSelectedProfiles };
+      for (const p of group.profiles) {
+        if (on) next[p.trashId] = true;
+        else delete next[p.trashId];
+      }
+      this.cfgbSelectedProfiles = next;
+    },
+
+    cfgbGroupSelectedCount(group) {
+      return group.profiles.filter(p => this.cfgbSelectedProfiles[p.trashId]).length;
+    },
+
+    // Per-panel clears — let the user keep profiles while starting a fresh
+    // CF selection (and vice versa). Useful for building several cf-groups
+    // that share the same quality-profile targets but differ in CF content.
+    cfgbClearCFs() {
+      this.cfgbSelectedCFs = {};
+      this.cfgbRequiredCFs = {};
+      this.cfgbDefaultCFs = {};
+    },
+    cfgbClearProfiles() {
+      this.cfgbSelectedProfiles = {};
+    },
+
+    // True when every currently-selected CF already has required=true.
+    // Drives the bulk required toggle's label — same click always flips
+    // the whole set so the user can mass-mark then mass-unmark quickly.
+    cfgbAllSelectedRequired() {
+      const selectedIds = Object.keys(this.cfgbSelectedCFs).filter(id => this.cfgbSelectedCFs[id]);
+      if (selectedIds.length === 0) return false;
+      return selectedIds.every(id => this.cfgbRequiredCFs[id]);
+    },
+    cfgbToggleAllRequired(on) {
+      const next = { ...this.cfgbRequiredCFs };
+      for (const id of Object.keys(this.cfgbSelectedCFs)) {
+        if (!this.cfgbSelectedCFs[id]) continue;
+        if (on) next[id] = true;
+        else delete next[id];
+      }
+      this.cfgbRequiredCFs = next;
+    },
+
+    // --- CF sort mode (alpha vs manual) ---
+
+    // Returns the selected CFs in the user-chosen order. In alpha mode this
+    // is just case-insensitive alpha by name. In manual mode we follow
+    // cfgbCFManualOrder, appending any newly-selected CFs that haven't been
+    // placed yet and skipping any whose selection was revoked. Callers use
+    // this for the JSON payload AND for the manual reorder UI.
+    cfgbOrderedSelectedCFs() {
+      const selected = this.cfgbCFs.filter(c => this.cfgbSelectedCFs[c.trashId]);
+      if (this.cfgbCFSortMode !== 'manual') {
+        return selected.slice().sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+      }
+      const byId = new Map(selected.map(c => [c.trashId, c]));
+      const result = [];
+      const placed = new Set();
+      for (const id of this.cfgbCFManualOrder) {
+        const cf = byId.get(id);
+        if (cf && !placed.has(id)) {
+          result.push(cf);
+          placed.add(id);
+        }
+      }
+      for (const cf of selected) {
+        if (!placed.has(cf.trashId)) result.push(cf);
+      }
+      return result;
+    },
+
+    cfgbSetCFSortMode(mode) {
+      // When switching into manual mode, seed the order from the current
+      // visible alpha order so the user starts with a sensible baseline
+      // rather than an empty list. Switching back to alpha leaves the manual
+      // order intact in case the user flips back again.
+      if (mode === 'manual' && this.cfgbCFManualOrder.length === 0) {
+        this.cfgbCFManualOrder = this.cfgbOrderedSelectedCFs().map(c => c.trashId);
+      }
+      this.cfgbCFSortMode = mode;
+    },
+
+    cfgbMoveCF(trashId, direction) {
+      // Move a single CF up (-1) or down (+1) in the manual order. Rebuilds
+      // the order from the current selection so we never operate on a stale
+      // list that includes since-deselected CFs.
+      const current = this.cfgbOrderedSelectedCFs().map(c => c.trashId);
+      const idx = current.indexOf(trashId);
+      if (idx < 0) return;
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= current.length) return;
+      const tmp = current[idx];
+      current[idx] = current[newIdx];
+      current[newIdx] = tmp;
+      this.cfgbCFManualOrder = current;
+    },
+
+    cfgbResetManualOrder() {
+      // Drops the manual ordering — list reverts to alpha the next time
+      // manual mode is re-entered.
+      this.cfgbCFManualOrder = [];
+      this.cfgbCFSortMode = 'alpha';
+    },
+
+    cfgbSelectedCFCount()      { return Object.values(this.cfgbSelectedCFs).filter(Boolean).length; },
+    cfgbSelectedProfileCount() { return Object.values(this.cfgbSelectedProfiles).filter(Boolean).length; },
+
+    cfgbAllProfilesSelected() {
+      if (this.cfgbProfiles.length === 0) return false;
+      return this.cfgbProfiles.every(p => this.cfgbSelectedProfiles[p.trashId]);
+    },
+
+    cfgbToggleAllProfiles(on) {
+      const next = {};
+      if (on) this.cfgbProfiles.forEach(p => next[p.trashId] = true);
+      this.cfgbSelectedProfiles = next;
+    },
+
+    cfgbCanExport() {
+      return !!(this.cfgbTrashID && this.cfgbName.trim() && this.cfgbSelectedCFCount() > 0);
+    },
+
+    cfgbGenerateJSON() {
+      // The preview and Download JSON share one payload builder so what the
+      // user sees in the preview is exactly what lands on disk. CF order
+      // preserves the /all-cfs API order (category > group > cf) which matches
+      // how TRaSH organizes their own source files, so exported diffs against
+      // hand-written cf-groups stay minimal. The UI shows alpha-sorted for
+      // discoverability; only EXPORT preserves source order.
+      return JSON.stringify(this.cfgbBuildPayload(), null, 4) + '\n';
+    },
+
+    async cfgbCopyJSON() {
+      try {
+        await copyToClipboard(this.cfgbGenerateJSON());
+        this.cfgbCopyLabel = 'Copied!';
+        setTimeout(() => { this.cfgbCopyLabel = 'Copy JSON'; }, 1500);
+      } catch (e) {
+        alert('Copy failed: ' + e.message);
+      }
+    },
+
+    cfgbDownloadJSON() {
+      // Slug: keep the category prefix (not strip it), so
+      // "[Release Groups] Anime" → "release-groups-anime.json".
+      // Matches TRaSH's filename convention — the brackets drop but the
+      // category words remain as part of the slug, joined to the short
+      // name with hyphens.
+      const slug = this.cfgbName.trim().toLowerCase()
+        .replace(/[\[\]]/g, ' ')         // brackets → space (preserves contents)
+        .replace(/[^a-z0-9]+/g, '-')     // non-alphanumerics → hyphen
+        .replace(/^-+|-+$/g, '')          // trim leading/trailing hyphens
+        // Collapse immediate leading duplication. "[Audio] Audio Formats"
+        // produces "audio-audio-formats"; TRaSH's convention drops the
+        // repeat so it becomes "audio-formats" (matches his existing files).
+        // Only triggers on exact back-to-back word equality at the start,
+        // so e.g. "hdr-formats-hdr" (where the category ends with "formats"
+        // but isn't doubled) stays untouched.
+        .replace(/^([a-z0-9]+)-\1(-|$)/, '$1$2')
+        || 'cf-group';
+      const blob = new Blob([this.cfgbGenerateJSON()], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = slug + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+
+    cfgbReset() {
+      this.cfgbName = '';
+      this.cfgbDescription = '';
+      this.cfgbTrashID = '';
+      this.cfgbDefault = false;
+      this.cfgbCFFilter = '';
+      this.cfgbGroupFilter = 'all';
+      this.cfgbSelectedCFs = {};
+      this.cfgbRequiredCFs = {};
+      this.cfgbDefaultCFs = {};
+      this.cfgbSelectedProfiles = {};
+      this.cfgbEditingId = '';
+      this.cfgbSavingMsg = '';
+      this.cfgbCFSortMode = 'alpha';
+      this.cfgbCFManualOrder = [];
+    },
+
+    // Called from the UI Reset / Discard button. Prompts when we're editing
+    // an existing saved group so a single misclick can't nuke the in-flight
+    // changes. cfgbReset itself stays prompt-free because it's called from
+    // internal flows (cfgbLoad, cfgbSave, delete-current-editing) where a
+    // prompt would be wrong.
+    cfgbUIReset() {
+      if (!this.cfgbEditingId) {
+        this.cfgbReset();
+        return;
+      }
+      this.confirmModal = {
+        show: true,
+        title: 'Discard changes',
+        message: 'Discard changes to "' + (this.cfgbName || '(unnamed)') + '"?\n\nThe saved copy on disk is unaffected.',
+        confirmLabel: 'Discard',
+        onConfirm: () => this.cfgbReset(),
+        onCancel: () => {},
+      };
+    },
+
+    // Returns true when the form has "meaningful work" that would be lost
+    // by a silent reset. Used to gate app-type switches + UI reset prompts.
+    cfgbIsDirty() {
+      if (this.cfgbEditingId) return true;
+      if ((this.cfgbName || '').trim()) return true;
+      if ((this.cfgbDescription || '').trim()) return true;
+      if (Object.keys(this.cfgbSelectedCFs).some(k => this.cfgbSelectedCFs[k])) return true;
+      if (Object.keys(this.cfgbSelectedProfiles).some(k => this.cfgbSelectedProfiles[k])) return true;
+      return false;
+    },
+
+    // --- Saved cf-groups ---
+    // Load an existing saved group into the form for editing. Sets
+    // cfgbEditingId so Save will PUT instead of POST, keeping the same file
+    // on disk. Profile/CF lookups are by trashId which is stable.
+    cfgbLoadForEdit(g) {
+      this.cfgbName = g.name || '';
+      this.cfgbDescription = g.trash_description || '';
+      this.cfgbTrashID = g.trash_id || '';
+      this.cfgbDefault = g.default === 'true' || g.default === true;
+      this.cfgbCFFilter = '';
+      this.cfgbGroupFilter = 'all';
+      const selCFs = {}, reqCFs = {}, defCFs = {};
+      for (const cf of (g.custom_formats || [])) {
+        if (!cf.trash_id) continue;
+        selCFs[cf.trash_id] = true;
+        if (cf.required) reqCFs[cf.trash_id] = true;
+        if (cf.default) defCFs[cf.trash_id] = true;
+      }
+      this.cfgbSelectedCFs = selCFs;
+      this.cfgbRequiredCFs = reqCFs;
+      this.cfgbDefaultCFs = defCFs;
+      // Restore CF order: if the saved CF sequence differs from alpha, flip
+      // to manual mode with that exact order. Otherwise stay in alpha.
+      const savedOrder = (g.custom_formats || []).map(cf => cf.trash_id).filter(Boolean);
+      // Name lookup so the comparator can never hit `undefined.localeCompare`
+      // when a saved trash_id is missing from custom_formats (defensive — a
+      // corrupted or older saved group might have drift).
+      const nameByTid = new Map(
+        (g.custom_formats || [])
+          .filter(cf => cf.trash_id)
+          .map(cf => [cf.trash_id, cf.name || ''])
+      );
+      const alphaOrder = savedOrder.slice().sort((a, b) =>
+        (nameByTid.get(a) || '').localeCompare(nameByTid.get(b) || '', undefined, { sensitivity: 'base' })
+      );
+      const isAlpha = savedOrder.every((id, i) => id === alphaOrder[i]);
+      if (isAlpha) {
+        this.cfgbCFSortMode = 'alpha';
+        this.cfgbCFManualOrder = [];
+      } else {
+        this.cfgbCFSortMode = 'manual';
+        this.cfgbCFManualOrder = savedOrder;
+      }
+      const selProf = {};
+      const include = (g.quality_profiles && g.quality_profiles.include) || {};
+      for (const trashId of Object.values(include)) {
+        if (trashId) selProf[trashId] = true;
+      }
+      this.cfgbSelectedProfiles = selProf;
+      this.cfgbEditingId = g.id || '';
+      this.cfgbSavingMsg = '';
+      // Scroll the form into view so the user sees the loaded fields
+      // immediately — the saved-groups list sits above the form.
+      setTimeout(() => {
+        const el = document.getElementById('cfgb-form-top');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    },
+
+    // Build the TRaSH-schema object used by both Download JSON and Save.
+    // Keeping this separate from cfgbGenerateJSON (which returns a string)
+    // avoids round-tripping through JSON.parse on Save.
+    //
+    // Sort contract (per TRaSH's builder spec):
+    //  - custom_formats: alpha by name, case-insensitive
+    //  - quality_profiles.include: group-number ascending, alpha within
+    //    same group — produced by cfgbSortedProfiles() already.
+    cfgbBuildPayload() {
+      const selectedCFs = this.cfgbOrderedSelectedCFs();
+      // Sanitize description — users often paste the whole JSON line
+      // ("...text...",) including outer quotes and the trailing comma; strip
+      // them so the emitted field holds only the inner text.
+      let desc = (this.cfgbDescription || '').trim();
+      while (desc.endsWith(',')) desc = desc.slice(0, -1).trim();
+      if (desc.startsWith('"') && desc.endsWith('"') && desc.length >= 2) {
+        desc = desc.slice(1, -1);
+      }
+      // Match TRaSH's convention: the `default` field is emitted only when
+      // the group is default-on ("true"). Opt-in groups (default unchecked)
+      // omit the field entirely, as seen in optional-*.json on disk. Emitting
+      // `"default": "false"` was a false diff against upstream files.
+      const payload = {
+        name: this.cfgbName.trim(),
+        trash_id: this.cfgbTrashID,
+        trash_description: desc,
+      };
+      if (this.cfgbDefault) payload.default = 'true';
+      payload.custom_formats = selectedCFs.map(c => {
+        const entry = {
+          name: c.name,
+          trash_id: c.trashId,
+          required: !!this.cfgbRequiredCFs[c.trashId],
+        };
+        // Match TRaSH's convention: per-CF `default` is emitted only when
+        // true (omitted when false). Keeps generated JSON diff-friendly
+        // against upstream Golden Rule files.
+        if (this.cfgbDefaultCFs[c.trashId]) entry.default = true;
+        return entry;
+      });
+      payload.quality_profiles = {
+        include: this.cfgbSortedProfiles()
+          .filter(p => this.cfgbSelectedProfiles[p.trashId])
+          .reduce((acc, p) => { acc[p.name] = p.trashId; return acc; }, {}),
+      };
+      return payload;
+    },
+
+    async cfgbSave() {
+      if (!this.cfgbCanExport()) return;
+      const appType = this.activeAppType;
+      const payload = this.cfgbBuildPayload();
+      const editing = !!this.cfgbEditingId;
+      const url = editing
+        ? '/api/cf-groups/' + appType + '/' + encodeURIComponent(this.cfgbEditingId)
+        : '/api/cf-groups/' + appType;
+      const method = editing ? 'PUT' : 'POST';
+      try {
+        const resp = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error('HTTP ' + resp.status + ': ' + text);
+        }
+        const saved = await resp.json();
+        // Refresh the saved-list and stay on the form. For creates, switch
+        // into edit-mode for the new record so the next Save is a PUT.
+        await this.cfgbRefreshSaved();
+        this.cfgbEditingId = saved.id || this.cfgbEditingId;
+        this.cfgbSavingOk = true;
+        this.cfgbSavingMsg = editing ? 'Updated.' : 'Saved.';
+        setTimeout(() => { if (this.cfgbSavingMsg === 'Updated.' || this.cfgbSavingMsg === 'Saved.') this.cfgbSavingMsg = ''; }, 2000);
+      } catch (e) {
+        console.error('cfgbSave failed:', e);
+        this.cfgbSavingOk = false;
+        this.cfgbSavingMsg = 'Save failed: ' + e.message;
+      }
+    },
+
+    cfgbDelete(g) {
+      if (!g || !g.id) return;
+      this.confirmModal = {
+        show: true,
+        title: 'Delete saved cf-group',
+        message: 'Delete saved cf-group "' + (g.name || g.id) + '"?\n\nThe file is removed from /config/custom/json/' + g.appType + '/cf-groups/.\nExported .json files on disk are unaffected.',
+        confirmLabel: 'Delete',
+        onConfirm: () => this._cfgbDeleteConfirmed(g),
+        onCancel: () => {},
+      };
+    },
+    async _cfgbDeleteConfirmed(g) {
+      // Guard against a double-fire: modal's onConfirm is a simple click
+      // handler, so a quick Delete→Confirm→Delete→Confirm sequence against
+      // two different groups could have their second DELETE land before
+      // the first finished. The flag blocks any overlapping delete.
+      if (this.cfgbDeleting) return;
+      this.cfgbDeleting = true;
+      try {
+        const resp = await fetch('/api/cf-groups/' + g.appType + '/' + encodeURIComponent(g.id), { method: 'DELETE' });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error('HTTP ' + resp.status + ': ' + text);
+        }
+        await this.cfgbRefreshSaved();
+        if (this.cfgbEditingId === g.id) this.cfgbReset();
+        this.cfgbSavingOk = true;
+        this.cfgbSavingMsg = 'Deleted.';
+        setTimeout(() => { if (this.cfgbSavingMsg === 'Deleted.') this.cfgbSavingMsg = ''; }, 2000);
+      } catch (e) {
+        console.error('cfgbDelete failed:', e);
+        this.cfgbSavingOk = false;
+        this.cfgbSavingMsg = 'Delete failed: ' + e.message;
+      } finally {
+        this.cfgbDeleting = false;
+      }
+    },
+
+    async cfgbRefreshSaved() {
+      const appType = this.activeAppType;
+      try {
+        const resp = await fetch('/api/cf-groups/' + appType);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const list = await resp.json();
+        this.cfgbSavedGroups = Array.isArray(list) ? list : [];
+        // Re-merge local groups into dropdown + CF memberships so the
+        // just-saved/deleted group shows up (or vanishes) without needing
+        // a full /all-cfs refetch or losing form state.
+        this.cfgbApplyLocalGroups();
+      } catch (e) {
+        console.error('cfgbRefreshSaved failed:', e);
+      }
+    },
+
+    cfgbSelectedCustomCFCount() {
+      // How many selected CFs are user-custom (IDs starting with "custom:").
+      // Surfaced in a banner next to Download JSON as a warning when the
+      // exported file is meant for TRaSH-Guides contribution — custom IDs
+      // don't resolve in the public repo.
+      let n = 0;
+      for (const cf of this.cfgbCFs) {
+        if (cf.isCustom && this.cfgbSelectedCFs[cf.trashId]) n++;
+      }
+      return n;
+    },
+
     // --- Utility ---
   };
+}
+
+// MD5 — compact, public-domain implementation (based on Paul Johnston's
+// well-tested reference). Used by the CF Group Builder to compute trash_ids
+// from group names client-side. TRaSH's schema uses MD5 for identifiers so
+// we match that exactly. Takes a string, returns 32-char lowercase hex.
+function cfgbMD5(str) {
+  function rh(n) { let s = ''; for (let j = 0; j <= 3; j++) s += ((n >> (j*8+4)) & 0xf).toString(16) + ((n >> (j*8)) & 0xf).toString(16); return s; }
+  function ad(a,b) { const l = (a & 0xffff) + (b & 0xffff); return (((a >> 16) + (b >> 16) + (l >> 16)) << 16) | (l & 0xffff); }
+  function rot(n,c) { return (n << c) | (n >>> (32 - c)); }
+  function cm(q,a,b,x,s,t) { return ad(rot(ad(ad(a,q), ad(x,t)), s), b); }
+  function ff(a,b,c,d,x,s,t){return cm((b&c)|(~b&d),a,b,x,s,t);}
+  function gg(a,b,c,d,x,s,t){return cm((b&d)|(c&~d),a,b,x,s,t);}
+  function hh(a,b,c,d,x,s,t){return cm(b^c^d,a,b,x,s,t);}
+  function ii(a,b,c,d,x,s,t){return cm(c^(b|~d),a,b,x,s,t);}
+  const utf8 = unescape(encodeURIComponent(str));
+  const bl = utf8.length, nb = ((bl + 8) >> 6) + 1, x = new Array(nb*16).fill(0);
+  for (let i = 0; i < bl; i++) x[i >> 2] |= utf8.charCodeAt(i) << ((i % 4) * 8);
+  x[bl >> 2] |= 0x80 << ((bl % 4) * 8);
+  x[nb*16 - 2] = bl * 8;
+  let a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
+  for (let i = 0; i < x.length; i += 16) {
+    const oa=a, ob=b, oc=c, od=d;
+    a=ff(a,b,c,d,x[i+0],7,-680876936);  d=ff(d,a,b,c,x[i+1],12,-389564586);  c=ff(c,d,a,b,x[i+2],17,606105819);    b=ff(b,c,d,a,x[i+3],22,-1044525330);
+    a=ff(a,b,c,d,x[i+4],7,-176418897);  d=ff(d,a,b,c,x[i+5],12,1200080426);  c=ff(c,d,a,b,x[i+6],17,-1473231341);  b=ff(b,c,d,a,x[i+7],22,-45705983);
+    a=ff(a,b,c,d,x[i+8],7,1770035416);  d=ff(d,a,b,c,x[i+9],12,-1958414417); c=ff(c,d,a,b,x[i+10],17,-42063);     b=ff(b,c,d,a,x[i+11],22,-1990404162);
+    a=ff(a,b,c,d,x[i+12],7,1804603682); d=ff(d,a,b,c,x[i+13],12,-40341101);  c=ff(c,d,a,b,x[i+14],17,-1502002290);b=ff(b,c,d,a,x[i+15],22,1236535329);
+    a=gg(a,b,c,d,x[i+1],5,-165796510);  d=gg(d,a,b,c,x[i+6],9,-1069501632);  c=gg(c,d,a,b,x[i+11],14,643717713);  b=gg(b,c,d,a,x[i+0],20,-373897302);
+    a=gg(a,b,c,d,x[i+5],5,-701558691);  d=gg(d,a,b,c,x[i+10],9,38016083);    c=gg(c,d,a,b,x[i+15],14,-660478335); b=gg(b,c,d,a,x[i+4],20,-405537848);
+    a=gg(a,b,c,d,x[i+9],5,568446438);   d=gg(d,a,b,c,x[i+14],9,-1019803690); c=gg(c,d,a,b,x[i+3],14,-187363961);  b=gg(b,c,d,a,x[i+8],20,1163531501);
+    a=gg(a,b,c,d,x[i+13],5,-1444681467);d=gg(d,a,b,c,x[i+2],9,-51403784);    c=gg(c,d,a,b,x[i+7],14,1735328473);  b=gg(b,c,d,a,x[i+12],20,-1926607734);
+    a=hh(a,b,c,d,x[i+5],4,-378558);     d=hh(d,a,b,c,x[i+8],11,-2022574463); c=hh(c,d,a,b,x[i+11],16,1839030562); b=hh(b,c,d,a,x[i+14],23,-35309556);
+    a=hh(a,b,c,d,x[i+1],4,-1530992060); d=hh(d,a,b,c,x[i+4],11,1272893353);  c=hh(c,d,a,b,x[i+7],16,-155497632);  b=hh(b,c,d,a,x[i+10],23,-1094730640);
+    a=hh(a,b,c,d,x[i+13],4,681279174);  d=hh(d,a,b,c,x[i+0],11,-358537222);  c=hh(c,d,a,b,x[i+3],16,-722521979);  b=hh(b,c,d,a,x[i+6],23,76029189);
+    a=hh(a,b,c,d,x[i+9],4,-640364487);  d=hh(d,a,b,c,x[i+12],11,-421815835); c=hh(c,d,a,b,x[i+15],16,530742520);  b=hh(b,c,d,a,x[i+2],23,-995338651);
+    a=ii(a,b,c,d,x[i+0],6,-198630844);  d=ii(d,a,b,c,x[i+7],10,1126891415);  c=ii(c,d,a,b,x[i+14],15,-1416354905);b=ii(b,c,d,a,x[i+5],21,-57434055);
+    a=ii(a,b,c,d,x[i+12],6,1700485571); d=ii(d,a,b,c,x[i+3],10,-1894986606); c=ii(c,d,a,b,x[i+10],15,-1051523);   b=ii(b,c,d,a,x[i+1],21,-2054922799);
+    a=ii(a,b,c,d,x[i+8],6,1873313359);  d=ii(d,a,b,c,x[i+15],10,-30611744);  c=ii(c,d,a,b,x[i+6],15,-1560198380); b=ii(b,c,d,a,x[i+13],21,1309151649);
+    a=ii(a,b,c,d,x[i+4],6,-145523070);  d=ii(d,a,b,c,x[i+11],10,-1120210379);c=ii(c,d,a,b,x[i+2],15,718787259);   b=ii(b,c,d,a,x[i+9],21,-343485551);
+    a=ad(a,oa); b=ad(b,ob); c=ad(c,oc); d=ad(d,od);
+  }
+  return rh(a) + rh(b) + rh(c) + rh(d);
 }
 </script>
 <div id="cf-tooltip-portal" onmouseenter="clearTimeout(window._tooltipHideTimer)" onmouseleave="const el=document.getElementById('cf-tooltip-portal'); window._tooltipHideTimer=setTimeout(()=>{if(el)el.style.display='none'},200)"></div>

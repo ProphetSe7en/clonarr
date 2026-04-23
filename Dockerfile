@@ -1,19 +1,19 @@
 FROM golang:1.25-alpine AS builder
 
-ARG VERSION=2.0.8
+ARG VERSION=2.1.0
 
 RUN apk add --no-cache git
 
 WORKDIR /build
-COPY ui/go.mod ui/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
-COPY ui/ .
+COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
 FROM alpine:3.21
 
-ARG VERSION=2.0.8
+ARG VERSION=2.1.0
 LABEL org.opencontainers.image.version=${VERSION}
 
 RUN apk add --no-cache git tini tzdata ca-certificates su-exec && \
