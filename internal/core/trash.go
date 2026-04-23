@@ -537,6 +537,76 @@ func parseChangelog(path string, maxSections int) []ChangelogSection {
 }
 
 // CloneOrPull clones or pulls the TRaSH repo, then re-parses all data.
+// cleanStaleGitLocks removes any *.lock files git left behind from an
+// interrupted operation (container killed mid-fetch, mid-reset, mid-
+// config). These locks block subsequent git invocations:
+//
+//   - shallow.lock     blocks `git fetch --deepen=1`
+//   - index.lock       blocks `git reset`, `git sparse-checkout set`
+//   - HEAD.lock        blocks `git reset`
+//   - config.lock      blocks `git config`, `git remote set-url`
+//   - packed-refs.lock blocks anything that rewrites refs
+//   - FETCH_HEAD.lock  blocks `git fetch`
+//   - refs/**/*.lock   blocks atomic ref updates
+//
+// Safe to call pre-emptively: Clonarr is the only writer to this repo
+// (pullMu serializes all our git calls, no external process touches
+// /data/trash-guides). If a lock exists when we start, it is by
+// definition stale from our own interrupted previous run.
+//
+// Flat scan over refs/{heads,remotes/origin,tags} is sufficient —
+// Clonarr only tracks `origin/master` or `origin/main`, so nested ref
+// hierarchies don't apply.
+//
+// Reported via GitHub issue #23 + PR #24 (fiservedpi, 2026-04-22).
+func cleanStaleGitLocks(gitDir string) {
+	// Top-level standard locks.
+	for _, name := range []string{
+		"HEAD.lock",
+		"index.lock",
+		"config.lock",
+		"packed-refs.lock",
+		"shallow.lock",
+		"FETCH_HEAD.lock",
+	} {
+		p := filepath.Join(gitDir, name)
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		if err := os.Remove(p); err != nil {
+			log.Printf("Warning: failed to remove stale git lock %s: %v", name, err)
+		} else {
+			log.Printf("Removed stale git lock: %s", name)
+		}
+	}
+	// Flat ref-lock scan — only the three dirs Clonarr's refs actually live in.
+	// Branch-name assumption: Clonarr tracks origin/master or origin/main (flat,
+	// no slashes). If TrashRepo.Branch ever becomes a slashed name like
+	// "feature/foo", the corresponding lock lands in refs/remotes/origin/feature/
+	// which this flat scan would miss — swap to filepath.WalkDir then.
+	for _, refDir := range []struct{ absPath, label string }{
+		{filepath.Join(gitDir, "refs", "heads"), "refs/heads"},
+		{filepath.Join(gitDir, "refs", "remotes", "origin"), "refs/remotes/origin"},
+		{filepath.Join(gitDir, "refs", "tags"), "refs/tags"},
+	} {
+		entries, err := os.ReadDir(refDir.absPath)
+		if err != nil {
+			continue // dir doesn't exist — fine, nothing to clean
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".lock") {
+				continue
+			}
+			p := filepath.Join(refDir.absPath, e.Name())
+			if err := os.Remove(p); err != nil {
+				log.Printf("Warning: failed to remove stale ref lock %s: %v", p, err)
+			} else {
+				log.Printf("Removed stale git ref lock: %s/%s", refDir.label, e.Name())
+			}
+		}
+	}
+}
+
 // Serialized via pullMu (C4: prevents concurrent git operations).
 func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 	// C3: Validate inputs to prevent git flag injection
@@ -558,6 +628,14 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 	}
 
 	if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err == nil {
+		// Clean any stale *.lock files from an interrupted previous run
+		// before issuing any git command. Container restarts mid-pull
+		// (or a killed `git` subprocess for any reason) leaves locks
+		// behind that cascade into "fatal: Unable to create lock"
+		// errors on the next run. See cleanStaleGitLocks for the full
+		// lock-file catalogue and rationale.
+		cleanStaleGitLocks(filepath.Join(ts.dataDir, ".git"))
+
 		// Disable git auto-gc — it detaches into the background and the orphan
 		// gets reparented to PID 1 (clonarr), which doesn't reap unknown children,
 		// causing zombie process buildup over time. (v1.8.5 zombie leak fix)
