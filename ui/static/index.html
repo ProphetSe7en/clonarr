@@ -28,6 +28,34 @@
   .topnav .sync-status .dot.stale { background: #d29922; }
   .topnav .sync-status .dot.none { background: #8b949e; }
 
+  /* Changelog dropdown */
+  .changelog-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 500px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200; max-height: 420px; overflow-y: auto; }
+
+  /* Responsive topnav */
+  @media (max-width: 1200px) {
+    .topnav .tab { padding: 0 12px; font-size: 14px; }
+    .topnav .logo { margin-right: 16px; }
+  }
+  @media (max-width: 1000px) {
+    .topnav .tab { padding: 0 8px; font-size: 13px; }
+    .sync-label { display: none; }
+    .sync-status { font-size: 11px; }
+    .changelog-dropdown { width: 400px; }
+  }
+  @media (max-width: 850px) {
+    .topnav { height: auto; flex-wrap: wrap; padding: 10px 16px; }
+    .topnav .tabs { order: 3; width: 100%; height: 44px; margin-top: 8px; border-top: 1px solid #30363d; overflow-x: auto; justify-content: flex-start; }
+    .topnav .tab { flex-shrink: 0; }
+    .topnav .spacer { display: none; }
+    .topnav .sync-status { order: 2; margin-left: auto; }
+    .changelog-dropdown { width: 100%; position: fixed; top: 120px; left: 16px; right: 16px; max-height: 60vh; }
+    .sync-commit, .sync-next { display: none; }
+  }
+  @media (max-width: 600px) {
+    .topnav .logo { font-size: 16px; }
+    .topnav .logo img { width: 24px !important; height: 24px !important; }
+  }
+
   /* Page layout */
   .page { padding: 24px; max-width: 1100px; margin: 0 auto; }
 
@@ -538,9 +566,9 @@
       <span class="dot" :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"></span>
       <template x-if="trashStatus.cloned">
         <span @click="showChangelog = !showChangelog" style="cursor:pointer" title="Click for changelog">
-          TRaSH synced <span x-text="formatSyncTime(trashStatus.lastPull)"></span>
-          <span x-show="trashStatus.commitHash" style="color:#aaa;font-size:12px;margin-left:4px" x-text="trashStatus.commitHash"></span>
-          <span x-show="config.pullInterval && config.pullInterval !== 'off' && trashStatus.lastPull"
+          <span class="sync-label">TRaSH synced</span> <span x-text="formatSyncTime(trashStatus.lastPull)"></span>
+          <span class="sync-commit" x-show="trashStatus.commitHash" style="color:#aaa;font-size:12px;margin-left:4px" x-text="trashStatus.commitHash"></span>
+          <span class="sync-next" x-show="config.pullInterval && config.pullInterval !== 'off' && trashStatus.lastPull"
                 style="color:#aaa;font-size:12px;margin-left:6px"
                 x-text="'· next ' + nextPullTime()"></span>
           <span style="color:#aaa;font-size:12px;margin-left:2px;transition:transform 0.2s;display:inline-block"
@@ -556,8 +584,7 @@
       </button>
 
       <!-- Changelog dropdown -->
-      <div x-show="showChangelog" @click.outside="showChangelog = false" x-cloak
-           style="position:absolute;top:calc(100% + 6px);right:0;width:500px;background:#161b22;border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:200;max-height:420px;overflow-y:auto">
+      <div x-show="showChangelog" @click.outside="showChangelog = false" x-cloak class="changelog-dropdown">
 
         <!-- Last pull diff -->
         <template x-if="trashStatus.lastDiff">
