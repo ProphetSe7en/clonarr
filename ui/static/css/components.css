@@ -33,7 +33,7 @@
   .btn-icon { background:none; border:none; color:#aaa; cursor:pointer; font-size:15px; padding:2px 4px; border-radius:4px; line-height:1; }
   .btn-icon:hover { color:#e1e4e8; background:#21262d; }
   /* Toggle switches */
-  /* .toggle styles live below at the canonical block (~line 295). Kept separate from the
+  /* .toggle styles live in the dedicated block below. Kept separate from the
      rest of reset styles to avoid breaking legacy dev/cached pages during editing. */
 
   /* CF toggle area (inline in cf-row, no wrapper needed) */
