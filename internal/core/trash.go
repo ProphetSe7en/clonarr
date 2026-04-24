@@ -708,15 +708,52 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 		}
 	}
 
+	return ts.loadAndSwap()
+}
+
+// LoadFromDisk parses the already-cloned TRaSH repo on disk and atomically
+// swaps the result into the store's snapshot, without any git operations.
+//
+// Used at startup when PullInterval is disabled: we must still populate the
+// in-memory snapshot (otherwise the app boots with no CF/profile data), but
+// we respect the user's choice not to pull on every container restart.
+//
+// Errors if the repo is not cloned yet — callers should fall back to
+// CloneOrPull for the first-run case.
+func (ts *TrashStore) LoadFromDisk() error {
+	if !ts.pullMu.TryLock() {
+		return fmt.Errorf("pull already in progress")
+	}
+	defer ts.pullMu.Unlock()
+
+	if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err != nil {
+		return fmt.Errorf("TRaSH repo not cloned at %s", ts.dataDir)
+	}
+
+	return ts.loadAndSwap()
+}
+
+// loadAndSwap reads commit metadata + parses CF/profile JSON from the on-disk
+// repo and atomically swaps a new snapshot into the store. Caller must hold
+// pullMu.
+//
+// On failure, records the error in ts.pullError so TrashStatus / the UI can
+// surface a "pull failing" state instead of silently showing a stale snapshot.
+// Success clears pullError. (Pre-existing behavior: the error path only
+// returned the error to the caller and never updated pullError — so a
+// corrupted on-disk repo after a failed parse looked "clean" in the UI.)
+func (ts *TrashStore) loadAndSwap() error {
 	// Get commit hash
 	hash, err := exec.Command("git", "-C", ts.dataDir, "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
+		ts.SetPullError(err.Error())
 		return fmt.Errorf("get commit hash: %w", err)
 	}
 
 	// Parse all data — builds a new *TrashData (C1: old snapshot remains valid)
 	data, err := ts.parseAll()
 	if err != nil {
+		ts.SetPullError(err.Error())
 		return fmt.Errorf("parse TRaSH data: %w", err)
 	}
 	data.CommitHash = strings.TrimSpace(string(hash))

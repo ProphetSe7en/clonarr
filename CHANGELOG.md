@@ -1,5 +1,36 @@
 # Changelog
 
+## v2.2.0
+
+CF Group Builder redesign, startup-pull bug fix, and a responsive topnav
+from the community. Collapsing what was going to ship as v2.1.2 into
+v2.2.0 since the builder reorganization outgrew the patch-release scope.
+
+### Fixed
+
+- **Settings → TRaSH Guides → Pull interval "Disabled" is now honored on container startup.** The scheduled-pull loop already respected the Disabled setting, but the startup-trash-pull goroutine called `CloneOrPull` unconditionally — so every container restart still did a full `git fetch`. Startup now checks `cfg.PullInterval == "0"` and, if the repo is already cloned, loads the existing on-disk data via a new `TrashStore.LoadFromDisk()` method without any git ops. First-run (no `.git` dir) still clones — the app needs CF/profile data to work.
+- **`TrashStore.loadAndSwap` now records `pullError` on failure.** Pre-existing issue surfaced during the refactor above: when `parseAll` or the commit-hash lookup errored, the store returned the error to its caller for logging but never updated `pullError`, so the Status panel kept showing a clean state on top of a stale/corrupted snapshot. Both error paths in `loadAndSwap` now call `SetPullError` so the UI can surface the real state.
+- **Row layouts no longer collapse when Alpine `:style` is used with a string.** Two separate rows in the Builder (Card A selected-highlight + Saved cf-groups last-row border) used the string form of `:style`, which replaces the entire static style attribute instead of merging. The result was `display:flex` being wiped — checkboxes wrapping above CF names and Edit/Delete buttons dropping to a third line on the only saved group. Both switched to the object form so Alpine merges individual properties.
+
+### Added
+
+- **CF Group Builder — Selected CFs card (live group preview).** Full-width card at the top of the builder showing every CF currently in the group being built. Reorder via drag-and-drop in manual mode, set required / default per CF, or remove with the × — all without scrolling back to the Custom Formats list. The card is a live view of the group's state; Custom Formats below is the browse/add surface. Works for new groups, local edits, and TRaSH copies.
+- **CF Group Builder — hash lock toggle in the edit banner.** When editing or copying a group, a visible lock (🔒 Hash locked / 🔓 Hash tracks name) replaces the earlier save-time "keep vs regenerate" modal. Locked (default for any edit) means typo fixes and minor rewording don't invalidate the `trash_id` — existing profile includes, prior exports, and synced Arr profiles stay valid. Unlocked means the hash regenerates on every keystroke in the name field. The user's explicit unlock choice is preserved across save so anyone iterating with a fresh hash doesn't get silently re-locked.
+- **CF Group Builder — copy an upstream TRaSH cf-group into the local builder.** A collapsed "TRaSH {app} cf-groups" section above the builder form lists every upstream group from the TRaSH repo clone. Each row has an `Edit` button that seeds the form with the group's contents (name, description, trash_id, CFs with required/default flags, profile includes, CF order) and saves as a NEW local cf-group under `/config/custom/json/{app}/cf-groups/` on Save. The TRaSH repo clone is never written to.
+- **Manual-order CF reorder via drag-and-drop.** Replaces the earlier ▲/▼ arrows on each row. Drop on another row to move, with visual feedback (40% opacity on source, blue top-shadow on target). Matches the pattern used by Scoring Sandbox + Quality Structure editor. `cfgbMoveCF` is kept for potential future keyboard-accessible reorder.
+
+### Changed
+
+- **CF Group Builder is now three cards** — Selected CFs (full-width, live preview of the group) + Custom Formats (browse + add) + Quality Profiles (include). Custom Formats is a pure selector now: the sort-mode toggle (Alpha / Manual) migrates to the Selected CFs card where order lives, and the per-row required / default flags move to Selected CFs too. Selected CFs in the Custom Formats list still render with a muted blue background + green `IN GROUP` pill so you can scan "what's already in my group" without scrolling up.
+- **Custom Formats list packs into columns on wide viewports.** `grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))` auto-fills 2+ columns when there's room (short CF names like `AMZN`, `10bit`, `ATV` pack tightly) and collapses to one column on narrow screens. Long names truncate with `…` instead of breaking the column.
+- **Selected CFs rows use a fixed-column grid** — `drag-handle (28px)` · `# (36px)` · `name (flex)` · `required+default (auto)` · `× (24px)`. Consistent alignment across rows regardless of sort mode; the handle column reserves its space in alpha mode too so rows don't jump.
+- **Responsive topnav + icon relocation.** Icon moved from `icon.png` (repo root + `ui/static/icon.png`) to `ui/static/icons/clonarr.png`. Topnav has media queries at 1200 / 1000 / 850 / 600 px so tabs wrap on narrow viewports, the "TRaSH synced" label collapses, and the Changelog dropdown scales / goes full-width on mobile. Also fixes layout "drift" when resizing. Credit [@ColeSpringer](https://github.com/ColeSpringer) via [PR #26](https://github.com/prophetse7en/clonarr/pull/26).
+
+### Internal
+
+- **Refactor: `TrashStore.loadAndSwap` extracted from `CloneOrPull`.** The "get commit hash + parseAll + atomic snapshot swap" portion of `CloneOrPull` became a private helper reused by both `CloneOrPull` (after git ops) and the new public `LoadFromDisk` (assumes repo is cloned, no git ops). Behavior of `CloneOrPull` callers is unchanged.
+- **Shared `confirmModal` supports a secondary action button.** Optional `secondaryLabel` / `onSecondary` fields on the modal state render a middle button between Cancel and Confirm. Currently unused (the hash lock replaced the save-time modal) but kept as a reusable extension point. Existing two-button flows (Discard / Delete / etc.) work unchanged — the middle button is hidden when `secondaryLabel` is unset.
+
 ## v2.1.1
 
 UX patch release. Profile Builder's "save without syncing" flow was always there — v2.1.0 just made it hard to discover and blocked for YAML-imported profiles. This release fixes both.

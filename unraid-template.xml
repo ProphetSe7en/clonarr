@@ -21,8 +21,12 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/ui/static/icons/clonarr.png</Icon>
-  <Date>2026-04-20</Date>
+  <Date>2026-04-24</Date>
   <Changes>
+### 2026-04-24
+- v2.2.0: **CF Group Builder redesign** — new Selected CFs card at the top is a live preview of the group being built, with drag-and-drop reorder (replaces ▲/▼ arrows), per-CF required / default flags, and remove. Custom Formats list becomes pure browse + add, packing into 2+ columns on wide viewports. Edit any upstream TRaSH cf-group into a new local copy with one click. Hash lock toggle in the edit banner (🔒/🔓) — default locked so typo fixes don't invalidate the trash_id; unlock if you want a new identity. **Fix** — Settings → TRaSH Guides → Pull interval "Disabled" now honored on container startup (was only respected by the scheduled-pull loop). **Responsive topnav** + icon relocation (credit @ColeSpringer via PR #26).
+### 2026-04-23
+- v2.1.1: **UX patch** — imported profiles can now be opened in the Profile Builder for editing (was blocked as read-only). TRaSH-imported profiles render their Required CFs in the Builder (was empty). Profile Builder save buttons clarified: `Save Profile` / `Save Changes` instead of `Create Profile` / `Update Profile`.
 ### 2026-04-20
 - v2.1.0: **Architecture refactor** (backend reorganized into `internal/api/`, `internal/core/`, `internal/arr/`, `internal/auth/`, `internal/netsec/`, `internal/utils/` — no user-facing behavior change, credit @ColeSpringer). Panic recovery via `utils.SafeGo` on every goroutine.
 - v2.0.8: **Notification Agents** — Discord, Gotify, and Pushover are now independent agents in an Instances-style list. Multi-agent per type (two Discord channels, etc.), optional Name field, per-agent test button. Auto-migration from v2.0.x flat config on first startup. Credit @xFlawless11x via PR #15. Plus T70 panic-recovery wrapper on the session-persistence goroutine.
