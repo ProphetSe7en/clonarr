@@ -51,7 +51,7 @@ function sanitizeHTML(html) {
   const div = document.createElement('div');
   div.innerHTML = html;
   const allowed = new Set(['A', 'B', 'BR', 'EM', 'I', 'P', 'SPAN', 'STRONG', 'U', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD']);
-  const allowedAttrs = { 'A': ['href', 'target'], 'TABLE': ['class'], 'TH': ['class'], 'TD': ['class'] };
+  const allowedAttrs = { 'A': ['href', 'target', 'rel'], 'TABLE': ['class'], 'TH': ['class'], 'TD': ['class'] };
   function clean(node) {
     for (const child of [...node.childNodes]) {
       if (child.nodeType === 1) { // element
@@ -67,6 +67,9 @@ function sanitizeHTML(html) {
           const href = child.getAttribute('href') || '';
           if (!href.startsWith('http://') && !href.startsWith('https://')) {
             child.removeAttribute('href');
+          }
+          if (child.hasAttribute('target')) {
+            child.setAttribute('rel', 'noopener noreferrer');
           }
         }
         clean(child);
