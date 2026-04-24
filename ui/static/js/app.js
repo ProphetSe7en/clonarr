@@ -9,7 +9,14 @@ function clonarr() {
     // Mirrors the on-disk shape of TRaSH cf-groups/*.json so export is a straight serialize.
     cfgbName: '',
     cfgbDescription: '',
-    cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input
+    cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input (unless cfgbHashLocked)
+    // When true, cfgbTrashID is frozen at cfgbOriginalTrashID and name
+    // changes do NOT regenerate the hash. Flips on automatically when the
+    // form is populated by an edit / TRaSH copy so the user can fix typos
+    // or tweak names without invalidating downstream references. Flips off
+    // manually via the lock button in the edit banner; fresh new groups
+    // keep it off (nothing to lock to).
+    cfgbHashLocked: false,
     cfgbDefault: false,
     cfgbCFs: [],                             // [{trashId, name, groupTrashId, groupName, isCustom}] — flattened from /api/trash/{app}/all-cfs
     cfgbGroups: [],                          // [{groupTrashId, name, count}] — actual TRaSH cf-groups for the dropdown
@@ -37,12 +44,26 @@ function clonarr() {
     // deselected CFs are pruned lazily when the payload is built.
     cfgbCFSortMode: 'alpha',
     cfgbCFManualOrder: [],
+    // Drag-and-drop reorder state for Selected CFs manual mode. Both hold
+    // trash_ids; null when no drag is in flight.
+    cfgbDragSrcTid: null,
+    cfgbDragOverTid: null,
     // Saved cf-groups (persistent, stored in Clonarr). Loaded per app type on
     // tab entry. Edit loads one into the form; Save writes it back (POST for
     // new, PUT for existing). Storage is scoped per appType on disk so a
     // Radarr and Sonarr group with the same name never overwrite each other.
     cfgbSavedGroups: [],                     // CFGroup[] from GET /api/cf-groups/{app}
+    cfgbTrashCFGroups: [],                   // TrashCFGroup[] from GET /api/trash/{app}/cf-groups — upstream groups the user can copy into local storage
+    cfgbTrashListOpen: false,                // whether the "TRaSH cf-groups" section is expanded; default collapsed to keep the page short
     cfgbEditingId: '',                       // '' = new (POST), non-empty = editing existing (PUT)
+    // trash_id captured at the moment the form was populated (either from a
+    // local edit or a TRaSH copy). Used by cfgbSave to detect a rename that
+    // would regenerate the MD5 so we can prompt the user to keep vs regenerate
+    // the hash. '' means "fresh new group" — no prompt needed.
+    cfgbOriginalTrashID: '',
+    // Human-readable name of the TRaSH group the user copied from, for the
+    // mode banner. '' when not copying from TRaSH.
+    cfgbFromTrashName: '',
     cfgbSavingMsg: '',                       // transient save/delete feedback
     cfgbSavingOk: false,                     // whether cfgbSavingMsg is success (green) or error (red)
     cfgbDeleting: false,                     // guard against double-fire on Delete → Confirm (modal's onConfirm could run twice under fast clicks)
@@ -230,7 +251,7 @@ function clonarr() {
     qsSyncing: {},       // per app-type: boolean
     qsSyncResult: {},    // per app-type: { ok, message }
     qsAutoSync: {},      // per app-type: { enabled, type }
-    confirmModal: { show: false, title: '', message: '', confirmLabel: '', onConfirm: null, onCancel: null },
+    confirmModal: { show: false, title: '', message: '', confirmLabel: '', cancelLabel: '', secondaryLabel: '', onConfirm: null, onCancel: null, onSecondary: null },
     inputModal: { show: false, title: '', message: '', value: '', placeholder: '', confirmLabel: '', onConfirm: null, onCancel: null },
     sandboxCopyModal: { show: false, title: '', text: '', copied: false },
     toasts: [], // { id, message, type: 'info'|'warning'|'error', timeout }
@@ -8632,19 +8653,21 @@ function clonarr() {
       // ours, discard the response instead of leaking state across appTypes.
       this._cfgbLoadFor = appType;
       try {
-        const [allCfsResp, profResp, savedResp] = await Promise.all([
+        const [allCfsResp, profResp, savedResp, trashGroupsResp] = await Promise.all([
           fetch('/api/trash/' + appType + '/all-cfs'),
           fetch('/api/trash/' + appType + '/profiles'),
           fetch('/api/cf-groups/' + appType),
+          fetch('/api/trash/' + appType + '/cf-groups'),
         ]);
         if (this._cfgbLoadFor !== appType) return; // superseded
         if (!allCfsResp.ok || !profResp.ok) {
           throw new Error('HTTP ' + allCfsResp.status + ' / ' + profResp.status);
         }
-        const [allCfsRes, profRes, savedRes] = await Promise.all([
+        const [allCfsRes, profRes, savedRes, trashGroupsRes] = await Promise.all([
           allCfsResp.json(),
           profResp.json(),
           savedResp.ok ? savedResp.json() : Promise.resolve([]),
+          trashGroupsResp.ok ? trashGroupsResp.json() : Promise.resolve([]),
         ]);
         // /all-cfs returns { categories: [{ category, groups: [{ cfs: [...] }] }] }.
         // The "categories" layer is a Clonarr-side abstraction; TRaSH itself
@@ -8725,6 +8748,10 @@ function clonarr() {
         // about rather than scrolling past 50+ profiles up front.
         this.cfgbProfileGroupExpanded = {};
         this.cfgbSavedGroups = Array.isArray(savedRes) ? savedRes : [];
+        // TRaSH upstream cf-groups — used by the "Copy from TRaSH" section so
+        // the user can base a new local group on an existing upstream one and
+        // tweak it without touching the TRaSH repo clone.
+        this.cfgbTrashCFGroups = Array.isArray(trashGroupsRes) ? trashGroupsRes : [];
       } catch (e) {
         if (this._cfgbLoadFor !== appType) return; // superseded
         console.error('cfgbLoad failed:', e);
@@ -8739,6 +8766,7 @@ function clonarr() {
         this._cfgbTrashHasCustom = false;
         this.cfgbProfiles = [];
         this.cfgbSavedGroups = [];
+        this.cfgbTrashCFGroups = [];
       }
     },
 
@@ -8801,17 +8829,36 @@ function clonarr() {
     },
 
     cfgbUpdateHash() {
-      // trash_id is MD5 of the group name, but scoped by app-type prefix so
-      // the same name ("[Release Groups] Anime") on Radarr vs Sonarr produces
+      // trash_id is MD5 of the group name, scoped by app-type prefix so the
+      // same name ("[Release Groups] Anime") on Radarr vs Sonarr produces
       // different hashes. TRaSH's tooling treats trash_id as a global key
       // across both apps, so identical hashes would collide there even
       // though our on-disk storage separates them per app-type.
-      // Existing saved groups keep their old hash (cfgbLoadForEdit restores
-      // the stored trash_id verbatim); the new formula only kicks in when
-      // the user types in the name field and the @input listener fires.
+      //
+      // Hash lock is the escape hatch for editing: when locked, name-input
+      // events don't regenerate the hash so typo fixes / minor rewording
+      // don't invalidate downstream references. The user toggles the lock
+      // explicitly via the edit-banner button.
+      if (this.cfgbHashLocked) return;
       const n = (this.cfgbName || '').trim();
       const app = this.activeAppType || 'radarr';
       this.cfgbTrashID = n ? cfgbMD5(app + ':' + n) : '';
+    },
+
+    // Toggle the hash lock. Locking restores the original trash_id
+    // (cfgbOriginalTrashID), unlocking regenerates from the current name.
+    // Only meaningful when cfgbOriginalTrashID is set — fresh new groups
+    // have no original to restore, so the button is hidden in that state.
+    cfgbToggleHashLock() {
+      if (!this.cfgbOriginalTrashID) return;
+      this.cfgbHashLocked = !this.cfgbHashLocked;
+      if (this.cfgbHashLocked) {
+        this.cfgbTrashID = this.cfgbOriginalTrashID;
+      } else {
+        const n = (this.cfgbName || '').trim();
+        const app = this.activeAppType || 'radarr';
+        this.cfgbTrashID = n ? cfgbMD5(app + ':' + n) : '';
+      }
     },
 
     cfgbFilteredCFs() {
@@ -9031,6 +9078,10 @@ function clonarr() {
       // Move a single CF up (-1) or down (+1) in the manual order. Rebuilds
       // the order from the current selection so we never operate on a stale
       // list that includes since-deselected CFs.
+      //
+      // Kept as a public method even though the arrow-based UI that drove it
+      // was replaced by drag-and-drop (cfgbCFDrop) in v2.2.0 — tests and any
+      // future keyboard-accessible reorder path could still use it.
       const current = this.cfgbOrderedSelectedCFs().map(c => c.trashId);
       const idx = current.indexOf(trashId);
       if (idx < 0) return;
@@ -9039,6 +9090,35 @@ function clonarr() {
       const tmp = current[idx];
       current[idx] = current[newIdx];
       current[newIdx] = tmp;
+      this.cfgbCFManualOrder = current;
+    },
+
+    // Drag-and-drop reorder for Selected CFs (manual mode only). Mirrors
+    // the sandboxDragStart/Over/Drop pattern used by Scoring Sandbox —
+    // source + target tracked by trash_id (identity-safe across re-renders),
+    // drop rewrites cfgbCFManualOrder from the current selection (stale
+    // entries for since-deselected CFs get dropped at the same time).
+    cfgbCFDragStart(trashId) {
+      this.cfgbDragSrcTid = trashId;
+    },
+    cfgbCFDragOver(trashId) {
+      this.cfgbDragOverTid = trashId;
+    },
+    cfgbCFDragEnd() {
+      this.cfgbDragSrcTid = null;
+      this.cfgbDragOverTid = null;
+    },
+    cfgbCFDrop(targetTid) {
+      const src = this.cfgbDragSrcTid;
+      this.cfgbDragSrcTid = null;
+      this.cfgbDragOverTid = null;
+      if (!src || src === targetTid) return;
+      const current = this.cfgbOrderedSelectedCFs().map(c => c.trashId);
+      const fromIdx = current.indexOf(src);
+      const toIdx = current.indexOf(targetTid);
+      if (fromIdx < 0 || toIdx < 0) return;
+      current.splice(fromIdx, 1);
+      current.splice(toIdx, 0, src);
       this.cfgbCFManualOrder = current;
     },
 
@@ -9128,6 +9208,9 @@ function clonarr() {
       this.cfgbDefaultCFs = {};
       this.cfgbSelectedProfiles = {};
       this.cfgbEditingId = '';
+      this.cfgbOriginalTrashID = '';
+      this.cfgbFromTrashName = '';
+      this.cfgbHashLocked = false;
       this.cfgbSavingMsg = '';
       this.cfgbCFSortMode = 'alpha';
       this.cfgbCFManualOrder = [];
@@ -9214,9 +9297,82 @@ function clonarr() {
       }
       this.cfgbSelectedProfiles = selProf;
       this.cfgbEditingId = g.id || '';
+      // Capture the trash_id at load time + engage the hash lock so the
+      // user can fix typos or tweak the name without invalidating
+      // downstream references (profile includes, prior exports, synced
+      // Arr profiles). The lock button in the edit banner unlocks it
+      // explicitly if the user wants a fresh identity.
+      this.cfgbOriginalTrashID = g.trash_id || '';
+      this.cfgbHashLocked = !!g.trash_id;
+      this.cfgbFromTrashName = '';
       this.cfgbSavingMsg = '';
       // Scroll the form into view so the user sees the loaded fields
       // immediately — the saved-groups list sits above the form.
+      setTimeout(() => {
+        const el = document.getElementById('cfgb-form-top');
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    },
+
+    // Copy an upstream TRaSH cf-group into the builder as the starting point
+    // for a new LOCAL group. The TRaSH repo clone is never modified — saving
+    // writes to /config/custom/json/{appType}/cf-groups/ alongside the user's
+    // own groups (cfgbEditingId stays empty so cfgbSave POSTs). Preserves the
+    // upstream trash_id so a user who tweaks without renaming keeps a hash
+    // that matches the source group until they explicitly change the name.
+    cfgbLoadFromTrash(g) {
+      this.cfgbName = g.name || '';
+      this.cfgbDescription = g.trash_description || '';
+      this.cfgbTrashID = g.trash_id || '';
+      this.cfgbDefault = g.default === 'true' || g.default === true;
+      this.cfgbCFFilter = '';
+      this.cfgbGroupFilter = 'all';
+      const selCFs = {}, reqCFs = {}, defCFs = {};
+      for (const cf of (g.custom_formats || [])) {
+        if (!cf.trash_id) continue;
+        selCFs[cf.trash_id] = true;
+        if (cf.required) reqCFs[cf.trash_id] = true;
+        if (cf.default) defCFs[cf.trash_id] = true;
+      }
+      this.cfgbSelectedCFs = selCFs;
+      this.cfgbRequiredCFs = reqCFs;
+      this.cfgbDefaultCFs = defCFs;
+      // Preserve TRaSH's CF ordering: flip to manual mode if the upstream
+      // order isn't already alphabetical, so the copied group matches the
+      // source file byte-for-byte until the user edits it.
+      const srcOrder = (g.custom_formats || []).map(cf => cf.trash_id).filter(Boolean);
+      const nameByTid = new Map(
+        (g.custom_formats || [])
+          .filter(cf => cf.trash_id)
+          .map(cf => [cf.trash_id, cf.name || ''])
+      );
+      const alphaOrder = srcOrder.slice().sort((a, b) =>
+        (nameByTid.get(a) || '').localeCompare(nameByTid.get(b) || '', undefined, { sensitivity: 'base' })
+      );
+      const isAlpha = srcOrder.every((id, i) => id === alphaOrder[i]);
+      if (isAlpha) {
+        this.cfgbCFSortMode = 'alpha';
+        this.cfgbCFManualOrder = [];
+      } else {
+        this.cfgbCFSortMode = 'manual';
+        this.cfgbCFManualOrder = srcOrder;
+      }
+      const selProf = {};
+      const include = (g.quality_profiles && g.quality_profiles.include) || {};
+      for (const trashId of Object.values(include)) {
+        if (trashId) selProf[trashId] = true;
+      }
+      this.cfgbSelectedProfiles = selProf;
+      // Key distinction from cfgbLoadForEdit: editingId stays empty so Save
+      // POSTs a NEW record rather than PUTting over the TRaSH clone. Capture
+      // the upstream trash_id and engage the hash lock so typo fixes or
+      // minor rewording of the group name don't invalidate the ID link
+      // back to the upstream group.
+      this.cfgbEditingId = '';
+      this.cfgbOriginalTrashID = g.trash_id || '';
+      this.cfgbHashLocked = !!g.trash_id;
+      this.cfgbFromTrashName = g.name || '';
+      this.cfgbSavingMsg = '';
       setTimeout(() => {
         const el = document.getElementById('cfgb-form-top');
         if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -9273,6 +9429,17 @@ function clonarr() {
 
     async cfgbSave() {
       if (!this.cfgbCanExport()) return;
+      // The hash-drift prompt was removed in favour of the explicit hash
+      // lock toggle in the edit banner — the user makes the keep-vs-
+      // regenerate decision visibly while editing rather than being
+      // surprised by a modal at save time.
+      return this._cfgbDoSave();
+    },
+
+    // Performs the actual POST (new) or PUT (existing local). The hash is
+    // whatever cfgbTrashID holds — the lock toggle decides whether that's
+    // the original (locked) or the MD5 of the current name (unlocked).
+    async _cfgbDoSave() {
       const appType = this.activeAppType;
       const payload = this.cfgbBuildPayload();
       const editing = !!this.cfgbEditingId;
@@ -9291,10 +9458,25 @@ function clonarr() {
           throw new Error('HTTP ' + resp.status + ': ' + text);
         }
         const saved = await resp.json();
-        // Refresh the saved-list and stay on the form. For creates, switch
-        // into edit-mode for the new record so the next Save is a PUT.
+        // Refresh the saved-list and stay on the form. For creates (incl.
+        // TRaSH copies), switch into edit-mode for the new record so the
+        // next Save is a PUT.
+        //
+        // Hash lock on save: if this was a fresh-new group (no prior
+        // baseline), engage the lock now that there's a saved identity.
+        // If it was an edit, PRESERVE the user's explicit lock choice —
+        // they deliberately unlocked/locked and shouldn't be surprised
+        // by a silent state reset. A user who saved with the lock off
+        // (regenerating hash from a new name) expects to stay unlocked
+        // and keep iterating on the name.
+        const wasFreshNew = !this.cfgbOriginalTrashID;
         await this.cfgbRefreshSaved();
         this.cfgbEditingId = saved.id || this.cfgbEditingId;
+        this.cfgbOriginalTrashID = saved.trash_id || this.cfgbTrashID;
+        if (wasFreshNew) {
+          this.cfgbHashLocked = !!this.cfgbOriginalTrashID;
+        }
+        this.cfgbFromTrashName = '';
         this.cfgbSavingOk = true;
         this.cfgbSavingMsg = editing ? 'Updated.' : 'Saved.';
         setTimeout(() => { if (this.cfgbSavingMsg === 'Updated.' || this.cfgbSavingMsg === 'Saved.') this.cfgbSavingMsg = ''; }, 2000);
