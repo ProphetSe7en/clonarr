@@ -20,7 +20,7 @@
   <Category>MediaApp:Other</Category>
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/ui/static/icons/clonarr.png</Icon>
   <Date>2026-04-20</Date>
   <Changes>
 ### 2026-04-20
