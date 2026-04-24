@@ -23,18 +23,17 @@
 (function() {
   const origFetch = window.fetch.bind(window);
   window.fetch = async function(input, init) {
-    init = init || {};
-    const method = (init.method || 'GET').toUpperCase();
-    const headers = Object.assign({}, init.headers || {});
+    const request = new Request(input, init);
+    const method = request.method.toUpperCase();
+    const headers = new Headers(request.headers);
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
       const m = document.cookie.match(/(?:^|; )clonarr_csrf=([^;]+)/);
-      if (m) headers['X-CSRF-Token'] = m[1];
+      if (m) headers.set('X-CSRF-Token', m[1]);
     }
-    const skipLoginRedirect = headers['X-Skip-Login-Redirect'] === '1';
+    const skipLoginRedirect = headers.get('X-Skip-Login-Redirect') === '1';
     // Client-side hint only — strip before sending to server.
-    delete headers['X-Skip-Login-Redirect'];
-    init.headers = headers;
-    const resp = await origFetch(input, init);
+    headers.delete('X-Skip-Login-Redirect');
+    const resp = await origFetch(new Request(request, { headers }));
     if (resp.status === 401 && !skipLoginRedirect) {
       const path = window.location.pathname;
       if (path !== '/login' && path !== '/setup') {
