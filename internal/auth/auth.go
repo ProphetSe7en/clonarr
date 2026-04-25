@@ -721,6 +721,9 @@ var publicExact = map[string]struct{}{
 var publicPrefixes = []string{
 	"/static/",
 	"/setup/", // for any setup-wizard sub-resources (e.g. form POSTs)
+	"/css/",
+	"/js/",
+	"/icons/",
 }
 
 // IsPublic returns true if the request path should bypass auth. Exact-match
