@@ -172,6 +172,17 @@ func (fs *FileStore[T, PT]) Update(item T) error {
 	defer fs.mu.Unlock()
 
 	p := PT(&item)
+
+	// Prevent renaming to a name that already exists for this appType
+	existing := fs.listLocked(p.GetAppType())
+	for _, ex := range existing {
+		exP := PT(&ex)
+		// same name in the same app type, but a different item ID
+		if exP.GetName() == p.GetName() && exP.GetID() != p.GetID() {
+			return fmt.Errorf("an item with name %q already exists for %s", p.GetName(), p.GetAppType())
+		}
+	}
+
 	newFilename := sanitizeFilename(p.GetName(), p.GetAppType(), p.GetID()) + ".json"
 
 	// Find and remove old file if it exists under a different name (migration/rename)
@@ -262,7 +273,16 @@ func sanitizeFilename(name, appType, id string) string {
 		result = id
 	}
 	if appType != "" {
-		result = result + "-" + appType
+		safeAppType := strings.ToLower(appType)
+		var ab strings.Builder
+		for _, r := range safeAppType {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+				ab.WriteRune(r)
+			}
+		}
+		if clean := ab.String(); clean != "" {
+			result = result + "-" + clean
+		}
 	}
 	return result
 }

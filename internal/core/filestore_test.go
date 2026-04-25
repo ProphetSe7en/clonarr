@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -230,7 +231,7 @@ func TestFileStore_AppTypeSeparation(t *testing.T) {
 	jsonCount := 0
 	files := make(map[string]bool, len(entries))
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
 			jsonCount++
 			files[e.Name()] = true
 		}
