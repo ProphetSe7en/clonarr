@@ -3814,6 +3814,12 @@ function clonarr() {
             name: cf.name || 'Unnamed CF',
             appType: this.importCFAppType,
             category: category,
+            // Honor includeCustomFormatWhenRenaming from imported JSON. The Arr
+            // API uses the long key on the CF; clonarr stores it as
+            // includeInRename internally. Without this map, importing a TRaSH
+            // JSON like pcok.json (which has the flag set true) silently
+            // landed it as false in the editor.
+            includeInRename: !!cf.includeCustomFormatWhenRenaming,
             specifications: cf.specifications || [],
           }));
 
@@ -8181,6 +8187,12 @@ function clonarr() {
       const lines = (sb.bulkInput || '').split('\n').map(l => l.trim()).filter(Boolean);
       if (lines.length === 0 || !sb.instanceId) return;
       sb.parsing = true;
+      // Each parse is one sequential call against the Arr Parse API. At ~100ms
+      // per call, a 200-title batch takes ~20s — surface that to the user
+      // instead of leaving them staring at a quiet spinner.
+      if (lines.length > 30) {
+        this.showToast(`Parsing ${lines.length} titles, this may take a moment...`, 'info', 6000);
+      }
       try {
         const r = await fetch('/api/scoring/parse/batch', {
           method: 'POST',
@@ -8323,6 +8335,9 @@ function clonarr() {
       const selected = (sb.searchResults || []).filter(r => r._selected);
       if (selected.length === 0 || !sb.instanceId) return;
       sb.parsing = true;
+      if (selected.length > 30) {
+        this.showToast(`Parsing ${selected.length} titles, this may take a moment...`, 'info', 6000);
+      }
       try {
         const titles = selected.map(r => r.title);
         const r = await fetch('/api/scoring/parse/batch', {

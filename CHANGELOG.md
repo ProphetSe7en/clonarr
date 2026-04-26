@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.2.3
+
+Two small bug fixes from user reports.
+
+### Fixes
+
+- **Scoring Sandbox batch limit raised from 15 to 200 titles.** The previous cap blocked users who wanted to test their profile against a large set of release-name variants from a Prowlarr search — exactly what the sandbox is for. The handler still loops sequentially against the Arr Parse API (no parallel hammering), and the per-route write deadline is now uncapped so a slow Arr can finish a 200-title batch without the global 30s server timeout cutting in. The frontend surfaces a "Parsing N titles, this may take a moment..." toast on batches >30 so the wait isn't silent.
+- **Custom Format JSON import now honors `includeCustomFormatWhenRenaming`.** The frontend mapping for *Custom Formats → Import → From JSON* picked only `name`, `specifications`, and category — so importing a TRaSH JSON like `pcok.json` (which has the rename flag set) silently landed it as false in the editor. The flag is now mapped through to `includeInRename`. The import-modal help text also notes that TRaSH-specific fields (`trash_id`, `trash_scores`) are intentionally not imported — the imported CF lives as your own custom format, separate from the TRaSH guide data path.
+
 ## v2.2.2
 
 UX patch covering two data-loss-prone code paths and a couple of quality-of-life fixes around custom format handling.
