@@ -5,6 +5,7 @@ import (
 	"clonarr/internal/core"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -92,6 +93,14 @@ func (s *Server) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 
 	case "orphaned-scores":
 		result, err := scanOrphanedScores(client, inst)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, result)
+
+	case "unused-by-clonarr":
+		result, err := scanUnusedByClonarr(s.Core, client, inst, req.Keep)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -201,6 +210,14 @@ func (s *Server) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]any{"scoresReset": count})
+
+	case "unused-by-clonarr":
+		count, err := applyDeleteCFs(client, req.IDs)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"deleted": count})
 
 	default:
 		writeError(w, http.StatusBadRequest, "Unknown action: "+req.Action)
@@ -558,4 +575,168 @@ func applyResetScores(client *arr.ArrClient, cfIDs []int) (int, error) {
 	}
 
 	return resetCount, errors.Join(errs...)
+}
+
+// scanUnusedByClonarr finds CFs in the Arr instance that aren't managed by any
+// clonarr sync rule and aren't used for renaming.
+//
+// "Managed by clonarr" means the CF's name appears in any of:
+//   - A sync rule's selectedCFs (covers both group-enabled CFs and Override
+//     extras — frontend pushes both into selectedCFs at sync time)
+//   - A sync rule's scoreOverrides keys (a score override on a CF is intent
+//     even when score is zero)
+//   - A TRaSH-source rule's TRaSH profile intrinsic CFs (formatItems
+//     resolved from TRaSH data — these are required by the profile structure)
+//   - An imported/builder profile's CFs (when the rule's profileSource is
+//     "imported")
+//   - The user's keep list
+//
+// CFs with includeCustomFormatWhenRenaming=true are always preserved
+// regardless of the score-based criteria — they affect filename rendering
+// in Arr, which clonarr doesn't manage.
+//
+// Hard caveat: this scan considers CFs that exist in Arr but were added
+// outside of clonarr (Arr UI directly, Recyclarr, Notifiarr, etc.) as
+// "unused". The frontend warns about this; the backend trusts the user's
+// selections from the preview list.
+func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instance, keep []string) (*CleanupScanResult, error) {
+	// Hard refusal when TRaSH guide data isn't loaded for this app type.
+	// Without it, every TRaSH ID in selectedCFs/scoreOverrides resolves to
+	// "" → managedNames misses every TRaSH-derived CF → the user is shown
+	// "delete all your TRaSH CFs" as candidates. That's data-loss-grade
+	// false positive risk, so refuse the scan with a clear remediation.
+	ad := app.Trash.GetAppData(inst.Type)
+	if ad == nil {
+		return nil, fmt.Errorf("TRaSH guide data is not loaded for %s — Clonarr cannot determine what's managed without it. Check Settings → TRaSH Guides and ensure the repository pull has completed successfully", inst.Type)
+	}
+
+	cfs, err := client.ListCustomFormats()
+	if err != nil {
+		return nil, err
+	}
+
+	// Keep list — case-insensitive name protection
+	keepSet := make(map[string]bool, len(keep))
+	for _, k := range keep {
+		k = strings.TrimSpace(k)
+		if k != "" {
+			keepSet[strings.ToLower(k)] = true
+		}
+	}
+
+	// Build the managed-name set from clonarr's sync rules + imported profiles.
+	managedNames := make(map[string]bool)
+	cfg := app.Config.Get()
+
+	// Resolve a CF ID (TRaSH hex string or "custom:<hex>") to its display name
+	// via the TRaSH appdata or clonarr's custom-CF store. Returns "" when the
+	// ID is unresolvable — those refs are silently skipped, mirroring the
+	// frontend's resolveCFName fallback behavior.
+	customCFs := app.CustomCFs.List(inst.Type)
+	customByID := make(map[string]string, len(customCFs))
+	for _, ccf := range customCFs {
+		customByID[ccf.ID] = ccf.Name
+	}
+	resolveName := func(cfID string) string {
+		if strings.HasPrefix(cfID, "custom:") {
+			return customByID[cfID]
+		}
+		// ad is guaranteed non-nil here — refused above when not loaded
+		if cf, ok := ad.CustomFormats[cfID]; ok {
+			return cf.Name
+		}
+		return ""
+	}
+
+	for _, rule := range cfg.AutoSync.Rules {
+		if rule.InstanceID != inst.ID {
+			continue
+		}
+		// User selections — Override extras AND group-enabled CFs both land here
+		for _, cfID := range rule.SelectedCFs {
+			if name := resolveName(cfID); name != "" {
+				managedNames[strings.ToLower(name)] = true
+			}
+		}
+		// Score overrides — a score (even 0) is explicit intent
+		for cfID := range rule.ScoreOverrides {
+			if name := resolveName(cfID); name != "" {
+				managedNames[strings.ToLower(name)] = true
+			}
+		}
+		// TRaSH-source rule: include the TRaSH profile's intrinsic CFs
+		if rule.ProfileSource == "trash" && rule.TrashProfileID != "" {
+			resolved, _ := core.ResolveProfileCFs(ad, rule.TrashProfileID)
+			for _, rcf := range resolved {
+				managedNames[strings.ToLower(rcf.Name)] = true
+			}
+		}
+		// Imported/builder rule: include the imported profile's CFs
+		if rule.ProfileSource == "imported" && rule.ImportedProfileID != "" {
+			if ip, ok := app.Profiles.Get(rule.ImportedProfileID); ok {
+				for trashID := range ip.FormatItems {
+					if comment, ok := ip.FormatComments[trashID]; ok && comment != "" {
+						managedNames[strings.ToLower(comment)] = true
+					} else if cf, ok := ad.CustomFormats[trashID]; ok {
+						managedNames[strings.ToLower(cf.Name)] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Belt-and-suspenders: also include CFs from sync history. This protects
+	// against TRaSH-side schema drift — if a TRaSH profile referenced by a
+	// rule no longer resolves cleanly (trash_id renamed/removed upstream),
+	// ResolveProfileCFs returns empty and the rule's intrinsic required CFs
+	// would be missing from managedNames. The sync history captures what
+	// clonarr actually pushed to Arr the last time this rule synced, so it's
+	// authoritative for "what clonarr put there". Only the latest entry
+	// per (instance, arrProfileId) matters — older entries may include CFs
+	// the user has since removed via rule edits.
+	latestPerProfile := make(map[int]int) // arrProfileId → index in cfg.SyncHistory
+	for i, sh := range cfg.SyncHistory {
+		if sh.InstanceID != inst.ID {
+			continue
+		}
+		if prev, has := latestPerProfile[sh.ArrProfileID]; !has || sh.LastSync > cfg.SyncHistory[prev].LastSync {
+			latestPerProfile[sh.ArrProfileID] = i
+		}
+	}
+	for _, idx := range latestPerProfile {
+		for _, cfID := range cfg.SyncHistory[idx].SyncedCFs {
+			if name := resolveName(cfID); name != "" {
+				managedNames[strings.ToLower(name)] = true
+			}
+		}
+	}
+
+	// Find CFs in Arr that are unmanaged. Filter out renaming-flagged CFs
+	// (always preserved) and keep-listed CFs (user-protected).
+	var items []CleanupItem
+	for _, cf := range cfs {
+		if cf.IncludeCustomFormatWhenRenaming {
+			continue
+		}
+		nameLower := strings.ToLower(cf.Name)
+		if managedNames[nameLower] {
+			continue
+		}
+		if keepSet[nameLower] {
+			continue
+		}
+		items = append(items, CleanupItem{
+			ID:   cf.ID,
+			Name: cf.Name,
+		})
+	}
+
+	return &CleanupScanResult{
+		Action:      "unused-by-clonarr",
+		InstanceID:  inst.ID,
+		Instance:    inst.Name,
+		TotalCount:  len(cfs),
+		AffectCount: len(items),
+		Items:       items,
+	}, nil
 }

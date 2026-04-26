@@ -1623,6 +1623,17 @@
                       </div>
                     </div>
 
+                    <!-- Unused by clonarr -->
+                    <div class="card" style="padding:16px;border-color:#d29922">
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                        <div>
+                          <div style="font-size:14px;font-weight:600;color:#d29922">Unused Custom Formats (Clonarr-managed only)</div>
+                          <div style="font-size:12px;color:#aaa;margin-top:4px;line-height:1.5">Finds CFs in this Arr instance that are not referenced by any Clonarr sync rule (selectedCFs, score overrides, or required by the rule's TRaSH/imported profile) and are not used for renaming. <strong>Assumes Clonarr is the sole tool managing CFs on this instance</strong> — CFs added via the Arr UI directly, or via Recyclarr / Notifiarr / other tools, will appear here as "unused". Review the preview list carefully. Keep List protection still applies.</div>
+                        </div>
+                        <button class="btn" style="border-color:#d29922;color:#d29922" @click="cleanupScan('unused-by-clonarr')" :disabled="cleanupScanning">Scan</button>
+                      </div>
+                    </div>
+
                     <!-- Reset unsynced scores -->
                     <div class="card" style="padding:16px">
                       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -4037,10 +4048,10 @@
         </div>
         <div class="modal-footer" x-show="cleanupResult.applied === undefined && cleanupResult.affectCount > 0">
           <button class="btn" @click="cleanupResult = null">Cancel</button>
-          <button class="btn" :class="['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action) ? 'btn-danger' : 'btn-primary'"
+          <button class="btn" :class="['delete-cfs-and-scores','delete-cfs-keep-scores','unused-by-clonarr'].includes(cleanupResult.action) ? 'btn-danger' : 'btn-primary'"
             @click="cleanupApply()" :disabled="cleanupApplying">
             <span x-show="cleanupApplying" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
-            <span x-show="!cleanupApplying" x-text="(cleanupResult.action?.startsWith('delete') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span>
+            <span x-show="!cleanupApplying" x-text="((cleanupResult.action?.startsWith('delete') || cleanupResult.action === 'unused-by-clonarr') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span>
           </button>
         </div>
         <div class="modal-footer" x-show="cleanupResult.applied !== undefined">

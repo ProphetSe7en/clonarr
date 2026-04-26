@@ -4,6 +4,41 @@
 
 Bundling several user-reported items. Currently on `:dev`; will be released as v2.2.4 when the bundle is complete.
 
+### Maintenance: "Unused Custom Formats" cleanup action
+
+New cleanup action under Maintenance → Cleanup that finds CFs in an Arr instance which are not referenced by any Clonarr sync rule and are not used for renaming. Hard caveat: assumes Clonarr is the sole tool managing CFs on the instance — CFs added directly via the Arr UI, Recyclarr, Notifiarr, etc. will appear here as "unused", since Clonarr has no record of them. The user reviews the preview list and the existing Keep List protection still applies.
+
+Two safety guards prevent destructive false positives:
+
+- **Refuses to scan when TRaSH guide data isn't loaded.** Without it, every TRaSH ID in a rule's `selectedCFs` would resolve to "" and the user would be shown "delete all your TRaSH CFs" as candidates. The scan returns a clear "TRaSH guide data is not loaded for {appType}" error instead and points the user to Settings → TRaSH Guides.
+- **Belt-and-suspenders sync-history fallback.** The "managed" set is built from each rule's `selectedCFs`, score-override keys, the rule's TRaSH or imported profile's intrinsic CFs, AND from the latest sync-history entry per `(instance, arrProfileId)`. The history fallback protects against TRaSH-side schema drift — if a rule's referenced TRaSH profile was renamed/removed upstream, `ResolveProfileCFs` returns empty, but the history captures what Clonarr actually pushed at last sync, so previously-required CFs aren't mistakenly flagged.
+
+### Custom Format editor: preserve field values across Type changes
+
+Switching a specification's Type dropdown used to wipe the field values
+unconditionally — type a regex into a `ReleaseTitleSpecification`, click
+Type by accident, and the regex is gone. Now the editor remembers the
+field state per implementation type for the lifetime of the editor session
+(snapshot taken when leaving an implementation, restored when returning),
+plus carries values forward across compatible types (same field name +
+type — e.g. ReleaseTitle ↔ ReleaseGroup, both expose a "value" textbox).
+Mismatched types still reset (Source's number/select "value" to a textbox
+"value" can't carry meaningfully). Loaded specs get their initial values
+seeded into the history so a Type → other → original round-trip restores
+the original value.
+
+### Maintenance UI: visual consistency on cleanup cards
+
+The "Unused Custom Formats" card now uses the same full-border styling as
+the other warning-level cleanup cards (yellow border + matching title +
+yellow outline scan button — same treatment as "Delete All Custom Formats
+(Keep Scores)"). The earlier left-border-only design was an outlier in a
+section that already had a consistent visual language.
+
+### Sync result banner: include Settings + Quality counts in summary line
+
+Toast/banner used to read "Created: 0 CFs, Updated: 0 CFs, Scores: 0 updated" even when the sync only changed profile settings or quality structure — nothing in the summary indicated anything had happened, the user had to click Show details to see e.g. "Language: Original → Any". The banner now reads `Created: X CFs, Updated: Y CFs, Scores: Z updated, Settings: A changed, Quality: B changes`. Counts come from `settingsDetails.length` and `qualityDetails.length` on the sync result. Updated in both result-banner instances (sync modal + Compare chained-sync banner). Sync history view already had its own per-category columns.
+
 ### Sync log: include language in "profile settings changed" line
 
 When only the profile language changed during a sync, the log line read
