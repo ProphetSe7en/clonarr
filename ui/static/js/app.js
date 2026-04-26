@@ -3286,13 +3286,24 @@ function clonarr() {
           selectOptions: [],
         }));
       }
+      // Seed the per-implementation field history so onSpecTypeChange can
+      // restore the original loaded values when the user switches Type and
+      // then back. _lastImpl tracks the implementation we'd be leaving on
+      // the next change so the snapshot is filed under the correct key.
+      const impl = arrSpec.implementation || '';
+      const history = {};
+      if (impl) {
+        history[impl] = fields.map(f => ({ name: f.name, value: f.value, type: f.type }));
+      }
       return {
         _key: ++this.cfEditorSpecCounter,
         name: arrSpec.name || '',
-        implementation: arrSpec.implementation || '',
+        implementation: impl,
         negate: arrSpec.negate || false,
         required: arrSpec.required || false,
         fields: fields,
+        _lastImpl: impl,
+        _fieldHistory: history,
       };
     },
 
@@ -3502,24 +3513,74 @@ function clonarr() {
         negate: false,
         required: false,
         fields: [],
+        _lastImpl: '',
+        _fieldHistory: {},
       });
     },
 
     onSpecTypeChange(specIdx) {
       const spec = this.cfEditorForm.specifications[specIdx];
       const schema = this.getAvailableImplementations().find(s => s.implementation === spec.implementation);
-      if (schema) {
-        spec.fields = schema.fields.map(f => ({
-          name: f.name,
-          value: f.defaultValue !== undefined ? f.defaultValue : (f.type === 'checkbox' ? false : f.type === 'number' ? 0 : ''),
-          label: f.label,
-          type: f.type,
-          selectOptions: f.selectOptions || [],
-          placeholder: f.placeholder || '',
+      // Two-tier value preservation across Type changes so a fat-fingered
+      // dropdown click doesn't silently destroy a typed regex:
+      //
+      //   1. Per-implementation memory: every time the user leaves an
+      //      implementation, snapshot its fields into spec._fieldHistory
+      //      keyed by the leaving implementation. Switching back later
+      //      restores the snapshot — covers "I clicked the wrong type,
+      //      went elsewhere, came back".
+      //   2. Same-named compatible carry: when the new implementation has
+      //      a field with the same name + type as the old one and the
+      //      history doesn't have a snapshot for it, copy the current
+      //      value forward. Covers "two regex-style specs sharing a 'value'
+      //      textbox" (ReleaseTitle ↔ ReleaseGroup).
+      //
+      // The snapshot is taken from the PREVIOUSLY active implementation,
+      // which we track via spec._lastImpl. spec._fieldHistory persists for
+      // the editor's lifetime — populated either here or by openCFEditor's
+      // initial seed of the spec's loaded values.
+      spec._fieldHistory = spec._fieldHistory || {};
+      const prevImpl = spec._lastImpl;
+      if (prevImpl && prevImpl !== spec.implementation && Array.isArray(spec.fields)) {
+        // Save outgoing field state under the implementation we're leaving.
+        spec._fieldHistory[prevImpl] = spec.fields.map(f => ({
+          name: f.name, value: f.value, type: f.type,
         }));
-      } else {
-        spec.fields = [{ name: 'value', value: '', label: 'Value', type: 'textbox', selectOptions: [], placeholder: '' }];
       }
+      const oldFields = {};
+      for (const f of (spec.fields || [])) {
+        oldFields[f.name] = { value: f.value, type: f.type };
+      }
+      const remembered = spec._fieldHistory[spec.implementation] || null;
+      const rememberedByName = {};
+      if (remembered) {
+        for (const f of remembered) rememberedByName[f.name] = f;
+      }
+      const resolveValue = (newName, newType, fallback) => {
+        // Tier 1: prior visit to this implementation — restore exactly.
+        const r = rememberedByName[newName];
+        if (r && r.type === newType) return r.value;
+        // Tier 2: carry from current fields when name + type match.
+        const old = oldFields[newName];
+        if (old && old.type === newType) return old.value;
+        return fallback;
+      };
+      if (schema) {
+        spec.fields = schema.fields.map(f => {
+          const fallback = f.defaultValue !== undefined ? f.defaultValue : (f.type === 'checkbox' ? false : f.type === 'number' ? 0 : '');
+          return {
+            name: f.name,
+            value: resolveValue(f.name, f.type, fallback),
+            label: f.label,
+            type: f.type,
+            selectOptions: f.selectOptions || [],
+            placeholder: f.placeholder || '',
+          };
+        });
+      } else {
+        spec.fields = [{ name: 'value', value: resolveValue('value', 'textbox', ''), label: 'Value', type: 'textbox', selectOptions: [], placeholder: '' }];
+      }
+      spec._lastImpl = spec.implementation;
     },
 
     getCFEditorPreviewJSON() {
@@ -4295,6 +4356,7 @@ function clonarr() {
         'delete-cfs-and-scores': 'Delete All CFs & Scores',
         'reset-unsynced-scores': 'Reset Non-Synced Scores',
         'orphaned-scores': 'Orphaned Scores',
+        'unused-by-clonarr': 'Unused Custom Formats (Clonarr-managed)',
       };
       return labels[action] || action;
     },
