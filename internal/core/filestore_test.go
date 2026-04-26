@@ -259,15 +259,64 @@ func TestFileStore_AppTypeSeparation(t *testing.T) {
 	}
 }
 
+// `!` is a common prefix on user-authored TRaSH-style CFs (`!P2P Internal`,
+// `!FLUX`). It must be preserved in filenames and `!FLUX` must not collide
+// with `FLUX`.
+func TestFileStore_PreservesBangPrefix(t *testing.T) {
+	fs := newTestStore(t)
+
+	items := []testItem{
+		{ID: "1", Name: "!FLUX", AppType: "radarr", Value: "bang"},
+		{ID: "2", Name: "FLUX", AppType: "radarr", Value: "plain"},
+	}
+	added, _, err := fs.Add(items)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if added != 2 {
+		t.Fatalf("expected both items to add, got %d", added)
+	}
+
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	got := map[string]bool{}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			got[e.Name()] = true
+		}
+	}
+	if !got["!flux-radarr.json"] {
+		t.Error("expected !flux-radarr.json to exist (bang preserved)")
+	}
+	if !got["flux-radarr.json"] {
+		t.Error("expected flux-radarr.json to exist (no collision with bang variant)")
+	}
+
+	bang, ok := fs.Get("1")
+	if !ok || bang.Value != "bang" {
+		t.Error("bang variant data corrupted or missing")
+	}
+	plain, ok := fs.Get("2")
+	if !ok || plain.Value != "plain" {
+		t.Error("plain variant data corrupted or missing")
+	}
+}
+
 // Verifies that MigrateFilenames preserves both items when two ID-named
 // files would migrate to the same target filename. Without collision
 // protection, the second writer silently overwrites the first.
 //
 // Regression test for the bug surfaced 2026-04-26 during PR #28 smoke-test:
-// names like "HD" and "HD !" both sanitize to "hd-sonarr.json"; the second
-// migrated file destroyed the first. After the fix, the alphabetically-first
+// two names that sanitize to the same target file used to silently overwrite
+// each other during MigrateFilenames. After the fix the alphabetically-first
 // source wins, the rest stay at their original (ID-based) filenames with a
-// log warning. User can resolve by renaming in the UI.
+// log warning. User resolves by renaming in the UI.
+//
+// `!` and `?` differ here because `!` is preserved in filenames (added in
+// 2026-04-26 sanitize-filename change) while `?` is still stripped — so
+// `HD` and `HD?` still collide, exercising the collision-preserve path.
 func TestFileStore_MigrateFilenames_CollisionPreserved(t *testing.T) {
 	fs := newTestStore(t)
 
@@ -275,7 +324,7 @@ func TestFileStore_MigrateFilenames_CollisionPreserved(t *testing.T) {
 	// to the same target. Bypasses Add() to simulate pre-fix on-disk state.
 	items := []testItem{
 		{ID: "aaaa1111aaaa1111aaaa1111aaaa1111", Name: "HD", AppType: "sonarr", Value: "first"},
-		{ID: "bbbb2222bbbb2222bbbb2222bbbb2222", Name: "HD !", AppType: "sonarr", Value: "second"},
+		{ID: "bbbb2222bbbb2222bbbb2222bbbb2222", Name: "HD?", AppType: "sonarr", Value: "second"},
 	}
 	for _, it := range items {
 		data, err := json.Marshal(it)

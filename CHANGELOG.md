@@ -1,8 +1,23 @@
 # Changelog
 
+## v2.2.2
+
+UX patch covering two data-loss-prone code paths and a couple of quality-of-life fixes around custom format handling.
+
+### Fixes
+
+- **Custom format filenames preserve `!` prefix.** `sanitizeFilename` previously stripped `!` from CF names, so `!FLUX` and `FLUX` collided to the same target file (`flux-radarr.json`) and one silently overwrote the other. `!` is safe on every filesystem we support and is a very common convention for user-authored CFs (TRaSH-style sort-to-top). After this release `!FLUX` lives at `!flux-radarr.json` and `FLUX` at `flux-radarr.json` — no collision. Existing files migrate on next startup. Regression test: `TestFileStore_PreservesBangPrefix`.
+- **Auto-sync toggle no longer rewrites the rule.** When the *Auto-sync this profile* checkbox in the sync modal was toggled, `toggleAutoSyncForProfile` PUT the entire rule with whatever the current sync form had. If the user reached the modal via *Save & Sync* on a TRaSH profile (fresh defaults — no extra CFs, no overrides loaded), a single toggle click silently replaced the rule's saved customizations with empty state. The handler now only modifies the `enabled` flag; customizations are edited only through the *Apply* path or the Edit-pencil in the Sync Rules list.
+- **"Showing X Custom Formats" counter on the Custom Formats tab** read the wrong field on the category objects (`c.cfs?.length` instead of `c.totalCFs`) and so always rendered 0. Now reflects the real total across TRaSH categories + your own custom CFs.
+
+### UX
+
+- **Sync modal defaults to "Create new profile"** when opened from the profile list. Previously it auto-flipped to "Update existing profile" if any sync history matched the TRaSH profile, which silently put the user in overwrite mode. The Edit-pencil flow on a sync rule still flips to update automatically (that's its purpose).
+- **Confirmation dialog before overwriting an existing sync rule.** When the user explicitly picks "Update existing profile" and clicks Apply, a modal now describes what will be overwritten ("the saved rule with N CFs and M score overrides will be replaced") and offers to cancel and use the Edit pencil instead. The Edit-pencil flow itself doesn't show this dialog — overwriting is the explicit intent there.
+
 ## v2.2.1
 
-Bug fix release addressing two classes of file-collision in clonarr's local storage that could cause silent data loss. Investigation prompted by **btTeddy's** detailed report on the TRaSH Guides Discord — thanks for taking the time to write it up.
+Bug fix release addressing two classes of file-collision in clonarr's local storage that could cause silent data loss.
 
 ### What's fixed (verified)
 
@@ -10,17 +25,17 @@ Two specific filename-collision bugs in `internal/core/filestore.go`, the layer 
 
 - **Same-name profiles on Radarr and Sonarr no longer overwrite each other at write time.** Before this release, profiles in `/config/profiles/` used filenames derived only from the sanitized name. If you imported the same TRaSH profile to both apps (Advanced → Import Profile), or built a custom profile with the same name on both via Profile Builder, saving the second wrote over the first. Filenames now include an app-type suffix (`-radarr` / `-sonarr`). Credit [@ColeSpringer](https://github.com/ColeSpringer) via [PR #28](https://github.com/prophetse7en/clonarr/pull/28).
 - **Migration of existing profile filenames is now wired at startup** (`profilesStore.MigrateFilenames()`). PR #28's wire-up was missed for the profile store but was already in place for custom CFs and cf-groups; without this call, existing on-disk files kept their pre-fix names and the new format only kicked in on next save.
-- **Migration-time collision protection.** When two existing files would migrate to the same target filename (e.g. names `HD` and `HD !` both sanitize to `hd-sonarr.json`), the alphabetically-first source wins and gets the target name; the rest stay at their original filenames with a log warning telling the user to rename one to allow migration. Without this guard, the second `os.WriteFile` silently overwrote the first during upgrade. This protection covers all FileStore-backed data — profiles, custom CFs, and cf-groups — so the same class of bug can't repeat for any of them. Verified with regression test `TestFileStore_MigrateFilenames_CollisionPreserved`.
+- **Migration-time collision protection.** When two existing files would migrate to the same target filename (e.g. names `HD` and `HD?` both sanitize to `hd-sonarr.json`), the alphabetically-first source wins and gets the target name; the rest stay at their original filenames with a log warning telling the user to rename one to allow migration. Without this guard, the second `os.WriteFile` silently overwrote the first during upgrade. This protection covers all FileStore-backed data — profiles, custom CFs, and cf-groups — so the same class of bug can't repeat for any of them. Verified with regression test `TestFileStore_MigrateFilenames_CollisionPreserved`.
 
 ### Honest scope statement
 
-The investigation was triggered by btTeddy's report of a Radarr profile "almost reset to stock" with personal CFs gone, alongside hex-named ghost CFs in his Sonarr profile and truncated sync history. We've shipped fixes for two specific filename-collision classes that could plausibly cause part of his symptoms, but **we cannot confirm those fixes fully explain his exact bug**. Possibilities still on the table:
+These fixes address two specific filename-collision classes in the data layer. They may explain reports of profile "reset to stock" symptoms, hex-named ghost CFs, or truncated sync history, but the full root cause for any specific user report cannot be confirmed without case-by-case data. Possibilities still on the table:
 
-- His report could be the cross-Arr profile collision we did fix (if he had imported/built the profile rather than only using TRaSH Sync).
-- Or it could be a separate within-`appType` collision in the custom-CF migration from v2.0.4 (where personal CFs with similar names like `!FLUX` and `FLUX` could sanitize to the same filename and one got silently lost, leaving sync rules with orphaned trash_id references — the "ghost" hex-named CFs.)
-- The migration-time collision protection now ships for the custom-CF and cf-group stores too, so the second class is protected for the future even though we haven't traced his specific case to it definitively.
+- Cross-Arr profile collision (now fixed) — affects users who imported or built same-name profiles on both apps.
+- Within-`appType` collision in the custom-CF migration from v2.0.4 — where personal CFs with similar names (e.g. `!FLUX` and `FLUX`) could sanitize to the same filename and one got silently lost, leaving sync rules with orphaned `trash_id` references (the "ghost" hex-named CFs).
+- The migration-time collision protection now ships for the custom-CF and cf-group stores too, so the second class is protected going forward.
 
-If you upgrade and continue to see profile-reset, history-truncation, or hex-named ghost CFs symptoms, please file a GitHub issue with details — we want to keep tracing.
+If you upgrade and continue to see profile-reset, history-truncation, or hex-named ghost CFs symptoms, please file a GitHub issue with details.
 
 ### Recovery for already-affected installs
 

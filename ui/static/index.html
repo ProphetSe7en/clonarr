@@ -1101,7 +1101,7 @@
           <div>
             <div style="padding:0 0 12px;display:flex;align-items:center;justify-content:space-between">
               <div style="font-size:14px;color:#aaa">
-                Showing <strong style="color:#e1e4e8" x-text="(getCFBrowseGroups(activeAppType) || []).reduce((acc, c) => acc + (c.cfs?.length || 0), 0)"></strong> Custom Formats.
+                Showing <strong style="color:#e1e4e8" x-text="(getCFBrowseGroups(activeAppType) || []).reduce((acc, c) => acc + (c.totalCFs || 0), 0)"></strong> Custom Formats.
               </div>
               <div style="display:flex;gap:8px;margin-left:12px;flex-shrink:0">
                 <button class="btn btn-sm" style="background:#1f6feb;color:#fff;white-space:nowrap" @click="openCFEditor('create', activeAppType)">Create</button>

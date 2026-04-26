@@ -6187,22 +6187,23 @@ function clonarr() {
       }
       // Load languages for this instance
       this.getLanguagesForInstance(instId);
-      // Auto-detect mode: use resync target if set, otherwise find first matching history entry
+      // Mode default: 'create'. Only the explicit Edit-pencil flow
+      // (resyncProfile → resyncTargetArrProfileId) auto-flips to 'update'.
+      // Previously we also auto-flipped on any sync-history match, which
+      // silently put users in overwrite mode when they re-opened a TRaSH
+      // profile from the list with no intent to edit the saved rule. The
+      // user must now explicitly pick "Update existing" via the radio for
+      // any non-pencil flow, and applySync() shows a confirm-overwrite
+      // dialog when they do (gated on _editFlow).
       const arrProfileIds = new Set((this.arrProfiles || []).map(p => p.id));
+      this.syncForm._editFlow = false;
       if (this.resyncTargetArrProfileId && arrProfileIds.has(this.resyncTargetArrProfileId)) {
         this.syncMode = 'update';
         this.syncForm.arrProfileId = String(this.resyncTargetArrProfileId);
+        this.syncForm._editFlow = true;
         this.resyncTargetArrProfileId = null;
       } else {
-        const history = (this.syncHistory[instId] || []).find(h =>
-          (h.profileTrashId === profileTrashId || h.importedProfileId === profileTrashId) && arrProfileIds.has(h.arrProfileId)
-        );
-        if (history && history.arrProfileId) {
-          this.syncMode = 'update';
-          this.syncForm.arrProfileId = String(history.arrProfileId);
-        } else {
-          this.syncMode = 'create';
-        }
+        this.syncMode = 'create';
       }
       this.syncPreview = null;
       // Auto-fetch preview if update mode with pre-selected profile
@@ -6330,6 +6331,35 @@ function clonarr() {
     },
 
     async startApply() {
+      // Overwrite-confirmation guard. The "Edit sync rule" pencil flow sets
+      // _editFlow=true in _loadSyncInstanceData; that path expects to update
+      // the existing rule and shows no popup. Any other path (Save & Sync
+      // from Profile Detail, Compare, etc.) reaching Update mode means the
+      // user explicitly clicked the "Update existing profile" radio — warn
+      // before we replace their saved customizations with current UI state.
+      if (this.syncMode === 'update' && !this.syncForm._editFlow) {
+        const arrId = parseInt(this.syncForm.arrProfileId) || 0;
+        const targetProfile = this.arrProfiles.find(p => p.id === arrId);
+        const profileName = targetProfile?.name || `Arr profile ${arrId}`;
+        const existingRule = this.autoSyncRules.find(r =>
+          r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrId
+        );
+        const ruleSummary = existingRule
+          ? `${existingRule.selectedCFs?.length || 0} CFs and ${Object.keys(existingRule.scoreOverrides || {}).length} score overrides`
+          : 'its existing settings';
+        const ok = await new Promise(resolve => {
+          this.confirmModal = {
+            show: true,
+            title: 'Overwrite existing sync rule?',
+            message: `You're about to overwrite the sync rule for "${profileName}" with the current sync form state.\n\nThe saved rule (${ruleSummary}) will be replaced. To edit the saved rule without losing customizations, cancel and use the pencil (edit) icon next to the rule in the Sync Rules list.\n\nProceed with overwrite?`,
+            confirmLabel: 'Overwrite',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+          };
+        });
+        if (!ok) return;
+      }
+
       // Check for name collision in Create mode — prevent silent overwrite
       if (this.syncMode === 'create') {
         const newName = this.syncForm.newProfileName.trim().toLowerCase();
@@ -7727,19 +7757,14 @@ function clonarr() {
       this.debugLog('UI', `Auto-sync: ${enabled ? 'enabled' : 'disabled'} for "${this.syncForm.profileName}" → ${this.syncForm.instanceName}`);
       const existing = this.autoSyncRuleForSync;
       if (existing) {
-        // Update existing rule — toggle enabled and update settings
-        const syncBody = this.buildSyncBody();
-        const updated = {
-          ...existing,
-          enabled: enabled,
-          selectedCFs: this.getAllSelectedCFIds(),
-          behavior: this.syncForm.behavior,
-          overrides: syncBody.overrides || null,
-          scoreOverrides: syncBody.scoreOverrides || null,
-          qualityOverrides: syncBody.qualityOverrides || null,
-          qualityStructure: syncBody.qualityStructure || null,
-          arrProfileId: parseInt(this.syncForm.arrProfileId) || existing.arrProfileId
-        };
+        // Toggle ONLY the enabled flag. Do NOT rebuild selectedCFs/scoreOverrides/etc.
+        // from current UI state — the user may be in the sync modal with fresh
+        // defaults (e.g., opened via Save & Sync from Profile Detail) where their
+        // saved extra CFs and score overrides are not loaded into the form. PUT'ing
+        // the rule with that incomplete state would silently overwrite the rule's
+        // customizations. Customizations are edited through the Apply path (which
+        // creates/refreshes sync history) and via the Edit Sync Settings pencil.
+        const updated = { ...existing, enabled: enabled };
         try {
           await fetch(`/api/auto-sync/rules/${existing.id}`, {
             method: 'PUT',

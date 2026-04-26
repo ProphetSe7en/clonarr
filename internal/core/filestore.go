@@ -251,7 +251,13 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 }
 
 // sanitizeFilename converts a name to a safe filesystem filename.
-// Strips path separators, .., and special characters. Falls back to ID if name is empty.
+// Strips path separators, .., and most special characters. Falls back to ID if name is empty.
+//
+// `!` is preserved because it's a common prefix on TRaSH-style custom format
+// names (e.g. `!P2P Internal`, `!FLUX`) and is safe on every filesystem we
+// support. Stripping it would also collide names like `!FLUX` and `FLUX` to
+// the same target file. The trim/collapse logic operates on '-' only so a
+// leading '!' is kept after the rest is normalized.
 func sanitizeFilename(name, appType, id string) string {
 	if name == "" {
 		name = id
@@ -260,7 +266,7 @@ func sanitizeFilename(name, appType, id string) string {
 	safe := strings.ToLower(name)
 	var b strings.Builder
 	for _, r := range safe {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '!' {
 			b.WriteRune(r)
 		} else if r == ' ' || r == '.' {
 			b.WriteRune('-')
