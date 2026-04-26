@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -199,5 +200,59 @@ func TestFileStore_UpdateNotFound(t *testing.T) {
 	err := fs.Update(testItem{ID: "nonexistent", Name: "X", AppType: "radarr"})
 	if err == nil {
 		t.Error("expected error for updating nonexistent item")
+	}
+}
+
+func TestFileStore_AppTypeSeparation(t *testing.T) {
+	fs := newTestStore(t)
+
+	// Add two items with the exact same name but different AppTypes.
+	// Both should be saved into the store since their filenames should not collide.
+	items := []testItem{
+		{ID: "1", Name: "Identical", AppType: "radarr", Value: "a"},
+		{ID: "2", Name: "Identical", AppType: "sonarr", Value: "b"},
+	}
+
+	added, skipped, err := fs.Add(items)
+	if err != nil {
+		t.Fatalf("Add failed: %v", err)
+	}
+	if added != 2 {
+		t.Errorf("expected 2 added, got %d (skipped: %d)", added, skipped)
+	}
+
+	// Verify both physically exist as files
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("failed to read dir: %v", err)
+	}
+
+	// There should be exactly 2 JSON files with app-scoped names
+	jsonCount := 0
+	files := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			jsonCount++
+			files[e.Name()] = true
+		}
+	}
+	if jsonCount != 2 {
+		t.Errorf("expected 2 JSON files, got %d", jsonCount)
+	}
+	if !files["identical-radarr.json"] {
+		t.Error("expected identical-radarr.json to exist")
+	}
+	if !files["identical-sonarr.json"] {
+		t.Error("expected identical-sonarr.json to exist")
+	}
+
+	// Verify we can retrieve both distinct items
+	rItem, rok := fs.Get("1")
+	sItem, sok := fs.Get("2")
+	if !rok || !sok {
+		t.Fatal("could not retrieve both items")
+	}
+	if rItem.Value != "a" || sItem.Value != "b" {
+		t.Errorf("items corrupted or overwritten: radarr=%q, sonarr=%q", rItem.Value, sItem.Value)
 	}
 }

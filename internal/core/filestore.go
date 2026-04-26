@@ -172,7 +172,18 @@ func (fs *FileStore[T, PT]) Update(item T) error {
 	defer fs.mu.Unlock()
 
 	p := PT(&item)
-	newFilename := sanitizeFilename(p.GetName(), p.GetID()) + ".json"
+
+	// Prevent renaming to a name that already exists for this appType
+	existing := fs.listLocked(p.GetAppType())
+	for _, ex := range existing {
+		exP := PT(&ex)
+		// same name in the same app type, but a different item ID
+		if exP.GetName() == p.GetName() && exP.GetID() != p.GetID() {
+			return fmt.Errorf("an item with name %q already exists for %s", p.GetName(), p.GetAppType())
+		}
+	}
+
+	newFilename := sanitizeFilename(p.GetName(), p.GetAppType(), p.GetID()) + ".json"
 
 	// Find and remove old file if it exists under a different name (migration/rename)
 	found := false
@@ -227,7 +238,7 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 
 	// Use sanitized name as filename for readability. Falls back to ID if name is empty.
 	// The file contains the full item JSON (including ID), so the filename is purely cosmetic.
-	filename := sanitizeFilename(p.GetName(), id) + ".json"
+	filename := sanitizeFilename(p.GetName(), p.GetAppType(), id) + ".json"
 	path := filepath.Join(fs.dir, filename)
 
 	tmp := path + ".tmp"
@@ -239,7 +250,7 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 
 // sanitizeFilename converts a name to a safe filesystem filename.
 // Strips path separators, .., and special characters. Falls back to ID if name is empty.
-func sanitizeFilename(name, id string) string {
+func sanitizeFilename(name, appType, id string) string {
 	if name == "" {
 		name = id
 	}
@@ -260,6 +271,18 @@ func sanitizeFilename(name, id string) string {
 	}
 	if result == "" {
 		result = id
+	}
+	if appType != "" {
+		safeAppType := strings.ToLower(appType)
+		var ab strings.Builder
+		for _, r := range safeAppType {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+				ab.WriteRune(r)
+			}
+		}
+		if clean := ab.String(); clean != "" {
+			result = result + "-" + clean
+		}
 	}
 	return result
 }
@@ -291,7 +314,7 @@ func (fs *FileStore[T, PT]) MigrateFilenames() int {
 			continue
 		}
 		p := PT(&item)
-		expectedFilename := sanitizeFilename(p.GetName(), p.GetID()) + ".json"
+		expectedFilename := sanitizeFilename(p.GetName(), p.GetAppType(), p.GetID()) + ".json"
 		if e.Name() != expectedFilename {
 			newPath := filepath.Join(fs.dir, expectedFilename)
 			if err := os.WriteFile(newPath, data, 0644); err == nil {
