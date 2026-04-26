@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased (v2.2.4 candidate)
+
+Bundling several user-reported items. Currently on `:dev`; will be released as v2.2.4 when the bundle is complete.
+
+### Custom Format JSON import — cross-Arr compatibility check
+
+Importing a Radarr CF JSON to Sonarr (or vice-versa) used to silently misinterpret value-encoded specs. The most common case: `SourceSpecification` value `7` means WEBDL in Radarr but BlurayRaw in Sonarr — so a Radarr "WEBDL" CF imported to Sonarr would silently start matching BlurayRaw releases.
+
+The import now runs a compatibility check before sending to the backend and surfaces issues in a confirmation modal:
+
+- **Errors:** spec types that don't exist in the target Arr (`QualityModifierSpecification` is Radarr-only, `ReleaseTypeSpecification` is Sonarr-only) and value-out-of-range cases (e.g. `SourceSpecification` value 8 or 9 imported to Sonarr where the enum tops at 7).
+- **Warnings:** canonical-name mismatches — when `spec.name` is a recognised Source name (WEBDL, WEBRip, Bluray, BlurayRaw, Remux, DVD, etc.) but the value resolves to a different name in the target Arr. Also flags `IndexerFlagSpecification` Internal value mismatches (Radarr Internal=32 vs Sonarr Internal=8).
+
+User-named specs without canonical names (e.g. spec.name="My favourite source") are left alone — we don't know intent there. The user can still **Import anyway** through the modal — this is a safety check, not a hard block.
+
 ## v2.2.3
 
 Two small bug fixes from user reports.

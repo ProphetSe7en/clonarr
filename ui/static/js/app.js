@@ -3713,6 +3713,122 @@ function clonarr() {
 
     // --- Import Custom CFs ---
 
+    // Detect known cross-Arr CF spec incompatibilities. Returns an array of
+    // issue objects for display. Only flags objectively-wrong cases or known
+    // canonical-name mismatches — never custom-named CFs (we can't know
+    // intent there). Empty result = import looks clean for target.
+    _detectCrossArrImportIssues(cfs, targetApp) {
+      // Spec implementations that exist in only one Arr — the other will
+      // reject them at sync. Verified against TRaSH guide CF coverage.
+      const ARR_ONLY_SPECS = {
+        radarr: ['ReleaseTypeSpecification'],          // Sonarr-only (Single/Multi-episode/Season pack)
+        sonarr: ['QualityModifierSpecification'],      // Radarr-only (Remux modifier)
+      };
+      // Source enum per Arr — values diverge between apps. Values verified
+      // against TRaSH CF JSON conventions and Arr source code.
+      const SOURCE_NAMES = {
+        radarr: { 0:'Unknown', 1:'CAM', 2:'Telesync', 3:'Telecine', 4:'Workprint',
+                  5:'DVD', 6:'TV', 7:'WEBDL', 8:'WEBRIP', 9:'Bluray' },
+        sonarr: { 0:'Unknown', 1:'Television', 2:'TelevisionRaw', 3:'WEBDL',
+                  4:'WEBRip', 5:'DVD', 6:'Bluray', 7:'BlurayRaw' },
+      };
+      // Known canonical Source names — only flag mismatch when spec.name
+      // looks like one of these (TRaSH uses these). Unknown names = user
+      // intent unclear, skip the check.
+      const KNOWN_SOURCE = new Set(['webdl','webrip','bluray','blurayraw',
+                                    'remux','blurayremux','dvd','television','tv',
+                                    'cam','telesync','telecine','workprint','web']);
+      // IndexerFlag — TRaSH only uses FreeLeech (1, same in both) and
+      // Internal (Radarr=32, Sonarr=8). Cross-import value=32 to Sonarr is
+      // out of range and silently broken.
+      const KNOWN_INTERNAL_FLAG = { radarr: 32, sonarr: 8 };
+
+      const normalize = s => (s || '').toLowerCase().replace(/^not\s+/i, '').replace(/[^a-z0-9]/g, '');
+      const issues = [];
+
+      for (const cf of cfs) {
+        for (const spec of (cf.specifications || [])) {
+          const impl = spec.implementation;
+
+          // Check 1: spec types that only exist in the other app
+          if ((ARR_ONLY_SPECS[targetApp] || []).includes(impl)) {
+            issues.push({
+              severity: 'error',
+              cf: cf.name, spec: spec.name || '(unnamed)',
+              message: `${impl} doesn't exist in ${targetApp} — will be rejected at sync`
+            });
+            continue;
+          }
+
+          const value = spec.fields?.value;
+          if (value === undefined || value === null) continue;
+
+          // Check 2: SourceSpecification — value out of range OR canonical-name mismatch
+          if (impl === 'SourceSpecification') {
+            const targetName = SOURCE_NAMES[targetApp]?.[value];
+            if (!targetName) {
+              issues.push({
+                severity: 'error',
+                cf: cf.name, spec: spec.name || '(unnamed)',
+                message: `SourceSpecification value=${value} is out of range for ${targetApp}`
+              });
+            } else {
+              const specNorm = normalize(spec.name);
+              if (KNOWN_SOURCE.has(specNorm) && specNorm !== normalize(targetName)) {
+                issues.push({
+                  severity: 'warning',
+                  cf: cf.name, spec: spec.name || '(unnamed)',
+                  message: `Spec named "${spec.name}" with value=${value}, but in ${targetApp} value=${value} means "${targetName}"`
+                });
+              }
+            }
+          }
+
+          // Check 3: IndexerFlagSpecification — Internal flag value mismatch
+          if (impl === 'IndexerFlagSpecification') {
+            const expectedInternal = KNOWN_INTERNAL_FLAG[targetApp];
+            const sourceArr = targetApp === 'radarr' ? 'sonarr' : 'radarr';
+            const sourceInternal = KNOWN_INTERNAL_FLAG[sourceArr];
+            if (value === sourceInternal && value !== expectedInternal) {
+              issues.push({
+                severity: 'warning',
+                cf: cf.name, spec: spec.name || '(unnamed)',
+                message: `IndexerFlagSpecification value=${value} matches "Internal" in ${sourceArr} but means something else in ${targetApp} (Internal=${expectedInternal} there)`
+              });
+            }
+          }
+        }
+      }
+      return issues;
+    },
+
+    async _confirmCrossArrImport(issues, targetApp, cfCount) {
+      const errors = issues.filter(i => i.severity === 'error');
+      const warnings = issues.filter(i => i.severity === 'warning');
+      let body = `Importing ${cfCount} CF(s) to ${targetApp}.\n\n`;
+      if (errors.length) {
+        body += 'ERRORS (these specs will not work in ' + targetApp + '):\n';
+        for (const e of errors) body += `• [${e.cf}] ${e.spec}: ${e.message}\n`;
+        body += '\n';
+      }
+      if (warnings.length) {
+        body += 'LIKELY MISMATCHES (silent value misinterpretation):\n';
+        for (const w of warnings) body += `• [${w.cf}] ${w.spec}: ${w.message}\n`;
+        body += '\n';
+      }
+      body += `This JSON looks like it may be from a different Arr app. Source values use different enums between Radarr and Sonarr (e.g. value 7 means WEBDL in Radarr but BlurayRaw in Sonarr). Find a ${targetApp}-native version of this CF or edit the spec values after import.`;
+      return new Promise(resolve => {
+        this.confirmModal = {
+          show: true,
+          title: 'Cross-app compatibility check',
+          message: body,
+          confirmLabel: 'Import anyway',
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        };
+      });
+    },
+
     openImportCFModal(appType) {
       this.importCFAppType = appType;
       this.importCFSource = 'instance';
@@ -3822,6 +3938,21 @@ function clonarr() {
             includeInRename: !!cf.includeCustomFormatWhenRenaming,
             specifications: cf.specifications || [],
           }));
+
+          // Cross-Arr compatibility check. Radarr and Sonarr share most spec
+          // types (ReleaseTitle, ReleaseGroup, Resolution, Language) but
+          // diverge on a few value-encoded ones, so importing a Radarr JSON
+          // to Sonarr (or vice-versa) silently misinterprets the value field.
+          // Most reported case: SourceSpec WEBDL=7 in Radarr → 7 means
+          // BlurayRaw in Sonarr.
+          const issues = this._detectCrossArrImportIssues(cfs, this.importCFAppType);
+          if (issues.length > 0) {
+            const ok = await this._confirmCrossArrImport(issues, this.importCFAppType, cfs.length);
+            if (!ok) {
+              this.importCFImporting = false;
+              return;
+            }
+          }
 
           const res = await fetch('/api/custom-cfs', {
             method: 'POST',
