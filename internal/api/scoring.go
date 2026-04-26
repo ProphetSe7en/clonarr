@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // --- Scoring Sandbox ---
@@ -160,9 +161,22 @@ func (s *Server) handleScoringParseBatch(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "instanceId and titles are required")
 		return
 	}
-	if len(req.Titles) > 15 {
-		writeError(w, 400, "Maximum 15 titles per batch")
+	// Cap is a safety net against accidental huge pastes, not a per-request
+	// rate limit — the loop below is sequential against the Arr Parse API,
+	// which is lightweight (in-process regex matching, no DB writes). 200
+	// covers practical sandbox use (TRaSH-style profile testing typically
+	// involves 50-150 release-name variants).
+	if len(req.Titles) > 200 {
+		writeError(w, 400, "Maximum 200 titles per batch")
 		return
+	}
+	// Disable the global write timeout for this route — 200 sequential Parse
+	// calls against a slow Arr can exceed the default 30s. Resetting the
+	// http.ResponseController gives this handler unlimited time to stream
+	// the response. The Arr request itself still has its own timeout via
+	// the shared HTTPClient.
+	if rc := http.NewResponseController(w); rc != nil {
+		_ = rc.SetWriteDeadline(time.Time{})
 	}
 
 	inst, ok := s.Core.Config.GetInstance(req.InstanceID)
