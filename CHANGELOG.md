@@ -4,6 +4,16 @@
 
 Bundling several user-reported items. Currently on `:dev`; will be released as v2.2.4 when the bundle is complete.
 
+### Sync log: include language in "profile settings changed" line
+
+When only the profile language changed during a sync, the log line read
+`profile settings changed (minScore=500→500, minUpgrade=50→50, cutoffScore=10000→10000, upgrade=true→true)`
+— every numeric field unchanged, no clue what triggered the "changed" claim. The detector
+included language in the diff but the log message and `SettingsDetails` (sync history
+display) both omitted it. The log line now appends `language=Original→Any`, and a
+`Language: X → Y` entry is added to `SettingsDetails` when language changes (matching the
+existing per-field detail entries for min-score, min-upgrade, cutoff-score, upgrades).
+
 ### Custom Format JSON import — cross-Arr compatibility check
 
 Importing a Radarr CF JSON to Sonarr (or vice-versa) used to silently misinterpret value-encoded specs. The most common case: `SourceSpecification` value `7` means WEBDL in Radarr but BlurayRaw in Sonarr — so a Radarr "WEBDL" CF imported to Sonarr would silently start matching BlurayRaw releases.
