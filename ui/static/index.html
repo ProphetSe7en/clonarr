@@ -625,7 +625,9 @@
                                               </template>
                                               Created: <span x-text="syncResult.cfsCreated || 0"></span> CFs,
                                               Updated: <span x-text="syncResult.cfsUpdated || 0"></span> CFs,
-                                              Scores: <span x-text="syncResult.scoresUpdated || 0"></span> updated
+                                              Scores: <span x-text="syncResult.scoresUpdated || 0"></span> updated,
+                                              Settings: <span x-text="(syncResult.settingsDetails || []).length"></span> changed,
+                                              Quality: <span x-text="(syncResult.qualityDetails || []).length"></span> changes
                                               <template x-if="syncResult.errors?.length">
                                                 <span> — <span x-text="syncResult.errors.length"></span> errors</span>
                                               </template>
@@ -3110,7 +3112,9 @@
             </template>
             Created: <span x-text="syncResult.cfsCreated || 0"></span> CFs,
             Updated: <span x-text="syncResult.cfsUpdated || 0"></span> CFs,
-            Scores: <span x-text="syncResult.scoresUpdated || 0"></span> updated
+            Scores: <span x-text="syncResult.scoresUpdated || 0"></span> updated,
+            Settings: <span x-text="(syncResult.settingsDetails || []).length"></span> changed,
+            Quality: <span x-text="(syncResult.qualityDetails || []).length"></span> changes
             <template x-if="syncResult.errors?.length">
               <span> — <span x-text="syncResult.errors.length"></span> errors</span>
             </template>
