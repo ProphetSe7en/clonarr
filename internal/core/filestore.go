@@ -3,8 +3,10 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -290,6 +292,14 @@ func sanitizeFilename(name, appType, id string) string {
 // MigrateFilenames renames files that use ID-based filenames (from the path
 // traversal fix) to sanitized name-based filenames. Safe to call on startup —
 // skips files that already have the correct name.
+//
+// Collision protection: when two items would migrate to the same target
+// filename (e.g. names "HD" and "HD !" both sanitize to "hd-radarr.json"),
+// the alphabetically-first source wins, the rest stay at their existing
+// filenames with a log warning. Without this guard, the second writer
+// silently overwrote the first (silent data loss). The user can resolve
+// the collision by renaming one of the items in the UI; the next startup
+// migrates the freshly-renamed item.
 func (fs *FileStore[T, PT]) MigrateFilenames() int {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -299,12 +309,28 @@ func (fs *FileStore[T, PT]) MigrateFilenames() int {
 		return 0
 	}
 
-	migrated := 0
+	// Pre-populate `claimed` with every existing JSON filename so we detect
+	// collisions both within this run and against files that already happen
+	// to be at the target name (correctly-migrated from a previous run).
+	claimed := make(map[string]bool, len(entries))
+	jsonNames := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		path := filepath.Join(fs.dir, e.Name())
+		claimed[e.Name()] = true
+		jsonNames = append(jsonNames, e.Name())
+	}
+
+	// Sort for deterministic migration order. When a collision occurs, the
+	// alphabetically-first source is the one that gets the target filename.
+	// OS-dependent ReadDir order would otherwise make migration outcomes
+	// unpredictable across hosts.
+	sort.Strings(jsonNames)
+
+	migrated := 0
+	for _, name := range jsonNames {
+		path := filepath.Join(fs.dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -315,12 +341,19 @@ func (fs *FileStore[T, PT]) MigrateFilenames() int {
 		}
 		p := PT(&item)
 		expectedFilename := sanitizeFilename(p.GetName(), p.GetAppType(), p.GetID()) + ".json"
-		if e.Name() != expectedFilename {
-			newPath := filepath.Join(fs.dir, expectedFilename)
-			if err := os.WriteFile(newPath, data, 0644); err == nil {
-				os.Remove(path)
-				migrated++
-			}
+		if name == expectedFilename {
+			continue
+		}
+		if claimed[expectedFilename] {
+			log.Printf("filestore: collision migrating %q to %q — target already claimed by another item (id=%q); leaving %q as-is. Rename one of the items in the UI to allow migration.", name, expectedFilename, p.GetID(), name)
+			continue
+		}
+		newPath := filepath.Join(fs.dir, expectedFilename)
+		if err := os.WriteFile(newPath, data, 0644); err == nil {
+			os.Remove(path)
+			delete(claimed, name)
+			claimed[expectedFilename] = true
+			migrated++
 		}
 	}
 	return migrated

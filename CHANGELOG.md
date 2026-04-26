@@ -1,5 +1,39 @@
 # Changelog
 
+## v2.2.1
+
+Bug fix release addressing two classes of file-collision in clonarr's local storage that could cause silent data loss. Investigation prompted by **btTeddy's** detailed report on the TRaSH Guides Discord — thanks for taking the time to write it up.
+
+### What's fixed (verified)
+
+Two specific filename-collision bugs in `internal/core/filestore.go`, the layer that backs profiles, custom CFs, and cf-groups on disk:
+
+- **Same-name profiles on Radarr and Sonarr no longer overwrite each other at write time.** Before this release, profiles in `/config/profiles/` used filenames derived only from the sanitized name. If you imported the same TRaSH profile to both apps (Advanced → Import Profile), or built a custom profile with the same name on both via Profile Builder, saving the second wrote over the first. Filenames now include an app-type suffix (`-radarr` / `-sonarr`). Credit [@ColeSpringer](https://github.com/ColeSpringer) via [PR #28](https://github.com/prophetse7en/clonarr/pull/28).
+- **Migration of existing profile filenames is now wired at startup** (`profilesStore.MigrateFilenames()`). PR #28's wire-up was missed for the profile store but was already in place for custom CFs and cf-groups; without this call, existing on-disk files kept their pre-fix names and the new format only kicked in on next save.
+- **Migration-time collision protection.** When two existing files would migrate to the same target filename (e.g. names `HD` and `HD !` both sanitize to `hd-sonarr.json`), the alphabetically-first source wins and gets the target name; the rest stay at their original filenames with a log warning telling the user to rename one to allow migration. Without this guard, the second `os.WriteFile` silently overwrote the first during upgrade. This protection covers all FileStore-backed data — profiles, custom CFs, and cf-groups — so the same class of bug can't repeat for any of them. Verified with regression test `TestFileStore_MigrateFilenames_CollisionPreserved`.
+
+### Honest scope statement
+
+The investigation was triggered by btTeddy's report of a Radarr profile "almost reset to stock" with personal CFs gone, alongside hex-named ghost CFs in his Sonarr profile and truncated sync history. We've shipped fixes for two specific filename-collision classes that could plausibly cause part of his symptoms, but **we cannot confirm those fixes fully explain his exact bug**. Possibilities still on the table:
+
+- His report could be the cross-Arr profile collision we did fix (if he had imported/built the profile rather than only using TRaSH Sync).
+- Or it could be a separate within-`appType` collision in the custom-CF migration from v2.0.4 (where personal CFs with similar names like `!FLUX` and `FLUX` could sanitize to the same filename and one got silently lost, leaving sync rules with orphaned trash_id references — the "ghost" hex-named CFs.)
+- The migration-time collision protection now ships for the custom-CF and cf-group stores too, so the second class is protected for the future even though we haven't traced his specific case to it definitively.
+
+If you upgrade and continue to see profile-reset, history-truncation, or hex-named ghost CFs symptoms, please file a GitHub issue with details — we want to keep tracing.
+
+### Recovery for already-affected installs
+
+These fixes prevent future loss but do not recover data already overwritten on disk. If you saw a profile "reset" or custom CFs disappear before upgrading:
+
+1. **Re-import or rebuild** the affected profile and re-add personal CFs + score overrides manually. After this release each app gets its own file going forward.
+2. **Restore from a host-level backup** of `/config/profiles/` and `/config/custom/json/` from before v2.0.4 if you have one.
+
+### Still under investigation (not in this release)
+
+- **Hex-named "ghost" CF references** (e.g. CFs displayed as 12-character hex strings like `89aa6944ba03` that aren't in your Custom Formats list) — most likely orphan trash_id references to custom CFs that were lost from disk. The sync engine doesn't currently clean these up; a future release will add orphan-reference cleanup.
+- **Sync history truncated** to a recent date — root cause not confirmed. Please file an issue with details if you see this.
+
 ## v2.2.0
 
 CF Group Builder redesign, startup-pull bug fix, and a responsive topnav

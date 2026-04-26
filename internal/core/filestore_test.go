@@ -1,7 +1,9 @@
 package core
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -254,5 +256,66 @@ func TestFileStore_AppTypeSeparation(t *testing.T) {
 	}
 	if rItem.Value != "a" || sItem.Value != "b" {
 		t.Errorf("items corrupted or overwritten: radarr=%q, sonarr=%q", rItem.Value, sItem.Value)
+	}
+}
+
+// Verifies that MigrateFilenames preserves both items when two ID-named
+// files would migrate to the same target filename. Without collision
+// protection, the second writer silently overwrites the first.
+//
+// Regression test for the bug surfaced 2026-04-26 during PR #28 smoke-test:
+// names like "HD" and "HD !" both sanitize to "hd-sonarr.json"; the second
+// migrated file destroyed the first. After the fix, the alphabetically-first
+// source wins, the rest stay at their original (ID-based) filenames with a
+// log warning. User can resolve by renaming in the UI.
+func TestFileStore_MigrateFilenames_CollisionPreserved(t *testing.T) {
+	fs := newTestStore(t)
+
+	// Manually create two ID-named JSON files whose name+appType sanitize
+	// to the same target. Bypasses Add() to simulate pre-fix on-disk state.
+	items := []testItem{
+		{ID: "aaaa1111aaaa1111aaaa1111aaaa1111", Name: "HD", AppType: "sonarr", Value: "first"},
+		{ID: "bbbb2222bbbb2222bbbb2222bbbb2222", Name: "HD !", AppType: "sonarr", Value: "second"},
+	}
+	for _, it := range items {
+		data, err := json.Marshal(it)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		path := filepath.Join(fs.dir, it.ID+".json")
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatalf("setup write: %v", err)
+		}
+	}
+
+	migrated := fs.MigrateFilenames()
+	if migrated != 1 {
+		t.Errorf("expected 1 migration (one collides and stays), got %d", migrated)
+	}
+
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	jsonCount := 0
+	gotNames := map[string]bool{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		jsonCount++
+		gotNames[e.Name()] = true
+	}
+	if jsonCount != 2 {
+		t.Errorf("expected 2 files preserved (one migrated, one ID-named), got %d", jsonCount)
+	}
+	// The migrated winner is "hd-sonarr.json" — the alphabetically-first
+	// source ID is "aaaa..." for "HD", which wins the target name.
+	if !gotNames["hd-sonarr.json"] {
+		t.Error("expected winner hd-sonarr.json to exist")
+	}
+	// The collision-loser keeps its ID-based filename.
+	if !gotNames["bbbb2222bbbb2222bbbb2222bbbb2222.json"] {
+		t.Error("expected loser to remain at ID-based filename bbbb...json")
 	}
 }

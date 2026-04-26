@@ -46,6 +46,13 @@ func main() {
 
 	trashStore := core.NewTrashStore(dataDir)
 	profilesStore := core.NewProfileStore(filepath.Join(configDir, "profiles"))
+	// Migrate profile filenames at startup so the appType suffix added in
+	// PR #28's sanitizeFilename change is applied to existing files. Without
+	// this, profiles created before the fix keep their old names and
+	// same-name-Radarr-vs-Sonarr collisions stay unresolved on disk.
+	if n := profilesStore.MigrateFilenames(); n > 0 {
+		log.Printf("profile: migrated %d filenames to name-based", n)
+	}
 	customCFsStore := core.NewCustomCFStore(filepath.Join(configDir, "custom", "json"))
 	customCFsStore.MigrateFromFlatDir(filepath.Join(configDir, "custom-cfs"))
 	customCFsStore.MigrateFilenames()
