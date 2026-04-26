@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Dockerfile for Clonarr
 #
 # Architecture: Multi-stage build (Builder -> Runtime)
@@ -70,7 +71,7 @@ EXPOSE 6060
 
 # Healthcheck to ensure the container is routing traffic properly
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD wget -qO- http://localhost:6060/api/health || exit 1
+  CMD sh -c 'wget -qO- "http://localhost:${PORT}/api/health" || exit 1'
 
 # Use tini as the init system to handle process reaping and signal forwarding
 ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]
