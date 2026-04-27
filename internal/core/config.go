@@ -1,6 +1,7 @@
 package core
 
 import (
+	"clonarr/internal/core/agents"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -56,44 +57,16 @@ type AutoSyncConfig struct {
 }
 
 // NotificationAgent is a configured notification provider instance.
-type NotificationAgent struct {
-	ID      string             `json:"id"`
-	Name    string             `json:"name"` // user-defined label, e.g. "Discord #alerts"
-	Type    string             `json:"type"` // registered provider type, e.g. "discord" | "gotify" | "pushover"
-	Enabled bool               `json:"enabled"`
-	Events  AgentEvents        `json:"events"`
-	Config  NotificationConfig `json:"config"`
-}
+// Backed by the notification agents package so providers can evolve independently
+// from the core config store implementation.
+type NotificationAgent = agents.Agent
 
 // AgentEvents controls which auto-sync events trigger this agent.
-type AgentEvents struct {
-	OnSyncSuccess bool `json:"onSyncSuccess"`
-	OnSyncFailure bool `json:"onSyncFailure"`
-	OnCleanup     bool `json:"onCleanup"`
-	OnRepoUpdate  bool `json:"onRepoUpdate"`
-	OnChangelog   bool `json:"onChangelog"`
-}
+type AgentEvents = agents.Events
 
 // NotificationConfig holds provider-specific credentials and settings.
-// Fields are omitempty so unused providers add no JSON bloat.
-// Adding a new provider = append fields here + register a NotificationAgentProvider.
-type NotificationConfig struct {
-	// Discord
-	DiscordWebhook        string `json:"discordWebhook,omitempty"`
-	DiscordWebhookUpdates string `json:"discordWebhookUpdates,omitempty"`
-	// Gotify
-	GotifyURL              string `json:"gotifyUrl,omitempty"`
-	GotifyToken            string `json:"gotifyToken,omitempty"`
-	GotifyPriorityCritical bool   `json:"gotifyPriorityCritical,omitempty"`
-	GotifyPriorityWarning  bool   `json:"gotifyPriorityWarning,omitempty"`
-	GotifyPriorityInfo     bool   `json:"gotifyPriorityInfo,omitempty"`
-	GotifyCriticalValue    *int   `json:"gotifyCriticalValue,omitempty"`
-	GotifyWarningValue     *int   `json:"gotifyWarningValue,omitempty"`
-	GotifyInfoValue        *int   `json:"gotifyInfoValue,omitempty"`
-	// Pushover
-	PushoverUserKey  string `json:"pushoverUserKey,omitempty"`
-	PushoverAppToken string `json:"pushoverAppToken,omitempty"`
-}
+// Adding a new provider = append fields in agents.Config + register a provider.
+type NotificationConfig = agents.Config
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
