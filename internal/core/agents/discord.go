@@ -149,7 +149,7 @@ func (discordProvider) sendWebhook(runtime Runtime, webhook, title, description 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("discord returned %d", resp.StatusCode)
