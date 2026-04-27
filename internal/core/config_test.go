@@ -219,3 +219,82 @@ func TestDeleteSyncHistory_NotFound(t *testing.T) {
 		t.Errorf("untouched entries should remain, got %d", len(got))
 	}
 }
+
+// TestAddNotificationAgentAllowsMultipleEnabledSameType verifies users can
+// configure multiple active agents at once, including multiple agents of the
+// same provider type.
+func TestAddNotificationAgentAllowsMultipleEnabledSameType(t *testing.T) {
+	dir := t.TempDir()
+	cs := NewConfigStore(dir)
+
+	a1 := NotificationAgent{
+		Name:    "Discord Alerts",
+		Type:    "discord",
+		Enabled: true,
+		Events: AgentEvents{
+			OnSyncSuccess: true,
+			OnSyncFailure: true,
+		},
+		Config: NotificationConfig{
+			DiscordWebhook: "https://discord.com/api/webhooks/111/aaa",
+		},
+	}
+	a2 := NotificationAgent{
+		Name:    "Discord Ops",
+		Type:    "discord",
+		Enabled: true,
+		Events: AgentEvents{
+			OnSyncSuccess: true,
+			OnSyncFailure: true,
+		},
+		Config: NotificationConfig{
+			DiscordWebhook: "https://discord.com/api/webhooks/222/bbb",
+		},
+	}
+
+	created1, err := cs.AddNotificationAgent(a1)
+	if err != nil {
+		t.Fatalf("AddNotificationAgent(a1): %v", err)
+	}
+	created2, err := cs.AddNotificationAgent(a2)
+	if err != nil {
+		t.Fatalf("AddNotificationAgent(a2): %v", err)
+	}
+	if created1.ID == "" || created2.ID == "" {
+		t.Fatal("expected generated IDs for both agents")
+	}
+	if created1.ID == created2.ID {
+		t.Fatal("expected unique IDs for each configured agent")
+	}
+
+	cfg := cs.Get()
+	if len(cfg.AutoSync.NotificationAgents) != 2 {
+		t.Fatalf("want 2 configured agents, got %d", len(cfg.AutoSync.NotificationAgents))
+	}
+
+	enabledCount := 0
+	discordCount := 0
+	for _, a := range cfg.AutoSync.NotificationAgents {
+		if a.Enabled {
+			enabledCount++
+		}
+		if a.Type == "discord" {
+			discordCount++
+		}
+	}
+	if enabledCount != 2 {
+		t.Fatalf("want 2 enabled agents, got %d", enabledCount)
+	}
+	if discordCount != 2 {
+		t.Fatalf("want 2 discord agents, got %d", discordCount)
+	}
+
+	cs2 := NewConfigStore(dir)
+	if err := cs2.Load(); err != nil {
+		t.Fatalf("Load() after save: %v", err)
+	}
+	reloaded := cs2.Get().AutoSync.NotificationAgents
+	if len(reloaded) != 2 {
+		t.Fatalf("want 2 agents after reload, got %d", len(reloaded))
+	}
+}
