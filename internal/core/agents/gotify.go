@@ -82,7 +82,7 @@ func (g gotifyProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 		res.Error = fmt.Sprintf("Failed to reach Gotify: %v", err)
 		return []TestResult{res}, nil
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
 		res.Status = statusError
@@ -129,7 +129,7 @@ func (g gotifyProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("gotify returned %d", resp.StatusCode)

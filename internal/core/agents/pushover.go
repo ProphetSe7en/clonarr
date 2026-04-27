@@ -8,15 +8,19 @@ import (
 )
 
 // pushoverProvider implements Provider for Pushover push notifications.
-// Messages are sent via the Pushover API (https://api.pushover.net/1/messages.json)
-// using the user's app token and user/group key. All messages are sent with
-// priority 0 (normal) — Pushover's priority system is not currently mapped to
-// Clonarr's severity levels.
+// Messages are sent via the Pushover API using the user's app token and
+// user/group key. Severity is mapped to Pushover priorities:
+//   - SeverityCritical → priority 1 (high — bypasses quiet hours, shown in red)
+//   - SeverityWarning  → priority 0 (normal)
+//   - SeverityInfo     → priority 0 (normal)
 //
 // Security: Pushover's API endpoint is a fixed third-party URL, so HTTP calls
 // go through Runtime.SafeClient (SSRF-protected) to prevent credential leakage
 // through DNS rebinding or other redirect attacks.
 type pushoverProvider struct{}
+
+// pushoverAPIURL is the Pushover message submission endpoint.
+const pushoverAPIURL = "https://api.pushover.net/1/messages.json"
 
 // Compile-time check: pushoverProvider satisfies the Provider interface.
 var _ Provider = pushoverProvider{}
@@ -76,13 +80,13 @@ func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 		"priority": 0,
 	})
 
-	resp, err := runtime.SafeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	resp, err := runtime.SafeClient.Post(pushoverAPIURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		res.Status = statusError
 		res.Error = fmt.Sprintf("Failed to reach Pushover: %v", err)
 		return []TestResult{res}, nil
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
 		res.Status = statusError
@@ -92,7 +96,7 @@ func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 	return []TestResult{res}, nil
 }
 
-// Notify sends one outbound Pushover message with normal priority.
+// Notify sends one outbound Pushover message with severity-mapped priority.
 // Returns nil (skip) when required credentials are missing, which can occur
 // if the agent was disabled after dispatch was queued.
 func (pushoverProvider) Notify(runtime Runtime, agent Agent, payload Payload) error {
@@ -109,18 +113,29 @@ func (pushoverProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 		"user":     cfg.PushoverUserKey,
 		"title":    payload.Title,
 		"message":  payload.Message,
-		"priority": 0,
+		"priority": pushoverPriority(payload.Severity),
 	})
 
-	resp, err := runtime.SafeClient.Post("https://api.pushover.net/1/messages.json", "application/json", bytes.NewReader(body))
+	resp, err := runtime.SafeClient.Post(pushoverAPIURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("pushover returned %d", resp.StatusCode)
 	}
 
 	return nil
+}
+
+// pushoverPriority maps Clonarr severity levels to Pushover priority integers.
+// Pushover supports priorities -2 (lowest) through 2 (emergency).
+//   - SeverityCritical → 1 (high priority: bypasses quiet hours, highlighted in red)
+//   - All others       → 0 (normal priority)
+func pushoverPriority(severity Severity) int {
+	if severity == SeverityCritical {
+		return 1
+	}
+	return 0
 }
