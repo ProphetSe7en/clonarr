@@ -4,6 +4,42 @@
 
 Bundling several user-reported items. Currently on `:dev`; will be released as v2.2.4 when the bundle is complete.
 
+### CF group activation respects per-CF `default` flag
+
+When toggling a TRaSH CF group on (in Profile Builder, Profile Detail, or
+the legacy `toggleGroup` path), Clonarr used to add **every** optional CF
+in the group to the profile. The TRaSH JSON marks some CFs as `default:
+true` precisely so consumers know which subset to auto-include — that
+flag was being read into the data model but ignored at activation time.
+Result: groups like `[Unwanted] Unwanted Formats` (15 CFs, 11 marked
+default) added all 15 instead of just the 11.
+
+Fix touches four call sites with the same fix in each:
+
+- `pdToggleGroup` (new, replaces inline `@change` handler in Profile
+  Detail) — uses `cf.default` from `ProfileCFGroupEntry`.
+- `pbToggleGroupInclude` (Profile Builder group toggle) — uses
+  `cf.cfDefault` from `CategorizedCF` (different field name because
+  `/api/trash/{app}/all-cfs` carries a different shape than
+  `/api/trash/{app}/profiles/{trashId}`).
+- `initSelectedCFs` for non-exclusive default-enabled groups loaded with
+  a profile.
+- `toggleGroup` (legacy orphan path) — kept consistent.
+
+Also: clicking any of the three state pills (Req / Opt / Fmt) on a CF in
+Profile Builder now adds that CF to the profile's `selectedCFs`. Before,
+only `Fmt` did — clicking `Req` or `Opt` set the state override but the
+CF remained absent from the saved profile, which silently cancelled the
+state change. Combined with the new dimmed rendering for "in an enabled
+group but not yet in profile" CFs, this gives users a one-click way to
+include the non-default optional CFs they want.
+
+Required CFs remain mandatory when the group is enabled. Custom CFs in
+user-created CF groups (CF Group Builder) work the same way: per-CF
+default flag controls auto-inclusion. The group's enable/disable toggle
+itself works unchanged — flipping a group off clears all its CFs from
+selection just like before.
+
 ### Maintenance: "Unused Custom Formats" cleanup action
 
 New cleanup action under Maintenance → Cleanup that finds CFs in an Arr instance which are not referenced by any Clonarr sync rule and are not used for renaming. Hard caveat: assumes Clonarr is the sole tool managing CFs on the instance — CFs added directly via the Arr UI, Recyclarr, Notifiarr, etc. will appear here as "unused", since Clonarr has no record of them. The user reviews the preview list and the existing Keep List protection still applies.

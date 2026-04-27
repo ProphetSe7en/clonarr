@@ -1716,7 +1716,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 		catNames = append(catNames, cat)
 	}
 	sort.Slice(catNames, func(i, j int) bool {
-		return core.GetCategoryOrder(catNames[i]) < core.GetCategoryOrder(catNames[j])
+		return core.CompareCFCategories(catNames[i], catNames[j]) < 0
 	})
 	for _, cat := range catNames {
 		comp.OptionalCategories = append(comp.OptionalCategories, CompareCategory{

@@ -1247,7 +1247,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 		})
 	}
 	sort.Slice(categories, func(i, j int) bool {
-		return GetCategoryOrder(categories[i].Category) < GetCategoryOrder(categories[j].Category)
+		return CompareCFCategories(categories[i].Category, categories[j].Category) < 0
 	})
 
 	var sets []string
@@ -1617,6 +1617,53 @@ func ParseCategoryPrefix(name string) (string, string) {
 }
 
 // getCategoryOrder returns the display order for a CF category.
+// CategoryTier returns the sort tier for a CF category. Mirrors the
+// frontend _categoryTier in app.js. Used by CompareCFCategories.
+//
+//	0 — regular TRaSH categories (alphabetical within tier)
+//	1 — SQP-prefix categories ([SQP], [SQP-1], [SQP-4 (MA Hybrid) Optional]...)
+//	2 — "Other" / unrecognised
+//	3 — Custom (user-authored CFs/groups, pinned at the bottom so user-data
+//	    stays visually separated from TRaSH-derived data)
+func CategoryTier(cat string) int {
+	if cat == "" {
+		return 2
+	}
+	if cat == "Custom" {
+		return 3
+	}
+	if cat == "Other" {
+		return 2
+	}
+	upper := strings.ToUpper(cat)
+	if strings.HasPrefix(upper, "SQP") {
+		return 1
+	}
+	return 0
+}
+
+// CompareCFCategories returns -1/0/+1 for sort.Slice and similar uses.
+// Tier-first, then alphabetical on category name.
+func CompareCFCategories(a, b string) int {
+	ta, tb := CategoryTier(a), CategoryTier(b)
+	if ta != tb {
+		if ta < tb {
+			return -1
+		}
+		return 1
+	}
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+// Deprecated: GetCategoryOrder is kept as a thin shim during the v2.2.4
+// sort-consolidation cleanup. New call sites should use CompareCFCategories
+// directly. Removed once all internal callers migrate.
 func GetCategoryOrder(cat string) int {
 	switch cat {
 	case "Golden Rule":
@@ -1782,7 +1829,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 	}
 
 	sort.Slice(categories, func(i, j int) bool {
-		return GetCategoryOrder(categories[i].Category) < GetCategoryOrder(categories[j].Category)
+		return CompareCFCategories(categories[i].Category, categories[j].Category) < 0
 	})
 
 	return categories
@@ -1901,15 +1948,14 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 		groups = append(groups, cg)
 	}
 
-	// Sort groups by category order, then defaultEnabled first, then name
+	// Sort groups by category tier, then alphabetical on category, then on
+	// group name. defaultEnabled-first sub-sort dropped here as part of the
+	// v2.2.4 unification — alphabetical-only matches the rest of the UI and
+	// defaultEnabled groups stay visually distinct via the green pill.
 	sort.Slice(groups, func(i, j int) bool {
-		oi := GetCategoryOrder(groups[i].Category)
-		oj := GetCategoryOrder(groups[j].Category)
-		if oi != oj {
-			return oi < oj
-		}
-		if groups[i].DefaultEnabled != groups[j].DefaultEnabled {
-			return groups[i].DefaultEnabled
+		c := CompareCFCategories(groups[i].Category, groups[j].Category)
+		if c != 0 {
+			return c < 0
 		}
 		return groups[i].Name < groups[j].Name
 	})
@@ -2082,15 +2128,13 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 		groups = append(groups, cg)
 	}
 
-	// Sort groups by category order, then name
+	// Sort groups by category tier, then alphabetical on category, then on
+	// group name. defaultEnabled-first sub-sort dropped (see v2.2.4 sort
+	// unification — same logic as ProfileDetailData above).
 	sort.Slice(groups, func(i, j int) bool {
-		oi := GetCategoryOrder(groups[i].Category)
-		oj := GetCategoryOrder(groups[j].Category)
-		if oi != oj {
-			return oi < oj
-		}
-		if groups[i].DefaultEnabled != groups[j].DefaultEnabled {
-			return groups[i].DefaultEnabled
+		c := CompareCFCategories(groups[i].Category, groups[j].Category)
+		if c != 0 {
+			return c < 0
 		}
 		return groups[i].Name < groups[j].Name
 	})

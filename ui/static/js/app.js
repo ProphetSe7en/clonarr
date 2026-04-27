@@ -1807,10 +1807,21 @@ function clonarr() {
           delete newFormatItems[cf.trashId];
         }
       } else {
-        // Enable group — add its CFs to selectedCFs (group CFs don't go in formatItems)
+        // Enable group — pre-select only the CFs the group's data marks as
+        // default (or required). This respects TRaSH's per-CF default flag
+        // — the whole point of that flag is to skip the same per-CF toggles
+        // in every profile that includes the group. CFs without default
+        // still appear in the group and remain user-toggleable.
+        //
+        // Profile Builder data uses cf.cfDefault (camelCase) on
+        // CategorizedCF — see core/trash.go:1087. Profile Detail uses
+        // cf.default on ProfileCFGroupEntry. Same TRaSH flag, two JSON
+        // names because the two endpoints carry different shapes.
         newEnabled[gid] = true;
         for (const cf of group.cfs) {
-          newSelected[cf.trashId] = true;
+          if (cf.required || cf.cfDefault) {
+            newSelected[cf.trashId] = true;
+          }
         }
       }
       this.pb.enabledGroups = newEnabled;
@@ -1832,7 +1843,13 @@ function clonarr() {
       return cf.required ? 'required' : 'optional';
     },
 
-    // Set CF state: 'required', 'optional', or 'formatItems'
+    // Set CF state: 'required', 'optional', or 'formatItems'.
+    // Also ensures the CF is added to pb.selectedCFs — clicking a state pill
+    // is the way to "include" a CF that's in an enabled group but isn't yet
+    // in the profile (the dimmed state). Previously only formatItems-state
+    // added to selectedCFs, so clicking Req/Opt on a dimmed CF set the state
+    // override but the CF stayed out of the profile. After this change all
+    // three pills "lift" the CF into the profile with the chosen state.
     pbSetCFState(trashId, state) {
       const newFI = { ...this.pb.formatItemCFs };
       const newOverrides = { ...(this.pb.cfStateOverrides || {}) };
@@ -1840,11 +1857,11 @@ function clonarr() {
       if (state === 'formatItems') {
         newFI[trashId] = true;
         delete newOverrides[trashId];
-        this.pb.selectedCFs = { ...this.pb.selectedCFs, [trashId]: true };
       } else {
         delete newFI[trashId];
         newOverrides[trashId] = state;
       }
+      this.pb.selectedCFs = { ...this.pb.selectedCFs, [trashId]: true };
       this.pb.formatItemCFs = newFI;
       this.pb.cfStateOverrides = newOverrides;
     },
@@ -1902,15 +1919,36 @@ function clonarr() {
       return all.filter(cf => cf.name.toLowerCase().includes(q));
     },
 
-    // Get all groups as a flat sorted list (not nested under categories)
+    // Tier-based ordering for CF categories. Used by every place that sorts
+    // CF groups so the Profile Builder, Custom Formats tab, and Profile
+    // Detail (Trash Sync) all show groups in the same order. Mirrors the
+    // backend's CompareCFCategories in trash.go.
+    //
+    //   0 — regular TRaSH categories (alphabetical within tier)
+    //   1 — SQP-prefix categories ([SQP], [SQP-1], [SQP-4 (MA Hybrid) Optional]...)
+    //   2 — "Other" / unrecognised
+    //   3 — Custom (user-authored CFs/groups, kept at the bottom so user-data
+    //       stays visually separated from TRaSH-derived data)
+    //
+    // Within the same tier, category name compared alphabetically.
+    _categoryTier(cat) {
+      if (!cat) return 2;
+      if (cat === 'Custom') return 3;
+      if (/^SQP/i.test(cat)) return 1;
+      if (cat === 'Other') return 2;
+      return 0;
+    },
+    _compareCFCategories(a, b) {
+      const ta = this._categoryTier(a), tb = this._categoryTier(b);
+      if (ta !== tb) return ta - tb;
+      return (a || '').localeCompare(b || '');
+    },
+
+    // Get all groups as a flat sorted list (not nested under categories).
+    // Drops the prior "defaultEnabled first" sub-sort — alphabetical only,
+    // matching the rest of the UI. defaultEnabled groups are still visually
+    // distinguishable via the green "default" pill.
     pbSortedGroups() {
-      const groupOrder = [
-        'Golden Rule', 'Audio', 'HDR Formats', 'HQ Release Groups', 'Resolution',
-        'Streaming Services', 'Miscellaneous', 'Optional', 'SQP',
-        'Release Groups', 'Unwanted', 'Movie Versions', 'Anime',
-        'French Audio Version', 'French HQ Source Groups',
-        'German Source Groups', 'German Miscellaneous', 'Language Profiles', 'Other'
-      ];
       const groups = [];
       for (const cat of this.pbFilteredCategories) {
         for (const g of cat.groups) {
@@ -1919,14 +1957,9 @@ function clonarr() {
         }
       }
       groups.sort((a, b) => {
-        const ai = groupOrder.indexOf(a._category);
-        const bi = groupOrder.indexOf(b._category);
-        const ao = ai === -1 ? 999 : ai;
-        const bo = bi === -1 ? 999 : bi;
-        if (ao !== bo) return ao - bo;
-        // Within same category: default-enabled first, then alphabetical
-        if (a.defaultEnabled !== b.defaultEnabled) return a.defaultEnabled ? -1 : 1;
-        return a.shortName.localeCompare(b.shortName);
+        const c = this._compareCFCategories(a._category, b._category);
+        if (c !== 0) return c;
+        return (a.shortName || '').localeCompare(b.shortName || '');
       });
       return groups;
     },
@@ -3173,16 +3206,12 @@ function clonarr() {
         categories.push({ category: 'Custom', displayName: 'Custom', groups: [{ name: 'Custom Formats', shortName: 'Custom Formats', cfs: allCustomCFs }], totalCFs: allCustomCFs.length, isCustom: true });
       }
 
-      // Sort by prefix order, then by display name within same prefix
-      const order = { 'Golden Rule': 0, 'Audio': 1, 'HDR Formats': 2, 'HQ Release Groups': 3,
-                       'Resolution': 4, 'Streaming Services': 5, 'Miscellaneous': 6, 'Optional': 7,
-                       'Release Groups': 8, 'Unwanted': 9, 'Movie Versions': 10, 'Anime': 11,
-                       'French Audio Version': 12, 'French HQ Source Groups': 13,
-                       'German Source Groups': 14, 'German Miscellaneous': 15,
-                       'Language Profiles': 16, 'SQP': 17, 'Other': 18, 'Custom': 99 };
+      // Tier-based sort (see _compareCFCategories): regular TRaSH categories
+      // alphabetical, then SQP-prefix categories, then Other, then Custom.
+      // Within same category, alphabetical on displayName.
       return categories.sort((a, b) => {
-        const oa = order[a.category] ?? 50, ob = order[b.category] ?? 50;
-        if (oa !== ob) return oa - ob;
+        const c = this._compareCFCategories(a.category, b.category);
+        if (c !== 0) return c;
         return a.displayName.localeCompare(b.displayName);
       });
     },
@@ -5277,9 +5306,13 @@ function clonarr() {
                 if (!cf.required) selected[cf.trashId] = !!cf.default;
               }
             } else {
-              // Only set optional CFs individually; required CFs are handled by group state
+              // Non-exclusive group: optional CFs respect their per-CF default
+              // flag. Required CFs are handled by group state. Previously this
+              // unconditionally set all optional CFs to true, ignoring
+              // cf.default — defeating TRaSH's whole reason for marking some
+              // group members default-on and others default-off.
               for (const cf of (group.cfs || [])) {
-                if (!cf.required) selected[cf.trashId] = true;
+                if (!cf.required) selected[cf.trashId] = !!cf.default;
               }
             }
           }
@@ -5293,8 +5326,10 @@ function clonarr() {
                   selected[cf.trashId] = !!cf.default;
                 }
               } else {
+                // Same fix as the trashGroups branch above — respect cf.default
+                // even when the legacy cfCategories shape is used.
                 for (const cf of (group.cfs || [])) {
-                  selected[cf.trashId] = true;
+                  selected[cf.trashId] = !!cf.default;
                 }
               }
             }
@@ -8144,10 +8179,51 @@ function clonarr() {
     },
 
     toggleGroup(category, groupName, cfs) {
+      // Legacy "select all CFs in group" toggle. Not currently invoked from
+      // any template path — Profile Detail uses pdToggleGroup below, which
+      // also tracks the `__grp_` enabled flag. Kept for any external caller.
       const anySelected = cfs.some(cf => this.selectedOptionalCFs[cf.trashId]);
       const updated = { ...this.selectedOptionalCFs };
-      for (const cf of cfs) {
-        updated[cf.trashId] = !anySelected;
+      if (anySelected) {
+        for (const cf of cfs) updated[cf.trashId] = false;
+      } else {
+        for (const cf of cfs) {
+          updated[cf.trashId] = !!(cf.required || cf.default);
+        }
+      }
+      this.selectedOptionalCFs = updated;
+    },
+
+    // Profile Detail group on/off toggle. Sets the `__grp_<name>` flag for
+    // group enabled/disabled state and updates per-CF selections according
+    // to the TRaSH group data:
+    //   - Enable + non-exclusive: pre-select required CFs and CFs marked
+    //     `default: true` in the group definition. Non-default optional CFs
+    //     remain visible (group is expanded) but unchecked — user can tick
+    //     them individually.
+    //   - Enable + exclusive: don't auto-pick anything; user picks one
+    //     (Golden Rule HD x265 vs no-HDR-DV, HDR Formats variant, etc.).
+    //   - Disable: clear all per-CF selections in the group.
+    // Replaces the inline @change handler that used to live in the template
+    // — moved here so the cf.default fix only has to live in one place.
+    pdToggleGroup(group, enabled) {
+      const updated = { ...this.selectedOptionalCFs };
+      updated['__grp_' + group.name] = enabled;
+      if (enabled) {
+        if (!group.exclusive) {
+          for (const cf of (group.cfs || [])) {
+            if (cf.required) {
+              updated[cf.trashId] = true;
+            } else if (cf.default) {
+              updated[cf.trashId] = true;
+            }
+            // else: leave as-is (unchecked by default), user can tick later
+          }
+        }
+      } else {
+        for (const cf of (group.cfs || [])) {
+          updated[cf.trashId] = false;
+        }
       }
       this.selectedOptionalCFs = updated;
     },

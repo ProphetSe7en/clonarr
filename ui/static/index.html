@@ -3039,7 +3039,18 @@
               <!-- CFs in this group -->
               <div x-show="pbExpandedGroups[group.groupTrashId]">
                 <template x-for="cf in group.cfs" :key="'gcf-'+cf.trashId">
-                  <div class="pb-cf-row" :style="!pbIsGroupEnabled(group) && !pb.formatItemCFs[cf.trashId] ? 'opacity:0.35' : ''">
+                  <!-- Three-tier opacity:
+                       - 1.0 (default): CF is in the profile (in selectedCFs or formatItems)
+                       - 0.5: CF is in an enabled group but not in the profile yet —
+                              respects the per-CF default flag from the TRaSH group def
+                              (cfDefault) so non-default optional CFs render dimmed,
+                              clickable to include via Req/Opt/Fmt
+                       - 0.35: CF's group is disabled and CF isn't in formatItems —
+                              CF is fully out of the profile, lowest emphasis -->
+                  <div class="pb-cf-row" :style="
+                    (!pbIsGroupEnabled(group) && !pb.formatItemCFs[cf.trashId]) ? 'opacity:0.35'
+                    : (pbIsGroupEnabled(group) && !cf.required && !pb.selectedCFs[cf.trashId] && !pb.formatItemCFs[cf.trashId]) ? 'opacity:0.5'
+                    : ''">
                     <div style="width:36px;flex-shrink:0"></div>
                     <div class="pb-cf-name">
                       <span x-text="cf.name"></span>
@@ -3892,7 +3903,7 @@
                   <label class="toggle toggle-sm" @click.stop>
                     <input type="checkbox"
                            :checked="selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled"
-                           @change="selectedOptionalCFs['__grp_' + group.name] = $event.target.checked; if ($event.target.checked) { if (!group.exclusive) { group.cfs.forEach(cf => { if (!cf.required) selectedOptionalCFs[cf.trashId] = true }); } } else { group.cfs.forEach(cf => { selectedOptionalCFs[cf.trashId] = false }); } selectedOptionalCFs = {...selectedOptionalCFs}">
+                           @change="pdToggleGroup(group, $event.target.checked)">
                     <span class="slider"></span>
                   </label>
                 </div>
