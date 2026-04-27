@@ -7,34 +7,49 @@ import (
 	"strings"
 )
 
+// discordProvider implements Provider for Discord webhook notifications.
+// It supports two independent webhook channels (main and updates) selected
+// via payload Route. Messages are delivered as Discord embeds with a colored
+// sidebar and a footer containing the Clonarr version.
+//
+// Security: Discord webhooks are user-supplied URLs, so all HTTP calls go
+// through Runtime.SafeClient (SSRF-protected). The URL is also validated
+// against known Discord API prefixes before every send.
 type discordProvider struct{}
 
+// Compile-time check: discordProvider satisfies the Provider interface.
 var _ Provider = discordProvider{}
 
 func init() {
 	registerProvider(discordProvider{})
 }
 
+// Type returns the provider registration key used in Agent.Type.
 func (discordProvider) Type() string {
 	return "discord"
 }
 
+// Async returns false because Discord sends are performed synchronously.
 func (discordProvider) Async() bool {
 	return false
 }
 
+// MaskConfig hides Discord webhook credentials for API responses.
 func (discordProvider) MaskConfig(cfg Config) Config {
 	cfg.DiscordWebhook = maskSecret(cfg.DiscordWebhook, maskedDiscordWebhook)
 	cfg.DiscordWebhookUpdates = maskSecret(cfg.DiscordWebhookUpdates, maskedDiscordWebhook)
 	return cfg
 }
 
+// PreserveConfig keeps existing credentials when masked placeholders are posted back.
 func (discordProvider) PreserveConfig(incoming, existing Config) Config {
 	incoming.DiscordWebhook = preserveIfMasked(strings.TrimSpace(incoming.DiscordWebhook), existing.DiscordWebhook, maskedDiscordWebhook)
 	incoming.DiscordWebhookUpdates = preserveIfMasked(strings.TrimSpace(incoming.DiscordWebhookUpdates), existing.DiscordWebhookUpdates, maskedDiscordWebhook)
 	return incoming
 }
 
+// Validate checks that the main webhook URL is present and well-formed,
+// and optionally validates the updates webhook URL if provided.
 func (discordProvider) Validate(agent Agent) error {
 	if strings.TrimSpace(agent.Config.DiscordWebhook) == "" {
 		return fmt.Errorf("discord webhook is required")
@@ -51,6 +66,9 @@ func (discordProvider) Validate(agent Agent) error {
 	return nil
 }
 
+// Test sends one test embed per configured webhook channel (main and, if
+// different, updates). Returns one TestResult per channel so the UI can
+// show per-channel pass/fail feedback.
 func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error) {
 	cfg := agent.Config
 	mainWebhook := strings.TrimSpace(cfg.DiscordWebhook)
@@ -83,6 +101,7 @@ func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error
 	return results, nil
 }
 
+// Notify sends one outbound notification to the route-resolved webhook.
 func (d discordProvider) Notify(runtime Runtime, agent Agent, payload Payload) error {
 	webhook := d.resolveWebhook(agent, payload.Route)
 	if webhook == "" {
@@ -91,6 +110,7 @@ func (d discordProvider) Notify(runtime Runtime, agent Agent, payload Payload) e
 	return d.sendWebhook(runtime, webhook, payload.Title, payload.Message, payload.Color)
 }
 
+// resolveWebhook chooses the updates webhook for RouteUpdates, falling back to main.
 func (discordProvider) resolveWebhook(agent Agent, route Route) string {
 	if route == RouteUpdates {
 		if webhook := strings.TrimSpace(agent.Config.DiscordWebhookUpdates); webhook != "" {
@@ -100,6 +120,10 @@ func (discordProvider) resolveWebhook(agent Agent, route Route) string {
 	return strings.TrimSpace(agent.Config.DiscordWebhook)
 }
 
+// sendWebhook posts one Discord embed to the given webhook URL.
+// The embed includes a title, description, colored sidebar, and a version
+// footer. Returns an error if the HTTP client is missing, the URL fails
+// validation, or Discord responds with a 4xx/5xx status.
 func (discordProvider) sendWebhook(runtime Runtime, webhook, title, description string, color int) error {
 	if runtime.SafeClient == nil {
 		return fmt.Errorf("discord client not configured")
@@ -133,6 +157,9 @@ func (discordProvider) sendWebhook(runtime Runtime, webhook, title, description 
 	return nil
 }
 
+// isDiscordWebhookURL returns true when raw starts with an accepted Discord
+// webhook API prefix. Both discord.com and the legacy discordapp.com domains
+// are accepted.
 func isDiscordWebhookURL(raw string) bool {
 	return strings.HasPrefix(raw, "https://discord.com/api/webhooks/") ||
 		strings.HasPrefix(raw, "https://discordapp.com/api/webhooks/")

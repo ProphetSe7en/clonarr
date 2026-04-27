@@ -8,23 +8,63 @@ import (
 	"sync"
 )
 
-// Provider encapsulates provider-specific behavior.
-// New providers are added by implementing this interface and registering once.
+// Provider encapsulates provider-specific notification behavior.
+// Each provider registers exactly once via init() and handles all operations
+// for its notification backend. The interface methods form the complete
+// lifecycle of a notification agent:
+//
+//   - [Provider.Type] — returns the unique registration key (e.g. "discord").
+//   - [Provider.Validate] — checks required fields before saving an agent.
+//   - [Provider.MaskConfig] — replaces secrets with placeholders for API responses.
+//   - [Provider.PreserveConfig] — restores real secrets when UI submits placeholders.
+//   - [Provider.Test] — sends a probe message and returns per-channel results.
+//   - [Provider.Notify] — delivers one production notification.
+//   - [Provider.Async] — signals whether Notify should run in a background goroutine.
+//
+// New providers are added by implementing this interface and calling
+// registerProvider in an init() function.
 type Provider interface {
+	// Type returns the lowercase registration key (e.g. "discord", "gotify").
+	// Must be stable — it is persisted in Agent.Type and used for registry lookup.
 	Type() string
+
+	// Validate checks that all required provider-specific fields are present
+	// and well-formed. Called before creating or updating an agent.
 	Validate(agent Agent) error
+
+	// MaskConfig replaces sensitive credential fields with display-safe
+	// placeholder values. The returned Config is safe to send to the UI.
 	MaskConfig(config Config) Config
+
+	// PreserveConfig compares incoming (from UI) against existing (from disk).
+	// If a field still holds its masked placeholder value, the existing real
+	// credential is preserved. Otherwise the user-supplied value is accepted.
 	PreserveConfig(incoming, existing Config) Config
+
+	// Test sends one or more probe messages and returns a TestResult per
+	// channel. Errors are returned per-channel in TestResult.Error rather
+	// than as a top-level error, unless the request itself is invalid.
 	Test(runtime Runtime, agent Agent) ([]TestResult, error)
+
+	// Notify delivers one production notification. The payload has already
+	// been resolved (message overrides, default severity/route applied).
 	Notify(runtime Runtime, agent Agent, payload Payload) error
+
+	// Async returns true when Notify should be dispatched in a background
+	// goroutine (via the asyncRun callback in DispatchAgent). Providers
+	// targeting external APIs with potentially high latency (Gotify, Pushover)
+	// return true; providers that are typically fast (Discord) return false.
 	Async() bool
 }
 
 const (
+	// maskedDiscordWebhook is returned to the UI instead of raw webhook credentials.
 	maskedDiscordWebhook = "https://discord.com/api/webhooks/[MASKED]/[MASKED]"
-	maskedToken          = "••••••••••••••••" // 16 bullets — visually distinct from real credentials
+	// maskedToken is returned to the UI instead of bearer credentials.
+	maskedToken = "••••••••••••••••"
 )
 
+// maskSecret returns placeholder when a secret exists, otherwise empty.
 func maskSecret(s, placeholder string) string {
 	if s == "" {
 		return ""
@@ -32,6 +72,7 @@ func maskSecret(s, placeholder string) string {
 	return placeholder
 }
 
+// preserveIfMasked keeps existing when UI submits an unchanged placeholder value.
 func preserveIfMasked(incoming, existing, placeholder string) string {
 	if incoming == placeholder {
 		return existing
@@ -44,13 +85,18 @@ var (
 	providers   = make(map[string]Provider)
 )
 
+// registerProvider is called by provider init() functions to add themselves
+// to the global registry. Panics on duplicate or invalid registration because
+// that indicates a programming error (provider type collision or nil provider).
 func registerProvider(provider Provider) {
 	if err := RegisterProvider(provider); err != nil {
 		panic(err)
 	}
 }
 
-// RegisterProvider registers a provider implementation by type.
+// RegisterProvider registers a provider implementation by its Type() key.
+// Returns an error if the provider is nil, has an empty type, or if a provider
+// with the same type is already registered. Thread-safe.
 func RegisterProvider(provider Provider) error {
 	if provider == nil {
 		return fmt.Errorf("notification provider is nil")
@@ -71,7 +117,8 @@ func RegisterProvider(provider Provider) error {
 	return nil
 }
 
-// GetProvider returns a provider by configured type.
+// GetProvider returns the registered provider for the given agent type string.
+// The lookup is case-insensitive and whitespace-trimmed. Thread-safe.
 func GetProvider(agentType string) (Provider, bool) {
 	providersMu.RLock()
 	defer providersMu.RUnlock()
@@ -91,6 +138,8 @@ func SupportedTypes() []string {
 	return types
 }
 
+// unknownTypeError formats a user-facing error that lists all registered
+// provider types so the caller can see what values are valid.
 func unknownTypeError(agentType string) error {
 	types := SupportedTypes()
 	if len(types) == 0 {
@@ -139,8 +188,15 @@ func TestAgent(runtime Runtime, agent Agent) ([]TestResult, error) {
 }
 
 // DispatchAgent sends a notification payload through one configured agent.
-// asyncRun is optional; when provided and provider.Async()==true, it is used
-// to run notifications asynchronously.
+// The function is the main entry point for outbound notifications:
+//
+//  1. Skips disabled agents silently.
+//  2. Looks up the registered provider by Agent.Type.
+//  3. Resolves payload defaults (message override, severity, route).
+//  4. Calls provider.Notify synchronously, or via asyncRun when the provider
+//     opts into async delivery (provider.Async() == true) and asyncRun is non-nil.
+//
+// asyncRun is typically utils.SafeGo, which isolates panics from provider code.
 func DispatchAgent(runtime Runtime, agent Agent, payload Payload, asyncRun func(name string, fn func())) {
 	if !agent.Enabled {
 		return
@@ -152,6 +208,7 @@ func DispatchAgent(runtime Runtime, agent Agent, payload Payload, asyncRun func(
 		return
 	}
 
+	// Resolve defaults and provider-specific message overrides once per dispatch.
 	agentPayload := payload
 	agentPayload.Message = payload.messageFor(agent.Type)
 	agentPayload.Severity = payload.severityOrDefault()

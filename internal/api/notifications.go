@@ -1,3 +1,16 @@
+// notifications.go implements the REST API endpoints for managing notification
+// agents. These handlers provide full CRUD for the AutoSync.NotificationAgents
+// slice and support both inline and saved-agent testing.
+//
+// Routes (registered in router.go):
+//
+//	GET    /api/notification-agents           → handleListNotificationAgents
+//	POST   /api/notification-agents           → handleCreateNotificationAgent
+//	PUT    /api/notification-agents/{id}      → handleUpdateNotificationAgent
+//	DELETE /api/notification-agents/{id}      → handleDeleteNotificationAgent
+//	POST   /api/notification-agents/test      → handleTestNotificationAgentInline
+//	POST   /api/notification-agents/{id}/test → handleTestNotificationAgent
+
 package api
 
 import (
@@ -23,7 +36,10 @@ func validateAgentConfig(agent core.NotificationAgent) error {
 }
 
 // handleListNotificationAgents returns all configured notification agents
-// with credentials masked.
+// with credentials masked so webhook URLs and tokens are never exposed to
+// the frontend.
+//
+// Response: JSON array of core.NotificationAgent.
 func (s *Server) handleListNotificationAgents(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Core.Config.Get()
 	agents := cfg.AutoSync.NotificationAgents
@@ -36,7 +52,12 @@ func (s *Server) handleListNotificationAgents(w http.ResponseWriter, r *http.Req
 	writeJSON(w, agents)
 }
 
-// handleCreateNotificationAgent adds a new notification agent.
+// handleCreateNotificationAgent validates and persists a new notification agent.
+// The agent receives a server-generated ID. Multiple agents of the same provider
+// type are allowed (e.g. two Discord channels).
+//
+// Request:  JSON core.NotificationAgent (max 8 KiB).
+// Response: JSON core.NotificationAgent with masked credentials.
 func (s *Server) handleCreateNotificationAgent(w http.ResponseWriter, r *http.Request) {
 	agent, ok := decodeJSON[core.NotificationAgent](w, r, 8192)
 	if !ok {
@@ -55,7 +76,12 @@ func (s *Server) handleCreateNotificationAgent(w http.ResponseWriter, r *http.Re
 	writeJSON(w, created)
 }
 
-// handleUpdateNotificationAgent replaces a notification agent by ID.
+// handleUpdateNotificationAgent replaces an existing notification agent by ID.
+// Credential fields that arrive as masked placeholders are transparently
+// restored to their stored values via preserveAgentConfig.
+//
+// Request:  JSON core.NotificationAgent (max 8 KiB).
+// Response: JSON core.NotificationAgent with masked credentials.
 func (s *Server) handleUpdateNotificationAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	agent, ok := decodeJSON[core.NotificationAgent](w, r, 8192)
@@ -82,6 +108,8 @@ func (s *Server) handleUpdateNotificationAgent(w http.ResponseWriter, r *http.Re
 }
 
 // handleDeleteNotificationAgent removes a notification agent by ID.
+//
+// Response: JSON {"status": "deleted"}.
 func (s *Server) handleDeleteNotificationAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := s.Core.Config.DeleteNotificationAgent(id); err != nil {
@@ -92,7 +120,11 @@ func (s *Server) handleDeleteNotificationAgent(w http.ResponseWriter, r *http.Re
 }
 
 // handleTestNotificationAgentInline tests agent credentials sent inline in the
-// request body without requiring a saved agent ID. Used by the add-agent modal.
+// request body without requiring a saved agent ID. Used by the add-agent modal
+// so users can verify connectivity before committing the configuration.
+//
+// Request:  JSON core.NotificationAgent (max 4 KiB).
+// Response: JSON {"results": []agents.TestResult}.
 func (s *Server) handleTestNotificationAgentInline(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[core.NotificationAgent](w, r, 4096)
 	if !ok {
@@ -101,7 +133,10 @@ func (s *Server) handleTestNotificationAgentInline(w http.ResponseWriter, r *htt
 	s.runNotificationAgentTest(w, req)
 }
 
-// handleTestNotificationAgent fires test messages for an existing saved agent.
+// handleTestNotificationAgent fires test messages for an already-saved agent.
+// Looks up the agent by path parameter {id} and delegates to the shared test runner.
+//
+// Response: JSON {"results": []agents.TestResult}.
 func (s *Server) handleTestNotificationAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	existing, ok := s.Core.Config.GetNotificationAgent(id)

@@ -5,6 +5,22 @@ import (
 	"clonarr/internal/utils"
 )
 
+// notification_bridge.go provides the bridge between the core application
+// package and the agents sub-package. It exists for two reasons:
+//
+//  1. Type aliasing: core-facing code uses domain-specific names like
+//     NotificationPayload and NotificationSeverity, while the agents package
+//     uses shorter names (Payload, Severity). The type aliases here allow
+//     the rest of core to use the domain names without importing agents directly.
+//
+//  2. Dependency injection: providers need HTTP clients and the app version
+//     at dispatch time. The notificationRuntime method adapts App fields into
+//     the agents.Runtime struct, keeping providers decoupled from App.
+//
+// All notification dispatch ultimately flows through:
+//
+//	core caller → DispatchNotificationAgent → agents.DispatchAgent → provider.Notify
+
 // NotificationPayload is the provider-agnostic message contract for outbound notifications.
 type NotificationPayload = agents.Payload
 
@@ -28,6 +44,10 @@ const (
 	NotificationRouteUpdates NotificationRoute = agents.RouteUpdates
 )
 
+// notificationRuntime adapts App dependencies into the agents.Runtime contract.
+// Called once per dispatch/test to snapshot the current app state. The returned
+// Runtime is safe for concurrent use because App.Version is immutable and the
+// HTTP clients are stateless.
 func (app *App) notificationRuntime() agents.Runtime {
 	return agents.Runtime{
 		Version:      app.Version,
@@ -57,6 +77,9 @@ func TestNotificationAgent(app *App, agent NotificationAgent) ([]NotificationTes
 }
 
 // DispatchNotificationAgent sends a notification payload through one configured agent.
+// Async-capable providers (Gotify, Pushover) are dispatched via utils.SafeGo to
+// isolate panics from provider code and prevent slow external APIs from blocking
+// the caller.
 func (app *App) DispatchNotificationAgent(agent NotificationAgent, payload NotificationPayload) {
 	agents.DispatchAgent(app.notificationRuntime(), agent, payload, func(name string, fn func()) {
 		utils.SafeGo(name, fn)

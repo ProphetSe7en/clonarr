@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestGotifyValidate verifies the Gotify provider's Validate logic:
+// missing URL/token credentials and valid config.
 func TestGotifyValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -44,6 +46,9 @@ func TestGotifyValidate(t *testing.T) {
 	}
 }
 
+// TestGotifyMaskAndPreserve verifies the credential mask/preserve round-trip:
+// MaskConfigByType replaces the Gotify token with a placeholder, and
+// PreserveConfigByType restores the original when that placeholder is submitted back.
 func TestGotifyMaskAndPreserve(t *testing.T) {
 	cfg := Config{GotifyURL: "https://gotify.example.com", GotifyToken: "tok123"}
 	masked := MaskConfigByType("gotify", cfg)
@@ -56,6 +61,9 @@ func TestGotifyMaskAndPreserve(t *testing.T) {
 	}
 }
 
+// TestGotifyPriorityForSeverity exercises the severity-to-priority mapping:
+// verifies custom priority values are returned for enabled severities, and that
+// disabled severities return (0, false) to suppress delivery.
 func TestGotifyPriorityForSeverity(t *testing.T) {
 	p := gotifyProvider{}
 	critical, warning, info := 8, 5, 3
@@ -84,6 +92,8 @@ func TestGotifyPriorityForSeverity(t *testing.T) {
 	}
 }
 
+// TestNormalizeGotifyMarkdown verifies that markdown normalization doubles
+// newlines before bold headers and list items for clean Gotify rendering.
 func TestNormalizeGotifyMarkdown(t *testing.T) {
 	input := "line\n**header**\n- item"
 	out := normalizeGotifyMarkdown(input)

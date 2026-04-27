@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestPushoverValidate verifies the Pushover provider's Validate logic:
+// missing user key / app token and valid config.
 func TestPushoverValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -44,6 +46,9 @@ func TestPushoverValidate(t *testing.T) {
 	}
 }
 
+// TestPushoverMaskAndPreserve verifies the credential mask/preserve round-trip:
+// MaskConfigByType replaces both Pushover credentials with placeholders, and
+// PreserveConfigByType restores the originals when those placeholders are submitted back.
 func TestPushoverMaskAndPreserve(t *testing.T) {
 	cfg := Config{PushoverUserKey: "user", PushoverAppToken: "app"}
 	masked := MaskConfigByType("pushover", cfg)
