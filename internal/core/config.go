@@ -14,12 +14,12 @@ import (
 type Config struct {
 	Instances            []Instance                       `json:"instances"`
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
-	PullInterval         string                           `json:"pullInterval"` // Go duration (e.g. "24h", "1h", "0" to disable)
-	DevMode              bool                             `json:"devMode"`             // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
-	TrashSchemaFields    bool                             `json:"trashSchemaFields"`   // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
-	DebugLogging         bool                             `json:"debugLogging"`        // Write detailed operations to /config/debug.log
+	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h", "0" to disable)
+	DevMode              bool                             `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
+	TrashSchemaFields    bool                             `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
+	DebugLogging         bool                             `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
 	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
-	QualitySizeAutoSync  map[string]QSAutoSync             `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
+	QualitySizeAutoSync  map[string]QSAutoSync            `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
 	SyncHistory          []SyncHistoryEntry               `json:"syncHistory,omitempty"`
 	CleanupKeep          map[string][]string              `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
 	AutoSync             AutoSyncConfig                   `json:"autoSync,omitempty"`
@@ -28,11 +28,11 @@ type Config struct {
 	// Credentials (bcrypt password hash, API key) live separately in
 	// /config/auth.json, NOT here, so this file can be exported/shared
 	// without leaking secrets.
-	Authentication         string   `json:"authentication,omitempty"`         // "forms" (default) | "basic" | "none"
-	AuthenticationRequired string   `json:"authenticationRequired,omitempty"` // "enabled" | "disabled_for_local_addresses" (default)
-	TrustedProxies         string   `json:"trustedProxies,omitempty"`         // comma-separated IPs — reverse-proxy deployments
-	TrustedNetworks        string   `json:"trustedNetworks,omitempty"`        // comma-separated IPs/CIDRs for local-bypass; empty = Radarr-parity default
-	SessionTTLDays         int      `json:"sessionTtlDays,omitempty"`         // default 30
+	Authentication         string `json:"authentication,omitempty"`         // "forms" (default) | "basic" | "none"
+	AuthenticationRequired string `json:"authenticationRequired,omitempty"` // "enabled" | "disabled_for_local_addresses" (default)
+	TrustedProxies         string `json:"trustedProxies,omitempty"`         // comma-separated IPs — reverse-proxy deployments
+	TrustedNetworks        string `json:"trustedNetworks,omitempty"`        // comma-separated IPs/CIDRs for local-bypass; empty = Radarr-parity default
+	SessionTTLDays         int    `json:"sessionTtlDays,omitempty"`         // default 30
 }
 
 // ProwlarrConfig holds Prowlarr connection settings for the Scoring Sandbox.
@@ -50,16 +50,16 @@ type ProwlarrConfig struct {
 
 // AutoSyncConfig holds global auto-sync settings and rules.
 type AutoSyncConfig struct {
-	Enabled            bool                 `json:"enabled"`
-	NotificationAgents []NotificationAgent  `json:"notificationAgents,omitempty"`
-	Rules              []AutoSyncRule        `json:"rules,omitempty"`
+	Enabled            bool                `json:"enabled"`
+	NotificationAgents []NotificationAgent `json:"notificationAgents,omitempty"`
+	Rules              []AutoSyncRule      `json:"rules,omitempty"`
 }
 
 // NotificationAgent is a configured notification provider instance.
 type NotificationAgent struct {
 	ID      string             `json:"id"`
-	Name    string             `json:"name"`    // user-defined label, e.g. "Discord #alerts"
-	Type    string             `json:"type"`    // "discord" | "gotify" | "pushover"
+	Name    string             `json:"name"` // user-defined label, e.g. "Discord #alerts"
+	Type    string             `json:"type"` // registered provider type, e.g. "discord" | "gotify" | "pushover"
 	Enabled bool               `json:"enabled"`
 	Events  AgentEvents        `json:"events"`
 	Config  NotificationConfig `json:"config"`
@@ -76,7 +76,7 @@ type AgentEvents struct {
 
 // NotificationConfig holds provider-specific credentials and settings.
 // Fields are omitempty so unused providers add no JSON bloat.
-// Adding a new provider = append fields here + new case in send dispatch.
+// Adding a new provider = append fields here + register a NotificationAgentProvider.
 type NotificationConfig struct {
 	// Discord
 	DiscordWebhook        string `json:"discordWebhook,omitempty"`
@@ -97,22 +97,22 @@ type NotificationConfig struct {
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
-	ID                string         `json:"id"`
-	Enabled           bool           `json:"enabled"`
-	InstanceID        string         `json:"instanceId"`
-	ProfileSource     string         `json:"profileSource"`               // "trash" or "imported"
-	TrashProfileID    string         `json:"trashProfileId,omitempty"`
-	ImportedProfileID string         `json:"importedProfileId,omitempty"`
-	ArrProfileID      int            `json:"arrProfileId"`                // target Arr profile to update
-	SelectedCFs       []string       `json:"selectedCFs,omitempty"`       // user's optional CF selections
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
-	Behavior          *SyncBehavior  `json:"behavior,omitempty"`          // sync behavior rules (nil = defaults)
-	Overrides         *SyncOverrides `json:"overrides,omitempty"`         // user overrides (min score, language, cutoff, etc.)
-	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
-	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
-	LastSyncError     string         `json:"lastSyncError,omitempty"`
+	ID                string          `json:"id"`
+	Enabled           bool            `json:"enabled"`
+	InstanceID        string          `json:"instanceId"`
+	ProfileSource     string          `json:"profileSource"` // "trash" or "imported"
+	TrashProfileID    string          `json:"trashProfileId,omitempty"`
+	ImportedProfileID string          `json:"importedProfileId,omitempty"`
+	ArrProfileID      int             `json:"arrProfileId"`               // target Arr profile to update
+	SelectedCFs       []string        `json:"selectedCFs,omitempty"`      // user's optional CF selections
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
+	Behavior          *SyncBehavior   `json:"behavior,omitempty"`         // sync behavior rules (nil = defaults)
+	Overrides         *SyncOverrides  `json:"overrides,omitempty"`        // user overrides (min score, language, cutoff, etc.)
+	LastSyncCommit    string          `json:"lastSyncCommit,omitempty"`
+	LastSyncTime      string          `json:"lastSyncTime,omitempty"`
+	LastSyncError     string          `json:"lastSyncError,omitempty"`
 	// OrphanedAt is set (RFC3339 timestamp) when clonarr's drift-check
 	// detects that ArrProfileID no longer resolves in the target Arr
 	// instance. Auto-sync skips orphaned rules; the UI exposes Restore
@@ -188,23 +188,23 @@ func (c *SyncChanges) HasChanges() bool {
 
 // SyncHistoryEntry records a completed sync operation.
 type SyncHistoryEntry struct {
-	InstanceID        string            `json:"instanceId"`
-	InstanceType      string            `json:"instanceType,omitempty"` // "radarr" or "sonarr" — for orphan migration
-	ProfileTrashID    string            `json:"profileTrashId"`
-	ImportedProfileID string            `json:"importedProfileId,omitempty"`
-	ProfileName       string            `json:"profileName"`
-	ArrProfileID   int               `json:"arrProfileId"`
-	ArrProfileName string            `json:"arrProfileName"`
-	SyncedCFs      []string          `json:"syncedCFs"`
-	SelectedCFs    map[string]bool   `json:"selectedCFs,omitempty"`
-	ScoreOverrides   map[string]int    `json:"scoreOverrides,omitempty"`
-	QualityOverrides map[string]bool   `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
-	QualityStructure []QualityItem     `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
-	Overrides        *SyncOverrides    `json:"overrides,omitempty"`
-	Behavior         *SyncBehavior     `json:"behavior,omitempty"`
-	CFsCreated       int               `json:"cfsCreated"`
-	CFsUpdated     int               `json:"cfsUpdated"`
-	ScoresUpdated  int               `json:"scoresUpdated"`
+	InstanceID        string          `json:"instanceId"`
+	InstanceType      string          `json:"instanceType,omitempty"` // "radarr" or "sonarr" — for orphan migration
+	ProfileTrashID    string          `json:"profileTrashId"`
+	ImportedProfileID string          `json:"importedProfileId,omitempty"`
+	ProfileName       string          `json:"profileName"`
+	ArrProfileID      int             `json:"arrProfileId"`
+	ArrProfileName    string          `json:"arrProfileName"`
+	SyncedCFs         []string        `json:"syncedCFs"`
+	SelectedCFs       map[string]bool `json:"selectedCFs,omitempty"`
+	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`
+	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
+	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
+	Overrides         *SyncOverrides  `json:"overrides,omitempty"`
+	Behavior          *SyncBehavior   `json:"behavior,omitempty"`
+	CFsCreated        int             `json:"cfsCreated"`
+	CFsUpdated        int             `json:"cfsUpdated"`
+	ScoresUpdated     int             `json:"scoresUpdated"`
 	// LastSync bumps on every sync attempt for this profile (including no-op
 	// auto-syncs) so callers can show "last activity" per profile. UI surfaces
 	// it in the TRaSH Sync tab's per-profile row.
@@ -213,8 +213,8 @@ type SyncHistoryEntry struct {
 	// changes — a stable "when these changes landed" timestamp. Empty on
 	// baseline/no-op entries and on entries predating this field (in which
 	// case UI falls back to LastSync).
-	AppliedAt string        `json:"appliedAt,omitempty"`
-	Changes   *SyncChanges  `json:"changes,omitempty"`
+	AppliedAt string       `json:"appliedAt,omitempty"`
+	Changes   *SyncChanges `json:"changes,omitempty"`
 	// OrphanedAt mirrors the field on the rule — set when the entry
 	// belongs to a profile that has been detected as deleted in Arr.
 	// Lets the UI gray out / badge orphaned history rows independently
@@ -566,7 +566,9 @@ func (cs *ConfigStore) migrateFlatNotifications(raw []byte) {
 	discordWebhook := str("discordWebhook")
 	if discordWebhook != "" {
 		cv, wv, iv := 8, 5, 3
-		_ = cv; _ = wv; _ = iv
+		_ = cv
+		_ = wv
+		_ = iv
 		agents = append(agents, NotificationAgent{
 			ID:      GenerateID(),
 			Name:    "Discord",
