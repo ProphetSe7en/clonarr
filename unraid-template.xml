@@ -21,8 +21,10 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/ui/static/icons/clonarr.png</Icon>
-  <Date>2026-04-26</Date>
+  <Date>2026-04-27</Date>
   <Changes>
+### 2026-04-27
+- v2.2.4: **Bundle of fixes and UX improvements.** CF group activation now respects TRaSH's per-CF `default` flag — toggling a group like `[Unwanted]` pre-checks only the CFs marked default, the rest are visible and individually toggleable. New Maintenance → Cleanup → "Unused Custom Formats" action finds CFs in your Arr instance not referenced by any Clonarr sync rule. CF editor preserves field values across Type changes. Cross-Arr CF JSON import warns about value mismatches (Radarr WEB-DL value would mean BlurayRaw in Sonarr). Sync result banner shows Settings + Quality change counts. Group sorting unified across Profile Builder / Custom Formats / Profile Detail — alphabetical, with SQP groups at the bottom and Custom last.
 ### 2026-04-26
 - v2.2.3: **Bug fixes** — Scoring Sandbox batch limit raised from 15 to 200 titles so a Prowlarr search worth of variants can be scored at once (the handler still calls Arr Parse sequentially — no indexer hammering, just a longer-running request). Frontend shows a parsing-progress toast on batches >30. Custom Format *Import → From JSON* now honors `includeCustomFormatWhenRenaming` (was silently dropped, so the rename tickbox came in unticked even when the JSON had it set). TRaSH-specific fields (`trash_id`, `trash_scores`) remain not imported — documented in the import modal.
 - v2.2.2: **UX patch** — covers two data-loss-prone code paths and quality-of-life fixes. Custom format filenames now preserve `!` prefix (`!FLUX` and `FLUX` no longer collide). Auto-sync toggle in the sync modal no longer rewrites the rule's saved customizations from a fresh form. "Showing X Custom Formats" counter on the Custom Formats tab now shows the real total (was always 0). Sync modal defaults to "Create new profile" when opened from the profile list (was silently auto-flipping to "Update existing"). Confirmation dialog now appears before overwriting an existing sync rule via the Update-existing flow — the Edit pencil flow still goes through directly.

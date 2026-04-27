@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased (v2.2.4 candidate)
+## v2.2.4
 
-Bundling several user-reported items. Currently on `:dev`; will be released as v2.2.4 when the bundle is complete.
+A bundle of user-reported fixes and small UX improvements collected and stabilised over the v2.2.3-dev cycle.
 
 ### CF group activation respects per-CF `default` flag
 
