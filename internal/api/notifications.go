@@ -130,7 +130,7 @@ func (s *Server) handleTestNotificationAgentInline(w http.ResponseWriter, r *htt
 	if !ok {
 		return
 	}
-	s.runNotificationAgentTest(w, req)
+	s.runNotificationAgentTest(w, r, req)
 }
 
 // handleTestNotificationAgent fires test messages for an already-saved agent.
@@ -144,13 +144,13 @@ func (s *Server) handleTestNotificationAgent(w http.ResponseWriter, r *http.Requ
 		writeError(w, 404, "Notification agent not found")
 		return
 	}
-	s.runNotificationAgentTest(w, existing)
+	s.runNotificationAgentTest(w, r, existing)
 }
 
 // runNotificationAgentTest executes the test logic for any notification agent
 // and writes the JSON response. Shared by both the inline and saved-agent test handlers.
-func (s *Server) runNotificationAgentTest(w http.ResponseWriter, req core.NotificationAgent) {
-	results, err := core.TestNotificationAgent(s.Core, req)
+func (s *Server) runNotificationAgentTest(w http.ResponseWriter, r *http.Request, req core.NotificationAgent) {
+	results, err := core.TestNotificationAgent(r.Context(), s.Core, req)
 	if err != nil {
 		writeError(w, 400, err.Error())
 		return

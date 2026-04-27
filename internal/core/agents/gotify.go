@@ -2,6 +2,7 @@ package agents
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -58,7 +59,7 @@ func (gotifyProvider) Validate(agent Agent) error {
 }
 
 // Test sends one verification message to the configured Gotify endpoint.
-func (g gotifyProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error) {
+func (g gotifyProvider) Test(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error) {
 	cfg := agent.Config
 	if strings.TrimSpace(cfg.GotifyURL) == "" || strings.TrimSpace(cfg.GotifyToken) == "" {
 		return nil, fmt.Errorf("URL and token are required")
@@ -76,7 +77,7 @@ func (g gotifyProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 	}
 	body, _ := json.Marshal(payload)
 
-	resp, err := gotifyPost(runtime.NotifyClient, cfg, body)
+	resp, err := gotifyPost(ctx, runtime.NotifyClient, cfg, body)
 	if err != nil {
 		res.Status = statusError
 		res.Error = fmt.Sprintf("Failed to reach Gotify: %v", err)
@@ -98,7 +99,7 @@ func (g gotifyProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 // severity is disabled (e.g. info notifications turned off), Notify returns
 // nil without sending. Message bodies are normalized for Gotify's markdown
 // renderer via normalizeGotifyMarkdown.
-func (g gotifyProvider) Notify(runtime Runtime, agent Agent, payload Payload) error {
+func (g gotifyProvider) Notify(ctx context.Context, runtime Runtime, agent Agent, payload Payload) error {
 	cfg := agent.Config
 	if strings.TrimSpace(cfg.GotifyURL) == "" || strings.TrimSpace(cfg.GotifyToken) == "" {
 		return nil
@@ -124,7 +125,7 @@ func (g gotifyProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 		},
 	})
 
-	resp, err := gotifyPost(runtime.NotifyClient, cfg, body)
+	resp, err := gotifyPost(ctx, runtime.NotifyClient, cfg, body)
 	if err != nil {
 		return err
 	}
@@ -140,9 +141,9 @@ func (g gotifyProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 // gotifyPost sends a JSON body to the Gotify /message endpoint, authenticating
 // via the X-Gotify-Key header instead of a query-string token. This keeps the
 // application token out of server access logs and reverse-proxy logs.
-func gotifyPost(client HTTPPoster, cfg Config, body []byte) (*http.Response, error) {
+func gotifyPost(ctx context.Context, client HTTPPoster, cfg Config, body []byte) (*http.Response, error) {
 	gotifyURL := strings.TrimRight(cfg.GotifyURL, "/") + "/message"
-	req, err := http.NewRequest("POST", gotifyURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", gotifyURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("gotify request: %w", err)
 	}

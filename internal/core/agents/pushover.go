@@ -2,8 +2,10 @@ package agents
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -62,7 +64,7 @@ func (pushoverProvider) Validate(agent Agent) error {
 }
 
 // Test sends one verification message to Pushover.
-func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error) {
+func (pushoverProvider) Test(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error) {
 	cfg := agent.Config
 	if strings.TrimSpace(cfg.PushoverUserKey) == "" || strings.TrimSpace(cfg.PushoverAppToken) == "" {
 		return nil, fmt.Errorf("User key and app token are required")
@@ -72,15 +74,7 @@ func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 	}
 
 	res := TestResult{Label: "Pushover", Status: statusOK}
-	body, _ := json.Marshal(map[string]any{
-		"token":    cfg.PushoverAppToken,
-		"user":     cfg.PushoverUserKey,
-		"title":    testTitle,
-		"message":  testMessage("Pushover"),
-		"priority": 0,
-	})
-
-	resp, err := runtime.SafeClient.Post(pushoverAPIURL, "application/json", bytes.NewReader(body))
+	resp, err := pushoverPost(ctx, runtime.SafeClient, cfg, testTitle, testMessage("Pushover"), 0)
 	if err != nil {
 		res.Status = statusError
 		res.Error = fmt.Sprintf("Failed to reach Pushover: %v", err)
@@ -99,7 +93,7 @@ func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 // Notify sends one outbound Pushover message with severity-mapped priority.
 // Returns nil (skip) when required credentials are missing, which can occur
 // if the agent was disabled after dispatch was queued.
-func (pushoverProvider) Notify(runtime Runtime, agent Agent, payload Payload) error {
+func (pushoverProvider) Notify(ctx context.Context, runtime Runtime, agent Agent, payload Payload) error {
 	cfg := agent.Config
 	if strings.TrimSpace(cfg.PushoverUserKey) == "" || strings.TrimSpace(cfg.PushoverAppToken) == "" {
 		return nil
@@ -108,15 +102,7 @@ func (pushoverProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 		return fmt.Errorf("pushover client not configured")
 	}
 
-	body, _ := json.Marshal(map[string]any{
-		"token":    cfg.PushoverAppToken,
-		"user":     cfg.PushoverUserKey,
-		"title":    payload.Title,
-		"message":  payload.Message,
-		"priority": pushoverPriority(payload.Severity),
-	})
-
-	resp, err := runtime.SafeClient.Post(pushoverAPIURL, "application/json", bytes.NewReader(body))
+	resp, err := pushoverPost(ctx, runtime.SafeClient, cfg, payload.Title, payload.Message, pushoverPriority(payload.Severity))
 	if err != nil {
 		return err
 	}
@@ -127,6 +113,25 @@ func (pushoverProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 	}
 
 	return nil
+}
+
+// pushoverPost builds and sends a Pushover API message. This helper
+// deduplicates the identical payload construction shared by Test and Notify.
+func pushoverPost(ctx context.Context, client HTTPPoster, cfg Config, title, message string, priority int) (*http.Response, error) {
+	body, _ := json.Marshal(map[string]any{
+		"token":    cfg.PushoverAppToken,
+		"user":     cfg.PushoverUserKey,
+		"title":    title,
+		"message":  message,
+		"priority": priority,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, "POST", pushoverAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("pushover request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return client.Do(req)
 }
 
 // pushoverPriority maps Clonarr severity levels to Pushover priority integers.

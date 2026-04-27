@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -71,7 +72,7 @@ func TestPushoverTestHappyPath(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	results, err := pushoverProvider{}.Test(rt, agent)
+	results, err := pushoverProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() error: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestPushoverTestHTTPError(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	results, err := pushoverProvider{}.Test(rt, agent)
+	results, err := pushoverProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() should not return top-level error: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestPushoverTestHTTPStatus(t *testing.T) {
 		PushoverAppToken: "bad-token",
 	}}
 
-	results, err := pushoverProvider{}.Test(rt, agent)
+	results, err := pushoverProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() error: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestPushoverTestNilClient(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	_, err := pushoverProvider{}.Test(rt, agent)
+	_, err := pushoverProvider{}.Test(context.Background(), rt, agent)
 	if err == nil {
 		t.Fatal("expected error when SafeClient is nil")
 	}
@@ -150,7 +151,7 @@ func TestPushoverNotifyHappyPath(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	err := pushoverProvider{}.Notify(rt, agent, Payload{
+	err := pushoverProvider{}.Notify(context.Background(), rt, agent, Payload{
 		Title:    "Test",
 		Message:  "body",
 		Severity: SeverityInfo,
@@ -172,7 +173,7 @@ func TestPushoverNotifyHTTPError(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	err := pushoverProvider{}.Notify(rt, agent, Payload{Severity: SeverityInfo})
+	err := pushoverProvider{}.Notify(context.Background(), rt, agent, Payload{Severity: SeverityInfo})
 	if err == nil {
 		t.Fatal("expected error on 500")
 	}
@@ -186,7 +187,7 @@ func TestPushoverNotifyNilClient(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	err := pushoverProvider{}.Notify(rt, agent, Payload{Severity: SeverityInfo})
+	err := pushoverProvider{}.Notify(context.Background(), rt, agent, Payload{Severity: SeverityInfo})
 	if err == nil {
 		t.Fatal("expected error when SafeClient is nil")
 	}
@@ -198,7 +199,7 @@ func TestPushoverNotifyMissingCredentials(t *testing.T) {
 	rt := testRuntime(nil, newOKPoster())
 	agent := Agent{Name: "Pushover", Type: "pushover", Enabled: true, Config: Config{}}
 
-	err := pushoverProvider{}.Notify(rt, agent, Payload{Severity: SeverityInfo})
+	err := pushoverProvider{}.Notify(context.Background(), rt, agent, Payload{Severity: SeverityInfo})
 	if err != nil {
 		t.Fatalf("expected nil for empty credentials, got: %v", err)
 	}

@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -75,7 +76,7 @@ func TestDispatchAgentEnabled(t *testing.T) {
 	}
 	payload := Payload{Title: "Test", Message: "body", Route: RouteDefault}
 
-	DispatchAgent(rt, agent, payload, nil)
+	DispatchAgent(context.Background(), rt, agent, payload, nil)
 
 	if mock.lastURL == "" {
 		t.Fatal("expected HTTP call when agent is enabled")
@@ -93,7 +94,7 @@ func TestDispatchAgentDisabled(t *testing.T) {
 		Config:  Config{DiscordWebhook: "https://discord.com/api/webhooks/111/aaa"},
 	}
 
-	DispatchAgent(rt, agent, Payload{}, nil)
+	DispatchAgent(context.Background(), rt, agent, Payload{}, nil)
 
 	if mock.lastURL != "" {
 		t.Fatal("expected no HTTP call when agent is disabled")
@@ -108,7 +109,7 @@ func TestDispatchAgentUnknownType(t *testing.T) {
 	agent := Agent{Name: "Unknown", Type: "smtp", Enabled: true}
 
 	// Should not panic or call HTTP
-	DispatchAgent(rt, agent, Payload{}, nil)
+	DispatchAgent(context.Background(), rt, agent, Payload{}, nil)
 
 	if mock.lastURL != "" {
 		t.Fatal("expected no HTTP call for unknown provider type")
@@ -137,7 +138,7 @@ func TestDispatchAgentAsync(t *testing.T) {
 		fn() // run synchronously for test
 	}
 
-	DispatchAgent(rt, agent, Payload{Severity: SeverityInfo}, asyncRun)
+	DispatchAgent(context.Background(), rt, agent, Payload{Severity: SeverityInfo}, asyncRun)
 
 	if !asyncCalled {
 		t.Fatal("expected asyncRun to be called for async provider")
@@ -166,7 +167,7 @@ func TestDispatchAgentMessageOverride(t *testing.T) {
 	}
 
 	// DispatchAgent resolves the message internally — just ensure no error
-	DispatchAgent(rt, agent, payload, nil)
+	DispatchAgent(context.Background(), rt, agent, payload, nil)
 
 	if mock.lastURL == "" {
 		t.Fatal("expected HTTP call")
@@ -229,7 +230,7 @@ func TestTestAgentUnknownType(t *testing.T) {
 	rt := testRuntime(nil, nil)
 	agent := Agent{Name: "Unknown", Type: "smtp"}
 
-	_, err := TestAgent(rt, agent)
+	_, err := TestAgent(context.Background(), rt, agent)
 	if err == nil {
 		t.Fatal("expected error for unknown provider type")
 	}
@@ -248,7 +249,7 @@ func TestTestAgentKnownType(t *testing.T) {
 		PushoverAppToken: "app",
 	}}
 
-	results, err := TestAgent(rt, agent)
+	results, err := TestAgent(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("TestAgent() error: %v", err)
 	}

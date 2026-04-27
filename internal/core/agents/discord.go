@@ -2,8 +2,10 @@ package agents
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -71,7 +73,7 @@ func (discordProvider) Validate(agent Agent) error {
 // Test sends one test embed per configured webhook channel (main and, if
 // different, updates). Returns one TestResult per channel so the UI can
 // show per-channel pass/fail feedback.
-func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error) {
+func (d discordProvider) Test(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error) {
 	cfg := agent.Config
 	mainWebhook := strings.TrimSpace(cfg.DiscordWebhook)
 	updatesWebhook := strings.TrimSpace(cfg.DiscordWebhookUpdates)
@@ -80,7 +82,7 @@ func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error
 
 	if mainWebhook != "" {
 		res := TestResult{Label: "Sync webhook", Status: statusOK}
-		if err := d.sendWebhook(runtime, mainWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
+		if err := d.sendWebhook(ctx, runtime, mainWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
 			res.Status = statusError
 			res.Error = err.Error()
 		}
@@ -89,7 +91,7 @@ func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error
 
 	if updatesWebhook != "" && updatesWebhook != mainWebhook {
 		res := TestResult{Label: "Updates webhook", Status: statusOK}
-		if err := d.sendWebhook(runtime, updatesWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
+		if err := d.sendWebhook(ctx, runtime, updatesWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
 			res.Status = statusError
 			res.Error = err.Error()
 		}
@@ -104,12 +106,12 @@ func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error
 }
 
 // Notify sends one outbound notification to the route-resolved webhook.
-func (d discordProvider) Notify(runtime Runtime, agent Agent, payload Payload) error {
+func (d discordProvider) Notify(ctx context.Context, runtime Runtime, agent Agent, payload Payload) error {
 	webhook := d.resolveWebhook(agent, payload.Route)
 	if webhook == "" {
 		return nil
 	}
-	return d.sendWebhook(runtime, webhook, payload.Title, payload.Message, payload.Color)
+	return d.sendWebhook(ctx, runtime, webhook, payload.Title, payload.Message, payload.Color)
 }
 
 // resolveWebhook chooses the updates webhook for RouteUpdates, falling back to main.
@@ -126,7 +128,7 @@ func (discordProvider) resolveWebhook(agent Agent, route Route) string {
 // The embed includes a title, description, colored sidebar, and a version
 // footer. Returns an error if the HTTP client is missing, the URL fails
 // validation, or Discord responds with a 4xx/5xx status.
-func (discordProvider) sendWebhook(runtime Runtime, webhook, title, description string, color int) error {
+func (discordProvider) sendWebhook(ctx context.Context, runtime Runtime, webhook, title, description string, color int) error {
 	if runtime.SafeClient == nil {
 		return fmt.Errorf("discord client not configured")
 	}
@@ -142,12 +144,18 @@ func (discordProvider) sendWebhook(runtime Runtime, webhook, title, description 
 		"color":       color,
 		"footer":      map[string]string{"text": "Clonarr " + runtime.Version + " by ProphetSe7en"},
 	}
-	payload, err := json.Marshal(map[string]any{"embeds": []any{embed}})
+	body, err := json.Marshal(map[string]any{"embeds": []any{embed}})
 	if err != nil {
 		return err
 	}
 
-	resp, err := runtime.SafeClient.Post(webhook, "application/json", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", webhook, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("discord request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := runtime.SafeClient.Do(req)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
@@ -44,16 +45,17 @@ type Provider interface {
 	// Test sends one or more probe messages and returns a TestResult per
 	// channel. Errors are returned per-channel in TestResult.Error rather
 	// than as a top-level error, unless the request itself is invalid.
-	Test(runtime Runtime, agent Agent) ([]TestResult, error)
+	// The context allows callers to set deadlines and cancel in-flight requests.
+	Test(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error)
 
 	// Notify delivers one production notification. The payload has already
 	// been resolved (message overrides, default severity/route applied).
-	Notify(runtime Runtime, agent Agent, payload Payload) error
+	// The context allows callers to cancel during graceful shutdown.
+	Notify(ctx context.Context, runtime Runtime, agent Agent, payload Payload) error
 
 	// Async returns true when Notify should be dispatched in a background
 	// goroutine (via the asyncRun callback in DispatchAgent). Providers
-	// targeting external APIs with potentially high latency (Gotify, Pushover)
-	// return true; providers that are typically fast (Discord) return false.
+	// targeting external APIs with potentially high latency return true.
 	Async() bool
 }
 
@@ -94,6 +96,15 @@ var (
 	providersMu sync.RWMutex
 	providers   = make(map[string]Provider)
 )
+
+// ResetProviders clears all registered providers. This is intended for test
+// isolation — it allows tests to exercise RegisterProvider error paths
+// (e.g. duplicate registration) without polluting global state across test runs.
+func ResetProviders() {
+	providersMu.Lock()
+	defer providersMu.Unlock()
+	providers = make(map[string]Provider)
+}
 
 // registerProvider is called by provider init() functions to add themselves
 // to the global registry. Panics on duplicate or invalid registration because
@@ -189,12 +200,13 @@ func ValidateAgent(agent Agent) error {
 }
 
 // TestAgent probes an inline or persisted agent configuration.
-func TestAgent(runtime Runtime, agent Agent) ([]TestResult, error) {
+// The context is forwarded to the provider's Test method for cancellation/deadline support.
+func TestAgent(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error) {
 	provider, ok := GetProvider(agent.Type)
 	if !ok {
 		return nil, unknownTypeError(agent.Type)
 	}
-	return provider.Test(runtime, agent)
+	return provider.Test(ctx, runtime, agent)
 }
 
 // DispatchAgent sends a notification payload through one configured agent.
@@ -206,8 +218,9 @@ func TestAgent(runtime Runtime, agent Agent) ([]TestResult, error) {
 //  4. Calls provider.Notify synchronously, or via asyncRun when the provider
 //     opts into async delivery (provider.Async() == true) and asyncRun is non-nil.
 //
+// The context is forwarded to provider.Notify for cancellation/deadline support.
 // asyncRun is typically utils.SafeGo, which isolates panics from provider code.
-func DispatchAgent(runtime Runtime, agent Agent, payload Payload, asyncRun func(name string, fn func())) {
+func DispatchAgent(ctx context.Context, runtime Runtime, agent Agent, payload Payload, asyncRun func(name string, fn func())) {
 	if !agent.Enabled {
 		return
 	}
@@ -225,7 +238,7 @@ func DispatchAgent(runtime Runtime, agent Agent, payload Payload, asyncRun func(
 	agentPayload.Route = payload.routeOrDefault()
 
 	send := func() {
-		if err := provider.Notify(runtime, agent, agentPayload); err != nil {
+		if err := provider.Notify(ctx, runtime, agent, agentPayload); err != nil {
 			log.Printf("Notification %q (%s) send failed: %v", agent.Name, provider.Type(), err)
 		}
 	}

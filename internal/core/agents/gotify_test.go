@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -115,7 +116,7 @@ func TestGotifyTestHappyPath(t *testing.T) {
 		GotifyToken: "tok123",
 	}}
 
-	results, err := gotifyProvider{}.Test(rt, agent)
+	results, err := gotifyProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() error: %v", err)
 	}
@@ -139,7 +140,7 @@ func TestGotifyTestHTTPError(t *testing.T) {
 		GotifyToken: "tok123",
 	}}
 
-	results, err := gotifyProvider{}.Test(rt, agent)
+	results, err := gotifyProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() should not return top-level error: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestGotifyTestHTTPStatus(t *testing.T) {
 		GotifyToken: "bad-token",
 	}}
 
-	results, err := gotifyProvider{}.Test(rt, agent)
+	results, err := gotifyProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() error: %v", err)
 	}
@@ -178,7 +179,7 @@ func TestGotifyTestNilClient(t *testing.T) {
 		GotifyToken: "tok123",
 	}}
 
-	_, err := gotifyProvider{}.Test(rt, agent)
+	_, err := gotifyProvider{}.Test(context.Background(), rt, agent)
 	if err == nil {
 		t.Fatal("expected error when NotifyClient is nil")
 	}
@@ -197,7 +198,7 @@ func TestGotifyNotifyHappyPath(t *testing.T) {
 		GotifyCriticalValue:    &critical,
 	}}
 
-	err := gotifyProvider{}.Notify(rt, agent, Payload{
+	err := gotifyProvider{}.Notify(context.Background(), rt, agent, Payload{
 		Title:    "Test",
 		Message:  "body",
 		Severity: SeverityCritical,
@@ -221,7 +222,7 @@ func TestGotifyNotifyDisabledSeverity(t *testing.T) {
 		GotifyPriorityInfo: false, // info disabled
 	}}
 
-	err := gotifyProvider{}.Notify(rt, agent, Payload{
+	err := gotifyProvider{}.Notify(context.Background(), rt, agent, Payload{
 		Title:    "Test",
 		Message:  "body",
 		Severity: SeverityInfo,
@@ -244,7 +245,7 @@ func TestGotifyNotifyHTTPError(t *testing.T) {
 		GotifyPriorityInfo: true,
 	}}
 
-	err := gotifyProvider{}.Notify(rt, agent, Payload{Severity: SeverityInfo})
+	err := gotifyProvider{}.Notify(context.Background(), rt, agent, Payload{Severity: SeverityInfo})
 	if err == nil {
 		t.Fatal("expected error on 500")
 	}
@@ -263,7 +264,7 @@ func TestGotifyNotifyNilClient(t *testing.T) {
 		GotifyPriorityInfo: true,
 	}}
 
-	err := gotifyProvider{}.Notify(rt, agent, Payload{Severity: SeverityInfo})
+	err := gotifyProvider{}.Notify(context.Background(), rt, agent, Payload{Severity: SeverityInfo})
 	if err == nil {
 		t.Fatal("expected error when NotifyClient is nil")
 	}
@@ -275,7 +276,7 @@ func TestGotifyNotifyMissingCredentials(t *testing.T) {
 	rt := testRuntime(newOKPoster(), nil)
 	agent := Agent{Name: "Gotify", Type: "gotify", Config: Config{}}
 
-	err := gotifyProvider{}.Notify(rt, agent, Payload{Severity: SeverityInfo})
+	err := gotifyProvider{}.Notify(context.Background(), rt, agent, Payload{Severity: SeverityInfo})
 	if err != nil {
 		t.Fatalf("expected nil for empty credentials, got: %v", err)
 	}

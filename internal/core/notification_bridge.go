@@ -3,6 +3,7 @@ package core
 import (
 	"clonarr/internal/core/agents"
 	"clonarr/internal/utils"
+	"context"
 )
 
 // notification_bridge.go provides the bridge between the core application
@@ -72,16 +73,17 @@ func ValidateNotificationAgent(agent NotificationAgent) error {
 }
 
 // TestNotificationAgent probes an inline or persisted agent configuration.
-func TestNotificationAgent(app *App, agent NotificationAgent) ([]NotificationTestResult, error) {
-	return agents.TestAgent(app.notificationRuntime(), agent)
+// The context allows callers (API handlers) to set request deadlines.
+func TestNotificationAgent(ctx context.Context, app *App, agent NotificationAgent) ([]NotificationTestResult, error) {
+	return agents.TestAgent(ctx, app.notificationRuntime(), agent)
 }
 
 // DispatchNotificationAgent sends a notification payload through one configured agent.
-// Async-capable providers (Gotify, Pushover) are dispatched via utils.SafeGo to
-// isolate panics from provider code and prevent slow external APIs from blocking
-// the caller.
+// Async-capable providers are dispatched via utils.SafeGo to isolate panics from
+// provider code and prevent slow external APIs from blocking the caller.
+// Uses context.Background because autosync dispatch has no parent context.
 func (app *App) DispatchNotificationAgent(agent NotificationAgent, payload NotificationPayload) {
-	agents.DispatchAgent(app.notificationRuntime(), agent, payload, func(name string, fn func()) {
+	agents.DispatchAgent(context.Background(), app.notificationRuntime(), agent, payload, func(name string, fn func()) {
 		utils.SafeGo(name, fn)
 	})
 }

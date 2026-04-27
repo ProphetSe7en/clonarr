@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -120,7 +121,7 @@ func TestDiscordTestHappyPath(t *testing.T) {
 		DiscordWebhookUpdates: "https://discord.com/api/webhooks/222/bbb",
 	}}
 
-	results, err := discordProvider{}.Test(rt, agent)
+	results, err := discordProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() error: %v", err)
 	}
@@ -143,7 +144,7 @@ func TestDiscordTestHTTPError(t *testing.T) {
 		DiscordWebhook: "https://discord.com/api/webhooks/111/aaa",
 	}}
 
-	results, err := discordProvider{}.Test(rt, agent)
+	results, err := discordProvider{}.Test(context.Background(), rt, agent)
 	if err != nil {
 		t.Fatalf("Test() should not return top-level error: %v", err)
 	}
@@ -164,7 +165,7 @@ func TestDiscordTestNoWebhook(t *testing.T) {
 	rt := testRuntime(nil, newOKPoster())
 	agent := Agent{Name: "Discord", Type: "discord", Config: Config{}}
 
-	_, err := discordProvider{}.Test(rt, agent)
+	_, err := discordProvider{}.Test(context.Background(), rt, agent)
 	if err == nil {
 		t.Fatal("expected error when no webhook configured")
 	}
@@ -186,7 +187,7 @@ func TestDiscordNotifyHappyPath(t *testing.T) {
 		Route:    RouteDefault,
 	}
 
-	err := discordProvider{}.Notify(rt, agent, payload)
+	err := discordProvider{}.Notify(context.Background(), rt, agent, payload)
 	if err != nil {
 		t.Fatalf("Notify() error: %v", err)
 	}
@@ -204,7 +205,7 @@ func TestDiscordNotifyHTTPError(t *testing.T) {
 		DiscordWebhook: "https://discord.com/api/webhooks/111/aaa",
 	}}
 
-	err := discordProvider{}.Notify(rt, agent, Payload{Route: RouteDefault})
+	err := discordProvider{}.Notify(context.Background(), rt, agent, Payload{Route: RouteDefault})
 	if err == nil {
 		t.Fatal("expected error on 429")
 	}
@@ -221,7 +222,7 @@ func TestDiscordNotifyNilClient(t *testing.T) {
 		DiscordWebhook: "https://discord.com/api/webhooks/111/aaa",
 	}}
 
-	err := discordProvider{}.Notify(rt, agent, Payload{Route: RouteDefault})
+	err := discordProvider{}.Notify(context.Background(), rt, agent, Payload{Route: RouteDefault})
 	if err == nil {
 		t.Fatal("expected error when SafeClient is nil")
 	}
@@ -233,7 +234,7 @@ func TestDiscordNotifyEmptyWebhook(t *testing.T) {
 	rt := testRuntime(nil, newOKPoster())
 	agent := Agent{Name: "Discord", Type: "discord", Enabled: true, Config: Config{}}
 
-	err := discordProvider{}.Notify(rt, agent, Payload{Route: RouteDefault})
+	err := discordProvider{}.Notify(context.Background(), rt, agent, Payload{Route: RouteDefault})
 	if err != nil {
 		t.Fatalf("expected nil for empty webhook, got: %v", err)
 	}
@@ -249,7 +250,7 @@ func TestDiscordNotifyRouteUpdates(t *testing.T) {
 		DiscordWebhookUpdates: "https://discord.com/api/webhooks/updates/token",
 	}}
 
-	err := discordProvider{}.Notify(rt, agent, Payload{Route: RouteUpdates})
+	err := discordProvider{}.Notify(context.Background(), rt, agent, Payload{Route: RouteUpdates})
 	if err != nil {
 		t.Fatalf("Notify() error: %v", err)
 	}
