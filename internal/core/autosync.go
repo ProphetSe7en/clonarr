@@ -465,12 +465,18 @@ func (app *App) CleanupStaleRules() {
 	}
 }
 
-// dispatchNotification sends one payload through one configured agent.
+// dispatchNotification sends one payload through one configured notification agent.
+// This is the single call site in autosync.go — all notification event builders
+// (NotifyAutoSync, NotifyCleanup, NotifyRepoUpdate, NotifyChangelog) iterate over
+// agents and delegate here.
 func (app *App) dispatchNotification(agent NotificationAgent, payload NotificationPayload) {
 	app.DispatchNotificationAgent(agent, payload)
 }
 
-// notifyCleanup sends notifications for auto-cleanup events.
+// NotifyCleanup sends notifications for auto-cleanup events.
+// Generates a markdown summary of removed rules/profiles and dispatches
+// to all agents that have OnCleanup enabled. Uses SeverityWarning to reflect
+// that cleanup is notable but not an error.
 func (app *App) NotifyCleanup(events []CleanupEvent) {
 	cfg := app.Config.Get()
 
@@ -536,7 +542,14 @@ func (app *App) UpdateAutoSyncRuleError(ruleID, errMsg string) {
 	})
 }
 
-// notifyAutoSync sends notifications for an auto-sync result.
+// NotifyAutoSync sends notifications for an auto-sync result.
+// Dispatches to agents based on the outcome:
+//   - syncErr != nil: sends to agents with OnSyncFailure enabled (red/critical).
+//   - syncErr == nil: sends to agents with OnSyncSuccess enabled (green/info).
+//
+// The notification body includes instance name, profile name, and a detailed
+// breakdown of CFs created/updated, score changes, quality changes, and
+// settings changes. Messages are truncated at ~1800 chars to respect provider limits.
 func (app *App) NotifyAutoSync(rule AutoSyncRule, inst Instance, profileName string, result *SyncResult, syncErr error) {
 	cfg := app.Config.Get()
 
@@ -624,8 +637,11 @@ func (app *App) NotifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 	}
 }
 
-// notifyRepoUpdate sends notifications when the TRaSH repo has new commits.
-// Shows actual file changes (CFs, profiles, groups) from the stored pull diff.
+// NotifyRepoUpdate sends notifications when the TRaSH Guides repository has
+// new commits. Includes the commit range and, when available, a human-readable
+// diff summary of changed CFs/profiles/groups from the stored pull diff.
+// Dispatches to agents with OnRepoUpdate enabled. Uses RouteUpdates so providers
+// with dual-channel support (Discord) deliver to the updates channel.
 func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 	cfg := app.Config.Get()
 
@@ -652,7 +668,13 @@ func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 	log.Printf("Repo update: notifications dispatched (%s → %s)", prevCommit, newCommit)
 }
 
-// notifyChangelog sends notifications when updates.txt has a new date section.
+// NotifyChangelog sends notifications when updates.txt has a new weekly date
+// section from TRaSH Guides. Builds platform-specific message bodies:
+//   - Discord/Pushover: inline bold entries with emoji icons and PR links.
+//   - Gotify: markdown bullet list for proper line-break rendering.
+//
+// Uses TypeMessages to override the Gotify body while keeping the default
+// for other providers. Dispatches to agents with OnChangelog enabled.
 func (app *App) NotifyChangelog(section ChangelogSection) {
 	cfg := app.Config.Get()
 

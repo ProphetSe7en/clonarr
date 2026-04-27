@@ -49,23 +49,32 @@ type ProwlarrConfig struct {
 	SonarrCategories []int  `json:"sonarrCategories,omitempty"`
 }
 
-// AutoSyncConfig holds global auto-sync settings and rules.
+// AutoSyncConfig holds global auto-sync settings, notification agents, and rules.
+// This is the top-level configuration object for the auto-sync subsystem.
 type AutoSyncConfig struct {
-	Enabled            bool                `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// NotificationAgents stores zero or more independently configured notification
+	// providers. Multiple enabled entries are supported, including multiple entries
+	// of the same Type (e.g. two Discord channels for different alert levels).
+	// The full provider configuration and lifecycle are managed by the agents package.
 	NotificationAgents []NotificationAgent `json:"notificationAgents,omitempty"`
 	Rules              []AutoSyncRule      `json:"rules,omitempty"`
 }
 
-// NotificationAgent is a configured notification provider instance.
-// Backed by the notification agents package so providers can evolve independently
-// from the core config store implementation.
+// NotificationAgent is the config shape of one notification provider entry.
+// This is a type alias for agents.Agent — the canonical definition and all
+// provider logic live in the agents sub-package. The alias allows the rest
+// of the core package to use the domain-specific name.
 type NotificationAgent = agents.Agent
 
-// AgentEvents controls which auto-sync events trigger this agent.
+// AgentEvents controls which application events trigger notifications for an agent.
+// Type alias for agents.Events.
 type AgentEvents = agents.Events
 
-// NotificationConfig holds provider-specific credentials and settings.
-// Adding a new provider = append fields in agents.Config + register a provider.
+// NotificationConfig holds provider-specific credentials and options for one agent.
+// This is a union struct — each provider uses only its relevant fields.
+// Adding a new provider requires extending agents.Config and registering a
+// Provider implementation.
 type NotificationConfig = agents.Config
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
@@ -630,6 +639,8 @@ func (cs *ConfigStore) migrateFlatNotifications(raw []byte) {
 }
 
 // --- Notification Agent CRUD --------------------------------------------------
+// Thread-safe operations for managing notification agents in the config.
+// All methods acquire cs.mu and persist changes to disk atomically.
 
 // GetNotificationAgent returns a notification agent by ID.
 func (cs *ConfigStore) GetNotificationAgent(id string) (NotificationAgent, bool) {

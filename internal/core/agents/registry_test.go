@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestSupportedTypesIncludesBuiltins verifies that all three built-in providers
+// (discord, gotify, pushover) are registered at startup via their init() functions.
 func TestSupportedTypesIncludesBuiltins(t *testing.T) {
 	types := SupportedTypes()
 	if len(types) < 3 {
@@ -19,6 +21,8 @@ func TestSupportedTypesIncludesBuiltins(t *testing.T) {
 	}
 }
 
+// TestValidateAgentCommon exercises the common validation path shared by all
+// providers: missing agent name and unknown agent type.
 func TestValidateAgentCommon(t *testing.T) {
 	tests := []struct {
 		name    string

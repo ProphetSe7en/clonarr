@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestDiscordValidate verifies the Discord provider's Validate logic:
+// missing webhook, invalid URL prefix, invalid updates webhook, and valid config.
 func TestDiscordValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -59,6 +61,9 @@ func TestDiscordValidate(t *testing.T) {
 	}
 }
 
+// TestDiscordMaskAndPreserve verifies the credential mask/preserve round-trip:
+// MaskConfigByType replaces webhook URLs with placeholders, and PreserveConfigByType
+// restores the originals when those placeholders are submitted back.
 func TestDiscordMaskAndPreserve(t *testing.T) {
 	cfg := Config{
 		DiscordWebhook:        "https://discord.com/api/webhooks/111/aaa",
@@ -82,6 +87,9 @@ func TestDiscordMaskAndPreserve(t *testing.T) {
 	}
 }
 
+// TestDiscordResolveWebhook verifies route-based webhook selection:
+// RouteDefault → main webhook, RouteUpdates → updates webhook (with fallback
+// to main when updates webhook is empty).
 func TestDiscordResolveWebhook(t *testing.T) {
 	p := discordProvider{}
 	agent := Agent{Config: Config{
