@@ -7481,6 +7481,7 @@ function clonarr() {
         case 'discord':   return !!c.discordWebhook;
         case 'gotify':    return !!c.gotifyUrl && !!c.gotifyToken;
         case 'pushover':  return !!c.pushoverUserKey && !!c.pushoverAppToken;
+        case 'ntfy':      return !!c.ntfyTopicUrl;
         default:          return false;
       }
     },

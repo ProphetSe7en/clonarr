@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -554,6 +555,42 @@ func (app *App) sendGotify(agent NotificationAgent, title, message, level string
 	resp.Body.Close()
 }
 
+// sendNtfy sends a notification to an ntfy topic. color maps to ntfy priority:
+// red (failure) → 5/urgent, anything else → 3/default.
+func (app *App) sendNtfy(agent NotificationAgent, title, message string, color int) {
+	nc := agent.Config
+	if nc.NtfyTopicURL == "" {
+		return
+	}
+
+	priority := "3"
+	if color == 0xf85149 {
+		priority = "5"
+	}
+
+	req, err := http.NewRequest("POST", nc.NtfyTopicURL, strings.NewReader(message))
+	if err != nil {
+		log.Printf("Ntfy: build request failed: %v", err)
+		return
+	}
+	req.Header.Set("Title", title)
+	req.Header.Set("Priority", priority)
+	req.Header.Set("Markdown", "yes")
+	if nc.NtfyToken != "" {
+		req.Header.Set("Authorization", "Bearer "+nc.NtfyToken)
+	}
+
+	resp, err := app.NotifyClient.Do(req)
+	if err != nil {
+		log.Printf("Ntfy: send failed: %v", err)
+		return
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		log.Printf("Ntfy: server returned %d", resp.StatusCode)
+	}
+}
+
 // sendPushover sends a Pushover push notification at normal priority.
 func (app *App) sendPushover(agent NotificationAgent, title, message string) {
 	nc := agent.Config
@@ -607,6 +644,8 @@ func (app *App) dispatchNotification(agent NotificationAgent, title, discordMsg,
 		utils.SafeGo("notify-gotify", func() { app.sendGotify(agent, title, gotifyMsg, level) })
 	case "pushover":
 		utils.SafeGo("notify-pushover", func() { app.sendPushover(agent, title, discordMsg) })
+	case "ntfy":
+		utils.SafeGo("notify-ntfy", func() { app.sendNtfy(agent, title, gotifyMsg, color) })
 	}
 }
 

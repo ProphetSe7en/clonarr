@@ -23,6 +23,8 @@ func maskAgentConfig(agentType string, nc core.NotificationConfig) core.Notifica
 	case "pushover":
 		nc.PushoverUserKey = maskSecret(nc.PushoverUserKey, maskedToken)
 		nc.PushoverAppToken = maskSecret(nc.PushoverAppToken, maskedToken)
+	case "ntfy":
+		nc.NtfyToken = maskSecret(nc.NtfyToken, maskedToken)
 	}
 	return nc
 }
@@ -39,6 +41,8 @@ func preserveAgentConfig(agentType string, incoming, existing core.NotificationC
 	case "pushover":
 		incoming.PushoverUserKey = preserveIfMasked(strings.TrimSpace(incoming.PushoverUserKey), existing.PushoverUserKey, maskedToken)
 		incoming.PushoverAppToken = preserveIfMasked(strings.TrimSpace(incoming.PushoverAppToken), existing.PushoverAppToken, maskedToken)
+	case "ntfy":
+		incoming.NtfyToken = preserveIfMasked(strings.TrimSpace(incoming.NtfyToken), existing.NtfyToken, maskedToken)
 	}
 	return incoming
 }
@@ -73,8 +77,16 @@ func validateAgentConfig(agent core.NotificationAgent) error {
 		if strings.TrimSpace(agent.Config.PushoverUserKey) == "" || strings.TrimSpace(agent.Config.PushoverAppToken) == "" {
 			return fmt.Errorf("pushover user key and app token are required")
 		}
+	case "ntfy":
+		if strings.TrimSpace(agent.Config.NtfyTopicURL) == "" {
+			return fmt.Errorf("ntfy topic URL is required")
+		}
+		u := strings.TrimSpace(agent.Config.NtfyTopicURL)
+		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+			return fmt.Errorf("ntfy topic URL must start with http:// or https://")
+		}
 	default:
-		return fmt.Errorf("unknown agent type: %q (expected discord | gotify | pushover)", agent.Type)
+		return fmt.Errorf("unknown agent type: %q (expected discord | gotify | pushover | ntfy)", agent.Type)
 	}
 	return nil
 }
@@ -257,6 +269,37 @@ func (s *Server) runNotificationAgentTest(w http.ResponseWriter, req core.Notifi
 			if resp.StatusCode >= 400 {
 				res.Status = "error"
 				res.Error = fmt.Sprintf("Pushover returned %d", resp.StatusCode)
+			}
+		}
+		results = append(results, res)
+
+	case "ntfy":
+		nc := req.Config
+		if nc.NtfyTopicURL == "" {
+			writeError(w, 400, "Topic URL is required")
+			return
+		}
+		res := testResult{Label: "Ntfy", Status: "ok"}
+		httpReq, err := http.NewRequest("POST", nc.NtfyTopicURL, strings.NewReader("If you see this, ntfy is configured correctly!"))
+		if err != nil {
+			res.Status = "error"
+			res.Error = fmt.Sprintf("Invalid topic URL: %v", err)
+		} else {
+			httpReq.Header.Set("Title", "Clonarr Test")
+			httpReq.Header.Set("Priority", "3")
+			if nc.NtfyToken != "" {
+				httpReq.Header.Set("Authorization", "Bearer "+nc.NtfyToken)
+			}
+			resp, err := s.Core.NotifyClient.Do(httpReq)
+			if err != nil {
+				res.Status = "error"
+				res.Error = fmt.Sprintf("Failed to reach ntfy: %v", err)
+			} else {
+				resp.Body.Close()
+				if resp.StatusCode >= 400 {
+					res.Status = "error"
+					res.Error = fmt.Sprintf("ntfy returned %d", resp.StatusCode)
+				}
 			}
 		}
 		results = append(results, res)

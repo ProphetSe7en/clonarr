@@ -59,7 +59,7 @@ type AutoSyncConfig struct {
 type NotificationAgent struct {
 	ID      string             `json:"id"`
 	Name    string             `json:"name"`    // user-defined label, e.g. "Discord #alerts"
-	Type    string             `json:"type"`    // "discord" | "gotify" | "pushover"
+	Type    string             `json:"type"`    // "discord" | "gotify" | "pushover" | "ntfy"
 	Enabled bool               `json:"enabled"`
 	Events  AgentEvents        `json:"events"`
 	Config  NotificationConfig `json:"config"`
@@ -93,6 +93,9 @@ type NotificationConfig struct {
 	// Pushover
 	PushoverUserKey  string `json:"pushoverUserKey,omitempty"`
 	PushoverAppToken string `json:"pushoverAppToken,omitempty"`
+	// Ntfy
+	NtfyTopicURL string `json:"ntfyTopicUrl,omitempty"` // full URL including topic, e.g. https://ntfy.sh/my-alerts
+	NtfyToken    string `json:"ntfyToken,omitempty"`    // Bearer token (optional for unauthenticated servers)
 }
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
