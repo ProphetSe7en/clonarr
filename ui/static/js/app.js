@@ -365,6 +365,7 @@ function clonarr() {
     cleanupResult: null,
     cleanupScanning: false,
     cleanupApplying: false,
+    cleanupFilter: 'all', // unused-by-clonarr only: 'all' | 'rename-flagged' | 'managed'
 
     syncForm: { instanceId: '', instanceName: '', appType: '', profileTrashId: '', importedProfileId: '', profileName: '', arrProfileId: '0', newProfileName: '', behavior: { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' } },
     arrProfiles: [],
@@ -4405,6 +4406,7 @@ function clonarr() {
           return;
         }
         this.cleanupResult = await resp.json();
+        this.cleanupFilter = 'all';
       } catch (e) {
         this.showToast('Scan failed: ' + e.message, 'error', 8000);
       } finally {
@@ -4412,11 +4414,41 @@ function clonarr() {
       }
     },
 
-    async cleanupApply() {
+    async cleanupApply(opts = {}) {
       if (!this.cleanupResult?.items?.length) return;
+      // For unused-by-clonarr, the user can opt to keep rename-flagged CFs
+      // (the safer default) or delete everything. Other cleanup actions
+      // ignore opts and delete the full item list.
+      const items = opts.skipRenameFlagged
+        ? this.cleanupResult.items.filter(i => !i.renamingFlag)
+        : this.cleanupResult.items;
+      if (items.length === 0) return;
+
+      // Build a clear confirmation message — count + (if rename-tags
+      // included) what they are. Destructive actions need explicit ack.
+      const includesRenameTags = !opts.skipRenameFlagged && items.some(i => i.renamingFlag);
+      const renameCount = items.filter(i => i.renamingFlag).length;
+      let message = `Permanently delete ${items.length} custom format${items.length === 1 ? '' : 's'} from ${this.cleanupResult.instance}?`;
+      if (includesRenameTags && renameCount > 0) {
+        message += `\n\nIncludes ${renameCount} CF${renameCount === 1 ? '' : 's'} tagged for filename rendering. Future renames will no longer include their tags (e.g. [AMZN], [v2]). Existing files on disk are unaffected.`;
+      }
+      message += `\n\nThis cannot be undone, but you can re-sync any TRaSH or builder profile to recreate CFs.`;
+
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = {
+          show: true,
+          title: 'Delete Custom Formats',
+          message,
+          confirmLabel: `Delete ${items.length}`,
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        };
+      });
+      if (!confirmed) return;
+
       this.cleanupApplying = true;
       try {
-        const ids = this.cleanupResult.items.map(i => i.id);
+        const ids = items.map(i => i.id);
         const resp = await fetch('/api/instances/' + this.cleanupResult.instanceId + '/cleanup/apply', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -5157,8 +5189,23 @@ function clonarr() {
         const r = await fetch('/api/cleanup-events');
         if (!r.ok) return;
         const events = await r.json();
+        if (events.length === 0) return;
+        // Coalesce per instance: bulk deletions in Arr would otherwise spawn
+        // one toast per affected profile, stacking 25+ deep with their own
+        // scrollbar. One toast per instance with first-three names + count
+        // is informative without being a wall of yellow.
+        const byInstance = {};
         for (const ev of events) {
-          this.showToast(`"${ev.profileName}" — deleted in ${ev.instanceName}, sync rule removed`, 'warning', 6000);
+          (byInstance[ev.instanceName] = byInstance[ev.instanceName] || []).push(ev.profileName);
+        }
+        for (const [instanceName, names] of Object.entries(byInstance)) {
+          if (names.length === 1) {
+            this.showToast(`"${names[0]}" — deleted in ${instanceName}, sync rule removed`, 'warning', 6000);
+          } else {
+            const preview = names.slice(0, 3).map(n => `"${n}"`).join(', ');
+            const extra = names.length > 3 ? ` and ${names.length - 3} more` : '';
+            this.showToast(`${names.length} profiles deleted in ${instanceName}, sync rules removed:\n${preview}${extra}`, 'warning', 8000);
+          }
         }
       } catch (e) { /* ignore */ }
     },
@@ -7088,6 +7135,63 @@ function clonarr() {
         }
         await this.loadSyncHistory(instanceId);
       } catch (e) { console.error('removeSyncHistory:', e); }
+    },
+
+    // Restore an orphaned sync rule: re-create the profile in Arr from the
+    // last synced state. Surfaces 409 name-collision errors via a rename
+    // prompt loop until the user provides a unique name or cancels.
+    async restoreOrphanedRule(inst, sh) {
+      const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+      if (!rule) {
+        this.showToast('Cannot restore: sync rule no longer exists', 'error', 6000);
+        return;
+      }
+      const cfCount = (sh.syncedCFs || []).length;
+      const scoreCount = Object.keys(sh.scoreOverrides || {}).length;
+      const baseMessage = `Recreate "${sh.profileName}" in ${inst.name} from the last synced state?\n\n${cfCount} custom format${cfCount === 1 ? '' : 's'}, ${scoreCount} score override${scoreCount === 1 ? '' : 's'}, plus saved quality items and settings will be re-pushed. A new ArrProfileID will be assigned.`;
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Restore Profile', message: baseMessage, confirmLabel: 'Restore', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!confirmed) return;
+
+      let newName = '';
+      // Loop on 409 collision until success or user cancels.
+      for (;;) {
+        const body = newName ? JSON.stringify({ newName }) : '';
+        const resp = await fetch(`/api/auto-sync/rules/${rule.id}/restore`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        if (resp.status === 409) {
+          const conflict = await resp.json().catch(() => ({}));
+          const promptMsg = `${conflict.error || 'Name conflict'}\n\nProvide a different name to use for the restored profile.`;
+          newName = await new Promise(resolve => {
+            this.inputModal = {
+              show: true,
+              title: 'Profile Name Conflict',
+              message: promptMsg,
+              value: conflict.suggested || '',
+              placeholder: 'New profile name',
+              confirmLabel: 'Restore with this name',
+              onConfirm: (val) => resolve((val || '').trim()),
+              onCancel: () => resolve(null),
+            };
+          });
+          if (!newName) return; // user cancelled
+          continue; // retry with new name
+        }
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast('Restore failed: ' + (err.error || resp.status), 'error', 8000);
+          return;
+        }
+        const result = await resp.json();
+        this.showToast(`Restored "${result.arrProfileName}" — ${result.cfsCreated} CF${result.cfsCreated === 1 ? '' : 's'} created, ${result.scoresUpdated} score${result.scoresUpdated === 1 ? '' : 's'} set`, 'info', 6000);
+        await this.loadAutoSyncRules();
+        await this.loadSyncHistory(inst.id);
+        return;
+      }
     },
 
     // Deduplicate sync history to latest entry per arrProfileId (entries are newest-first

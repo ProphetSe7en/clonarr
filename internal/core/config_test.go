@@ -162,3 +162,60 @@ func TestMigrateFlatNotificationsEmpty(t *testing.T) {
 		t.Errorf("want 0 agents for empty config, got %d", n)
 	}
 }
+
+// TestDeleteSyncHistory_RemovesAllMatching verifies that DeleteSyncHistory
+// removes EVERY entry with the matching (instanceID, arrProfileID) pair —
+// not just the first one. A profile that's been synced multiple times has
+// multiple history entries; the UI dedupes them to one row, so a single
+// delete must clear all of them.
+func TestDeleteSyncHistory_RemovesAllMatching(t *testing.T) {
+	dir := t.TempDir()
+	cs := NewConfigStore(dir)
+	if err := cs.Update(func(cfg *Config) {
+		cfg.SyncHistory = []SyncHistoryEntry{
+			{InstanceID: "inst-A", ArrProfileID: 10, ProfileName: "first"},
+			{InstanceID: "inst-A", ArrProfileID: 10, ProfileName: "second"},
+			{InstanceID: "inst-A", ArrProfileID: 10, ProfileName: "third"},
+			{InstanceID: "inst-A", ArrProfileID: 99, ProfileName: "different-profile"},
+			{InstanceID: "inst-B", ArrProfileID: 10, ProfileName: "different-instance"},
+		}
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := cs.DeleteSyncHistory("inst-A", 10); err != nil {
+		t.Fatalf("DeleteSyncHistory: %v", err)
+	}
+
+	got := cs.Get().SyncHistory
+	if len(got) != 2 {
+		t.Errorf("want 2 entries left, got %d: %+v", len(got), got)
+	}
+	for _, sh := range got {
+		if sh.InstanceID == "inst-A" && sh.ArrProfileID == 10 {
+			t.Errorf("entry for (inst-A, 10) was not removed: %+v", sh)
+		}
+	}
+}
+
+// TestDeleteSyncHistory_NotFound verifies that calling delete on a
+// non-existent (instanceID, arrProfileID) pair returns an error and leaves
+// existing entries untouched.
+func TestDeleteSyncHistory_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	cs := NewConfigStore(dir)
+	if err := cs.Update(func(cfg *Config) {
+		cfg.SyncHistory = []SyncHistoryEntry{
+			{InstanceID: "inst-A", ArrProfileID: 10},
+		}
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := cs.DeleteSyncHistory("inst-A", 999); err == nil {
+		t.Error("want error for missing entry, got nil")
+	}
+	if got := cs.Get().SyncHistory; len(got) != 1 {
+		t.Errorf("untouched entries should remain, got %d", len(got))
+	}
+}

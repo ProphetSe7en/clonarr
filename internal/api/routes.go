@@ -102,6 +102,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auto-sync/rules", s.handleCreateAutoSyncRule)
 	mux.HandleFunc("PUT /api/auto-sync/rules/{id}", s.handleUpdateAutoSyncRule)
 	mux.HandleFunc("DELETE /api/auto-sync/rules/{id}", s.handleDeleteAutoSyncRule)
+	mux.HandleFunc("POST /api/auto-sync/rules/{id}/restore", s.handleRestoreAutoSyncRule)
 
 	// Cleanup events
 	mux.HandleFunc("GET /api/cleanup-events", s.handleCleanupEvents)
