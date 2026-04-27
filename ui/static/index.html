@@ -199,12 +199,18 @@
                         <span style="width:180px;flex-shrink:0;text-align:center">Actions</span>
                       </div>
                       <template x-for="sh in sortedSyncRules(inst.id)" :key="sh.arrProfileId">
-                        <div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;gap:8px;font-size:12px">
-                          <span style="color:#58a6ff;font-weight:500;width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="sh.profileName"></span>
+                        <div :style="'display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;gap:8px;font-size:12px;' + (sh.orphanedAt ? 'background:#1f1305' : '')">
+                          <span :style="'color:' + (sh.orphanedAt ? '#aaa' : '#58a6ff') + ';font-weight:500;width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'" x-text="sh.profileName"></span>
                           <span style="color:#aaa;flex-shrink:0;font-size:15px;width:20px;text-align:center">&rarr;</span>
                           <span style="width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
                                 x-data="{ editing: false, newName: '' }">
-                            <template x-if="!editing">
+                            <template x-if="sh.orphanedAt">
+                              <span>
+                                <span style="color:#aaa;text-decoration:line-through" x-text="sh.arrProfileName"></span>
+                                <span style="background:#3d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;margin-left:6px" :title="'Profile deleted in Arr — ' + (sh.orphanedAt || '')">orphaned</span>
+                              </span>
+                            </template>
+                            <template x-if="!sh.orphanedAt && !editing">
                               <span>
                                 <span style="color:#e1e4e8;cursor:pointer;border-bottom:1px dashed #30363d" @click.stop="newName = sh.arrProfileName; editing = true" title="Click to rename in Arr" x-text="sh.arrProfileName"></span>
                                 <span style="color:#aaa;font-size:12px" x-text="'ID ' + sh.arrProfileId"></span>
@@ -220,15 +226,16 @@
                             </template>
                           </span>
                           <div style="display:flex;align-items:center;gap:4px;width:100px;flex-shrink:0">
-                              <label class="toggle toggle-sm" @click.stop title="Toggle auto-sync for this profile">
+                              <label class="toggle toggle-sm" @click.stop :title="sh.orphanedAt ? 'Restore the profile to re-enable auto-sync' : 'Toggle auto-sync for this profile'">
                                 <input type="checkbox"
-                                       :checked="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled"
-                                       @change="(() => { const rule = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (rule) toggleAutoSyncRule(rule); })()">
+                                       :disabled="!!sh.orphanedAt"
+                                       :checked="!sh.orphanedAt && autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled"
+                                       @change="(() => { if (sh.orphanedAt) return; const rule = autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId); if (rule) toggleAutoSyncRule(rule); })()">
                                 <span class="slider"></span>
                               </label>
                               <span style="font-size:11px"
-                                    :style="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'color:#3fb950' : 'color:#f8514980'"
-                                    x-text="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'auto-sync' : 'auto-sync off'"></span>
+                                    :style="sh.orphanedAt ? 'color:#666' : (autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'color:#3fb950' : 'color:#f8514980')"
+                                    x-text="sh.orphanedAt ? 'orphaned' : (autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'auto-sync' : 'auto-sync off')"></span>
                           </div>
                           <span style="flex:1;display:flex;gap:8px;align-items:center;justify-content:flex-end">
                             <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">
@@ -252,10 +259,19 @@
                             <span style="color:#aaa;flex-shrink:0" x-text="timeAgo(sh.lastSync)"></span>
                           </span>
                           <span style="display:flex;gap:6px;flex-shrink:0;align-items:center">
-                            <button class="btn-icon" @click.stop="resyncProfile(inst, sh)" title="Edit sync settings">&#9998;</button>
-                            <button class="btn-icon" style="color:#3fb950" @click.stop="quickSync(inst, sh)" title="Re-sync with saved settings">&#8635;</button>
-                            <button class="btn-icon" style="color:#58a6ff" @click.stop="cloneProfile(inst, sh)" title="Clone to new profile">&#10697;</button>
-                            <button class="btn-icon" style="color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" title="Remove sync rule">&#10005;</button>
+                            <template x-if="sh.orphanedAt">
+                              <button class="btn" style="padding:3px 10px;font-size:11px;background:#0d2818;border:1px solid #1f6f3d;color:#7ee787" @click.stop="restoreOrphanedRule(inst, sh)" title="Recreate this profile in Arr from the last synced state">&#8634; Restore</button>
+                            </template>
+                            <template x-if="!sh.orphanedAt">
+                              <button class="btn-icon" @click.stop="resyncProfile(inst, sh)" title="Edit sync settings">&#9998;</button>
+                            </template>
+                            <template x-if="!sh.orphanedAt">
+                              <button class="btn-icon" style="color:#3fb950" @click.stop="quickSync(inst, sh)" title="Re-sync with saved settings">&#8635;</button>
+                            </template>
+                            <template x-if="!sh.orphanedAt">
+                              <button class="btn-icon" style="color:#58a6ff" @click.stop="cloneProfile(inst, sh)" title="Clone to new profile">&#10697;</button>
+                            </template>
+                            <button class="btn-icon" style="color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" :title="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
                           </span>
                         </div>
                       </template>
@@ -381,6 +397,14 @@
                       </template>
                       <template x-if="!historyLoading && historyEntries.filter(e => e.changes).length > 0">
                         <div style="padding:6px 16px 6px 32px">
+                          <!-- Orphaned banner — shown when any entry in this profile's
+                               history is marked orphaned. All entries for one ArrProfileID
+                               share the same orphaned state, so we just check the first. -->
+                          <template x-if="historyEntries.some(e => e.orphanedAt)">
+                            <div style="margin:4px 0 8px 0;padding:8px 12px;background:#3d2410;border:1px solid #d29922;border-radius:6px;font-size:12px;color:#e3b341;line-height:1.55">
+                              <strong>This profile is orphaned</strong> — its target was deleted in Arr. These entries describe the pre-deletion state and Rollback is disabled. Click Restore on the sync row above to recreate the profile from this saved state. After a successful restore, these entries are cleared automatically.
+                            </div>
+                          </template>
                           <!-- Sub-table column headers -->
                           <div style="display:flex;align-items:center;padding:4px 0;gap:8px;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #21262d;margin-bottom:2px">
                             <span style="width:150px;flex-shrink:0">Date</span>
@@ -418,9 +442,11 @@
                                   <span x-show="!entry.changes.settingsDetails?.length" style="color:#30363d">—</span>
                                 </span>
                                 <span style="flex:1"></span>
-                                <button class="btn" style="font-size:11px;padding:2px 8px;border-color:#d29922;color:#d29922;flex-shrink:0"
-                                        @click.stop="rollbackSync(inst, entry, ei)"
-                                        title="Re-sync this profile to the state from this point in time. Auto-sync will be disabled.">Rollback</button>
+                                <button class="btn" style="font-size:11px;padding:2px 8px;flex-shrink:0"
+                                        :style="entry.orphanedAt ? 'opacity:0.4;cursor:not-allowed;border-color:#30363d;color:#666' : 'border-color:#d29922;color:#d29922'"
+                                        :disabled="!!entry.orphanedAt"
+                                        @click.stop="if (!entry.orphanedAt) rollbackSync(inst, entry, ei)"
+                                        :title="entry.orphanedAt ? 'Cannot rollback — the target profile is orphaned (deleted in Arr). Use Restore on the sync row first.' : 'Re-sync this profile to the state from this point in time. Auto-sync will be disabled.'">Rollback</button>
                               </div>
                               <!-- Expanded detail -->
                               <div x-show="historyDetailIdx === ei" style="margin:4px 0 8px 16px;padding:10px 14px;background:#161b22;border-left:2px solid #58a6ff;border-radius:0 6px 6px 0;font-size:12px;line-height:1.7">
@@ -4030,16 +4056,118 @@
                   <template x-if="!['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
                     <div>
                       <div style="font-size:13px;color:#e1e4e8;margin-bottom:12px">
-                        Found <strong x-text="cleanupResult.affectCount"></strong> items out of <span x-text="cleanupResult.totalCount"></span> total CFs.
-                      </div>
-                      <div style="columns:2;column-gap:16px;font-size:12px">
-                        <template x-for="item in cleanupResult.items" :key="item.id">
-                          <div style="break-inside:avoid;padding:4px 8px;margin-bottom:4px;background:#161b22;border-radius:4px;border-left:3px solid #30363d">
-                            <div style="color:#e1e4e8;font-weight:500" x-text="item.name"></div>
-                            <div x-show="item.detail" style="color:#aaa;font-size:13px;margin-top:1px" x-text="item.detail"></div>
-                          </div>
+                        Found <strong x-text="cleanupResult.affectCount"></strong> unmanaged items out of <span x-text="cleanupResult.totalCount"></span> total CFs.
+                        <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag)">
+                          <span style="color:#aaa">
+                            (<span x-text="cleanupResult.items.filter(i => i.renamingFlag).length"></span> tagged for filename rendering — see info below)
+                          </span>
                         </template>
                       </div>
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.namingUsesCustomFormats && cleanupResult.items.some(i => i.renamingFlag)">
+                        <div style="margin-bottom:12px;padding:12px 14px;background:#0f2238;border:1px solid #2a4d7a;border-radius:6px;font-size:13px;color:#b3c7dc;line-height:1.6">
+                          <div style="font-weight:600;color:#79b8ff;margin-bottom:6px;font-size:14px">ⓘ About filename-rendering CFs</div>
+                          Your file naming format on this instance contains <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">{Custom Formats}</code>.
+                          The CFs marked <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:12px;font-weight:500">rename tag</span> below contribute their names to filenames Radarr/Sonarr renders after import (e.g. <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">[AMZN]</code>, <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">[v2]</code>).
+                          Deleting them removes those tags from <em>future</em> renames; existing files on disk are unaffected. If you re-sync any TRaSH or builder profile that includes them, they're recreated automatically.
+                        </div>
+                      </template>
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr' && !cleanupResult.namingUsesCustomFormats && cleanupResult.items.some(i => i.renamingFlag)">
+                        <div style="margin-bottom:12px;padding:12px 14px;background:#0d2818;border:1px solid #1f6f3d;border-radius:6px;font-size:13px;color:#b3d4be;line-height:1.6">
+                          <div style="font-weight:600;color:#3fb950;margin-bottom:6px;font-size:14px">ⓘ Filename-rendering CFs are inert here</div>
+                          Some CFs below have a "rename tag" flag, but your file naming format on this instance does <strong>not</strong> use the <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">{Custom Formats}</code> token, so the flag has no functional effect. Safe to delete.
+                        </div>
+                      </template>
+
+                      <!-- Filter tabs (unused-by-clonarr only) -->
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr'">
+                        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+                          <button class="btn"
+                            :style="cleanupFilter === 'all' ? 'background:#1f6feb;border-color:#1f6feb;color:#fff' : ''"
+                            @click="cleanupFilter = 'all'"
+                            x-text="'All unmanaged (' + cleanupResult.items.length + ')'"></button>
+                          <template x-if="cleanupResult.items.some(i => i.renamingFlag)">
+                            <button class="btn"
+                              :style="cleanupFilter === 'rename-flagged' ? 'background:#d29922;border-color:#d29922;color:#000' : ''"
+                              @click="cleanupFilter = 'rename-flagged'"
+                              x-text="'Rename-tagged only (' + cleanupResult.items.filter(i => i.renamingFlag).length + ')'"></button>
+                          </template>
+                          <template x-if="(cleanupResult.managedItems || []).length > 0">
+                            <button class="btn"
+                              :style="cleanupFilter === 'managed' ? 'background:#238636;border-color:#238636;color:#fff' : ''"
+                              @click="cleanupFilter = 'managed'"
+                              x-text="'Managed by Clonarr (' + (cleanupResult.managedItems || []).length + ')'"></button>
+                          </template>
+                        </div>
+                      </template>
+
+                      <!-- Items table — unmanaged + rename-flagged variants -->
+                      <template x-if="cleanupResult.action !== 'unused-by-clonarr' || cleanupFilter !== 'managed'">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px">
+                          <thead>
+                            <tr style="text-align:left;color:#aaa;border-bottom:1px solid #30363d">
+                              <th style="padding:6px 8px;font-weight:500">Custom Format</th>
+                              <th style="padding:6px 8px;font-weight:500;width:120px">Tag</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="item in (cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'rename-flagged' ? cleanupResult.items.filter(i => i.renamingFlag) : cleanupResult.items)" :key="item.id">
+                              <tr style="border-bottom:1px solid #21262d">
+                                <td style="padding:6px 8px;color:#e1e4e8">
+                                  <span x-text="item.name"></span>
+                                  <span x-show="item.detail" style="color:#aaa;display:block;font-size:11px;margin-top:2px" x-text="item.detail"></span>
+                                </td>
+                                <td style="padding:6px 8px">
+                                  <template x-if="item.renamingFlag">
+                                    <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500" title="includeCustomFormatWhenRenaming=true on this CF">rename tag</span>
+                                  </template>
+                                </td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </template>
+
+                      <!-- Managed-by-clonarr table — read-only, with profile usage column -->
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'managed'">
+                        <div>
+                          <div style="font-size:12px;color:#aaa;margin-bottom:8px;line-height:1.5">
+                            These CFs are referenced by one of your sync rules (selected, score-overridden, or required by the rule's TRaSH/builder profile). They cannot be deleted from this view. The "Used in profile(s)" column shows which Arr quality profile(s) currently have the CF at a non-zero score.
+                          </div>
+                          <table style="width:100%;border-collapse:collapse;font-size:12px">
+                            <thead>
+                              <tr style="text-align:left;color:#aaa;border-bottom:1px solid #30363d">
+                                <th style="padding:6px 8px;font-weight:500">Custom Format</th>
+                                <th style="padding:6px 8px;font-weight:500">Used in profile(s)</th>
+                                <th style="padding:6px 8px;font-weight:500;width:120px">Tag</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <template x-for="item in (cleanupResult.managedItems || [])" :key="item.id">
+                                <tr style="border-bottom:1px solid #21262d">
+                                  <td style="padding:6px 8px;color:#e1e4e8;font-weight:500" x-text="item.name"></td>
+                                  <td style="padding:6px 8px;color:#aaa">
+                                    <template x-if="(item.usedInProfiles || []).length > 0">
+                                      <div style="display:flex;flex-wrap:wrap;gap:4px">
+                                        <template x-for="prof in (item.usedInProfiles || [])" :key="prof">
+                                          <span style="background:#0d2818;border:1px solid #1f6f3d;color:#7ee787;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:500;line-height:1.4" x-text="prof"></span>
+                                        </template>
+                                      </div>
+                                    </template>
+                                    <template x-if="(item.usedInProfiles || []).length === 0">
+                                      <span style="color:#666;font-style:italic;font-size:11px">— (in sync rule but not yet at non-zero score in any profile)</span>
+                                    </template>
+                                  </td>
+                                  <td style="padding:6px 8px">
+                                    <template x-if="item.renamingFlag">
+                                      <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500">rename tag</span>
+                                    </template>
+                                  </td>
+                                </tr>
+                              </template>
+                            </tbody>
+                          </table>
+                        </div>
+                      </template>
                     </div>
                   </template>
                   <template x-if="cleanupResult.action === 'delete-cfs-and-scores'">
@@ -4057,13 +4185,31 @@
             </div>
           </template>
         </div>
-        <div class="modal-footer" x-show="cleanupResult.applied === undefined && cleanupResult.affectCount > 0">
+        <div class="modal-footer" x-show="cleanupResult.applied === undefined && cleanupResult.affectCount > 0 && !(cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'managed')">
           <button class="btn" @click="cleanupResult = null">Cancel</button>
-          <button class="btn" :class="['delete-cfs-and-scores','delete-cfs-keep-scores','unused-by-clonarr'].includes(cleanupResult.action) ? 'btn-danger' : 'btn-primary'"
-            @click="cleanupApply()" :disabled="cleanupApplying">
-            <span x-show="cleanupApplying" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
-            <span x-show="!cleanupApplying" x-text="((cleanupResult.action?.startsWith('delete') || cleanupResult.action === 'unused-by-clonarr') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span>
-          </button>
+          <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag)">
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-danger" style="padding:5px 10px;font-size:12px" @click="cleanupApply({ skipRenameFlagged: true })" :disabled="cleanupApplying" title="Keep CFs tagged for filename rendering">
+                <span x-show="cleanupApplying" class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+                <span x-show="!cleanupApplying" x-text="'Delete safe (' + cleanupResult.items.filter(i => !i.renamingFlag).length + ')'"></span>
+              </button>
+              <button class="btn" style="padding:5px 10px;font-size:12px;background:transparent;border:1px solid #f85149;color:#f85149" @click="cleanupApply({ skipRenameFlagged: false })" :disabled="cleanupApplying" title="Also delete CFs tagged for filename rendering">
+                <span x-show="cleanupApplying" class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+                <span x-show="!cleanupApplying" x-text="'Delete all (' + cleanupResult.affectCount + ')'"></span>
+              </button>
+            </div>
+          </template>
+          <template x-if="!(cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag))">
+            <button class="btn" :class="['delete-cfs-and-scores','delete-cfs-keep-scores','unused-by-clonarr'].includes(cleanupResult.action) ? 'btn-danger' : 'btn-primary'"
+              @click="cleanupApply()" :disabled="cleanupApplying">
+              <span x-show="cleanupApplying" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+              <span x-show="!cleanupApplying" x-text="((cleanupResult.action?.startsWith('delete') || cleanupResult.action === 'unused-by-clonarr') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span>
+            </button>
+          </template>
+        </div>
+        <!-- Managed-tab close-only footer -->
+        <div class="modal-footer" x-show="cleanupResult.applied === undefined && cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'managed'">
+          <button class="btn btn-primary" @click="cleanupResult = null">Close</button>
         </div>
         <div class="modal-footer" x-show="cleanupResult.applied !== undefined">
           <button class="btn btn-primary" @click="cleanupResult = null">Close</button>

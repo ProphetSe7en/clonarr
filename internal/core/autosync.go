@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,9 @@ func (app *App) AutoSyncAfterPull() {
 	for _, rule := range cfg.AutoSync.Rules {
 		if !rule.Enabled {
 			continue
+		}
+		if rule.OrphanedAt != "" {
+			continue // orphaned (target profile gone from Arr) — needs Restore or Remove
 		}
 		if rule.ProfileSource == "imported" {
 			continue // builder profiles are manual-sync only
@@ -334,27 +338,101 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	}
 }
 
-// cleanupStaleRules removes auto-sync rules and sync history for Arr profiles that no longer exist.
-// Only acts on instances that are reachable — unreachable instances are skipped (never deletes on connection error).
+// applyOrphanMarking is the pure-logic core of soft-tombstone cleanup —
+// no I/O, no logging side-effects, no app state. Given a config, the set
+// of valid Arr profile IDs per reachable instance, and a timestamp, it
+// mutates rules + history in-place to reflect orphan transitions and
+// returns the user-visible CleanupEvents. Extracted as a free function
+// so unit tests can drive every transition (mark, clear, idempotent,
+// unreachable-skip) without spinning up an httptest Arr.
+//
+// validProfiles map semantics:
+//
+//	missing key   → instance not probed (e.g. unreachable) — never mutate
+//	present key   → instance was probed; value is the set of valid IDs
+//	  empty value → instance returned 0 profiles, treat as "all gone"
+//	                (intentional after dropping the old startup-skip safety)
+//
+// instNames is used only to populate user-facing CleanupEvent.InstanceName.
+// Pass "" for instances that aren't found if you don't have the lookup
+// — the function won't error.
+func applyOrphanMarking(cfg *Config, validProfiles map[string]map[int]bool, instNames map[string]string, now string) []CleanupEvent {
+	var events []CleanupEvent
+	for i := range cfg.AutoSync.Rules {
+		r := &cfg.AutoSync.Rules[i]
+		valid, ok := validProfiles[r.InstanceID]
+		if !ok {
+			continue // unreachable instance — leave as-is
+		}
+		profileExists := valid[r.ArrProfileID]
+		if !profileExists && r.OrphanedAt == "" {
+			r.OrphanedAt = now
+		} else if profileExists && r.OrphanedAt != "" {
+			r.OrphanedAt = ""
+		}
+	}
+
+	// Mirror onto sync history. Emit a CleanupEvent only on the first
+	// transition to orphaned (per profile), not on every probe.
+	seenOrphan := make(map[string]bool) // instID|arrProfileID
+	for i := range cfg.SyncHistory {
+		h := &cfg.SyncHistory[i]
+		valid, ok := validProfiles[h.InstanceID]
+		if !ok {
+			continue
+		}
+		profileExists := valid[h.ArrProfileID]
+		if !profileExists && h.OrphanedAt == "" {
+			h.OrphanedAt = now
+			key := h.InstanceID + "|" + strconv.Itoa(h.ArrProfileID)
+			if !seenOrphan[key] {
+				seenOrphan[key] = true
+				events = append(events, CleanupEvent{
+					ProfileName:  h.ProfileName,
+					InstanceName: instNames[h.InstanceID],
+					ArrProfileID: h.ArrProfileID,
+					Timestamp:    now,
+				})
+			}
+		} else if profileExists && h.OrphanedAt != "" {
+			h.OrphanedAt = ""
+		}
+	}
+	return events
+}
+
+// CleanupStaleRules marks (does NOT delete) auto-sync rules and sync
+// history entries when their target Arr profile no longer exists. Setting
+// OrphanedAt instead of splice-deleting preserves the full sync intent
+// (CFs, scores, qualities, overrides) so the user can either Restore the
+// profile from saved state or Remove it manually. Only acts on instances
+// that are reachable — unreachable instances are skipped (never modifies
+// state on connection error).
+//
+// Re-running marks idempotently: an already-orphaned rule keeps its
+// original OrphanedAt timestamp. A previously-orphaned rule whose Arr
+// profile reappears (e.g. user restored manually in Arr) gets its
+// OrphanedAt cleared so the rule resumes normal operation.
+//
+// The previous "0 profiles → skip as startup-state" safety is no longer
+// needed: marking is non-destructive, so there's no risk of losing data
+// during a transient empty response.
+//
+// This is the I/O wrapper. The pure mark/clear logic lives in
+// applyOrphanMarking and is unit-tested directly.
 func (app *App) CleanupStaleRules() {
 	cfg := app.Config.Get()
-	instNames := make(map[string]string) // instanceID → name
+	instNames := make(map[string]string)
 
-	// Build set of valid Arr profile IDs per reachable instance
-	validProfiles := make(map[string]map[int]bool) // instanceID → set of arrProfileIDs
+	validProfiles := make(map[string]map[int]bool)
 	for _, inst := range cfg.Instances {
 		instNames[inst.ID] = inst.Name
 		client := arr.NewArrClient(inst.URL, inst.APIKey, app.HTTPClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
-			app.DebugLog.Logf(LogAutoSync, "Startup cleanup: skipping %s — not reachable: %v", inst.Name, err)
-			continue // instance unreachable — do NOT remove any rules
-		}
-		if len(profiles) == 0 {
-			log.Printf("Cleanup: skipping %s — returned 0 profiles (instance may still be starting)", inst.Name)
-			app.DebugLog.Logf(LogAutoSync, "Startup cleanup: skipping %s — 0 profiles returned, likely still starting", inst.Name)
-			continue // safety: Arr may be starting up and not yet serving profiles
+			app.DebugLog.Logf(LogAutoSync, "Cleanup: skipping %s — not reachable: %v", inst.Name, err)
+			continue
 		}
 		ids := make(map[int]bool)
 		for _, p := range profiles {
@@ -363,39 +441,16 @@ func (app *App) CleanupStaleRules() {
 		validProfiles[inst.ID] = ids
 	}
 
-	// Remove stale rules and sync history, collect events
 	var events []CleanupEvent
+	now := time.Now().Format(time.RFC3339)
 	app.Config.Update(func(cfg *Config) {
-		cleaned := make([]AutoSyncRule, 0, len(cfg.AutoSync.Rules))
-		for _, r := range cfg.AutoSync.Rules {
-			valid, ok := validProfiles[r.InstanceID]
-			if ok && !valid[r.ArrProfileID] {
-				log.Printf("Cleanup: removing stale auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, instNames[r.InstanceID])
-				app.DebugLog.Logf(LogAutoSync, "Startup cleanup: removing auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, instNames[r.InstanceID])
-				continue
-			}
-			cleaned = append(cleaned, r)
-		}
-		cfg.AutoSync.Rules = cleaned
-
-		cleanedHistory := make([]SyncHistoryEntry, 0, len(cfg.SyncHistory))
-		for _, h := range cfg.SyncHistory {
-			valid, ok := validProfiles[h.InstanceID]
-			if ok && !valid[h.ArrProfileID] {
-				log.Printf("Cleanup: removing stale sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, instNames[h.InstanceID])
-				app.DebugLog.Logf(LogAutoSync, "Startup cleanup: removing sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, instNames[h.InstanceID])
-				events = append(events, CleanupEvent{
-					ProfileName:  h.ProfileName,
-					InstanceName: instNames[h.InstanceID],
-					ArrProfileID: h.ArrProfileID,
-					Timestamp:    time.Now().Format(time.RFC3339),
-				})
-				continue
-			}
-			cleanedHistory = append(cleanedHistory, h)
-		}
-		cfg.SyncHistory = cleanedHistory
+		events = applyOrphanMarking(cfg, validProfiles, instNames, now)
 	})
+
+	for _, ev := range events {
+		log.Printf("Cleanup: marking sync history for %q orphaned (Arr profile %d gone from %s)", ev.ProfileName, ev.ArrProfileID, ev.InstanceName)
+		app.DebugLog.Logf(LogAutoSync, "Cleanup: marked %q orphaned (profile %d gone from %s)", ev.ProfileName, ev.ArrProfileID, ev.InstanceName)
+	}
 
 	// Store events for frontend to pick up + send Discord notification
 	if len(events) > 0 {

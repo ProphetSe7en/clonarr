@@ -296,7 +296,10 @@ func (s *Server) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Missing instance ID")
 		return
 	}
-	// Clean up stale entries for this instance before returning (only if instance is reachable)
+	// Mark stale entries for this instance as orphaned (do NOT delete) so
+	// the user can either Restore or Remove via the UI. Soft-tombstone
+	// preserves full sync intent. Skip silently when the instance is
+	// unreachable — never mutate state on a connection error.
 	inst, ok := s.Core.Config.GetInstance(id)
 	if ok {
 		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
@@ -304,43 +307,51 @@ func (s *Server) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
 			s.Core.DebugLog.Logf(core.LogAutoSync, "Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
-		} else if len(profiles) == 0 {
-			log.Printf("Cleanup: skipping %s — returned 0 profiles (instance may still be starting)", inst.Name)
-			s.Core.DebugLog.Logf(core.LogAutoSync, "Cleanup: skipping %s — 0 profiles returned, likely still starting", inst.Name)
 		} else {
 			validIDs := make(map[int]bool)
 			for _, p := range profiles {
 				validIDs[p.ID] = true
 			}
 			var events []core.CleanupEvent
+			now := time.Now().Format(time.RFC3339)
 			s.Core.Config.Update(func(cfg *core.Config) {
-				cleanedHistory := make([]core.SyncHistoryEntry, 0, len(cfg.SyncHistory))
-				for _, h := range cfg.SyncHistory {
-					if h.InstanceID == id && !validIDs[h.ArrProfileID] {
-						log.Printf("Cleanup: removing stale sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, inst.Name)
-						s.Core.DebugLog.Logf(core.LogAutoSync, "Cleanup: removing stale sync history for %q (Arr profile %d deleted from %s)", h.ProfileName, h.ArrProfileID, inst.Name)
-						events = append(events, core.CleanupEvent{
-							ProfileName:  h.ProfileName,
-							InstanceName: inst.Name,
-							ArrProfileID: h.ArrProfileID,
-							Timestamp:    time.Now().Format(time.RFC3339),
-						})
+				seenOrphan := make(map[int]bool)
+				for i := range cfg.SyncHistory {
+					h := &cfg.SyncHistory[i]
+					if h.InstanceID != id {
 						continue
 					}
-					cleanedHistory = append(cleanedHistory, h)
+					profileExists := validIDs[h.ArrProfileID]
+					if !profileExists && h.OrphanedAt == "" {
+						h.OrphanedAt = now
+						if !seenOrphan[h.ArrProfileID] {
+							seenOrphan[h.ArrProfileID] = true
+							log.Printf("Cleanup: marking sync history for %q orphaned (Arr profile %d gone from %s)", h.ProfileName, h.ArrProfileID, inst.Name)
+							s.Core.DebugLog.Logf(core.LogAutoSync, "Cleanup: marking %q orphaned (profile %d gone from %s)", h.ProfileName, h.ArrProfileID, inst.Name)
+							events = append(events, core.CleanupEvent{
+								ProfileName:  h.ProfileName,
+								InstanceName: inst.Name,
+								ArrProfileID: h.ArrProfileID,
+								Timestamp:    now,
+							})
+						}
+					} else if profileExists && h.OrphanedAt != "" {
+						h.OrphanedAt = ""
+					}
 				}
-				cleanedRules := make([]core.AutoSyncRule, 0, len(cfg.AutoSync.Rules))
-				for _, r := range cfg.AutoSync.Rules {
-					if r.InstanceID == id && !validIDs[r.ArrProfileID] && r.ArrProfileID != 0 {
-						log.Printf("Cleanup: removing stale auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, inst.Name)
-						s.Core.DebugLog.Logf(core.LogAutoSync, "Cleanup: removing stale auto-sync rule %s (Arr profile %d deleted from %s)", r.ID, r.ArrProfileID, inst.Name)
+				for i := range cfg.AutoSync.Rules {
+					r := &cfg.AutoSync.Rules[i]
+					if r.InstanceID != id || r.ArrProfileID == 0 {
 						continue
 					}
-					cleanedRules = append(cleanedRules, r)
-				}
-				if len(events) > 0 || len(cleanedRules) < len(cfg.AutoSync.Rules) {
-					cfg.SyncHistory = cleanedHistory
-					cfg.AutoSync.Rules = cleanedRules
+					profileExists := validIDs[r.ArrProfileID]
+					if !profileExists && r.OrphanedAt == "" {
+						log.Printf("Cleanup: marking auto-sync rule %s orphaned (Arr profile %d gone from %s)", r.ID, r.ArrProfileID, inst.Name)
+						s.Core.DebugLog.Logf(core.LogAutoSync, "Cleanup: marking rule %s orphaned (profile %d gone from %s)", r.ID, r.ArrProfileID, inst.Name)
+						r.OrphanedAt = now
+					} else if profileExists && r.OrphanedAt != "" {
+						r.OrphanedAt = ""
+					}
 				}
 			})
 			if len(events) > 0 {

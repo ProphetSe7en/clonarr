@@ -1,5 +1,69 @@
 # Changelog
 
+## v2.2.5
+
+A bundle of bug fixes and UX improvements driven by hands-on testing of the v2.2.4 cleanup-after-experiment workflow. Two real bugs (sync-history delete-one-of-many, toast-stack overflow), an Unused-CFs scan rework that gives users full visibility instead of silent protection, and a soft-tombstone refactor with Restore so a profile deleted in Arr can be brought back from clonarr's saved sync intent.
+
+### Soft-tombstone for stale auto-sync rules + Restore action
+
+When a profile is deleted in Arr, clonarr no longer silently splice-deletes the corresponding sync rule and its history. Instead, the rule + history entries get an `OrphanedAt` timestamp; the full intent (selected CFs, score overrides, quality structure, behavior, last synced state) is preserved. Auto-sync skips orphaned rules so they don't error in the background.
+
+The History tab surfaces orphaned rows distinctly:
+- Amber-tinted background, profile name greyed
+- Arr name strike-through with an "orphaned" badge whose tooltip shows the orphaned-since timestamp
+- Auto-sync toggle disabled
+- Edit / Resync / Clone icons hidden — none of them apply to a missing profile
+- Two action buttons: Restore (recreate in Arr from saved state) or Remove (permanent delete)
+
+Restore (`POST /api/auto-sync/rules/{id}/restore`):
+- Pulls the latest sync history entry for the orphaned rule
+- Probes Arr for name collision; if a profile with that name already exists, returns 409 with a structured response (`conflictWith`, `existingName`, `suggested`)
+- Also catches collisions against other active clonarr rules on the same instance
+- On 409 the frontend prompts the user with an inputModal pre-populated with the suggested rename and retries
+- On success: creates the profile in Arr, reassigns the rule's `ArrProfileID`, clears `OrphanedAt`, appends a fresh sync-history entry marked "Restored profile", and removes the now-stale orphaned history entries that pointed at the deleted profile (they contributed their saved intent to the restore and are no longer informational)
+
+The expanded change-history panel for an orphaned profile now shows an explanatory amber banner and disables Rollback on each entry — rolling back to the deleted profile would just push to a missing target.
+
+The previous "0 profiles → skip cleanup as startup-state" safety has been removed. Marking is non-destructive (reversible on the next probe), so a transient empty response no longer risks data loss. If the user manually recreates the profile in Arr (e.g. via API with the original ID), the next probe clears `OrphanedAt` automatically.
+
+### Bug A — sync-history delete only removed one of many
+
+A profile that's been synced multiple times accumulates multiple `SyncHistoryEntry` rows for the same `(InstanceID, ArrProfileID)`. The UI dedupes them to one row per profile, so when the user clicked the red X to remove a sync entry, the backend's early-return removed only the first match — the row reappeared on next render and the user perceived the delete as broken.
+
+`DeleteSyncHistory` now does a full filter pass and removes every matching entry. Two regression tests cover the delete-all path and the not-found path.
+
+### Bug C — bulk cleanup events no longer drown the screen
+
+Mass-deletes in Arr (deleting 25+ profiles in one go) used to spawn one warning toast per affected profile. The toast container hit `max-height: 80vh` and grew its own scrollbar, covering ~30% of the viewport with stacked yellow boxes.
+
+`checkCleanupEvents` now coalesces by instance: a single profile keeps the existing message; multiple profiles emit one toast with the first three names + "X more" count. The 25-profile case becomes one readable toast instead of 25 stacked.
+
+### Unused Custom Formats — full visibility, not silent protection
+
+The "Unused Custom Formats (Clonarr-managed only)" scan used to auto-skip CFs with `includeCustomFormatWhenRenaming=true`, hiding them entirely from the result. On a typical instance this means 60+ TRaSH streaming-services / language / version CFs (AMZN, NF, German, v1, etc.) that were left behind after profile deletion never showed up — exactly the cleanup-after-experiment case the scan is meant to catch.
+
+The scan now exposes them. The result modal has three filter tabs:
+
+- **All unmanaged (N)** — every CF not referenced by any sync rule. Default view.
+- **Rename-tagged only (M)** — subset that has the `includeCustomFormatWhenRenaming` flag. Shown as a yellow "rename tag" badge per row.
+- **Managed by Clonarr (K)** — read-only table with three columns: name, "Used in profile(s)" (rendered as wrapping pill-chips per profile, score-zero entries excluded as inert padding), and tag.
+
+The scan probes the instance's File Naming format. When `{Custom Formats}` is in the format, a blue info box explains what the rename tag means and what deleting those CFs does to future filenames (existing files unaffected; re-sync any TRaSH/builder profile to recreate). When the token isn't in the format, a green box notes the flag is functionally inert and the CFs are safe to delete.
+
+The footer offers two delete actions when rename-tagged CFs are present:
+
+- **Delete safe only (N − M)** — keeps rename-tagged CFs
+- **Delete all (N, incl. rename tags)** — outline-style red, visually subordinate but available
+
+Both routes go through a confirmation modal explaining the count, the rename-tag implication (when applicable), and the recovery path. Direct-POST without confirmation has been removed.
+
+### Internal
+
+- `applyOrphanMarking` extracted from `CleanupStaleRules` as a pure mark/clear function — no I/O, no logging, no app state. The HTTP wrapper that fetches profiles and dispatches events stays thin. Enables direct unit tests of every transition (mark, clear, idempotent, unreachable-skip, empty-list, dedup) without needing an httptest Arr server.
+- New tests cover `applyOrphanMarking` (7 cases) and `handleRestoreAutoSyncRule`'s pre-Arr-call paths (404 missing rule, 412 not orphaned, 412 no history, 404 missing instance). The happy path and 409 collision path require an Arr mock and remain manual-test-only for now.
+- `DeleteSyncHistory` test coverage for delete-all + not-found.
+- `namingFormatUsesCustomFormats` test coverage for all token variants (bare, `[bracketed]`, `(parens)`, `:truncated`).
+
 ## v2.2.4
 
 A bundle of user-reported fixes and small UX improvements collected and stabilised over the v2.2.3-dev cycle.

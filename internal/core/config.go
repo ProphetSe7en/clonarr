@@ -113,6 +113,13 @@ type AutoSyncRule struct {
 	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
 	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
 	LastSyncError     string         `json:"lastSyncError,omitempty"`
+	// OrphanedAt is set (RFC3339 timestamp) when clonarr's drift-check
+	// detects that ArrProfileID no longer resolves in the target Arr
+	// instance. Auto-sync skips orphaned rules; the UI exposes Restore
+	// (re-create profile in Arr from last synced intent) and Remove
+	// (permanent delete) actions. Empty when the rule is in normal
+	// operation. Soft-tombstone replaces the previous auto-delete cleanup.
+	OrphanedAt string `json:"orphanedAt,omitempty"`
 }
 
 // SyncBehavior controls how the sync engine handles CF additions, score overrides, and removals.
@@ -208,6 +215,12 @@ type SyncHistoryEntry struct {
 	// case UI falls back to LastSync).
 	AppliedAt string        `json:"appliedAt,omitempty"`
 	Changes   *SyncChanges  `json:"changes,omitempty"`
+	// OrphanedAt mirrors the field on the rule — set when the entry
+	// belongs to a profile that has been detected as deleted in Arr.
+	// Lets the UI gray out / badge orphaned history rows independently
+	// of rule state (the rule may have been removed while history is
+	// retained for diagnostics).
+	OrphanedAt string `json:"orphanedAt,omitempty"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.
@@ -918,16 +931,29 @@ func (cs *ConfigStore) GetProfileChangeHistory(instanceID string, arrProfileID i
 }
 
 // DeleteSyncHistory removes a sync history entry by instanceId + arrProfileId.
+// DeleteSyncHistory removes ALL sync history entries matching the
+// (instanceID, arrProfileID) pair. A profile that has been synced multiple
+// times accumulates multiple entries; the UI dedupes them to one row, so a
+// single user-initiated delete must clear every matching entry — otherwise
+// the row reappears (only one entry got removed) and the user perceives the
+// delete as broken.
 func (cs *ConfigStore) DeleteSyncHistory(instanceID string, arrProfileID int) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	for i, sh := range cs.config.SyncHistory {
+	cleaned := make([]SyncHistoryEntry, 0, len(cs.config.SyncHistory))
+	removed := false
+	for _, sh := range cs.config.SyncHistory {
 		if sh.InstanceID == instanceID && sh.ArrProfileID == arrProfileID {
-			cs.config.SyncHistory = append(cs.config.SyncHistory[:i], cs.config.SyncHistory[i+1:]...)
-			return cs.saveLocked()
+			removed = true
+			continue
 		}
+		cleaned = append(cleaned, sh)
 	}
-	return fmt.Errorf("sync history entry not found")
+	if !removed {
+		return fmt.Errorf("sync history entry not found")
+	}
+	cs.config.SyncHistory = cleaned
+	return cs.saveLocked()
 }
 
 // MigrateImportedProfiles moves any imported profiles from the old config
