@@ -1,11 +1,312 @@
 # Changelog
 
+## v2.2.5
+
+A bundle of bug fixes and UX improvements driven by hands-on testing of the v2.2.4 cleanup-after-experiment workflow. Two real bugs (sync-history delete-one-of-many, toast-stack overflow), an Unused-CFs scan rework that gives users full visibility instead of silent protection, and a soft-tombstone refactor with Restore so a profile deleted in Arr can be brought back from clonarr's saved sync intent.
+
+### Soft-tombstone for stale auto-sync rules + Restore action
+
+When a profile is deleted in Arr, clonarr no longer silently splice-deletes the corresponding sync rule and its history. Instead, the rule + history entries get an `OrphanedAt` timestamp; the full intent (selected CFs, score overrides, quality structure, behavior, last synced state) is preserved. Auto-sync skips orphaned rules so they don't error in the background.
+
+The History tab surfaces orphaned rows distinctly:
+- Amber-tinted background, profile name greyed
+- Arr name strike-through with an "orphaned" badge whose tooltip shows the orphaned-since timestamp
+- Auto-sync toggle disabled
+- Edit / Resync / Clone icons hidden — none of them apply to a missing profile
+- Two action buttons: Restore (recreate in Arr from saved state) or Remove (permanent delete)
+
+Restore (`POST /api/auto-sync/rules/{id}/restore`):
+- Pulls the latest sync history entry for the orphaned rule
+- Probes Arr for name collision; if a profile with that name already exists, returns 409 with a structured response (`conflictWith`, `existingName`, `suggested`)
+- Also catches collisions against other active clonarr rules on the same instance
+- On 409 the frontend prompts the user with an inputModal pre-populated with the suggested rename and retries
+- On success: creates the profile in Arr, reassigns the rule's `ArrProfileID`, clears `OrphanedAt`, appends a fresh sync-history entry marked "Restored profile", and removes the now-stale orphaned history entries that pointed at the deleted profile (they contributed their saved intent to the restore and are no longer informational)
+
+The expanded change-history panel for an orphaned profile now shows an explanatory amber banner and disables Rollback on each entry — rolling back to the deleted profile would just push to a missing target.
+
+The previous "0 profiles → skip cleanup as startup-state" safety has been removed. Marking is non-destructive (reversible on the next probe), so a transient empty response no longer risks data loss. If the user manually recreates the profile in Arr (e.g. via API with the original ID), the next probe clears `OrphanedAt` automatically.
+
+### Bug A — sync-history delete only removed one of many
+
+A profile that's been synced multiple times accumulates multiple `SyncHistoryEntry` rows for the same `(InstanceID, ArrProfileID)`. The UI dedupes them to one row per profile, so when the user clicked the red X to remove a sync entry, the backend's early-return removed only the first match — the row reappeared on next render and the user perceived the delete as broken.
+
+`DeleteSyncHistory` now does a full filter pass and removes every matching entry. Two regression tests cover the delete-all path and the not-found path.
+
+### Bug C — bulk cleanup events no longer drown the screen
+
+Mass-deletes in Arr (deleting 25+ profiles in one go) used to spawn one warning toast per affected profile. The toast container hit `max-height: 80vh` and grew its own scrollbar, covering ~30% of the viewport with stacked yellow boxes.
+
+`checkCleanupEvents` now coalesces by instance: a single profile keeps the existing message; multiple profiles emit one toast with the first three names + "X more" count. The 25-profile case becomes one readable toast instead of 25 stacked.
+
+### Unused Custom Formats — full visibility, not silent protection
+
+The "Unused Custom Formats (Clonarr-managed only)" scan used to auto-skip CFs with `includeCustomFormatWhenRenaming=true`, hiding them entirely from the result. On a typical instance this means 60+ TRaSH streaming-services / language / version CFs (AMZN, NF, German, v1, etc.) that were left behind after profile deletion never showed up — exactly the cleanup-after-experiment case the scan is meant to catch.
+
+The scan now exposes them. The result modal has three filter tabs:
+
+- **All unmanaged (N)** — every CF not referenced by any sync rule. Default view.
+- **Rename-tagged only (M)** — subset that has the `includeCustomFormatWhenRenaming` flag. Shown as a yellow "rename tag" badge per row.
+- **Managed by Clonarr (K)** — read-only table with three columns: name, "Used in profile(s)" (rendered as wrapping pill-chips per profile, score-zero entries excluded as inert padding), and tag.
+
+The scan probes the instance's File Naming format. When `{Custom Formats}` is in the format, a blue info box explains what the rename tag means and what deleting those CFs does to future filenames (existing files unaffected; re-sync any TRaSH/builder profile to recreate). When the token isn't in the format, a green box notes the flag is functionally inert and the CFs are safe to delete.
+
+The footer offers two delete actions when rename-tagged CFs are present:
+
+- **Delete safe only (N − M)** — keeps rename-tagged CFs
+- **Delete all (N, incl. rename tags)** — outline-style red, visually subordinate but available
+
+Both routes go through a confirmation modal explaining the count, the rename-tag implication (when applicable), and the recovery path. Direct-POST without confirmation has been removed.
+
+### Internal
+
+- `applyOrphanMarking` extracted from `CleanupStaleRules` as a pure mark/clear function — no I/O, no logging, no app state. The HTTP wrapper that fetches profiles and dispatches events stays thin. Enables direct unit tests of every transition (mark, clear, idempotent, unreachable-skip, empty-list, dedup) without needing an httptest Arr server.
+- New tests cover `applyOrphanMarking` (7 cases) and `handleRestoreAutoSyncRule`'s pre-Arr-call paths (404 missing rule, 412 not orphaned, 412 no history, 404 missing instance). The happy path and 409 collision path require an Arr mock and remain manual-test-only for now.
+- `DeleteSyncHistory` test coverage for delete-all + not-found.
+- `namingFormatUsesCustomFormats` test coverage for all token variants (bare, `[bracketed]`, `(parens)`, `:truncated`).
+
+## v2.2.4
+
+A bundle of user-reported fixes and small UX improvements collected and stabilised over the v2.2.3-dev cycle.
+
+### CF group activation respects per-CF `default` flag
+
+When toggling a TRaSH CF group on (in Profile Builder, Profile Detail, or
+the legacy `toggleGroup` path), Clonarr used to add **every** optional CF
+in the group to the profile. The TRaSH JSON marks some CFs as `default:
+true` precisely so consumers know which subset to auto-include — that
+flag was being read into the data model but ignored at activation time.
+Result: groups like `[Unwanted] Unwanted Formats` (15 CFs, 11 marked
+default) added all 15 instead of just the 11.
+
+Fix touches four call sites with the same fix in each:
+
+- `pdToggleGroup` (new, replaces inline `@change` handler in Profile
+  Detail) — uses `cf.default` from `ProfileCFGroupEntry`.
+- `pbToggleGroupInclude` (Profile Builder group toggle) — uses
+  `cf.cfDefault` from `CategorizedCF` (different field name because
+  `/api/trash/{app}/all-cfs` carries a different shape than
+  `/api/trash/{app}/profiles/{trashId}`).
+- `initSelectedCFs` for non-exclusive default-enabled groups loaded with
+  a profile.
+- `toggleGroup` (legacy orphan path) — kept consistent.
+
+Also: clicking any of the three state pills (Req / Opt / Fmt) on a CF in
+Profile Builder now adds that CF to the profile's `selectedCFs`. Before,
+only `Fmt` did — clicking `Req` or `Opt` set the state override but the
+CF remained absent from the saved profile, which silently cancelled the
+state change. Combined with the new dimmed rendering for "in an enabled
+group but not yet in profile" CFs, this gives users a one-click way to
+include the non-default optional CFs they want.
+
+Required CFs remain mandatory when the group is enabled. Custom CFs in
+user-created CF groups (CF Group Builder) work the same way: per-CF
+default flag controls auto-inclusion. The group's enable/disable toggle
+itself works unchanged — flipping a group off clears all its CFs from
+selection just like before.
+
+### Maintenance: "Unused Custom Formats" cleanup action
+
+New cleanup action under Maintenance → Cleanup that finds CFs in an Arr instance which are not referenced by any Clonarr sync rule and are not used for renaming. Hard caveat: assumes Clonarr is the sole tool managing CFs on the instance — CFs added directly via the Arr UI, Recyclarr, Notifiarr, etc. will appear here as "unused", since Clonarr has no record of them. The user reviews the preview list and the existing Keep List protection still applies.
+
+Two safety guards prevent destructive false positives:
+
+- **Refuses to scan when TRaSH guide data isn't loaded.** Without it, every TRaSH ID in a rule's `selectedCFs` would resolve to "" and the user would be shown "delete all your TRaSH CFs" as candidates. The scan returns a clear "TRaSH guide data is not loaded for {appType}" error instead and points the user to Settings → TRaSH Guides.
+- **Belt-and-suspenders sync-history fallback.** The "managed" set is built from each rule's `selectedCFs`, score-override keys, the rule's TRaSH or imported profile's intrinsic CFs, AND from the latest sync-history entry per `(instance, arrProfileId)`. The history fallback protects against TRaSH-side schema drift — if a rule's referenced TRaSH profile was renamed/removed upstream, `ResolveProfileCFs` returns empty, but the history captures what Clonarr actually pushed at last sync, so previously-required CFs aren't mistakenly flagged.
+
+### Custom Format editor: preserve field values across Type changes
+
+Switching a specification's Type dropdown used to wipe the field values
+unconditionally — type a regex into a `ReleaseTitleSpecification`, click
+Type by accident, and the regex is gone. Now the editor remembers the
+field state per implementation type for the lifetime of the editor session
+(snapshot taken when leaving an implementation, restored when returning),
+plus carries values forward across compatible types (same field name +
+type — e.g. ReleaseTitle ↔ ReleaseGroup, both expose a "value" textbox).
+Mismatched types still reset (Source's number/select "value" to a textbox
+"value" can't carry meaningfully). Loaded specs get their initial values
+seeded into the history so a Type → other → original round-trip restores
+the original value.
+
+### Maintenance UI: visual consistency on cleanup cards
+
+The "Unused Custom Formats" card now uses the same full-border styling as
+the other warning-level cleanup cards (yellow border + matching title +
+yellow outline scan button — same treatment as "Delete All Custom Formats
+(Keep Scores)"). The earlier left-border-only design was an outlier in a
+section that already had a consistent visual language.
+
+### Sync result banner: include Settings + Quality counts in summary line
+
+Toast/banner used to read "Created: 0 CFs, Updated: 0 CFs, Scores: 0 updated" even when the sync only changed profile settings or quality structure — nothing in the summary indicated anything had happened, the user had to click Show details to see e.g. "Language: Original → Any". The banner now reads `Created: X CFs, Updated: Y CFs, Scores: Z updated, Settings: A changed, Quality: B changes`. Counts come from `settingsDetails.length` and `qualityDetails.length` on the sync result. Updated in both result-banner instances (sync modal + Compare chained-sync banner). Sync history view already had its own per-category columns.
+
+### Sync log: include language in "profile settings changed" line
+
+When only the profile language changed during a sync, the log line read
+`profile settings changed (minScore=500→500, minUpgrade=50→50, cutoffScore=10000→10000, upgrade=true→true)`
+— every numeric field unchanged, no clue what triggered the "changed" claim. The detector
+included language in the diff but the log message and `SettingsDetails` (sync history
+display) both omitted it. The log line now appends `language=Original→Any`, and a
+`Language: X → Y` entry is added to `SettingsDetails` when language changes (matching the
+existing per-field detail entries for min-score, min-upgrade, cutoff-score, upgrades).
+
+### Custom Format JSON import — cross-Arr compatibility check
+
+Importing a Radarr CF JSON to Sonarr (or vice-versa) used to silently misinterpret value-encoded specs. The most common case: `SourceSpecification` value `7` means WEBDL in Radarr but BlurayRaw in Sonarr — so a Radarr "WEBDL" CF imported to Sonarr would silently start matching BlurayRaw releases.
+
+The import now runs a compatibility check before sending to the backend and surfaces issues in a confirmation modal:
+
+- **Errors:** spec types that don't exist in the target Arr (`QualityModifierSpecification` is Radarr-only, `ReleaseTypeSpecification` is Sonarr-only) and value-out-of-range cases (e.g. `SourceSpecification` value 8 or 9 imported to Sonarr where the enum tops at 7).
+- **Warnings:** canonical-name mismatches — when `spec.name` is a recognised Source name (WEBDL, WEBRip, Bluray, BlurayRaw, Remux, DVD, etc.) but the value resolves to a different name in the target Arr. Also flags `IndexerFlagSpecification` Internal value mismatches (Radarr Internal=32 vs Sonarr Internal=8).
+
+User-named specs without canonical names (e.g. spec.name="My favourite source") are left alone — we don't know intent there. The user can still **Import anyway** through the modal — this is a safety check, not a hard block.
+
+## v2.2.3
+
+Two small bug fixes from user reports.
+
+### Fixes
+
+- **Scoring Sandbox batch limit raised from 15 to 200 titles.** The previous cap blocked users who wanted to test their profile against a large set of release-name variants from a Prowlarr search — exactly what the sandbox is for. The handler still loops sequentially against the Arr Parse API (no parallel hammering), and the per-route write deadline is now uncapped so a slow Arr can finish a 200-title batch without the global 30s server timeout cutting in. The frontend surfaces a "Parsing N titles, this may take a moment..." toast on batches >30 so the wait isn't silent.
+- **Custom Format JSON import now honors `includeCustomFormatWhenRenaming`.** The frontend mapping for *Custom Formats → Import → From JSON* picked only `name`, `specifications`, and category — so importing a TRaSH JSON like `pcok.json` (which has the rename flag set) silently landed it as false in the editor. The flag is now mapped through to `includeInRename`. The import-modal help text also notes that TRaSH-specific fields (`trash_id`, `trash_scores`) are intentionally not imported — the imported CF lives as your own custom format, separate from the TRaSH guide data path.
+
+## v2.2.2
+
+UX patch covering two data-loss-prone code paths and a couple of quality-of-life fixes around custom format handling.
+
+### Fixes
+
+- **Custom format filenames preserve `!` prefix.** `sanitizeFilename` previously stripped `!` from CF names, so `!FLUX` and `FLUX` collided to the same target file (`flux-radarr.json`) and one silently overwrote the other. `!` is safe on every filesystem we support and is a very common convention for user-authored CFs (TRaSH-style sort-to-top). After this release `!FLUX` lives at `!flux-radarr.json` and `FLUX` at `flux-radarr.json` — no collision. Existing files migrate on next startup. Regression test: `TestFileStore_PreservesBangPrefix`.
+- **Auto-sync toggle no longer rewrites the rule.** When the *Auto-sync this profile* checkbox in the sync modal was toggled, `toggleAutoSyncForProfile` PUT the entire rule with whatever the current sync form had. If the user reached the modal via *Save & Sync* on a TRaSH profile (fresh defaults — no extra CFs, no overrides loaded), a single toggle click silently replaced the rule's saved customizations with empty state. The handler now only modifies the `enabled` flag; customizations are edited only through the *Apply* path or the Edit-pencil in the Sync Rules list.
+- **"Showing X Custom Formats" counter on the Custom Formats tab** read the wrong field on the category objects (`c.cfs?.length` instead of `c.totalCFs`) and so always rendered 0. Now reflects the real total across TRaSH categories + your own custom CFs.
+
+### UX
+
+- **Sync modal defaults to "Create new profile"** when opened from the profile list. Previously it auto-flipped to "Update existing profile" if any sync history matched the TRaSH profile, which silently put the user in overwrite mode. The Edit-pencil flow on a sync rule still flips to update automatically (that's its purpose).
+- **Confirmation dialog before overwriting an existing sync rule.** When the user explicitly picks "Update existing profile" and clicks Apply, a modal now describes what will be overwritten ("the saved rule with N CFs and M score overrides will be replaced") and offers to cancel and use the Edit pencil instead. The Edit-pencil flow itself doesn't show this dialog — overwriting is the explicit intent there.
+
+## v2.2.1
+
+Bug fix release addressing two classes of file-collision in clonarr's local storage that could cause silent data loss.
+
+### What's fixed (verified)
+
+Two specific filename-collision bugs in `internal/core/filestore.go`, the layer that backs profiles, custom CFs, and cf-groups on disk:
+
+- **Same-name profiles on Radarr and Sonarr no longer overwrite each other at write time.** Before this release, profiles in `/config/profiles/` used filenames derived only from the sanitized name. If you imported the same TRaSH profile to both apps (Advanced → Import Profile), or built a custom profile with the same name on both via Profile Builder, saving the second wrote over the first. Filenames now include an app-type suffix (`-radarr` / `-sonarr`). Credit [@ColeSpringer](https://github.com/ColeSpringer) via [PR #28](https://github.com/prophetse7en/clonarr/pull/28).
+- **Migration of existing profile filenames is now wired at startup** (`profilesStore.MigrateFilenames()`). PR #28's wire-up was missed for the profile store but was already in place for custom CFs and cf-groups; without this call, existing on-disk files kept their pre-fix names and the new format only kicked in on next save.
+- **Migration-time collision protection.** When two existing files would migrate to the same target filename (e.g. names `HD` and `HD?` both sanitize to `hd-sonarr.json`), the alphabetically-first source wins and gets the target name; the rest stay at their original filenames with a log warning telling the user to rename one to allow migration. Without this guard, the second `os.WriteFile` silently overwrote the first during upgrade. This protection covers all FileStore-backed data — profiles, custom CFs, and cf-groups — so the same class of bug can't repeat for any of them. Verified with regression test `TestFileStore_MigrateFilenames_CollisionPreserved`.
+
+### Honest scope statement
+
+These fixes address two specific filename-collision classes in the data layer. They may explain reports of profile "reset to stock" symptoms, hex-named ghost CFs, or truncated sync history, but the full root cause for any specific user report cannot be confirmed without case-by-case data. Possibilities still on the table:
+
+- Cross-Arr profile collision (now fixed) — affects users who imported or built same-name profiles on both apps.
+- Within-`appType` collision in the custom-CF migration from v2.0.4 — where personal CFs with similar names (e.g. `!FLUX` and `FLUX`) could sanitize to the same filename and one got silently lost, leaving sync rules with orphaned `trash_id` references (the "ghost" hex-named CFs).
+- The migration-time collision protection now ships for the custom-CF and cf-group stores too, so the second class is protected going forward.
+
+If you upgrade and continue to see profile-reset, history-truncation, or hex-named ghost CFs symptoms, please file a GitHub issue with details.
+
+### Recovery for already-affected installs
+
+These fixes prevent future loss but do not recover data already overwritten on disk. If you saw a profile "reset" or custom CFs disappear before upgrading:
+
+1. **Re-import or rebuild** the affected profile and re-add personal CFs + score overrides manually. After this release each app gets its own file going forward.
+2. **Restore from a host-level backup** of `/config/profiles/` and `/config/custom/json/` from before v2.0.4 if you have one.
+
+### Still under investigation (not in this release)
+
+- **Hex-named "ghost" CF references** (e.g. CFs displayed as 12-character hex strings like `89aa6944ba03` that aren't in your Custom Formats list) — most likely orphan trash_id references to custom CFs that were lost from disk. The sync engine doesn't currently clean these up; a future release will add orphan-reference cleanup.
+- **Sync history truncated** to a recent date — root cause not confirmed. Please file an issue with details if you see this.
+
+## v2.2.0
+
+CF Group Builder redesign, startup-pull bug fix, and a responsive topnav
+from the community. Collapsing what was going to ship as v2.1.2 into
+v2.2.0 since the builder reorganization outgrew the patch-release scope.
+
+### Fixed
+
+- **Settings → TRaSH Guides → Pull interval "Disabled" is now honored on container startup.** The scheduled-pull loop already respected the Disabled setting, but the startup-trash-pull goroutine called `CloneOrPull` unconditionally — so every container restart still did a full `git fetch`. Startup now checks `cfg.PullInterval == "0"` and, if the repo is already cloned, loads the existing on-disk data via a new `TrashStore.LoadFromDisk()` method without any git ops. First-run (no `.git` dir) still clones — the app needs CF/profile data to work.
+- **`TrashStore.loadAndSwap` now records `pullError` on failure.** Pre-existing issue surfaced during the refactor above: when `parseAll` or the commit-hash lookup errored, the store returned the error to its caller for logging but never updated `pullError`, so the Status panel kept showing a clean state on top of a stale/corrupted snapshot. Both error paths in `loadAndSwap` now call `SetPullError` so the UI can surface the real state.
+- **Row layouts no longer collapse when Alpine `:style` is used with a string.** Two separate rows in the Builder (Card A selected-highlight + Saved cf-groups last-row border) used the string form of `:style`, which replaces the entire static style attribute instead of merging. The result was `display:flex` being wiped — checkboxes wrapping above CF names and Edit/Delete buttons dropping to a third line on the only saved group. Both switched to the object form so Alpine merges individual properties.
+
+### Added
+
+- **CF Group Builder — Selected CFs card (live group preview).** Full-width card at the top of the builder showing every CF currently in the group being built. Reorder via drag-and-drop in manual mode, set required / default per CF, or remove with the × — all without scrolling back to the Custom Formats list. The card is a live view of the group's state; Custom Formats below is the browse/add surface. Works for new groups, local edits, and TRaSH copies.
+- **CF Group Builder — hash lock toggle in the edit banner.** When editing or copying a group, a visible lock (🔒 Hash locked / 🔓 Hash tracks name) replaces the earlier save-time "keep vs regenerate" modal. Locked (default for any edit) means typo fixes and minor rewording don't invalidate the `trash_id` — existing profile includes, prior exports, and synced Arr profiles stay valid. Unlocked means the hash regenerates on every keystroke in the name field. The user's explicit unlock choice is preserved across save so anyone iterating with a fresh hash doesn't get silently re-locked.
+- **CF Group Builder — copy an upstream TRaSH cf-group into the local builder.** A collapsed "TRaSH {app} cf-groups" section above the builder form lists every upstream group from the TRaSH repo clone. Each row has an `Edit` button that seeds the form with the group's contents (name, description, trash_id, CFs with required/default flags, profile includes, CF order) and saves as a NEW local cf-group under `/config/custom/json/{app}/cf-groups/` on Save. The TRaSH repo clone is never written to.
+- **Manual-order CF reorder via drag-and-drop.** Replaces the earlier ▲/▼ arrows on each row. Drop on another row to move, with visual feedback (40% opacity on source, blue top-shadow on target). Matches the pattern used by Scoring Sandbox + Quality Structure editor. `cfgbMoveCF` is kept for potential future keyboard-accessible reorder.
+
+### Changed
+
+- **CF Group Builder is now three cards** — Selected CFs (full-width, live preview of the group) + Custom Formats (browse + add) + Quality Profiles (include). Custom Formats is a pure selector now: the sort-mode toggle (Alpha / Manual) migrates to the Selected CFs card where order lives, and the per-row required / default flags move to Selected CFs too. Selected CFs in the Custom Formats list still render with a muted blue background + green `IN GROUP` pill so you can scan "what's already in my group" without scrolling up.
+- **Custom Formats list packs into columns on wide viewports.** `grid-template-columns: repeat(auto-fill, minmax(240px, 1fr))` auto-fills 2+ columns when there's room (short CF names like `AMZN`, `10bit`, `ATV` pack tightly) and collapses to one column on narrow screens. Long names truncate with `…` instead of breaking the column.
+- **Selected CFs rows use a fixed-column grid** — `drag-handle (28px)` · `# (36px)` · `name (flex)` · `required+default (auto)` · `× (24px)`. Consistent alignment across rows regardless of sort mode; the handle column reserves its space in alpha mode too so rows don't jump.
+- **Responsive topnav + icon relocation.** Icon moved from `icon.png` (repo root + `ui/static/icon.png`) to `ui/static/icons/clonarr.png`. Topnav has media queries at 1200 / 1000 / 850 / 600 px so tabs wrap on narrow viewports, the "TRaSH synced" label collapses, and the Changelog dropdown scales / goes full-width on mobile. Also fixes layout "drift" when resizing. Credit [@ColeSpringer](https://github.com/ColeSpringer) via [PR #26](https://github.com/prophetse7en/clonarr/pull/26).
+
+### Internal
+
+- **Refactor: `TrashStore.loadAndSwap` extracted from `CloneOrPull`.** The "get commit hash + parseAll + atomic snapshot swap" portion of `CloneOrPull` became a private helper reused by both `CloneOrPull` (after git ops) and the new public `LoadFromDisk` (assumes repo is cloned, no git ops). Behavior of `CloneOrPull` callers is unchanged.
+- **Shared `confirmModal` supports a secondary action button.** Optional `secondaryLabel` / `onSecondary` fields on the modal state render a middle button between Cancel and Confirm. Currently unused (the hash lock replaced the save-time modal) but kept as a reusable extension point. Existing two-button flows (Discard / Delete / etc.) work unchanged — the middle button is hidden when `secondaryLabel` is unset.
+
+## v2.1.1
+
+UX patch release. Profile Builder's "save without syncing" flow was always there — v2.1.0 just made it hard to discover and blocked for YAML-imported profiles. This release fixes both.
+
+### Fixed
+
+- **Imported profiles can now be opened in the Profile Builder for editing.** Previously, profiles created via YAML import (`Advanced → Import profile`) were rendered read-only — clicking the profile name sent you to a detail view with only "Save & Sync" / "Create New" buttons, and the Edit button was hidden. That made the "start a profile, come back to it later, finish it before pushing to Arr" workflow impossible for imported profiles. The backend always allowed edits; the frontend was gating on `source === 'custom'` in three places (`profile name click`, `Edit button`, `Edit button in detail view`). All three now accept any user-owned profile (`custom` / `import` / legacy empty source).
+- **TRaSH-imported profiles now render their required CFs in the Builder.** Opening a TRaSH profile import (e.g. `base-profile.json` with 4 mandatory blocking CFs) in the Builder showed an empty Required CFs section — the CFs existed in `formatItems` with correct scores but weren't mirrored into `formatItemCFs`, which is what the Builder UI reads to render the Required section. The TRaSH convention is that every CF in `formatItems` is a mandatory CF of the profile; `parseTrashProfileJSON` now populates `FormatItemCFs` accordingly. Profiles imported before v2.1.1 get the same treatment via a frontend fallback in `openProfileBuilder` — no re-import needed.
+
+### Changed
+
+- **Profile Builder save-button labels clarified.** `Create Profile` → `Save Profile`, `Update Profile` → `Save Changes`. The existing Save-only action always saved locally without syncing to Arr (distinct from `Save & Sync` / `Create New` which push to an Arr instance), but the old labels didn't make that separation obvious when both options were visible side-by-side. Tooltips ("Save profile changes without syncing") unchanged.
+
+### For existing users — how the save flow works
+
+Profile Builder has two-tier saving:
+
+1. **`Save Profile` / `Save Changes`** — saves locally in Clonarr only. Nothing touches Radarr/Sonarr. Perfect for drafts: start a profile, come back tomorrow, finish it, push it later.
+2. **`Save & Sync`** or **`Create New`** — saves locally AND pushes to an existing or new Arr quality profile. Only shown when editing an existing profile.
+
+This separation always existed — v2.1.1 just makes it more obvious and fixes the imported-profile gap.
+
 ## v2.1.0
+
+### Added
+
+- **CF Group Builder** — client-side generator for `cf-groups/*.json` files under Settings → CF Group Builder. Loads TRaSH's real cf-groups as starting points, filters by app type (Radarr/Sonarr), supports manual and alpha CF ordering, per-CF `required` / `default` toggles, category filter, multi-term search, scoped Select-all, bulk Mark-all / Clear-required / Clear-CFs / Clear-profiles, custom CFs with MD5 trash_id scoped by app-type, deduplication across cf-groups with accumulated group memberships, and export to downloadable JSON named with category prefix. Persists locally in browser storage. Profile cards reuse the Profiles-tab styling, collapsed by default, per-card select-all, reloads on appType switch. Makes it practical to ship custom exclusivity groups without editing JSON by hand.
+- **Advanced Mode split into two toggles** — Settings now exposes "Show advanced Clonarr options" (existing) and a separate "Show TRaSH schema fields" toggle. Lets you see raw TRaSH fields (trash_id, includeCustomFormatWhenRenaming, etc.) without enabling the rest of Clonarr's advanced UI. Either, both, or neither — fully independent.
 
 ### Changed
 
 - **Architecture refactor** — backend restructured from flat `ui/*.go` to standard Go layout: `internal/api/` (HTTP handlers split by domain — instances, cleanup, sync, autosync, trash, custom_cfs, custom_profiles, import, scoring, notifications, config, auth_handlers, routes, server, utils), `internal/core/` (models, config store, sync engine, TRaSH integration), `internal/arr/` (Radarr/Sonarr API clients), `internal/auth/` + `internal/netsec/` (security primitives unchanged), `internal/utils/` (`SafeGo`). `ui/` is now only the `//go:embed static` wrapper. Contributed by @ColeSpringer via revived PR #14. No user-facing behavior change — pure reorganization for maintainability.
 - **Background panic recovery everywhere** — every goroutine wrapped via `utils.SafeGo`. One bad notifier/poller can no longer crash the whole process.
+- **Golden Rule is now optional everywhere.** TRaSH renamed `[Required] Golden Rule` → `[Optional] Golden Rule` in PR #2711 upstream — both Golden Rule CFs (`Golden Rule UHD` and `Golden Rule HD`) are `required: false` in the schema and always were, but the group naming implied otherwise. Clonarr now treats the group as optional in the TRaSH-profile flow (profile detail, compare, builder) — picking zero is allowed, picking one is allowed, picking both is still forbidden (the exclusivity rule). Works with both the old and the renamed TRaSH repo name so existing installs don't break when TRaSH's PR merges upstream.
+- **CF Group Builder for CF categorization** — formerly only TRaSH's own cf-groups drove the dropdown; now the UI surfaces the user's locally-built cf-groups alongside upstream ones and splits the "Ungrouped" bucket so it's obvious what hasn't been categorized yet.
+- **Profile card sorting** — profiles within each card on the Profiles tab now alpha-sort, and cards themselves sort by their group integer (not a hardcoded name order) so new groups slot in correctly.
+- **Sync history "Last Changed" time is frozen on apply.** Previously the column could drift as entries aged; now it's backfilled for existing entries at load and preserved via a frozen `AppliedAt` field going forward. Empty-state placeholder shown when entries exist but have no changes.
+
+### Fixed
+
+- **Stale git-lock files no longer permanently break the TRaSH pull.** A container kill during `git fetch --deepen=1` (or any other git op) can leave a `.lock` file behind. Next start failed with "fatal: Unable to create lock" until manual deletion. Reported by @fiservedpi in issue #23 with a one-line `shallow.lock` patch in PR #24. Broadened the fix to cover the full catalogue of locks that the same class of interrupt can leave behind: `HEAD.lock`, `index.lock`, `config.lock`, `packed-refs.lock`, `FETCH_HEAD.lock`, `shallow.lock`, and any `refs/**/*.lock`. Runs at the top of the existing-clone branch in `CloneOrPull`, before any git invocation. Safe — Clonarr is the only writer to `/data/trash-guides/.git` (single-process `pullMu` serializes all callers), so any lock found at startup is by definition stale from our own interrupted previous run. Credit @fiservedpi for the clean reproducer + patch that started the investigation.
+- **C3 — config save no longer clobbers env-locked trust-boundary fields on no-change edits.** Unrelated setting saves could silently empty `TrustedNetworks` / `TrustedProxies` when the UI didn't touch them. Now guarded at every call site.
+- **H3 — unauthenticated `/api/*` requests redirect to `/login`** instead of returning raw 401 JSON for browser-initiated navigation. API-key paths still return JSON 401. Centralized in the fetch wrapper so every handler inherits it.
+- **H4 — `handleUpdateConfig` serialized to close a lost-update race.** Two parallel config edits could land in the wrong order; one lock per handler eliminates the interleave.
+- **H5 — password-complexity UX on the setup wizard** gives progressive hints instead of a single rejection at submit. Matches Radarr/Sonarr feel.
+- **Profile export omits the `language` field from Sonarr TRaSH JSON.** Sonarr schema doesn't include it at the profile level; previous exports added noise that round-tripped back as a dirty diff. Radarr exports unchanged (language is valid there).
+- **Profile detail — cutoff override now syncs after an auto-correct.** If the chosen cutoff was invalid and the UI auto-corrected it, the override state stayed pointing at the old value until a manual change. Now auto-correct writes through.
+- **Profile builder — auto-selected cutoff syncs to `pb.cutoff` immediately.** Same class of desync as above; the builder flow was independently affected.
+- **Sync-history display** — backfills `AppliedAt` on load for entries that pre-date the field (so they don't all show the same placeholder time).
+- **CF Group Builder** — scopes MD5 trash_id generation by app type (a Radarr CF and a Sonarr CF with identical names now get different trash_ids and don't collide when imported side-by-side). `cfgbDelete` guarded against overlapping clicks. Styled confirm modals instead of the browser-native `confirm()` dialog. Paste artefacts stripped from pasted descriptions.
+- **Notification webhook validation** restored after refactor, with migration tests covering the v2.0.x-flat → v2.0.8-agents path.
+- **UI polish** — readable placeholder text on dark inputs; renamed undefined `.config-input` class to the actual `.input` style.
+
+### Notes for upgraders
+
+Upgrading from v2.0.x is transparent — no config migration needed. If you have `cf-groups/*.json` files in `/config/custom-cfs/`, they're picked up automatically by the CF Group Builder dropdown alongside TRaSH's upstream groups. The v2.0.6 security baseline (authentication, trusted networks, API key) is unchanged.
+
+Users who were manually deleting `.git/shallow.lock` after container restarts can stop — that's now handled automatically.
 
 ## v2.0.8
 

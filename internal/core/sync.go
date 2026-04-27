@@ -926,8 +926,10 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		prevCutoffFormatScore := targetProfile.CutoffFormatScore
 		prevUpgradeAllowed := targetProfile.UpgradeAllowed
 		var prevLanguageID int
+		var prevLanguageName string
 		if targetProfile.Language != nil {
 			prevLanguageID = targetProfile.Language.ID
+			prevLanguageName = targetProfile.Language.Name
 		}
 		// Snapshot the current quality structure — filtered to items TRaSH manages
 		// so the comparison is insensitive to Radarr's unused-tail ordering, which
@@ -984,8 +986,10 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 		// Detect profile-level setting changes
 		var curLanguageID int
+		var curLanguageName string
 		if targetProfile.Language != nil {
 			curLanguageID = targetProfile.Language.ID
+			curLanguageName = targetProfile.Language.Name
 		}
 		profileSettingsChanged := targetProfile.MinFormatScore != prevMinFormatScore ||
 			targetProfile.MinUpgradeFormatScore != prevMinUpgradeFormatScore ||
@@ -1301,11 +1305,23 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 
 		if profileSettingsChanged {
 			updated = true
-			log.Printf("Sync: profile settings changed (minScore=%d→%d, minUpgrade=%d→%d, cutoffScore=%d→%d, upgrade=%v→%v)",
+			// Resolve language for log/details — prevLanguageName/curLanguageName
+			// fall back to the ID when the API didn't surface a name (rare).
+			fmtLang := func(name string, id int) string {
+				if name != "" {
+					return name
+				}
+				if id == 0 {
+					return "<none>"
+				}
+				return fmt.Sprintf("ID %d", id)
+			}
+			log.Printf("Sync: profile settings changed (minScore=%d→%d, minUpgrade=%d→%d, cutoffScore=%d→%d, upgrade=%v→%v, language=%s→%s)",
 				prevMinFormatScore, targetProfile.MinFormatScore,
 				prevMinUpgradeFormatScore, targetProfile.MinUpgradeFormatScore,
 				prevCutoffFormatScore, targetProfile.CutoffFormatScore,
-				prevUpgradeAllowed, targetProfile.UpgradeAllowed)
+				prevUpgradeAllowed, targetProfile.UpgradeAllowed,
+				fmtLang(prevLanguageName, prevLanguageID), fmtLang(curLanguageName, curLanguageID))
 			if targetProfile.MinFormatScore != prevMinFormatScore {
 				result.SettingsDetails = append(result.SettingsDetails, fmt.Sprintf("Min Score: %d → %d", prevMinFormatScore, targetProfile.MinFormatScore))
 			}
@@ -1317,6 +1333,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 			if targetProfile.UpgradeAllowed != prevUpgradeAllowed {
 				result.SettingsDetails = append(result.SettingsDetails, fmt.Sprintf("Upgrades: %v → %v", prevUpgradeAllowed, targetProfile.UpgradeAllowed))
+			}
+			if curLanguageID != prevLanguageID {
+				result.SettingsDetails = append(result.SettingsDetails, fmt.Sprintf("Language: %s → %s", fmtLang(prevLanguageName, prevLanguageID), fmtLang(curLanguageName, curLanguageID)))
 			}
 		}
 

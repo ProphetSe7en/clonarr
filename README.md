@@ -2,7 +2,7 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/ProphetSe7en/clonarr?label=latest) ![GitHub last commit](https://img.shields.io/github/last-commit/ProphetSe7en/clonarr/main?label=last%20commit)
 
-Please report issues on [GitHub](https://github.com/prophetse7en/clonarr/issues).
+**Support / questions:** [#clonarr](https://discordapp.com/channels/492590071455940612/1495685561552207913) on the [TRaSH Guides Discord](https://trash-guides.info/discord) (under Community Apps). **Report bugs:** [GitHub issues](https://github.com/prophetse7en/clonarr/issues).
 
 A fully visual TRaSH Guides sync tool for Radarr and Sonarr. Browse, customize, and sync Custom Formats, Quality Profiles, Scores, and Quality Sizes — no YAML configs, no CLI, just a browser.
 

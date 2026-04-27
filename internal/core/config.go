@@ -15,8 +15,9 @@ type Config struct {
 	Instances            []Instance                       `json:"instances"`
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
 	PullInterval         string                           `json:"pullInterval"` // Go duration (e.g. "24h", "1h", "0" to disable)
-	DevMode              bool                             `json:"devMode"`      // Enable TRaSH developer tools (TRaSH JSON export)
-	DebugLogging         bool                             `json:"debugLogging"` // Write detailed operations to /config/debug.log
+	DevMode              bool                             `json:"devMode"`             // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
+	TrashSchemaFields    bool                             `json:"trashSchemaFields"`   // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
+	DebugLogging         bool                             `json:"debugLogging"`        // Write detailed operations to /config/debug.log
 	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
 	QualitySizeAutoSync  map[string]QSAutoSync             `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
 	SyncHistory          []SyncHistoryEntry               `json:"syncHistory,omitempty"`
@@ -112,6 +113,13 @@ type AutoSyncRule struct {
 	LastSyncCommit    string         `json:"lastSyncCommit,omitempty"`
 	LastSyncTime      string         `json:"lastSyncTime,omitempty"`
 	LastSyncError     string         `json:"lastSyncError,omitempty"`
+	// OrphanedAt is set (RFC3339 timestamp) when clonarr's drift-check
+	// detects that ArrProfileID no longer resolves in the target Arr
+	// instance. Auto-sync skips orphaned rules; the UI exposes Restore
+	// (re-create profile in Arr from last synced intent) and Remove
+	// (permanent delete) actions. Empty when the rule is in normal
+	// operation. Soft-tombstone replaces the previous auto-delete cleanup.
+	OrphanedAt string `json:"orphanedAt,omitempty"`
 }
 
 // SyncBehavior controls how the sync engine handles CF additions, score overrides, and removals.
@@ -197,8 +205,22 @@ type SyncHistoryEntry struct {
 	CFsCreated       int               `json:"cfsCreated"`
 	CFsUpdated     int               `json:"cfsUpdated"`
 	ScoresUpdated  int               `json:"scoresUpdated"`
-	LastSync       string            `json:"lastSync"`
-	Changes        *SyncChanges      `json:"changes,omitempty"`
+	// LastSync bumps on every sync attempt for this profile (including no-op
+	// auto-syncs) so callers can show "last activity" per profile. UI surfaces
+	// it in the TRaSH Sync tab's per-profile row.
+	LastSync string `json:"lastSync"`
+	// AppliedAt is frozen at entry creation when the sync actually produced
+	// changes — a stable "when these changes landed" timestamp. Empty on
+	// baseline/no-op entries and on entries predating this field (in which
+	// case UI falls back to LastSync).
+	AppliedAt string        `json:"appliedAt,omitempty"`
+	Changes   *SyncChanges  `json:"changes,omitempty"`
+	// OrphanedAt mirrors the field on the rule — set when the entry
+	// belongs to a profile that has been detected as deleted in Arr.
+	// Lets the UI gray out / badge orphaned history rows independently
+	// of rule state (the rule may have been removed while history is
+	// retained for diagnostics).
+	OrphanedAt string `json:"orphanedAt,omitempty"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.
@@ -264,6 +286,30 @@ func (cs *ConfigStore) Load() error {
 	// Migrate old flat notification fields to NotificationAgents slice.
 	// Safe to call under lock — migrateFlatNotifications reads cs.filePath directly.
 	cs.migrateFlatNotifications(data)
+
+	// Backfill AppliedAt on sync history entries that predate the field.
+	// Without this, existing entries keep showing "just now" in the History
+	// tab (because the frontend falls back to LastSync when AppliedAt is
+	// empty, and LastSync still bumps on no-op syncs). Seeding with
+	// LastSync captures the current value and — crucially — freezes it, so
+	// subsequent no-op bumps no longer drift the displayed "Last Changed"
+	// timestamp. Best-effort: we don't know the original change time, but
+	// freezing at migration time stops the wandering. New entries created
+	// after this point set AppliedAt inline (see api/sync.go & autosync.go).
+	var migrated int
+	for i := range cs.config.SyncHistory {
+		sh := &cs.config.SyncHistory[i]
+		if sh.AppliedAt == "" && sh.Changes.HasChanges() {
+			sh.AppliedAt = sh.LastSync
+			migrated++
+		}
+	}
+	if migrated > 0 {
+		log.Printf("Migrated %d sync history entries to set AppliedAt = LastSync", migrated)
+		if err := cs.saveLocked(); err != nil {
+			log.Printf("Warning: failed to persist sync history migration: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -885,16 +931,29 @@ func (cs *ConfigStore) GetProfileChangeHistory(instanceID string, arrProfileID i
 }
 
 // DeleteSyncHistory removes a sync history entry by instanceId + arrProfileId.
+// DeleteSyncHistory removes ALL sync history entries matching the
+// (instanceID, arrProfileID) pair. A profile that has been synced multiple
+// times accumulates multiple entries; the UI dedupes them to one row, so a
+// single user-initiated delete must clear every matching entry — otherwise
+// the row reappears (only one entry got removed) and the user perceives the
+// delete as broken.
 func (cs *ConfigStore) DeleteSyncHistory(instanceID string, arrProfileID int) error {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	for i, sh := range cs.config.SyncHistory {
+	cleaned := make([]SyncHistoryEntry, 0, len(cs.config.SyncHistory))
+	removed := false
+	for _, sh := range cs.config.SyncHistory {
 		if sh.InstanceID == instanceID && sh.ArrProfileID == arrProfileID {
-			cs.config.SyncHistory = append(cs.config.SyncHistory[:i], cs.config.SyncHistory[i+1:]...)
-			return cs.saveLocked()
+			removed = true
+			continue
 		}
+		cleaned = append(cleaned, sh)
 	}
-	return fmt.Errorf("sync history entry not found")
+	if !removed {
+		return fmt.Errorf("sync history entry not found")
+	}
+	cs.config.SyncHistory = cleaned
+	return cs.saveLocked()
 }
 
 // MigrateImportedProfiles moves any imported profiles from the old config

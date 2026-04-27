@@ -46,9 +46,18 @@ func main() {
 
 	trashStore := core.NewTrashStore(dataDir)
 	profilesStore := core.NewProfileStore(filepath.Join(configDir, "profiles"))
+	// Migrate profile filenames at startup so the appType suffix added in
+	// PR #28's sanitizeFilename change is applied to existing files. Without
+	// this, profiles created before the fix keep their old names and
+	// same-name-Radarr-vs-Sonarr collisions stay unresolved on disk.
+	if n := profilesStore.MigrateFilenames(); n > 0 {
+		log.Printf("profile: migrated %d filenames to name-based", n)
+	}
 	customCFsStore := core.NewCustomCFStore(filepath.Join(configDir, "custom", "json"))
 	customCFsStore.MigrateFromFlatDir(filepath.Join(configDir, "custom-cfs"))
 	customCFsStore.MigrateFilenames()
+	cfGroupsStore := core.NewCFGroupStore(filepath.Join(configDir, "custom", "json"))
+	cfGroupsStore.MigrateFilenames()
 
 	// Migrate any imported profiles from old config to per-file storage
 	core.MigrateImportedProfiles(cfgStore, profilesStore)
@@ -61,6 +70,7 @@ func main() {
 		Trash:        trashStore,
 		Profiles:     profilesStore,
 		CustomCFs:    customCFsStore,
+		CFGroups:     cfGroupsStore,
 		DebugLog:     debugLogStore,
 		Version:      Version,
 		HTTPClient:   &http.Client{Timeout: 30 * time.Second},
@@ -97,9 +107,30 @@ func main() {
 	server := &api.Server{Core: app}
 	server.RegisterRoutes(mux)
 
-	// Background: clone/pull TRaSH repo on startup
+	// Background: clone/pull TRaSH repo on startup.
+	//
+	// Respect PullInterval=Disabled when the repo is already cloned: users who
+	// explicitly disable pulls don't expect a pull on every container restart.
+	// On first run (no .git) we still clone — the app has no CF/profile data
+	// otherwise — and we still load the existing on-disk data into memory.
 	utils.SafeGo("startup-trash-pull", func() {
 		cfg := cfgStore.Get()
+		repoCloned := false
+		if _, err := os.Stat(filepath.Join(trashStore.DataDir(), ".git")); err == nil {
+			repoCloned = true
+		}
+
+		if cfg.PullInterval == "0" && repoCloned {
+			log.Printf("Startup TRaSH pull skipped (interval disabled) — loading existing repo")
+			if err := trashStore.LoadFromDisk(); err != nil {
+				log.Printf("Startup TRaSH load failed: %v", err)
+				return
+			}
+			server.AutoSyncQualitySizes()
+			app.AutoSyncAfterPull()
+			return
+		}
+
 		if err := trashStore.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
 			log.Printf("Startup TRaSH clone/pull failed: %v", err)
 		} else {

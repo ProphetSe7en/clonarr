@@ -38,6 +38,9 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	s.updateConfigMu.Lock()
+	defer s.updateConfigMu.Unlock()
+
 	r.Body = http.MaxBytesReader(w, r.Body, 65536)
 	// Read body once so we can decode into both the main ConfigData and a
 	// small side struct that picks up `confirm_password` (never persisted).
@@ -50,6 +53,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		TrashRepo              *core.TrashRepo      `json:"trashRepo,omitempty"`
 		PullInterval           *string              `json:"pullInterval,omitempty"`
 		DevMode                *bool                `json:"devMode,omitempty"`
+		TrashSchemaFields      *bool                `json:"trashSchemaFields,omitempty"`
 		DebugLogging           *bool                `json:"debugLogging"`
 		Prowlarr               *core.ProwlarrConfig `json:"prowlarr,omitempty"`
 		Authentication         *string              `json:"authentication,omitempty"`
@@ -92,10 +96,20 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Env-lock enforcement: when the field is pinned via TRUSTED_PROXIES /
+	// TRUSTED_NETWORKS env var, reject any submission that tries to CHANGE
+	// it. Submissions matching either the env-locked effective value or
+	// the existing on-disk value are accepted — this prevents clients
+	// that happen to include the field in their body (e.g. a partial PUT
+	// that snapshots current state) from being bounced with 403.
 	if req.TrustedProxies != nil {
 		if s.AuthStore != nil && s.AuthStore.TrustedProxiesLocked() {
-			writeError(w, 403, "trustedProxies is locked by the TRUSTED_PROXIES environment variable. Edit the Unraid template / docker-compose file and restart the container to change it.")
-			return
+			effective := s.AuthStore.TrustedProxiesRaw()
+			existing := s.Core.Config.Get().TrustedProxies
+			if *req.TrustedProxies != effective && *req.TrustedProxies != existing {
+				writeError(w, 403, "trustedProxies is locked by the TRUSTED_PROXIES environment variable. Edit the Unraid template / docker-compose file and restart the container to change it.")
+				return
+			}
 		}
 		if *req.TrustedProxies != "" {
 			if _, perr := netsec.ParseTrustedProxies(*req.TrustedProxies); perr != nil {
@@ -106,8 +120,12 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TrustedNetworks != nil {
 		if s.AuthStore != nil && s.AuthStore.TrustedNetworksLocked() {
-			writeError(w, 403, "trustedNetworks is locked by the TRUSTED_NETWORKS environment variable. Edit the Unraid template / docker-compose file and restart the container to change it.")
-			return
+			effective := s.AuthStore.TrustedNetworksRaw()
+			existing := s.Core.Config.Get().TrustedNetworks
+			if *req.TrustedNetworks != effective && *req.TrustedNetworks != existing {
+				writeError(w, 403, "trustedNetworks is locked by the TRUSTED_NETWORKS environment variable. Edit the Unraid template / docker-compose file and restart the container to change it.")
+				return
+			}
 		}
 		if *req.TrustedNetworks != "" {
 			if _, perr := netsec.ParseTrustedNetworks(*req.TrustedNetworks); perr != nil {
@@ -146,6 +164,9 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.DevMode != nil {
 			cfg.DevMode = *req.DevMode
+		}
+		if req.TrashSchemaFields != nil {
+			cfg.TrashSchemaFields = *req.TrashSchemaFields
 		}
 		if req.DebugLogging != nil {
 			cfg.DebugLogging = *req.DebugLogging

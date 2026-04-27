@@ -758,6 +758,19 @@ func parseTrashProfileJSON(data []byte, appType string, ad *AppData) (*ImportedP
 		}
 	}
 
+	// In a TRaSH profile, every CF in `formatItems` is a mandatory/required
+	// CF of the profile — that's the TRaSH convention (mainly negative
+	// blocking CFs like BR-DISK / LQ that penalise unwanted formats).
+	// Clonarr's Builder uses `FormatItemCFs` as the map that controls which
+	// CFs render in the "Required CFs" section, so mirror the set of keys
+	// from FormatItems. Without this, Builder opens the imported profile
+	// with an empty Required section and the 4 required CFs stay hidden
+	// (group-gated, low opacity) — "imported but nothing shown".
+	formatItemCFs := make(map[string]bool, len(formatItems))
+	for tid := range formatItems {
+		formatItemCFs[tid] = true
+	}
+
 	profile := &ImportedProfile{
 		ID:                    GenerateID(),
 		Name:                  sanitizeName(tp.Name),
@@ -775,6 +788,7 @@ func parseTrashProfileJSON(data []byte, appType string, ad *AppData) (*ImportedP
 		FormatItems:           formatItems,
 		FormatComments:        formatComments,
 		FormatGroups:          formatGroups,
+		FormatItemCFs:         formatItemCFs,
 		TrashDescription:      tp.TrashDescription,
 		GroupNum:              tp.Group,
 	}

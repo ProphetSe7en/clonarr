@@ -537,6 +537,76 @@ func parseChangelog(path string, maxSections int) []ChangelogSection {
 }
 
 // CloneOrPull clones or pulls the TRaSH repo, then re-parses all data.
+// cleanStaleGitLocks removes any *.lock files git left behind from an
+// interrupted operation (container killed mid-fetch, mid-reset, mid-
+// config). These locks block subsequent git invocations:
+//
+//   - shallow.lock     blocks `git fetch --deepen=1`
+//   - index.lock       blocks `git reset`, `git sparse-checkout set`
+//   - HEAD.lock        blocks `git reset`
+//   - config.lock      blocks `git config`, `git remote set-url`
+//   - packed-refs.lock blocks anything that rewrites refs
+//   - FETCH_HEAD.lock  blocks `git fetch`
+//   - refs/**/*.lock   blocks atomic ref updates
+//
+// Safe to call pre-emptively: Clonarr is the only writer to this repo
+// (pullMu serializes all our git calls, no external process touches
+// /data/trash-guides). If a lock exists when we start, it is by
+// definition stale from our own interrupted previous run.
+//
+// Flat scan over refs/{heads,remotes/origin,tags} is sufficient —
+// Clonarr only tracks `origin/master` or `origin/main`, so nested ref
+// hierarchies don't apply.
+//
+// Reported via GitHub issue #23 + PR #24 (fiservedpi, 2026-04-22).
+func cleanStaleGitLocks(gitDir string) {
+	// Top-level standard locks.
+	for _, name := range []string{
+		"HEAD.lock",
+		"index.lock",
+		"config.lock",
+		"packed-refs.lock",
+		"shallow.lock",
+		"FETCH_HEAD.lock",
+	} {
+		p := filepath.Join(gitDir, name)
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		if err := os.Remove(p); err != nil {
+			log.Printf("Warning: failed to remove stale git lock %s: %v", name, err)
+		} else {
+			log.Printf("Removed stale git lock: %s", name)
+		}
+	}
+	// Flat ref-lock scan — only the three dirs Clonarr's refs actually live in.
+	// Branch-name assumption: Clonarr tracks origin/master or origin/main (flat,
+	// no slashes). If TrashRepo.Branch ever becomes a slashed name like
+	// "feature/foo", the corresponding lock lands in refs/remotes/origin/feature/
+	// which this flat scan would miss — swap to filepath.WalkDir then.
+	for _, refDir := range []struct{ absPath, label string }{
+		{filepath.Join(gitDir, "refs", "heads"), "refs/heads"},
+		{filepath.Join(gitDir, "refs", "remotes", "origin"), "refs/remotes/origin"},
+		{filepath.Join(gitDir, "refs", "tags"), "refs/tags"},
+	} {
+		entries, err := os.ReadDir(refDir.absPath)
+		if err != nil {
+			continue // dir doesn't exist — fine, nothing to clean
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".lock") {
+				continue
+			}
+			p := filepath.Join(refDir.absPath, e.Name())
+			if err := os.Remove(p); err != nil {
+				log.Printf("Warning: failed to remove stale ref lock %s: %v", p, err)
+			} else {
+				log.Printf("Removed stale git ref lock: %s/%s", refDir.label, e.Name())
+			}
+		}
+	}
+}
+
 // Serialized via pullMu (C4: prevents concurrent git operations).
 func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 	// C3: Validate inputs to prevent git flag injection
@@ -558,6 +628,14 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 	}
 
 	if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err == nil {
+		// Clean any stale *.lock files from an interrupted previous run
+		// before issuing any git command. Container restarts mid-pull
+		// (or a killed `git` subprocess for any reason) leaves locks
+		// behind that cascade into "fatal: Unable to create lock"
+		// errors on the next run. See cleanStaleGitLocks for the full
+		// lock-file catalogue and rationale.
+		cleanStaleGitLocks(filepath.Join(ts.dataDir, ".git"))
+
 		// Disable git auto-gc — it detaches into the background and the orphan
 		// gets reparented to PID 1 (clonarr), which doesn't reap unknown children,
 		// causing zombie process buildup over time. (v1.8.5 zombie leak fix)
@@ -630,15 +708,52 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 		}
 	}
 
+	return ts.loadAndSwap()
+}
+
+// LoadFromDisk parses the already-cloned TRaSH repo on disk and atomically
+// swaps the result into the store's snapshot, without any git operations.
+//
+// Used at startup when PullInterval is disabled: we must still populate the
+// in-memory snapshot (otherwise the app boots with no CF/profile data), but
+// we respect the user's choice not to pull on every container restart.
+//
+// Errors if the repo is not cloned yet — callers should fall back to
+// CloneOrPull for the first-run case.
+func (ts *TrashStore) LoadFromDisk() error {
+	if !ts.pullMu.TryLock() {
+		return fmt.Errorf("pull already in progress")
+	}
+	defer ts.pullMu.Unlock()
+
+	if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err != nil {
+		return fmt.Errorf("TRaSH repo not cloned at %s", ts.dataDir)
+	}
+
+	return ts.loadAndSwap()
+}
+
+// loadAndSwap reads commit metadata + parses CF/profile JSON from the on-disk
+// repo and atomically swaps a new snapshot into the store. Caller must hold
+// pullMu.
+//
+// On failure, records the error in ts.pullError so TrashStatus / the UI can
+// surface a "pull failing" state instead of silently showing a stale snapshot.
+// Success clears pullError. (Pre-existing behavior: the error path only
+// returned the error to the caller and never updated pullError — so a
+// corrupted on-disk repo after a failed parse looked "clean" in the UI.)
+func (ts *TrashStore) loadAndSwap() error {
 	// Get commit hash
 	hash, err := exec.Command("git", "-C", ts.dataDir, "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
+		ts.SetPullError(err.Error())
 		return fmt.Errorf("get commit hash: %w", err)
 	}
 
 	// Parse all data — builds a new *TrashData (C1: old snapshot remains valid)
 	data, err := ts.parseAll()
 	if err != nil {
+		ts.SetPullError(err.Error())
 		return fmt.Errorf("parse TRaSH data: %w", err)
 	}
 	data.CommitHash = strings.TrimSpace(string(hash))
@@ -1132,7 +1247,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 		})
 	}
 	sort.Slice(categories, func(i, j int) bool {
-		return GetCategoryOrder(categories[i].Category) < GetCategoryOrder(categories[j].Category)
+		return CompareCFCategories(categories[i].Category, categories[j].Category) < 0
 	})
 
 	var sets []string
@@ -1488,12 +1603,67 @@ func ParseCategoryPrefix(name string) (string, string) {
 	case "SQP":
 		// SQP-specific CFs (e.g. "Disable if one Radarr") belong in Miscellaneous
 		category = "Miscellaneous"
+	case "Optional":
+		// TRaSH PR #2711 renames Golden Rule groups from "[Required] Golden Rule HD/UHD"
+		// to "[Optional] Golden Rule HD/UHD" to signal they can legitimately be unset.
+		// Preserve the "Golden Rule" category so UI ordering and grouping don't break
+		// when the upstream rename lands.
+		if strings.HasPrefix(shortName, "Golden Rule") {
+			category = "Golden Rule"
+		}
 	}
 
 	return category, shortName
 }
 
 // getCategoryOrder returns the display order for a CF category.
+// CategoryTier returns the sort tier for a CF category. Mirrors the
+// frontend _categoryTier in app.js. Used by CompareCFCategories.
+//
+//	0 — regular TRaSH categories (alphabetical within tier)
+//	1 — SQP-prefix categories ([SQP], [SQP-1], [SQP-4 (MA Hybrid) Optional]...)
+//	2 — "Other" / unrecognised
+//	3 — Custom (user-authored CFs/groups, pinned at the bottom so user-data
+//	    stays visually separated from TRaSH-derived data)
+func CategoryTier(cat string) int {
+	if cat == "" {
+		return 2
+	}
+	if cat == "Custom" {
+		return 3
+	}
+	if cat == "Other" {
+		return 2
+	}
+	upper := strings.ToUpper(cat)
+	if strings.HasPrefix(upper, "SQP") {
+		return 1
+	}
+	return 0
+}
+
+// CompareCFCategories returns -1/0/+1 for sort.Slice and similar uses.
+// Tier-first, then alphabetical on category name.
+func CompareCFCategories(a, b string) int {
+	ta, tb := CategoryTier(a), CategoryTier(b)
+	if ta != tb {
+		if ta < tb {
+			return -1
+		}
+		return 1
+	}
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+// Deprecated: GetCategoryOrder is kept as a thin shim during the v2.2.4
+// sort-consolidation cleanup. New call sites should use CompareCFCategories
+// directly. Removed once all internal callers migrate.
 func GetCategoryOrder(cat string) int {
 	switch cat {
 	case "Golden Rule":
@@ -1659,7 +1829,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 	}
 
 	sort.Slice(categories, func(i, j int) bool {
-		return GetCategoryOrder(categories[i].Category) < GetCategoryOrder(categories[j].Category)
+		return CompareCFCategories(categories[i].Category, categories[j].Category) < 0
 	})
 
 	return categories
@@ -1778,15 +1948,14 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 		groups = append(groups, cg)
 	}
 
-	// Sort groups by category order, then defaultEnabled first, then name
+	// Sort groups by category tier, then alphabetical on category, then on
+	// group name. defaultEnabled-first sub-sort dropped here as part of the
+	// v2.2.4 unification — alphabetical-only matches the rest of the UI and
+	// defaultEnabled groups stay visually distinct via the green pill.
 	sort.Slice(groups, func(i, j int) bool {
-		oi := GetCategoryOrder(groups[i].Category)
-		oj := GetCategoryOrder(groups[j].Category)
-		if oi != oj {
-			return oi < oj
-		}
-		if groups[i].DefaultEnabled != groups[j].DefaultEnabled {
-			return groups[i].DefaultEnabled
+		c := CompareCFCategories(groups[i].Category, groups[j].Category)
+		if c != 0 {
+			return c < 0
 		}
 		return groups[i].Name < groups[j].Name
 	})
@@ -1959,15 +2128,13 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 		groups = append(groups, cg)
 	}
 
-	// Sort groups by category order, then name
+	// Sort groups by category tier, then alphabetical on category, then on
+	// group name. defaultEnabled-first sub-sort dropped (see v2.2.4 sort
+	// unification — same logic as ProfileDetailData above).
 	sort.Slice(groups, func(i, j int) bool {
-		oi := GetCategoryOrder(groups[i].Category)
-		oj := GetCategoryOrder(groups[j].Category)
-		if oi != oj {
-			return oi < oj
-		}
-		if groups[i].DefaultEnabled != groups[j].DefaultEnabled {
-			return groups[i].DefaultEnabled
+		c := CompareCFCategories(groups[i].Category, groups[j].Category)
+		if c != 0 {
+			return c < 0
 		}
 		return groups[i].Name < groups[j].Name
 	})

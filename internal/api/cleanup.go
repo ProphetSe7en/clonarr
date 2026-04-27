@@ -5,6 +5,7 @@ import (
 	"clonarr/internal/core"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -24,6 +25,17 @@ type CleanupScanResult struct {
 	Items       []CleanupItem `json:"items"`
 	TotalCount  int           `json:"totalCount"`
 	AffectCount int           `json:"affectCount"`
+	// NamingUsesCustomFormats reports whether the instance's file-naming
+	// format string contains the {Custom Formats} token. Only set by
+	// unused-by-clonarr scans. The frontend uses this to render an info
+	// box explaining rename-flag-tagged CFs in the user's actual context.
+	NamingUsesCustomFormats bool `json:"namingUsesCustomFormats,omitempty"`
+	// ManagedItems lists CFs that ARE referenced by clonarr's sync rules
+	// — the complement of Items. Returned only by unused-by-clonarr scans
+	// for the "Managed" filter view in the frontend so the user can see
+	// what's actually in active use and which Arr profiles use it. Never
+	// deleted by cleanupApply.
+	ManagedItems []ManagedCFRef `json:"managedItems,omitempty"`
 }
 
 type CleanupItem struct {
@@ -31,6 +43,25 @@ type CleanupItem struct {
 	Name     string   `json:"name"`
 	Detail   string   `json:"detail,omitempty"`
 	Profiles []string `json:"profiles,omitempty"`
+	// RenamingFlag is true when the CF has includeCustomFormatWhenRenaming
+	// set in Arr. When the instance's naming format uses the {Custom Formats}
+	// token, deleting these CFs removes their tags from filenames rendered
+	// after the delete (existing files unaffected). Only set by
+	// unused-by-clonarr scans.
+	RenamingFlag bool `json:"renamingFlag,omitempty"`
+}
+
+// ManagedCFRef describes a CF that is currently referenced by a clonarr
+// sync rule (selected, score-overridden, or required by the rule's TRaSH/
+// imported profile). UsedInProfiles lists every Arr quality profile that
+// has the CF at a non-zero score — i.e. where the CF is actually
+// influencing release decisions, not just present at score 0. Returned by
+// unused-by-clonarr scans for the "Managed" filter view, never deleted.
+type ManagedCFRef struct {
+	ID             int      `json:"id"`
+	Name           string   `json:"name"`
+	UsedInProfiles []string `json:"usedInProfiles,omitempty"`
+	RenamingFlag   bool     `json:"renamingFlag,omitempty"`
 }
 
 // --- Handlers ---
@@ -92,6 +123,14 @@ func (s *Server) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 
 	case "orphaned-scores":
 		result, err := scanOrphanedScores(client, inst)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, result)
+
+	case "unused-by-clonarr":
+		result, err := scanUnusedByClonarr(s.Core, client, inst, req.Keep)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -201,6 +240,14 @@ func (s *Server) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]any{"scoresReset": count})
+
+	case "unused-by-clonarr":
+		count, err := applyDeleteCFs(client, req.IDs)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"deleted": count})
 
 	default:
 		writeError(w, http.StatusBadRequest, "Unknown action: "+req.Action)
@@ -558,4 +605,234 @@ func applyResetScores(client *arr.ArrClient, cfIDs []int) (int, error) {
 	}
 
 	return resetCount, errors.Join(errs...)
+}
+
+// scanUnusedByClonarr finds CFs in the Arr instance that aren't managed by
+// any clonarr sync rule.
+//
+// "Managed by clonarr" means the CF's name appears in any of:
+//   - A sync rule's selectedCFs (covers both group-enabled CFs and Override
+//     extras — frontend pushes both into selectedCFs at sync time)
+//   - A sync rule's scoreOverrides keys (a score override on a CF is intent
+//     even when score is zero)
+//   - A TRaSH-source rule's TRaSH profile intrinsic CFs (formatItems
+//     resolved from TRaSH data — these are required by the profile structure)
+//   - An imported/builder profile's CFs (when the rule's profileSource is
+//     "imported")
+//   - The user's keep list
+//
+// CFs with includeCustomFormatWhenRenaming=true are NO LONGER auto-skipped.
+// They appear in results with RenamingFlag=true; the frontend renders a badge
+// and explains the implication (only meaningful when the user's naming format
+// actually uses {Custom Formats}, which we report via NamingUsesCustomFormats).
+// Auto-skipping was over-defensive — it hid TRaSH streaming/language CFs that
+// remain after profile deletion, exactly the cleanup-after-experimentation
+// case this scan is meant to catch.
+//
+// Hard caveat: this scan considers CFs that exist in Arr but were added
+// outside of clonarr (Arr UI directly, Recyclarr, Notifiarr, etc.) as
+// "unused". The frontend warns about this; the backend trusts the user's
+// selections from the preview list.
+func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instance, keep []string) (*CleanupScanResult, error) {
+	// Hard refusal when TRaSH guide data isn't loaded for this app type.
+	// Without it, every TRaSH ID in selectedCFs/scoreOverrides resolves to
+	// "" → managedNames misses every TRaSH-derived CF → the user is shown
+	// "delete all your TRaSH CFs" as candidates. That's data-loss-grade
+	// false positive risk, so refuse the scan with a clear remediation.
+	ad := app.Trash.GetAppData(inst.Type)
+	if ad == nil {
+		return nil, fmt.Errorf("TRaSH guide data is not loaded for %s — Clonarr cannot determine what's managed without it. Check Settings → TRaSH Guides and ensure the repository pull has completed successfully", inst.Type)
+	}
+
+	cfs, err := client.ListCustomFormats()
+	if err != nil {
+		return nil, err
+	}
+
+	// Keep list — case-insensitive name protection
+	keepSet := make(map[string]bool, len(keep))
+	for _, k := range keep {
+		k = strings.TrimSpace(k)
+		if k != "" {
+			keepSet[strings.ToLower(k)] = true
+		}
+	}
+
+	// Build the managed-name set from clonarr's sync rules + imported profiles.
+	managedNames := make(map[string]bool)
+	cfg := app.Config.Get()
+
+	// Resolve a CF ID (TRaSH hex string or "custom:<hex>") to its display name
+	// via the TRaSH appdata or clonarr's custom-CF store. Returns "" when the
+	// ID is unresolvable — those refs are silently skipped, mirroring the
+	// frontend's resolveCFName fallback behavior.
+	customCFs := app.CustomCFs.List(inst.Type)
+	customByID := make(map[string]string, len(customCFs))
+	for _, ccf := range customCFs {
+		customByID[ccf.ID] = ccf.Name
+	}
+	resolveName := func(cfID string) string {
+		if strings.HasPrefix(cfID, "custom:") {
+			return customByID[cfID]
+		}
+		// ad is guaranteed non-nil here — refused above when not loaded
+		if cf, ok := ad.CustomFormats[cfID]; ok {
+			return cf.Name
+		}
+		return ""
+	}
+
+	for _, rule := range cfg.AutoSync.Rules {
+		if rule.InstanceID != inst.ID {
+			continue
+		}
+		// User selections — Override extras AND group-enabled CFs both land here
+		for _, cfID := range rule.SelectedCFs {
+			if name := resolveName(cfID); name != "" {
+				managedNames[strings.ToLower(name)] = true
+			}
+		}
+		// Score overrides — a score (even 0) is explicit intent
+		for cfID := range rule.ScoreOverrides {
+			if name := resolveName(cfID); name != "" {
+				managedNames[strings.ToLower(name)] = true
+			}
+		}
+		// TRaSH-source rule: include the TRaSH profile's intrinsic CFs
+		if rule.ProfileSource == "trash" && rule.TrashProfileID != "" {
+			resolved, _ := core.ResolveProfileCFs(ad, rule.TrashProfileID)
+			for _, rcf := range resolved {
+				managedNames[strings.ToLower(rcf.Name)] = true
+			}
+		}
+		// Imported/builder rule: include the imported profile's CFs
+		if rule.ProfileSource == "imported" && rule.ImportedProfileID != "" {
+			if ip, ok := app.Profiles.Get(rule.ImportedProfileID); ok {
+				for trashID := range ip.FormatItems {
+					if comment, ok := ip.FormatComments[trashID]; ok && comment != "" {
+						managedNames[strings.ToLower(comment)] = true
+					} else if cf, ok := ad.CustomFormats[trashID]; ok {
+						managedNames[strings.ToLower(cf.Name)] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Belt-and-suspenders: also include CFs from sync history. This protects
+	// against TRaSH-side schema drift — if a TRaSH profile referenced by a
+	// rule no longer resolves cleanly (trash_id renamed/removed upstream),
+	// ResolveProfileCFs returns empty and the rule's intrinsic required CFs
+	// would be missing from managedNames. The sync history captures what
+	// clonarr actually pushed to Arr the last time this rule synced, so it's
+	// authoritative for "what clonarr put there". Only the latest entry
+	// per (instance, arrProfileId) matters — older entries may include CFs
+	// the user has since removed via rule edits.
+	latestPerProfile := make(map[int]int) // arrProfileId → index in cfg.SyncHistory
+	for i, sh := range cfg.SyncHistory {
+		if sh.InstanceID != inst.ID {
+			continue
+		}
+		if prev, has := latestPerProfile[sh.ArrProfileID]; !has || sh.LastSync > cfg.SyncHistory[prev].LastSync {
+			latestPerProfile[sh.ArrProfileID] = i
+		}
+	}
+	for _, idx := range latestPerProfile {
+		for _, cfID := range cfg.SyncHistory[idx].SyncedCFs {
+			if name := resolveName(cfID); name != "" {
+				managedNames[strings.ToLower(name)] = true
+			}
+		}
+	}
+
+	// Probe the instance's naming format so the frontend can show context
+	// for renaming-flagged CFs. Soft-fail: if the probe errors, we just
+	// don't render the info box — scan results are still correct.
+	namingUsesCFs := false
+	if naming, err := client.GetNaming(); err == nil {
+		namingUsesCFs = namingFormatUsesCustomFormats(naming, inst.Type)
+	}
+
+	// Build a map of CF ID → list of Arr profile names where the CF has a
+	// non-zero score (i.e. actively influences release decisions in that
+	// profile). Score-zero entries are omitted because they're inert
+	// padding — every Arr profile contains every CF at score 0 by default.
+	// Soft-fail: empty map if the profile list can't be fetched.
+	profileUsage := make(map[int][]string)
+	if profiles, err := client.ListProfiles(); err == nil {
+		for _, p := range profiles {
+			for _, fi := range p.FormatItems {
+				if fi.Score != 0 {
+					profileUsage[fi.Format] = append(profileUsage[fi.Format], p.Name)
+				}
+			}
+		}
+	}
+
+	// Walk the Arr CF list once: split into unmanaged (Items — delete
+	// candidates) and managed (ManagedItems — display only). Keep-list
+	// CFs are skipped from both buckets — they're explicit user-protected.
+	var items []CleanupItem
+	var managedItems []ManagedCFRef
+	for _, cf := range cfs {
+		nameLower := strings.ToLower(cf.Name)
+		if keepSet[nameLower] {
+			continue
+		}
+		if managedNames[nameLower] {
+			managedItems = append(managedItems, ManagedCFRef{
+				ID:             cf.ID,
+				Name:           cf.Name,
+				UsedInProfiles: profileUsage[cf.ID],
+				RenamingFlag:   cf.IncludeCustomFormatWhenRenaming,
+			})
+			continue
+		}
+		items = append(items, CleanupItem{
+			ID:           cf.ID,
+			Name:         cf.Name,
+			RenamingFlag: cf.IncludeCustomFormatWhenRenaming,
+		})
+	}
+
+	return &CleanupScanResult{
+		Action:                  "unused-by-clonarr",
+		InstanceID:              inst.ID,
+		Instance:                inst.Name,
+		TotalCount:              len(cfs),
+		AffectCount:             len(items),
+		Items:                   items,
+		ManagedItems:            managedItems,
+		NamingUsesCustomFormats: namingUsesCFs,
+	}, nil
+}
+
+// namingFormatUsesCustomFormats reports whether the instance's primary file-
+// naming format string references the Custom Formats token in any of its
+// common variations:
+//
+//	{Custom Formats}            // bare token
+//	{[Custom Formats]}          // TRaSH-recommended (literal brackets)
+//	{(Custom Formats)}          // parenthesis variant
+//	{Custom Formats:30}         // truncated variant
+//
+// Substring match on "Custom Formats" reliably catches all of these — that
+// exact phrase only appears as a Radarr/Sonarr token, not in any other
+// part of a naming format. Only the standard format is checked (>99% of
+// setups); exotic anime/daily formats can be added if a real case appears.
+// Returns false silently when the expected key is absent.
+func namingFormatUsesCustomFormats(naming arr.ArrNamingConfig, instType string) bool {
+	key := "standardMovieFormat"
+	if instType != "radarr" {
+		key = "standardEpisodeFormat"
+	}
+	v, ok := naming[key]
+	if !ok {
+		return false
+	}
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	return strings.Contains(s, "Custom Formats")
 }

@@ -97,13 +97,13 @@ func TestSetupAcceptsStrongPassword(t *testing.T) {
 
 func TestSetupUsernameValidation(t *testing.T) {
 	bads := map[string]string{
-		"empty":           "",
-		"whitespace":      "   ",
-		"leading_space":   " admin",
-		"trailing_space":  "admin ",
-		"control_char":    "admin\x00",
-		"newline":         "admin\nname",
-		"too_long":        strings.Repeat("a", 65),
+		"empty":          "",
+		"whitespace":     "   ",
+		"leading_space":  " admin",
+		"trailing_space": "admin ",
+		"control_char":   "admin\x00",
+		"newline":        "admin\nname",
+		"too_long":       strings.Repeat("a", 65),
 	}
 	for name, u := range bads {
 		t.Run(name, func(t *testing.T) {
@@ -300,6 +300,9 @@ func TestIsPublic(t *testing.T) {
 		{"/api/auth/status", true, "exact auth status"},
 		// Sub-paths under documented prefixes
 		{"/static/main.js", true, "static file"},
+		{"/css/main.css", true, "css file"},
+		{"/js/api.js", true, "js file"},
+		{"/icons/icon.png", true, "icon file"},
 		{"/setup/step2", true, "setup substep"},
 		// Must NOT be public — catches #1 bypass
 		{"/loginzzz", false, "loginzzz must NOT match /login prefix"},

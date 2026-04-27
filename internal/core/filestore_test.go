@@ -1,7 +1,10 @@
 package core
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -199,5 +202,169 @@ func TestFileStore_UpdateNotFound(t *testing.T) {
 	err := fs.Update(testItem{ID: "nonexistent", Name: "X", AppType: "radarr"})
 	if err == nil {
 		t.Error("expected error for updating nonexistent item")
+	}
+}
+
+func TestFileStore_AppTypeSeparation(t *testing.T) {
+	fs := newTestStore(t)
+
+	// Add two items with the exact same name but different AppTypes.
+	// Both should be saved into the store since their filenames should not collide.
+	items := []testItem{
+		{ID: "1", Name: "Identical", AppType: "radarr", Value: "a"},
+		{ID: "2", Name: "Identical", AppType: "sonarr", Value: "b"},
+	}
+
+	added, skipped, err := fs.Add(items)
+	if err != nil {
+		t.Fatalf("Add failed: %v", err)
+	}
+	if added != 2 {
+		t.Errorf("expected 2 added, got %d (skipped: %d)", added, skipped)
+	}
+
+	// Verify both physically exist as files
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("failed to read dir: %v", err)
+	}
+
+	// There should be exactly 2 JSON files with app-scoped names
+	jsonCount := 0
+	files := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			jsonCount++
+			files[e.Name()] = true
+		}
+	}
+	if jsonCount != 2 {
+		t.Errorf("expected 2 JSON files, got %d", jsonCount)
+	}
+	if !files["identical-radarr.json"] {
+		t.Error("expected identical-radarr.json to exist")
+	}
+	if !files["identical-sonarr.json"] {
+		t.Error("expected identical-sonarr.json to exist")
+	}
+
+	// Verify we can retrieve both distinct items
+	rItem, rok := fs.Get("1")
+	sItem, sok := fs.Get("2")
+	if !rok || !sok {
+		t.Fatal("could not retrieve both items")
+	}
+	if rItem.Value != "a" || sItem.Value != "b" {
+		t.Errorf("items corrupted or overwritten: radarr=%q, sonarr=%q", rItem.Value, sItem.Value)
+	}
+}
+
+// `!` is a common prefix on user-authored TRaSH-style CFs (`!P2P Internal`,
+// `!FLUX`). It must be preserved in filenames and `!FLUX` must not collide
+// with `FLUX`.
+func TestFileStore_PreservesBangPrefix(t *testing.T) {
+	fs := newTestStore(t)
+
+	items := []testItem{
+		{ID: "1", Name: "!FLUX", AppType: "radarr", Value: "bang"},
+		{ID: "2", Name: "FLUX", AppType: "radarr", Value: "plain"},
+	}
+	added, _, err := fs.Add(items)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if added != 2 {
+		t.Fatalf("expected both items to add, got %d", added)
+	}
+
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	got := map[string]bool{}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			got[e.Name()] = true
+		}
+	}
+	if !got["!flux-radarr.json"] {
+		t.Error("expected !flux-radarr.json to exist (bang preserved)")
+	}
+	if !got["flux-radarr.json"] {
+		t.Error("expected flux-radarr.json to exist (no collision with bang variant)")
+	}
+
+	bang, ok := fs.Get("1")
+	if !ok || bang.Value != "bang" {
+		t.Error("bang variant data corrupted or missing")
+	}
+	plain, ok := fs.Get("2")
+	if !ok || plain.Value != "plain" {
+		t.Error("plain variant data corrupted or missing")
+	}
+}
+
+// Verifies that MigrateFilenames preserves both items when two ID-named
+// files would migrate to the same target filename. Without collision
+// protection, the second writer silently overwrites the first.
+//
+// Regression test for the bug surfaced 2026-04-26 during PR #28 smoke-test:
+// two names that sanitize to the same target file used to silently overwrite
+// each other during MigrateFilenames. After the fix the alphabetically-first
+// source wins, the rest stay at their original (ID-based) filenames with a
+// log warning. User resolves by renaming in the UI.
+//
+// `!` and `?` differ here because `!` is preserved in filenames (added in
+// 2026-04-26 sanitize-filename change) while `?` is still stripped — so
+// `HD` and `HD?` still collide, exercising the collision-preserve path.
+func TestFileStore_MigrateFilenames_CollisionPreserved(t *testing.T) {
+	fs := newTestStore(t)
+
+	// Manually create two ID-named JSON files whose name+appType sanitize
+	// to the same target. Bypasses Add() to simulate pre-fix on-disk state.
+	items := []testItem{
+		{ID: "aaaa1111aaaa1111aaaa1111aaaa1111", Name: "HD", AppType: "sonarr", Value: "first"},
+		{ID: "bbbb2222bbbb2222bbbb2222bbbb2222", Name: "HD?", AppType: "sonarr", Value: "second"},
+	}
+	for _, it := range items {
+		data, err := json.Marshal(it)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		path := filepath.Join(fs.dir, it.ID+".json")
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatalf("setup write: %v", err)
+		}
+	}
+
+	migrated := fs.MigrateFilenames()
+	if migrated != 1 {
+		t.Errorf("expected 1 migration (one collides and stays), got %d", migrated)
+	}
+
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	jsonCount := 0
+	gotNames := map[string]bool{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		jsonCount++
+		gotNames[e.Name()] = true
+	}
+	if jsonCount != 2 {
+		t.Errorf("expected 2 files preserved (one migrated, one ID-named), got %d", jsonCount)
+	}
+	// The migrated winner is "hd-sonarr.json" — the alphabetically-first
+	// source ID is "aaaa..." for "HD", which wins the target name.
+	if !gotNames["hd-sonarr.json"] {
+		t.Error("expected winner hd-sonarr.json to exist")
+	}
+	// The collision-loser keeps its ID-based filename.
+	if !gotNames["bbbb2222bbbb2222bbbb2222bbbb2222.json"] {
+		t.Error("expected loser to remain at ID-based filename bbbb...json")
 	}
 }

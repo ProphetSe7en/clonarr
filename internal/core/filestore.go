@@ -3,8 +3,10 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -172,7 +174,18 @@ func (fs *FileStore[T, PT]) Update(item T) error {
 	defer fs.mu.Unlock()
 
 	p := PT(&item)
-	newFilename := sanitizeFilename(p.GetName(), p.GetID()) + ".json"
+
+	// Prevent renaming to a name that already exists for this appType
+	existing := fs.listLocked(p.GetAppType())
+	for _, ex := range existing {
+		exP := PT(&ex)
+		// same name in the same app type, but a different item ID
+		if exP.GetName() == p.GetName() && exP.GetID() != p.GetID() {
+			return fmt.Errorf("an item with name %q already exists for %s", p.GetName(), p.GetAppType())
+		}
+	}
+
+	newFilename := sanitizeFilename(p.GetName(), p.GetAppType(), p.GetID()) + ".json"
 
 	// Find and remove old file if it exists under a different name (migration/rename)
 	found := false
@@ -227,7 +240,7 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 
 	// Use sanitized name as filename for readability. Falls back to ID if name is empty.
 	// The file contains the full item JSON (including ID), so the filename is purely cosmetic.
-	filename := sanitizeFilename(p.GetName(), id) + ".json"
+	filename := sanitizeFilename(p.GetName(), p.GetAppType(), id) + ".json"
 	path := filepath.Join(fs.dir, filename)
 
 	tmp := path + ".tmp"
@@ -238,8 +251,14 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 }
 
 // sanitizeFilename converts a name to a safe filesystem filename.
-// Strips path separators, .., and special characters. Falls back to ID if name is empty.
-func sanitizeFilename(name, id string) string {
+// Strips path separators, .., and most special characters. Falls back to ID if name is empty.
+//
+// `!` is preserved because it's a common prefix on TRaSH-style custom format
+// names (e.g. `!P2P Internal`, `!FLUX`) and is safe on every filesystem we
+// support. Stripping it would also collide names like `!FLUX` and `FLUX` to
+// the same target file. The trim/collapse logic operates on '-' only so a
+// leading '!' is kept after the rest is normalized.
+func sanitizeFilename(name, appType, id string) string {
 	if name == "" {
 		name = id
 	}
@@ -247,7 +266,7 @@ func sanitizeFilename(name, id string) string {
 	safe := strings.ToLower(name)
 	var b strings.Builder
 	for _, r := range safe {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '!' {
 			b.WriteRune(r)
 		} else if r == ' ' || r == '.' {
 			b.WriteRune('-')
@@ -261,12 +280,32 @@ func sanitizeFilename(name, id string) string {
 	if result == "" {
 		result = id
 	}
+	if appType != "" {
+		safeAppType := strings.ToLower(appType)
+		var ab strings.Builder
+		for _, r := range safeAppType {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+				ab.WriteRune(r)
+			}
+		}
+		if clean := ab.String(); clean != "" {
+			result = result + "-" + clean
+		}
+	}
 	return result
 }
 
 // MigrateFilenames renames files that use ID-based filenames (from the path
 // traversal fix) to sanitized name-based filenames. Safe to call on startup —
 // skips files that already have the correct name.
+//
+// Collision protection: when two items would migrate to the same target
+// filename (e.g. names "HD" and "HD !" both sanitize to "hd-radarr.json"),
+// the alphabetically-first source wins, the rest stay at their existing
+// filenames with a log warning. Without this guard, the second writer
+// silently overwrote the first (silent data loss). The user can resolve
+// the collision by renaming one of the items in the UI; the next startup
+// migrates the freshly-renamed item.
 func (fs *FileStore[T, PT]) MigrateFilenames() int {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -276,12 +315,28 @@ func (fs *FileStore[T, PT]) MigrateFilenames() int {
 		return 0
 	}
 
-	migrated := 0
+	// Pre-populate `claimed` with every existing JSON filename so we detect
+	// collisions both within this run and against files that already happen
+	// to be at the target name (correctly-migrated from a previous run).
+	claimed := make(map[string]bool, len(entries))
+	jsonNames := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		path := filepath.Join(fs.dir, e.Name())
+		claimed[e.Name()] = true
+		jsonNames = append(jsonNames, e.Name())
+	}
+
+	// Sort for deterministic migration order. When a collision occurs, the
+	// alphabetically-first source is the one that gets the target filename.
+	// OS-dependent ReadDir order would otherwise make migration outcomes
+	// unpredictable across hosts.
+	sort.Strings(jsonNames)
+
+	migrated := 0
+	for _, name := range jsonNames {
+		path := filepath.Join(fs.dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
@@ -291,13 +346,20 @@ func (fs *FileStore[T, PT]) MigrateFilenames() int {
 			continue
 		}
 		p := PT(&item)
-		expectedFilename := sanitizeFilename(p.GetName(), p.GetID()) + ".json"
-		if e.Name() != expectedFilename {
-			newPath := filepath.Join(fs.dir, expectedFilename)
-			if err := os.WriteFile(newPath, data, 0644); err == nil {
-				os.Remove(path)
-				migrated++
-			}
+		expectedFilename := sanitizeFilename(p.GetName(), p.GetAppType(), p.GetID()) + ".json"
+		if name == expectedFilename {
+			continue
+		}
+		if claimed[expectedFilename] {
+			log.Printf("filestore: collision migrating %q to %q — target already claimed by another item (id=%q); leaving %q as-is. Rename one of the items in the UI to allow migration.", name, expectedFilename, p.GetID(), name)
+			continue
+		}
+		newPath := filepath.Join(fs.dir, expectedFilename)
+		if err := os.WriteFile(newPath, data, 0644); err == nil {
+			os.Remove(path)
+			delete(claimed, name)
+			claimed[expectedFilename] = true
+			migrated++
 		}
 	}
 	return migrated

@@ -37,6 +37,7 @@ type App struct {
 	Trash          *TrashStore
 	Profiles       *ProfileStore
 	CustomCFs      *CustomCFStore
+	CFGroups       *CFGroupStore
 	DebugLog       *DebugLogger
 	Version        string
 	HTTPClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls
