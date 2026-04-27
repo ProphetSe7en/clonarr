@@ -67,7 +67,7 @@ func (pushoverProvider) Validate(agent Agent) error {
 func (pushoverProvider) Test(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error) {
 	cfg := agent.Config
 	if strings.TrimSpace(cfg.PushoverUserKey) == "" || strings.TrimSpace(cfg.PushoverAppToken) == "" {
-		return nil, fmt.Errorf("User key and app token are required")
+		return nil, fmt.Errorf("pushover user key and app token are required")
 	}
 	if runtime.SafeClient == nil {
 		return nil, fmt.Errorf("pushover client not configured")

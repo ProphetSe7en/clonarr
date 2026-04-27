@@ -24,7 +24,7 @@ func TestDiscordValidate(t *testing.T) {
 			agent: Agent{Name: "Discord", Type: "discord", Config: Config{
 				DiscordWebhook: "http://example.com/webhook",
 			}},
-			wantErr: "discord webhook must start with https://discord.com/api/webhooks/",
+			wantErr: "discord webhook must start with https://discord.com/api/webhooks/ or https://discordapp.com/api/webhooks/",
 		},
 		{
 			name: "invalid updates webhook",
@@ -32,7 +32,7 @@ func TestDiscordValidate(t *testing.T) {
 				DiscordWebhook:        "https://discord.com/api/webhooks/111/aaa",
 				DiscordWebhookUpdates: "http://example.com/webhook",
 			}},
-			wantErr: "discord updates webhook must start with https://discord.com/api/webhooks/",
+			wantErr: "discord updates webhook must start with https://discord.com/api/webhooks/ or https://discordapp.com/api/webhooks/",
 		},
 		{
 			name: "valid",
@@ -258,4 +258,3 @@ func TestDiscordNotifyRouteUpdates(t *testing.T) {
 		t.Fatalf("expected updates webhook URL, got %q", mock.lastURL)
 	}
 }
-

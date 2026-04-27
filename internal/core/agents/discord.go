@@ -60,11 +60,11 @@ func (discordProvider) Validate(agent Agent) error {
 	}
 	webhook := strings.TrimSpace(agent.Config.DiscordWebhook)
 	if !isDiscordWebhookURL(webhook) {
-		return fmt.Errorf("discord webhook must start with https://discord.com/api/webhooks/")
+		return fmt.Errorf("discord webhook must start with https://discord.com/api/webhooks/ or https://discordapp.com/api/webhooks/")
 	}
 	if u := strings.TrimSpace(agent.Config.DiscordWebhookUpdates); u != "" {
 		if !isDiscordWebhookURL(u) {
-			return fmt.Errorf("discord updates webhook must start with https://discord.com/api/webhooks/")
+			return fmt.Errorf("discord updates webhook must start with https://discord.com/api/webhooks/ or https://discordapp.com/api/webhooks/")
 		}
 	}
 	return nil
@@ -135,7 +135,7 @@ func (discordProvider) sendWebhook(ctx context.Context, runtime Runtime, webhook
 
 	webhook = strings.TrimSpace(webhook)
 	if !isDiscordWebhookURL(webhook) {
-		return fmt.Errorf("must start with https://discord.com/api/webhooks/")
+		return fmt.Errorf("discord webhook must start with https://discord.com/api/webhooks/ or https://discordapp.com/api/webhooks/")
 	}
 
 	embed := map[string]any{

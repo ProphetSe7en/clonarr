@@ -62,7 +62,7 @@ func (gotifyProvider) Validate(agent Agent) error {
 func (g gotifyProvider) Test(ctx context.Context, runtime Runtime, agent Agent) ([]TestResult, error) {
 	cfg := agent.Config
 	if strings.TrimSpace(cfg.GotifyURL) == "" || strings.TrimSpace(cfg.GotifyToken) == "" {
-		return nil, fmt.Errorf("URL and token are required")
+		return nil, fmt.Errorf("gotify URL and token are required")
 	}
 	if runtime.NotifyClient == nil {
 		return nil, fmt.Errorf("gotify client not configured")

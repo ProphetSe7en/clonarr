@@ -547,10 +547,6 @@ func (cs *ConfigStore) migrateFlatNotifications(raw []byte) {
 	// Discord
 	discordWebhook := str("discordWebhook")
 	if discordWebhook != "" {
-		cv, wv, iv := 8, 5, 3
-		_ = cv
-		_ = wv
-		_ = iv
 		agents = append(agents, NotificationAgent{
 			ID:      GenerateID(),
 			Name:    "Discord",

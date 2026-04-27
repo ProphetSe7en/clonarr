@@ -141,6 +141,21 @@ func TestPushoverTestNilClient(t *testing.T) {
 	}
 }
 
+// TestPushoverTestMissingCredentials verifies Test returns the same
+// missing-credentials message as Validate.
+func TestPushoverTestMissingCredentials(t *testing.T) {
+	rt := testRuntime(nil, newOKPoster())
+	agent := Agent{Name: "Pushover", Type: "pushover", Config: Config{}}
+
+	_, err := pushoverProvider{}.Test(context.Background(), rt, agent)
+	if err == nil {
+		t.Fatal("expected error when credentials are missing")
+	}
+	if !strings.Contains(err.Error(), "pushover user key and app token are required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // TestPushoverNotifyHappyPath verifies that Notify sends to the Pushover API
 // and returns nil on success.
 func TestPushoverNotifyHappyPath(t *testing.T) {
@@ -215,8 +230,8 @@ func TestPushoverPriority(t *testing.T) {
 		{SeverityCritical, 1},
 		{SeverityWarning, 0},
 		{SeverityInfo, 0},
-		{"", 0},           // unset severity
-		{"unknown", 0},    // unrecognized severity
+		{"", 0},        // unset severity
+		{"unknown", 0}, // unrecognized severity
 	}
 	for _, tc := range tests {
 		got := pushoverPriority(tc.severity)
@@ -225,4 +240,3 @@ func TestPushoverPriority(t *testing.T) {
 		}
 	}
 }
-

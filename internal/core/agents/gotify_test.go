@@ -185,6 +185,21 @@ func TestGotifyTestNilClient(t *testing.T) {
 	}
 }
 
+// TestGotifyTestMissingCredentials verifies Test returns the same
+// missing-credentials message as Validate.
+func TestGotifyTestMissingCredentials(t *testing.T) {
+	rt := testRuntime(newOKPoster(), nil)
+	agent := Agent{Name: "Gotify", Type: "gotify", Config: Config{}}
+
+	_, err := gotifyProvider{}.Test(context.Background(), rt, agent)
+	if err == nil {
+		t.Fatal("expected error when credentials are missing")
+	}
+	if !strings.Contains(err.Error(), "gotify URL and token are required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // TestGotifyNotifyHappyPath verifies Notify sends to the correct URL with
 // severity-based priority.
 func TestGotifyNotifyHappyPath(t *testing.T) {
@@ -303,4 +318,3 @@ func TestGotifyPriorityNilDefaults(t *testing.T) {
 		}
 	}
 }
-
