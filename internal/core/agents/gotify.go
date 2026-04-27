@@ -75,7 +75,12 @@ func (g gotifyProvider) Test(ctx context.Context, runtime Runtime, agent Agent) 
 		"priority": 5,
 		"extras":   map[string]any{"client::display": map[string]string{"contentType": "text/markdown"}},
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		res.Status = statusError
+		res.Error = fmt.Sprintf("Failed to encode Gotify request: %v", err)
+		return []TestResult{res}, nil
+	}
 
 	resp, err := gotifyPost(ctx, runtime.NotifyClient, cfg, body)
 	if err != nil {
@@ -114,7 +119,7 @@ func (g gotifyProvider) Notify(ctx context.Context, runtime Runtime, agent Agent
 	}
 
 	msg := normalizeGotifyMarkdown(payload.Message)
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"title":    payload.Title,
 		"message":  msg,
 		"priority": priority,
@@ -124,6 +129,9 @@ func (g gotifyProvider) Notify(ctx context.Context, runtime Runtime, agent Agent
 			},
 		},
 	})
+	if err != nil {
+		return fmt.Errorf("gotify marshal request body: %w", err)
+	}
 
 	resp, err := gotifyPost(ctx, runtime.NotifyClient, cfg, body)
 	if err != nil {

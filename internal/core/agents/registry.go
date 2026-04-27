@@ -92,6 +92,24 @@ func preserveIfMasked(incoming, existing, placeholder string) string {
 	return incoming
 }
 
+func maskConfigFallback(cfg Config) Config {
+	cfg.DiscordWebhook = maskSecret(cfg.DiscordWebhook, maskedDiscordWebhook)
+	cfg.DiscordWebhookUpdates = maskSecret(cfg.DiscordWebhookUpdates, maskedDiscordWebhook)
+	cfg.GotifyToken = maskSecret(cfg.GotifyToken, maskedToken)
+	cfg.PushoverUserKey = maskSecret(cfg.PushoverUserKey, maskedToken)
+	cfg.PushoverAppToken = maskSecret(cfg.PushoverAppToken, maskedToken)
+	return cfg
+}
+
+func preserveConfigFallback(incoming, existing Config) Config {
+	incoming.DiscordWebhook = preserveIfMasked(strings.TrimSpace(incoming.DiscordWebhook), existing.DiscordWebhook, maskedDiscordWebhook)
+	incoming.DiscordWebhookUpdates = preserveIfMasked(strings.TrimSpace(incoming.DiscordWebhookUpdates), existing.DiscordWebhookUpdates, maskedDiscordWebhook)
+	incoming.GotifyToken = preserveIfMasked(strings.TrimSpace(incoming.GotifyToken), existing.GotifyToken, maskedToken)
+	incoming.PushoverUserKey = preserveIfMasked(strings.TrimSpace(incoming.PushoverUserKey), existing.PushoverUserKey, maskedToken)
+	incoming.PushoverAppToken = preserveIfMasked(strings.TrimSpace(incoming.PushoverAppToken), existing.PushoverAppToken, maskedToken)
+	return incoming
+}
+
 var (
 	providersMu sync.RWMutex
 	providers   = make(map[string]Provider)
@@ -173,7 +191,7 @@ func unknownTypeError(agentType string) error {
 func MaskConfigByType(agentType string, cfg Config) Config {
 	provider, ok := GetProvider(agentType)
 	if !ok {
-		return cfg
+		return maskConfigFallback(cfg)
 	}
 	return provider.MaskConfig(cfg)
 }
@@ -182,7 +200,7 @@ func MaskConfigByType(agentType string, cfg Config) Config {
 func PreserveConfigByType(agentType string, incoming, existing Config) Config {
 	provider, ok := GetProvider(agentType)
 	if !ok {
-		return incoming
+		return preserveConfigFallback(incoming, existing)
 	}
 	return provider.PreserveConfig(incoming, existing)
 }

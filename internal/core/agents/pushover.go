@@ -118,13 +118,16 @@ func (pushoverProvider) Notify(ctx context.Context, runtime Runtime, agent Agent
 // pushoverPost builds and sends a Pushover API message. This helper
 // deduplicates the identical payload construction shared by Test and Notify.
 func pushoverPost(ctx context.Context, client HTTPPoster, cfg Config, title, message string, priority int) (*http.Response, error) {
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"token":    cfg.PushoverAppToken,
 		"user":     cfg.PushoverUserKey,
 		"title":    title,
 		"message":  message,
 		"priority": priority,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("pushover marshal request body: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", pushoverAPIURL, bytes.NewReader(body))
 	if err != nil {

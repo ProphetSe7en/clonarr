@@ -77,17 +77,18 @@ func (d discordProvider) Test(ctx context.Context, runtime Runtime, agent Agent)
 	cfg := agent.Config
 	mainWebhook := strings.TrimSpace(cfg.DiscordWebhook)
 	updatesWebhook := strings.TrimSpace(cfg.DiscordWebhookUpdates)
+	if mainWebhook == "" {
+		return nil, fmt.Errorf("discord webhook is required")
+	}
 
 	results := make([]TestResult, 0, 2)
 
-	if mainWebhook != "" {
-		res := TestResult{Label: "Sync webhook", Status: statusOK}
-		if err := d.sendWebhook(ctx, runtime, mainWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
-			res.Status = statusError
-			res.Error = err.Error()
-		}
-		results = append(results, res)
+	res := TestResult{Label: "Sync webhook", Status: statusOK}
+	if err := d.sendWebhook(ctx, runtime, mainWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
+		res.Status = statusError
+		res.Error = err.Error()
 	}
+	results = append(results, res)
 
 	if updatesWebhook != "" && updatesWebhook != mainWebhook {
 		res := TestResult{Label: "Updates webhook", Status: statusOK}
@@ -96,10 +97,6 @@ func (d discordProvider) Test(ctx context.Context, runtime Runtime, agent Agent)
 			res.Error = err.Error()
 		}
 		results = append(results, res)
-	}
-
-	if len(results) == 0 {
-		return nil, fmt.Errorf("At least one webhook URL is required")
 	}
 
 	return results, nil
