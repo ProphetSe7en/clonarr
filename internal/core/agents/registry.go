@@ -62,7 +62,17 @@ const (
 	maskedDiscordWebhook = "https://discord.com/api/webhooks/[MASKED]/[MASKED]"
 	// maskedToken is returned to the UI instead of bearer credentials.
 	maskedToken = "••••••••••••••••"
+
+	// testTitle is the embed/notification title used by all provider Test methods.
+	testTitle = "Clonarr Test"
+	// testColor is the Discord embed sidebar color used for test messages (blue).
+	testColor = 0x58a6ff
 )
+
+// testMessage returns the standard test body for a given provider name.
+func testMessage(providerName string) string {
+	return "If you see this, " + providerName + " is configured correctly!"
+}
 
 // maskSecret returns placeholder when a secret exists, otherwise empty.
 func maskSecret(s, placeholder string) string {

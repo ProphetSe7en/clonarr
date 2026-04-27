@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/url"
+	"net/http"
 	"strings"
 )
 
@@ -69,14 +69,14 @@ func (g gotifyProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 
 	res := TestResult{Label: "Gotify", Status: statusOK}
 	payload := map[string]any{
-		"title":    "Clonarr Test",
-		"message":  "If you see this, Gotify is configured correctly!",
+		"title":    testTitle,
+		"message":  testMessage("Gotify"),
 		"priority": 5,
 		"extras":   map[string]any{"client::display": map[string]string{"contentType": "text/markdown"}},
 	}
 	body, _ := json.Marshal(payload)
-	gotifyURL := strings.TrimRight(cfg.GotifyURL, "/") + "/message?token=" + url.QueryEscape(cfg.GotifyToken)
-	resp, err := runtime.NotifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
+
+	resp, err := gotifyPost(runtime.NotifyClient, cfg, body)
 	if err != nil {
 		res.Status = statusError
 		res.Error = fmt.Sprintf("Failed to reach Gotify: %v", err)
@@ -86,7 +86,7 @@ func (g gotifyProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 
 	if resp.StatusCode >= 400 {
 		res.Status = statusError
-		res.Error = fmt.Sprintf("Gotify returned %d", resp.StatusCode)
+		res.Error = httpError("gotify", resp).Error()
 	}
 
 	return []TestResult{res}, nil
@@ -124,18 +124,31 @@ func (g gotifyProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 		},
 	})
 
-	gotifyURL := strings.TrimRight(cfg.GotifyURL, "/") + "/message?token=" + url.QueryEscape(cfg.GotifyToken)
-	resp, err := runtime.NotifyClient.Post(gotifyURL, "application/json", bytes.NewReader(body))
+	resp, err := gotifyPost(runtime.NotifyClient, cfg, body)
 	if err != nil {
 		return err
 	}
 	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("gotify returned %d", resp.StatusCode)
+		return httpError("gotify", resp)
 	}
 
 	return nil
+}
+
+// gotifyPost sends a JSON body to the Gotify /message endpoint, authenticating
+// via the X-Gotify-Key header instead of a query-string token. This keeps the
+// application token out of server access logs and reverse-proxy logs.
+func gotifyPost(client HTTPPoster, cfg Config, body []byte) (*http.Response, error) {
+	gotifyURL := strings.TrimRight(cfg.GotifyURL, "/") + "/message"
+	req, err := http.NewRequest("POST", gotifyURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("gotify request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Gotify-Key", cfg.GotifyToken)
+	return client.Do(req)
 }
 
 // priorityForSeverity maps a payload severity to the user-configured Gotify

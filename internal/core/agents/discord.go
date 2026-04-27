@@ -29,9 +29,11 @@ func (discordProvider) Type() string {
 	return "discord"
 }
 
-// Async returns false because Discord sends are performed synchronously.
+// Async returns true because Discord webhook sends are dispatched in background
+// workers. This prevents the sync goroutine from blocking when Discord rate-limits
+// (429 + Retry-After) or experiences high latency.
 func (discordProvider) Async() bool {
-	return false
+	return true
 }
 
 // MaskConfig hides Discord webhook credentials for API responses.
@@ -78,7 +80,7 @@ func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error
 
 	if mainWebhook != "" {
 		res := TestResult{Label: "Sync webhook", Status: statusOK}
-		if err := d.sendWebhook(runtime, mainWebhook, "Clonarr Test", "If you see this, Discord is configured correctly!", 0x58a6ff); err != nil {
+		if err := d.sendWebhook(runtime, mainWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
 			res.Status = statusError
 			res.Error = err.Error()
 		}
@@ -87,7 +89,7 @@ func (d discordProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error
 
 	if updatesWebhook != "" && updatesWebhook != mainWebhook {
 		res := TestResult{Label: "Updates webhook", Status: statusOK}
-		if err := d.sendWebhook(runtime, updatesWebhook, "Clonarr Test", "If you see this, Discord is configured correctly!", 0x58a6ff); err != nil {
+		if err := d.sendWebhook(runtime, updatesWebhook, testTitle, testMessage("Discord"), testColor); err != nil {
 			res.Status = statusError
 			res.Error = err.Error()
 		}
@@ -152,7 +154,7 @@ func (discordProvider) sendWebhook(runtime Runtime, webhook, title, description 
 	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("discord returned %d", resp.StatusCode)
+		return httpError("discord", resp)
 	}
 	return nil
 }

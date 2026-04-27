@@ -26,6 +26,17 @@ func (m *mockPoster) Post(url, contentType string, body io.Reader) (*http.Respon
 	}, nil
 }
 
+func (m *mockPoster) Do(req *http.Request) (*http.Response, error) {
+	m.lastURL = req.URL.String()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &http.Response{
+		StatusCode: m.statusCode,
+		Body:       io.NopCloser(strings.NewReader("")),
+	}, nil
+}
+
 // newOKPoster returns a mock that always responds with 200 OK.
 func newOKPoster() *mockPoster {
 	return &mockPoster{statusCode: 200}

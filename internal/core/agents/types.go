@@ -133,11 +133,13 @@ func (p Payload) routeOrDefault() Route {
 	return p.Route
 }
 
-// HTTPPoster is the minimal HTTP capability required by providers.
-// Both [Runtime.NotifyClient] and [Runtime.SafeClient] satisfy this interface.
+// HTTPPoster is the HTTP capability required by notification providers.
+// Both [Runtime.NotifyClient] and [Runtime.SafeClient] satisfy this interface
+// (Go's *http.Client implements both Post and Do).
 // Using an interface rather than *http.Client allows test doubles and SSRF-safe wrappers.
 type HTTPPoster interface {
 	Post(url, contentType string, body io.Reader) (*http.Response, error)
+	Do(req *http.Request) (*http.Response, error)
 }
 
 // Runtime bundles process-scoped dependencies injected into providers at

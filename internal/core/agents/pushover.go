@@ -75,8 +75,8 @@ func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 	body, _ := json.Marshal(map[string]any{
 		"token":    cfg.PushoverAppToken,
 		"user":     cfg.PushoverUserKey,
-		"title":    "Clonarr Test",
-		"message":  "If you see this, Pushover is configured correctly!",
+		"title":    testTitle,
+		"message":  testMessage("Pushover"),
 		"priority": 0,
 	})
 
@@ -90,7 +90,7 @@ func (pushoverProvider) Test(runtime Runtime, agent Agent) ([]TestResult, error)
 
 	if resp.StatusCode >= 400 {
 		res.Status = statusError
-		res.Error = fmt.Sprintf("Pushover returned %d", resp.StatusCode)
+		res.Error = httpError("pushover", resp).Error()
 	}
 
 	return []TestResult{res}, nil
@@ -123,7 +123,7 @@ func (pushoverProvider) Notify(runtime Runtime, agent Agent, payload Payload) er
 	defer drainAndClose(resp)
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("pushover returned %d", resp.StatusCode)
+		return httpError("pushover", resp)
 	}
 
 	return nil
