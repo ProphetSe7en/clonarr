@@ -4576,14 +4576,16 @@
             <label>Sync webhook</label>
             <input class="input" x-model="agentModal.config.discordWebhook"
               placeholder="https://discord.com/api/webhooks/..."
-              autocomplete="one-time-code">
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
             <div style="font-size:12px;color:#8b949e;margin-top:4px">Sync success, failure, and cleanup</div>
           </div>
           <div class="form-group">
             <label>Updates webhook <span style="font-weight:400;color:#8b949e">(optional)</span></label>
             <input class="input" x-model="agentModal.config.discordWebhookUpdates"
               placeholder="Falls back to sync webhook if empty"
-              autocomplete="one-time-code">
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
             <div style="font-size:12px;color:#8b949e;margin-top:4px">TRaSH repo updates and weekly changelog</div>
           </div>
         </div>
@@ -4596,13 +4598,15 @@
             <label>URL</label>
             <input class="input" x-model="agentModal.config.gotifyUrl"
               placeholder="https://gotify.example.com"
-              autocomplete="one-time-code">
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
           </div>
           <div class="form-group">
             <label>App Token</label>
             <input type="password" class="input" x-model="agentModal.config.gotifyToken"
               placeholder="App token from Gotify"
-              autocomplete="one-time-code">
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
           </div>
           <div class="form-group">
             <label>Priority levels</label>
@@ -4640,13 +4644,15 @@
             <label>User Key</label>
             <input type="password" class="input" x-model="agentModal.config.pushoverUserKey"
               placeholder="Your Pushover user key"
-              autocomplete="one-time-code">
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
           </div>
           <div class="form-group">
             <label>App Token</label>
             <input type="password" class="input" x-model="agentModal.config.pushoverAppToken"
               placeholder="App/API token from Pushover"
-              autocomplete="one-time-code">
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
           </div>
         </div>
       </template>

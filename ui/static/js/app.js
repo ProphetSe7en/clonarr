@@ -7245,9 +7245,15 @@ function clonarr() {
     openAgentModal(agent = null) {
       this.agentModal.testResults = [];
       this.agentModal.testing = false;
-      this.agentModal.testPassed = false;
       this.agentModal.saving = false;
       if (agent) {
+        // Editing an existing agent: it was tested at some point before being
+        // saved, so we don't force the user to re-test for trivial edits like
+        // renaming or toggling event checkboxes. The credential <input> fields
+        // each have an @input that resets testPassed to false the moment the
+        // user touches them — so changes that actually affect delivery still
+        // require a successful test before Update is enabled.
+        this.agentModal.testPassed = true;
         this.agentModal.editId = agent.id;
         this.agentModal.name = agent.name || '';
         this.agentModal.type = agent.type;
@@ -7255,6 +7261,7 @@ function clonarr() {
         this.agentModal.events = { ...agent.events };
         this.agentModal.config = { ...agent.config };
       } else {
+        this.agentModal.testPassed = false;
         this.agentModal.editId = null;
         this.agentModal.name = '';
         this.agentModal.type = 'discord';
