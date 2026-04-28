@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.2.8
+
+Fixes a bug from v2.2.6/v2.2.7: turning off a custom format group didn't stick — the group came back on after the next sync. v2.2.8 respects your choices again. What you tick or untick is exactly what gets synced.
+
+Sorry for the rough 24 hours. v2.2.6 and v2.2.7 went out too quickly. Thanks for the reports and patience.
+
 ## v2.2.7
 
 Follow-up to v2.2.6. v2.2.6 fixed the missing custom formats (BR-DISK, LQ, AV1, etc.) from reappearing on your profiles after the TRaSH update — but their scores were still being reset to 0, so the CFs were technically there but inactive (not blocking or boosting anything).

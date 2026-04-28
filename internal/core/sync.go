@@ -141,50 +141,6 @@ func resolveScore(trashID string, trashCF *TrashCF, scoreCtx string, cfScoreOver
 	return 0
 }
 
-// mergeDefaultEnabledGroupCFs adds CFs from cf-groups marked default: "true"
-// in the TRaSH data, scoped to the given profile name. Matches Recyclarr
-// semantics: a default-enabled group whose include-list contains the
-// profile auto-applies — required CFs always, default-flagged CFs by
-// the same convention.
-//
-// Why this is needed: TRaSH increasingly moves CFs out of profile
-// formatItems and into default-enabled cf-groups (e.g. commit 23b38abb
-// on 2026-04-27 moved BR-DISK / LQ / AV1 / Streaming Boost / etc. out
-// of WEB-1080p and WEB-2160p formatItems and into the [Unwanted]
-// Unwanted Formats and [Streaming Services] HD/UHD boost groups).
-// Without this merge, those CFs silently drop off synced profiles —
-// data-loss-grade regression in user-facing scoring intent.
-//
-// User opt-out: there's currently no rule-level field for "I disabled
-// this default-enabled group" — selectedCFs is positive-only. Default
-// groups are auto-included unconditionally; an explicit opt-out flag
-// can be added in a future release if anyone surfaces a real need.
-func mergeDefaultEnabledGroupCFs(allCFTrashIDs map[string]bool, ad *AppData, profileName string) {
-	if ad == nil {
-		return
-	}
-	for _, group := range ad.CFGroups {
-		if group.Default != "true" {
-			continue
-		}
-		// When the include list is non-empty, the group only applies
-		// to the listed profiles. An empty/nil include list means
-		// "applies broadly" — inherit Recyclarr's permissive default.
-		if len(group.QualityProfiles.Include) > 0 {
-			if _, applies := group.QualityProfiles.Include[profileName]; !applies {
-				continue
-			}
-		}
-		for _, cf := range group.CustomFormats {
-			if cf.Required {
-				allCFTrashIDs[cf.TrashID] = true
-			} else if cf.Default != nil && *cf.Default {
-				allCFTrashIDs[cf.TrashID] = true
-			}
-		}
-	}
-}
-
 // --- Build Sync Plan ---
 
 // BuildSyncPlan compares TRaSH profile CFs against an Arr instance and produces a plan.
@@ -296,12 +252,8 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	for _, trashID := range req.SelectedCFs {
 		allCFTrashIDs[trashID] = true
 	}
-	mandatoryAndUserCount := len(allCFTrashIDs)
-	mergeDefaultEnabledGroupCFs(allCFTrashIDs, ad, profile.Name)
-	log.Printf("Sync plan: %d core formatItems + %d selectedCFs + %d auto-included from default groups = %d total CFs",
-		len(profile.FormatItems), len(req.SelectedCFs),
-		len(allCFTrashIDs)-mandatoryAndUserCount,
-		len(allCFTrashIDs))
+	log.Printf("Sync plan: %d core formatItems + %d selectedCFs = %d total CFs",
+		len(profile.FormatItems), len(req.SelectedCFs), len(allCFTrashIDs))
 
 	// Map: CF name → Arr CF ID (for score assignment)
 	cfNameToArrID := make(map[string]int)
@@ -1069,7 +1021,6 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		for _, cfTrashID := range req.SelectedCFs {
 			allTrashIDs[cfTrashID] = true
 		}
-		mergeDefaultEnabledGroupCFs(allTrashIDs, ad, profile.Name)
 
 		// Build current score map for allow_custom check
 		currentScores := make(map[int]int)
@@ -1527,11 +1478,6 @@ func BuildArrProfile(
 	for trashID := range selectedCFs {
 		allTrashIDs[trashID] = true
 	}
-	// Same merge as BuildSyncPlan / score-assignment loop: a profile
-	// being built from TRaSH must include CFs from default-enabled
-	// cf-groups (else profile-create / restore loses Unwanted Formats
-	// etc.).
-	mergeDefaultEnabledGroupCFs(allTrashIDs, ad, profile.Name)
 
 	customCFMap := buildCustomCFMap(customCFs)
 
