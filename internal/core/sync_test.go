@@ -408,3 +408,118 @@ func TestCutoffIDToName_FlatAndGroup(t *testing.T) {
 		}
 	}
 }
+
+// TestMergeDefaultEnabledGroupCFs_Recyclarr semantics: a cf-group with
+// `default: "true"` whose include-list contains the profile name must
+// auto-add CFs that are required or have per-CF default=true. Optional
+// CFs without default flag must NOT be added (those are the user's
+// choice). Groups with default != "true" or non-matching include lists
+// must not contribute.
+//
+// Repro: TRaSH commit 23b38abb (2026-04-27) moved BR-DISK / LQ / etc.
+// from WEB-1080p formatItems into the [Unwanted] Unwanted Formats
+// cf-group with default: "true". Without this auto-merge, those CFs
+// silently drop off all synced WEB-* profiles.
+func TestMergeDefaultEnabledGroupCFs(t *testing.T) {
+	tru := true
+	unwanted := &TrashCFGroup{
+		Name:    "[Unwanted] Unwanted Formats",
+		Default: "true",
+		QualityProfiles: struct {
+			Include map[string]string `json:"include"`
+		}{
+			Include: map[string]string{
+				"WEB-1080p": "trash-web-1080p",
+				"WEB-2160p": "trash-web-2160p",
+			},
+		},
+		CustomFormats: []CFGroupEntry{
+			{TrashID: "av1-id", Name: "AV1", Default: &tru},
+			{TrashID: "br-disk-id", Name: "BR-DISK", Default: &tru},
+			{TrashID: "scene-id", Name: "Scene", Default: nil}, // optional, not auto-included
+		},
+	}
+	streamingBoost := &TrashCFGroup{
+		Name:    "[Streaming Services] HD/UHD boost",
+		Default: "true",
+		QualityProfiles: struct {
+			Include map[string]string `json:"include"`
+		}{
+			Include: map[string]string{"WEB-1080p": "trash-web-1080p"},
+		},
+		CustomFormats: []CFGroupEntry{
+			{TrashID: "hd-boost-id", Name: "HD Streaming Boost", Required: true},
+		},
+	}
+	notDefault := &TrashCFGroup{
+		Name:    "[Optional] Anime Versions",
+		Default: "false",
+		QualityProfiles: struct {
+			Include map[string]string `json:"include"`
+		}{
+			Include: map[string]string{"WEB-1080p": "trash-web-1080p"},
+		},
+		CustomFormats: []CFGroupEntry{
+			{TrashID: "anime-id", Name: "Anime DTS", Default: &tru},
+		},
+	}
+	otherProfileOnly := &TrashCFGroup{
+		Name:    "[German] Anime",
+		Default: "true",
+		QualityProfiles: struct {
+			Include map[string]string `json:"include"`
+		}{
+			Include: map[string]string{"German Anime HD": "x"},
+		},
+		CustomFormats: []CFGroupEntry{
+			{TrashID: "german-id", Name: "German Sub", Default: &tru},
+		},
+	}
+	emptyInclude := &TrashCFGroup{
+		Name:    "[Universal] Bad Releases",
+		Default: "true",
+		QualityProfiles: struct {
+			Include map[string]string `json:"include"`
+		}{},
+		CustomFormats: []CFGroupEntry{
+			{TrashID: "bad-id", Name: "Bad Release", Default: &tru},
+		},
+	}
+	ad := &AppData{
+		CFGroups: []*TrashCFGroup{unwanted, streamingBoost, notDefault, otherProfileOnly, emptyInclude},
+	}
+
+	got := make(map[string]bool)
+	mergeDefaultEnabledGroupCFs(got, ad, "WEB-1080p")
+
+	want := map[string]bool{
+		"av1-id":      true, // default=true in unwanted
+		"br-disk-id":  true, // default=true in unwanted
+		"hd-boost-id": true, // required=true in streamingBoost
+		"bad-id":      true, // empty include = applies broadly
+	}
+	for k := range want {
+		if !got[k] {
+			t.Errorf("want %s in result, missing", k)
+		}
+	}
+	if got["scene-id"] {
+		t.Error("scene-id (default=nil, optional) should NOT auto-include")
+	}
+	if got["anime-id"] {
+		t.Error("anime-id (group default=false) should NOT auto-include")
+	}
+	if got["german-id"] {
+		t.Error("german-id (group not in include list for WEB-1080p) should NOT auto-include")
+	}
+}
+
+// TestMergeDefaultEnabledGroupCFs_NilAppData verifies the helper is
+// safe against nil — sync may run before TRaSH data is loaded.
+func TestMergeDefaultEnabledGroupCFs_NilAppData(t *testing.T) {
+	got := make(map[string]bool)
+	mergeDefaultEnabledGroupCFs(got, nil, "any")
+	if len(got) != 0 {
+		t.Error("nil AppData should not add anything")
+	}
+}
