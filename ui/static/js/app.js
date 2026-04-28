@@ -1385,12 +1385,15 @@ function clonarr() {
       // Restore new group-based state
       if (existing?.formatItemCFs && Object.keys(existing.formatItemCFs).length > 0) {
         this.pb.formatItemCFs = { ...existing.formatItemCFs };
-      } else if (existing?.source === 'import' && existing?.formatItems) {
-        // Fallback for profiles imported before v2.1.1: a TRaSH profile's
-        // formatItems are, by TRaSH convention, the required CFs. Older
-        // imports don't have FormatItemCFs populated on disk — derive it
-        // here so the Builder shows the Required section correctly when
-        // opening those profiles. New imports get this from the backend.
+      } else if ((existing?.source === 'import' || (!existing?.source && existing?.formatItems)) && existing?.formatItems) {
+        // Fallback for profiles imported before formatItemCFs/Source were
+        // populated server-side (Recyclarr YAML imports historically
+        // omitted both — per the ImportedProfile struct comment, missing
+        // source is treated as "import"). A TRaSH profile's formatItems
+        // are, by convention, the required CFs. Without this fallback,
+        // the Builder opens with an empty Required section AND a Save
+        // would wipe the profile (saveCustomProfile builds its sync-set
+        // from formatItemCFs + enabledGroups, ignoring selectedCFs).
         for (const tid of Object.keys(existing.formatItems)) {
           this.pb.formatItemCFs[tid] = true;
         }

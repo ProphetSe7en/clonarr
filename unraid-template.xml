@@ -24,6 +24,7 @@
   <Date>2026-04-28</Date>
   <Changes>
 ### 2026-04-28
+- v2.2.10: **Bug fix — Recyclarr-imported profiles now show their CFs in the Profile Builder.** Previously the Builder showed 0 CFs and clicking Save Changes wiped them from disk. Existing imports are restored automatically when re-opened.
 - v2.2.9: **Bug fix — Edit a sync rule, Dry Run / Cancel, then Save & Sync again now stays on the same Arr profile** (was flipping to "Create new" on the second click).
 - v2.2.8: **Bug fix — turning off a custom format group now sticks.** v2.2.6/v2.2.7 overrode your toggle-off choices and re-added groups on the next sync. v2.2.8 respects what you've ticked or unticked. Sorry for the rough 24 hours.
 - v2.2.7: **Follow-up to v2.2.6.** v2.2.6 brought the missing custom formats back to your profiles, but their scores were still being reset to 0 — so the CFs were there but inactive (not blocking or boosting anything). v2.2.7 finishes the job: scores are now correct after a sync. If you upgraded to v2.2.6 and noticed scores still looked off, Force Update to v2.2.7 and run a sync.

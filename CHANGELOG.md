@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.10
+
+Profiles imported from Recyclarr YAML now show their custom formats correctly when opened in the Profile Builder. Previously the Builder showed 0 CFs and clicking Save Changes wiped the profile's CFs from disk.
+
 ## v2.2.9
 
 When editing a sync rule, Save & Sync now stays locked to the same Arr profile across Dry Run and Cancel clicks. Previously the second Save & Sync flipped to "Create new profile" mode.

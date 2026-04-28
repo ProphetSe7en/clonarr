@@ -464,15 +464,31 @@ func extractProfiles(inst recyclarrInstance, appType string, ad *AppData) []Impo
 			qualities = trashProfile.Items
 		}
 
+		// Mirror the set of FormatItems trash_ids into FormatItemCFs so the
+		// Builder's "Required CFs" section renders them on edit. Recyclarr
+		// has no notion of "required vs group-optional" — every assigned
+		// CF is simply scored on the profile, which maps cleanest to the
+		// Builder's Required (formatItems) section. Without this, opening
+		// the imported profile shows 0 CFs and a Save would wipe the
+		// profile (saveCustomProfile builds its sync-set from
+		// formatItemCFs + enabledGroups, ignoring selectedCFs). Mirrors
+		// the same pattern parseTrashProfileJSON uses.
+		formatItemCFs := make(map[string]bool, len(scores))
+		for tid := range scores {
+			formatItemCFs[tid] = true
+		}
+
 		p := ImportedProfile{
 			ID:             GenerateID(),
 			Name:           sanitizeName(name),
 			AppType:        appType,
+			Source:         "import",
 			QualityType:    inst.QualityDefinition.Type,
 			TrashProfileID: qp.TrashID,
 			ScoreSet:       qp.ScoreSet,
 			Qualities:      qualities,
 			FormatItems:    scores,
+			FormatItemCFs:  formatItemCFs,
 		}
 		if len(comments) > 0 {
 			p.FormatComments = comments
