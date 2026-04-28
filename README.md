@@ -311,6 +311,10 @@ For questions, help, or bug reports:
 - **Discord:** [`#prophetse7en-apps`](https://discordapp.com/channels/492590071455940612/1486391669384417300) on the [TRaSH Guides Discord](https://trash-guides.info/discord) (under Community Apps)
 - **GitHub:** [prophetse7en/clonarr/issues](https://github.com/prophetse7en/clonarr/issues)
 
+## Development
+
+Clonarr is developed with active AI assistance (Claude, Anthropic) under human direction. Architectural decisions, code review, testing against real Radarr/Sonarr instances, and releases are done by ProphetSe7en. Issues and PRs go through a human review.
+
 ## License
 
 MIT
