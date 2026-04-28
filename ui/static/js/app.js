@@ -5274,8 +5274,18 @@ function clonarr() {
             clearInterval(poll);
             this.pulling = false;
             // Show toast based on pull result
+            const radarrCFs = this.trashStatus.radarrCFs || 0;
+            const sonarrCFs = this.trashStatus.sonarrCFs || 0;
+            const radarrProfs = this.trashStatus.radarrProfiles || 0;
+            const sonarrProfs = this.trashStatus.sonarrProfiles || 0;
+            const totalLoaded = radarrCFs + sonarrCFs + radarrProfs + sonarrProfs;
             if (this.trashStatus.pullError) {
               this.showToast('Pull failed: ' + this.trashStatus.pullError, 'error');
+            } else if (totalLoaded === 0) {
+              // Git fetch succeeded but the parser found nothing — typically a
+              // path/permissions issue with /config/data/trash-guides. Surfacing
+              // this as a warning instead of a misleading "success" toast.
+              this.showToast('Pull completed but no TRaSH data was loaded (0 CFs, 0 profiles). Check container logs and that /config/data/trash-guides/docs/json/ exists and is readable by the container user.', 'warning', 12000);
             } else if (this.trashStatus.commitHash !== prevCommit && this.trashStatus.lastDiff?.summary) {
               const summary = this.trashStatus.lastDiff.summary.replace(/\*\*/g, '').replace(/^\n/, '').replace(/\n/g, ', ').replace(/:,/g, ':');
               this.showToast('TRaSH updated: ' + summary, 'info', 10000);
