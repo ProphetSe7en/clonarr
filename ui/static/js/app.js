@@ -4496,13 +4496,22 @@ function clonarr() {
     addCleanupKeepName(name) {
       if (!name) return;
       if (this.cleanupKeepList.some(n => n.toLowerCase() === name.toLowerCase())) {
-        this.cleanupKeepInput = '';
-        this.cleanupKeepSuggestions = [];
-        return;
+        return; // already in list — no-op, keep input + dropdown intact
       }
       this.cleanupKeepList.push(name);
-      this.cleanupKeepInput = '';
-      this.cleanupKeepSuggestions = [];
+      // Keep the input + dropdown open so the user can click another match
+      // from the same query. Refresh suggestions so the just-added one
+      // disappears and remaining matches stay visible. Empty query → empty
+      // suggestions (dropdown closes naturally).
+      const q = this.cleanupKeepInput.trim().toLowerCase();
+      if (q) {
+        this.cleanupKeepSuggestions = this.cleanupCFNames.filter(n =>
+          n.toLowerCase().includes(q) &&
+          !this.cleanupKeepList.some(k => k.toLowerCase() === n.toLowerCase())
+        ).slice(0, 10);
+      } else {
+        this.cleanupKeepSuggestions = [];
+      }
       this.saveCleanupKeep();
     },
     async addCleanupKeep() {

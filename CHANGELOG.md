@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.2.6
+
+Hotfix for a regression caused by a TRaSH guide update on 2026-04-27.
+
+### Fixed — custom formats that disappeared from profiles after the TRaSH update
+
+TRaSH reorganised how a few common custom formats are linked to profiles. The CFs themselves still exist (BR-DISK, LQ, LQ (Release Title), Extras, AV1, HD/UHD Streaming Boost, Generated Dynamic HDR, Upscaled), but Clonarr didn't follow the new structure and dropped them from your profiles on the next sync. Scores got reset to 0, and the blocking/scoring behavior you expected was gone.
+
+This release teaches Clonarr to follow the new structure, the same way Recyclarr does. Affected profiles include WEB-1080p, WEB-2160p, SQP-3 (Audio), SQP-4 (MA Hybrid), and the German variants — basically any profile where TRaSH attaches an "Unwanted Formats" or "HD/UHD Streaming Boost" group.
+
+**What you do:** Update to v2.2.6 in Unraid (Force Update), then run a sync (Pull, or Sync now on the affected rules). The missing CFs come back with their correct scores. No manual rule editing.
+
+If you saw CFs disappear, your existing files in Radarr/Sonarr aren't broken — only future grabs were affected (until the CFs are re-applied).
+
 ## v2.2.5
 
 Two bug fixes and a couple of UX improvements around cleaning up after testing.
