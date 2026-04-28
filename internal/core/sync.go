@@ -1057,7 +1057,11 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Merge core formatItems + selectedCFs for score assignment
+		// Merge core formatItems + selectedCFs for score assignment.
+		// Mirror BuildSyncPlan's set including auto-included CFs from
+		// default-enabled cf-groups, otherwise score-assignment + reset-
+		// mode disagree with the plan and CFs the plan said to include
+		// get reset to 0 here.
 		allTrashIDs := make(map[string]bool)
 		for _, cfTrashID := range profile.FormatItems {
 			allTrashIDs[cfTrashID] = true
@@ -1065,6 +1069,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		for _, cfTrashID := range req.SelectedCFs {
 			allTrashIDs[cfTrashID] = true
 		}
+		mergeDefaultEnabledGroupCFs(allTrashIDs, ad, profile.Name)
 
 		// Build current score map for allow_custom check
 		currentScores := make(map[int]int)
@@ -1522,6 +1527,11 @@ func BuildArrProfile(
 	for trashID := range selectedCFs {
 		allTrashIDs[trashID] = true
 	}
+	// Same merge as BuildSyncPlan / score-assignment loop: a profile
+	// being built from TRaSH must include CFs from default-enabled
+	// cf-groups (else profile-create / restore loses Unwanted Formats
+	// etc.).
+	mergeDefaultEnabledGroupCFs(allTrashIDs, ad, profile.Name)
 
 	customCFMap := buildCustomCFMap(customCFs)
 

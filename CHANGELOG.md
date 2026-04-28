@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.2.7
+
+Follow-up to v2.2.6. v2.2.6 fixed the missing custom formats (BR-DISK, LQ, AV1, etc.) from reappearing on your profiles after the TRaSH update — but their scores were still being reset to 0, so the CFs were technically there but inactive (not blocking or boosting anything).
+
+v2.2.7 finishes the job. After Force Update + a sync, the CFs come back with the correct scores, and the blocking/scoring behavior actually works again.
+
+If you only upgraded to v2.2.6 and noticed your scores still looked off, this is the patch. Update + sync and you're set.
+
 ## v2.2.6
 
 Hotfix for a regression caused by a TRaSH guide update on 2026-04-27.
