@@ -6271,6 +6271,13 @@ function clonarr() {
         newProfileName: profile.name,
         behavior: { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' }
       };
+      // Re-arm the edit-session lock on every Save & Sync click. Without
+      // this, after the first sync attempt the modal would flip back to
+      // 'create' mode on a second click (Dry Run / Cancel had cleared
+      // resyncTargetArrProfileId in _loadSyncInstanceData).
+      if (this.profileDetail?._editLockedArrProfileId) {
+        this.resyncTargetArrProfileId = this.profileDetail._editLockedArrProfileId;
+      }
       await this._loadSyncInstanceData(inst.id, profile.trashId);
       this.showSyncModal = true;
     },
@@ -7026,6 +7033,13 @@ function clonarr() {
       await this.openProfileDetail(inst, profile);
       // Show which Arr profile this is synced to
       this.profileDetail._arrProfileName = sh.arrProfileName || null;
+      // Lock the edit session to this Arr profile. resyncTargetArrProfileId
+      // is consumed once per modal open in _loadSyncInstanceData, so on a
+      // second Save & Sync (after Dry Run / Cancel) it would fall back to
+      // 'create' mode. Persist the target on profileDetail (cleared when
+      // user leaves the detail view) so every subsequent openSyncModal in
+      // this edit session re-arms the lock. Bypass: openSyncModalAsNew.
+      this.profileDetail._editLockedArrProfileId = sh.arrProfileId;
       // Restore optional CF selections from sync history
       if (sh.selectedCFs && Object.keys(sh.selectedCFs).length > 0) {
         const groups = this.profileDetail?.detail?.trashGroups || [];

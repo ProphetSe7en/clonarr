@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.9
+
+When editing a sync rule, Save & Sync now stays locked to the same Arr profile across Dry Run and Cancel clicks. Previously the second Save & Sync flipped to "Create new profile" mode.
+
 ## v2.2.8
 
 Fixes a bug from v2.2.6/v2.2.7: turning off a custom format group didn't stick — the group came back on after the next sync. v2.2.8 respects your choices again. What you tick or untick is exactly what gets synced.
