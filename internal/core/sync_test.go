@@ -3,6 +3,7 @@ package core
 import (
 	"clonarr/internal/arr"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -408,4 +409,36 @@ func TestCutoffIDToName_FlatAndGroup(t *testing.T) {
 		}
 	}
 }
+
+
+
+// TestFriendlyArrErr matches Arr's name-uniqueness error across version-
+// dependent wording variants (case differences, period punctuation, FluentValidation
+// nesting). The helper translates 400-class "Must be unique" payloads into a
+// human-actionable message; everything else passes through verbatim.
+func TestFriendlyArrErr(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"exact", "HTTP 400: Must be unique", "already exists in Arr"},
+		{"lowercase", "http 400: must be unique", "already exists in Arr"},
+		{"name-prefix", "Name must be unique.", "already exists in Arr"},
+		{"nested", `[{"propertyName":"Name","errorMessage":"Must be unique."}]`, "already exists in Arr"},
+		{"unrelated", "connection refused", "connection refused"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := friendlyArrErr("update", "PCOK", &stringErr{c.in})
+			if !strings.Contains(got, c.want) {
+				t.Errorf("friendlyArrErr(_, _, %q): got %q, want substring %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+type stringErr struct{ s string }
+
+func (e *stringErr) Error() string { return e.s }
 

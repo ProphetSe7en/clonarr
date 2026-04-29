@@ -53,6 +53,11 @@ type ProwlarrConfig struct {
 // This is the top-level configuration object for the auto-sync subsystem.
 type AutoSyncConfig struct {
 	Enabled bool `json:"enabled"`
+	// Paused is a global kill-switch for non-user-initiated sync. When true,
+	// AutoSyncAfterPull (run on TRaSH pull and on container startup) skips
+	// every rule. Manual actions — "Sync All", per-rule "Sync now", per-
+	// profile "Save & Sync" — are unaffected. Default false.
+	Paused bool `json:"paused,omitempty"`
 	// NotificationAgents stores zero or more independently configured notification
 	// providers. Multiple enabled entries are supported, including multiple entries
 	// of the same Type (e.g. two Discord channels for different alert levels).

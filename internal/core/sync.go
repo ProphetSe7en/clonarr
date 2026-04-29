@@ -233,7 +233,13 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	// Build name → existing CF map (case-insensitive keys for matching)
 	existingByName := make(map[string]*arr.ArrCF)
 	for i := range existingCFs {
-		existingByName[strings.ToLower(existingCFs[i].Name)] = &existingCFs[i]
+		// Case-sensitive key: Radarr/Sonarr stores CFs as separate entries when
+		// names differ only by case (e.g. "720p" vs "720P"), so we must too —
+		// otherwise we collide them in the map and apply rule changes to the
+		// wrong CF. Earlier case-insensitive lookup was a workaround for
+		// upstream rename "HULU"→"Hulu"; that path is now via reset+create
+		// (RemoveMode handles legacy CFs, AddMode creates the new name).
+		existingByName[existingCFs[i].Name] = &existingCFs[i]
 	}
 
 	plan := &SyncPlan{
@@ -275,7 +281,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			continue
 		}
 
-		existing, found := existingByName[strings.ToLower(cfName)]
+		existing, found := existingByName[cfName]
 		if !found {
 			// Add mode: controls whether missing CFs get created
 			switch behavior.AddMode {
@@ -731,7 +737,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		case "create":
 			created, err := client.CreateCustomFormat(arrCF)
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("create %s: %v", action.Name, err))
+				result.Errors = append(result.Errors, friendlyArrErr("create", action.Name, err))
 				continue
 			}
 			createdCFIDs[action.Name] = created.ID
@@ -742,7 +748,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		case "update":
 			_, err := client.UpdateCustomFormat(action.ArrID, arrCF)
 			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("update %s: %v", action.Name, err))
+				result.Errors = append(result.Errors, friendlyArrErr("update", action.Name, err))
 				continue
 			}
 			result.CFsUpdated++
@@ -759,7 +765,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 	}
 	nameToID := make(map[string]int)
 	for _, cf := range existingCFs {
-		nameToID[strings.ToLower(cf.Name)] = cf.ID
+		nameToID[cf.Name] = cf.ID
 	}
 
 	if req.ArrProfileID == 0 {
@@ -1042,7 +1048,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			} else {
 				continue
 			}
-			arrID, ok := nameToID[strings.ToLower(cfName)]
+			arrID, ok := nameToID[cfName]
 			if !ok {
 				continue
 			}
@@ -1098,7 +1104,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					cfName = ccf.Name
 				}
 				if cfName != "" {
-					if arrID, ok := nameToID[strings.ToLower(cfName)]; ok {
+					if arrID, ok := nameToID[cfName]; ok {
 						syncedArrIDs[arrID] = true
 					}
 				}
@@ -1496,7 +1502,7 @@ func BuildArrProfile(
 			continue
 		}
 
-		arrID, ok := cfNameToID[strings.ToLower(cfName)]
+		arrID, ok := cfNameToID[cfName]
 		if !ok {
 			continue
 		}
@@ -1566,6 +1572,22 @@ func BuildArrProfile(
 		Items:                 items,
 		Language:              lang,
 	}, nil
+}
+
+// friendlyArrErr translates known Arr API errors into actionable messages.
+// Catches the name-uniqueness constraint that fires when clonarr tries to
+// rename one CF to a name already taken by a different CF in the same Arr
+// instance (typical when the user has both "720p" and "720P" CFs and the
+// rule's matching tries to converge them). The match is case-insensitive
+// + lowercase-substring so it survives Arr-version wording variants like
+// "Must be unique", "must be unique", "Name must be unique.", and nested
+// FluentValidation messages.
+func friendlyArrErr(verb, cfName string, err error) string {
+	msg := err.Error()
+	if strings.Contains(strings.ToLower(msg), "must be unique") {
+		return fmt.Sprintf("%s %s failed: another CF with the same name (case-insensitive) already exists in Arr. Resolve in Arr — delete one of the duplicate CFs, or rename them so they differ by more than just case — then re-sync.", verb, cfName)
+	}
+	return fmt.Sprintf("%s %s: %v", verb, cfName, err)
 }
 
 // resolveQualityItems converts TRaSH quality items to Arr format using quality definitions.

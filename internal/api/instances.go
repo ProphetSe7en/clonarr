@@ -423,9 +423,13 @@ func (s *Server) handleInstanceProfileExport(w http.ResponseWriter, r *http.Requ
 	// the skip check stays a cheap map lookup in the FormatItems loop.
 	knownArrIDs := make(map[int]bool)
 	if ad != nil || len(customCFByID) > 0 {
+		// Case-sensitive lookup mirrors sync.go's matching policy. Two
+		// case-different CFs in Arr (e.g. "720p" + "720P") are distinct
+		// entries; the rule's CF must match exactly so we don't claim
+		// drift-free when one of them is actually orphan.
 		arrByName := make(map[string]int, len(arrCFs))
 		for i := range arrCFs {
-			arrByName[strings.ToLower(arrCFs[i].Name)] = arrCFs[i].ID
+			arrByName[arrCFs[i].Name] = arrCFs[i].ID
 		}
 		resolveArrID := func(id string) {
 			var name string
@@ -442,7 +446,7 @@ func (s *Server) handleInstanceProfileExport(w http.ResponseWriter, r *http.Requ
 			if name == "" {
 				return
 			}
-			if arrID, ok := arrByName[strings.ToLower(name)]; ok {
+			if arrID, ok := arrByName[name]; ok {
 				knownArrIDs[arrID] = true
 			}
 		}
@@ -724,14 +728,18 @@ func (s *Server) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build name→ID maps for matching (case-insensitive)
+	// Build name→ID maps for matching. Case-sensitive — mirrors sync.go's
+	// CF-matching policy. Restoring a backup that contains "PCOK" against
+	// an Arr that has only "pcok" creates a new CF rather than collapsing
+	// onto the case-different one (which would surprise the user, since
+	// the backup explicitly recorded "PCOK").
 	existingCFByName := make(map[string]*arr.ArrCF, len(existingCFs))
 	for i := range existingCFs {
-		existingCFByName[strings.ToLower(existingCFs[i].Name)] = &existingCFs[i]
+		existingCFByName[existingCFs[i].Name] = &existingCFs[i]
 	}
 	existingProfileByName := make(map[string]*arr.ArrQualityProfile, len(existingProfiles))
 	for i := range existingProfiles {
-		existingProfileByName[strings.ToLower(existingProfiles[i].Name)] = &existingProfiles[i]
+		existingProfileByName[existingProfiles[i].Name] = &existingProfiles[i]
 	}
 
 	type RestoreAction struct {
@@ -748,7 +756,7 @@ func (s *Server) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Restore Custom Formats
 	for _, cf := range backup.CustomFormats {
 		oldID := cf.ID
-		existing := existingCFByName[strings.ToLower(cf.Name)]
+		existing := existingCFByName[cf.Name]
 		action := "create"
 		if existing != nil {
 			action = "update"
@@ -787,7 +795,7 @@ func (s *Server) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 
 	// Step 2: Restore Profiles (remap CF IDs in formatItems)
 	for _, profile := range backup.Profiles {
-		existing := existingProfileByName[strings.ToLower(profile.Name)]
+		existing := existingProfileByName[profile.Name]
 		action := "create"
 		if existing != nil {
 			action = "update"
@@ -806,7 +814,7 @@ func (s *Server) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 				if newID, ok := cfIDMap[fi.Format]; ok {
 					fi.Format = newID
 				} else if cfName := backupCFByID[fi.Format]; cfName != "" {
-					if ecf := existingCFByName[strings.ToLower(cfName)]; ecf != nil {
+					if ecf := existingCFByName[cfName]; ecf != nil {
 						fi.Format = ecf.ID
 					}
 				}
@@ -1469,10 +1477,11 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 		return comp
 	}
 
-	// Build name → arr.ArrCF map (case-insensitive keys for matching)
+	// Build name → arr.ArrCF map. Case-sensitive — same matching policy
+	// as the sync engine, so Compare reflects exactly what sync would do.
 	arrByName := make(map[string]*arr.ArrCF)
 	for i := range arrCFs {
-		arrByName[strings.ToLower(arrCFs[i].Name)] = &arrCFs[i]
+		arrByName[arrCFs[i].Name] = &arrCFs[i]
 	}
 
 	// Fetch the specific Arr profile to get scores
@@ -1528,7 +1537,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 				Description:  description,
 				DesiredScore: desiredScore,
 			}
-			if arrCF, ok := arrByName[strings.ToLower(fi.Name)]; ok {
+			if arrCF, ok := arrByName[fi.Name]; ok {
 				cfi.Exists = true
 				cfi.ArrID = arrCF.ID
 				cfi.CurrentScore = arrScores[arrCF.ID]
@@ -1597,7 +1606,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 					Default:      cf.Default,
 					DesiredScore: desiredScore,
 				}
-				if arrCF, ok := arrByName[strings.ToLower(cf.Name)]; ok {
+				if arrCF, ok := arrByName[cf.Name]; ok {
 					ccf.Exists = true
 					ccf.ArrID = arrCF.ID
 					ccf.CurrentScore = arrScores[arrCF.ID]
@@ -1702,7 +1711,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 					Default:      cfEntry.Default,
 					DesiredScore: desiredScore,
 				}
-				if arrCF, ok := arrByName[strings.ToLower(cfEntry.Name)]; ok {
+				if arrCF, ok := arrByName[cfEntry.Name]; ok {
 					ocs.Exists = true
 					ocs.ArrID = arrCF.ID
 					ocs.CurrentScore = arrScores[arrCF.ID]
@@ -1758,7 +1767,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 		if !ok {
 			return
 		}
-		if arrCF, ok := arrByName[strings.ToLower(tcf.Name)]; ok {
+		if arrCF, ok := arrByName[tcf.Name]; ok {
 			knownExtraArrIDs[arrCF.ID] = true
 		}
 	}
