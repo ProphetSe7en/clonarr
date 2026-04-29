@@ -13,7 +13,7 @@
 
 FROM golang:1.25-alpine AS builder
 
-ARG VERSION=2.4.0-dev
+ARG VERSION=2.4.0
 
 RUN apk add --no-cache git
 
@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:3.21
 
-ARG VERSION=2.4.0-dev
+ARG VERSION=2.4.0
 
 # Open Container Initiative (OCI) labels for registry metadata
 LABEL org.opencontainers.image.version=${VERSION} \

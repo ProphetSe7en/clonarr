@@ -1,5 +1,96 @@
 # Changelog
 
+## v2.4.0
+
+A round of fixes and quality-of-life additions on top of v2.3.0's notification refactor.
+
+### New
+
+- **Pause Auto-Sync toggle** on the TRaSH-sync tab. When you're testing
+  or making bulk changes, click pause and clonarr will skip scheduled
+  syncs and the sync that runs on container restart. Manual actions
+  ("Sync All", per-rule "Sync now", "Save & Sync" from a profile) still
+  work. Click resume when you're done.
+
+- **NTFY and Apprise notification agents.** Set them up under Settings
+  → Notifications → Add. ntfy works against ntfy.sh out of the box (no
+  account needed); Apprise needs your own Apprise API server but then
+  fans out to many backends from one config. Both get the same Test
+  button + per-severity priority controls as Discord/Gotify/Pushover.
+
+### Bug fixes
+
+- **Custom format names are now case-sensitive throughout.** Previously
+  clonarr could match the wrong custom format when two CFs in your Arr
+  instance differed only by case (e.g. you'd manually created `720P`
+  while TRaSH already synced `720p`). Symptoms: the rule's score
+  occasionally landed on the case-different CF, sync history claimed
+  it synced the right one. Fixed across sync, compare, restore, and
+  cleanup paths.
+
+- **"Hide Overrides" no longer drops your overrides on save.** On the
+  General and Quality cards, the toggle previously discarded the
+  override values when you clicked Save & Sync in hide mode. Now it
+  hides only — values stay safe until you click Reset. While hidden,
+  override rows show the current value in orange with a tooltip
+  showing the TRaSH default for context.
+
+- **Custom format tooltip no longer cuts off at the bottom of the screen.**
+  Long descriptions (Wikipedia-linked streaming services etc.) on small
+  viewports now scroll inside the tooltip instead of overflowing.
+
+- **Custom formats now show in their own group in the Add Extra CFs
+  picker.** Previously your custom CFs were lumped together with TRaSH
+  CFs that don't belong to a TRaSH group, all under "Other". Now you
+  get a dedicated "Custom" group below.
+
+- **Quality group members now show in the same order as Radarr/Sonarr.**
+  Inside a quality group (e.g. "WEB 1080p" containing WEBDL-1080p +
+  WEBRip-1080p), clonarr's order was the reverse of what you'd see in
+  the Arr UI. Now they match.
+
+- **Better error message when Arr rejects a CF rename.** When two CFs
+  in your Arr instance share a name (case-insensitive), Arr refuses
+  the rename with a generic 400. Sync now surfaces a clear message
+  explaining what to clean up in Arr.
+
+### Custom Formats
+
+- **Custom CFs you create are now saved with a leading `!`** so they
+  can never collide with a TRaSH guides CF of the same name. The CF
+  editor shows a live preview as you type ("`PCOK` will be saved as
+  `!PCOK`"). Existing custom CFs get prefixed automatically on first
+  startup — no action needed from you.
+
+  Heads up: **the first sync after updating may produce a flurry of
+  "reset to 0 — no longer in profile" + "added: !X" notifications**
+  per affected custom CF, while Arr's old un-prefixed names get
+  replaced. One-time. Things settle right after. If you don't want
+  the notification storm, click **Pause Auto-Sync** before updating,
+  let the migration run, then resume.
+
+- **Custom CF storage refuses duplicate names** for the same Arr type.
+  Saving a CF with a name that's already taken returns a clear error
+  ("A custom CF named '!PCOK' already exists for radarr") instead of
+  silently overwriting on disk.
+
+### Under the hood
+
+- Internal code review pass with five small fixes: better logging on
+  migration failures, whitespace-only-name validation, paused-state
+  rollback on backend errors, friendlier matching of Arr's name-
+  uniqueness errors across version-dependent wording.
+
+- New unit tests covering migration idempotency, prefix enforcement
+  edge cases, and error-message matching variants.
+
+### Credit
+
+The v2.3.0 notification framework that NTFY and Apprise are built on
+top of is [@ColeSpringer](https://github.com/ColeSpringer)'s work
+(PR #32). Closes #31 (NTFY/Apprise feature request from
+[@shadow5631](https://github.com/shadow5631)).
+
 ## v2.3.0
 
 Notifications were rebuilt under the hood. Existing setups keep working — nothing to reconfigure.

@@ -24,6 +24,7 @@
   <Date>2026-04-29</Date>
   <Changes>
 ### 2026-04-29
+- v2.4.0: **NTFY + Apprise notifications, Pause Auto-Sync, several bug fixes.** New: ntfy.sh + self-hosted ntfy + Apprise API support; Pause Auto-Sync toggle on TRaSH-sync tab to skip scheduled/restart syncs while keeping manual ones. Fixed: case-sensitive CF name matching (no more wrong-CF-gets-the-score with mixed-case duplicates), Hide Overrides actually hides instead of silently dropping your overrides on save, tooltip clipping on small viewports, Custom CFs in own picker group, quality-group member order matching Arr UI. Custom formats now saved with leading `!` so they can never collide with TRaSH names — existing customs migrate automatically on startup. **First sync after updating may show extra "reset to 0" + "added !X" notifications** while old names get replaced; click Pause Auto-Sync first if you want to avoid the notification burst. Closes #31.
 - v2.3.0: **Notifications rebuilt under the hood.** Existing Discord/Gotify/Pushover setups keep working — nothing to reconfigure. Better error messages when a test fails, Gotify tokens move from URL to request header, sensitive fields stay masked in more places. Sets up NTFY and Apprise to land in v2.4 next. Big credit to @ColeSpringer (PR #32) for the entire refactor.
 ### 2026-04-28
 - v2.2.10: **Bug fix — Recyclarr-imported profiles now show their CFs in the Profile Builder.** Previously the Builder showed 0 CFs and clicking Save Changes wiped them from disk. Existing imports are restored automatically when re-opened.
