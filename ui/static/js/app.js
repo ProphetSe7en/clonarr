@@ -6546,24 +6546,25 @@ function clonarr() {
       if (this.syncMode === 'create') {
         body.profileName = this.syncForm.newProfileName;
       }
-      // Build overrides from per-section active flags. Values are kept in pdOverrides regardless,
-      // but only sent when the matching section toggle is on.
+      // Build overrides from pdOverrides values. The pdGeneralActive /
+      // pdQualityActive flags only control UI display (input form vs
+      // read-only) — they do NOT gate the payload. Values that match the
+      // TRaSH default are filtered out below; "Hide Overrides" therefore
+      // never silently discards user data. Reset buttons are the explicit
+      // way to clear overrides. Matches the always-send behaviour of
+      // cfScoreOverrides + extraCFs further down.
       const ov = this.pdOverrides;
       const p = this.profileDetail?.detail?.profile || {};
       const overrides = {};
       let hasOverrides = false;
-      if (this.pdGeneralActive) {
-        if (this.activeAppType === 'radarr' && ov.language.value !== (p.language || 'Original')) { overrides.language = ov.language.value; hasOverrides = true; }
-        const upVal = ov.upgradeAllowed.value === true || ov.upgradeAllowed.value === 'true';
-        if (upVal !== (p.upgradeAllowed ?? true)) { overrides.upgradeAllowed = upVal; hasOverrides = true; }
-        if (ov.minFormatScore.value !== (p.minFormatScore ?? 0)) { overrides.minFormatScore = ov.minFormatScore.value; hasOverrides = true; }
-        if (ov.minUpgradeFormatScore.value !== (p.minUpgradeFormatScore ?? 1)) { overrides.minUpgradeFormatScore = ov.minUpgradeFormatScore.value; hasOverrides = true; }
-        if (ov.cutoffFormatScore.value !== (p.cutoffFormatScore || p.cutoffScore || 10000)) { overrides.cutoffFormatScore = ov.cutoffFormatScore.value; hasOverrides = true; }
-      }
-      if (this.pdQualityActive) {
-        const defaultCutoff = p.cutoff || '';
-        if (ov.cutoffQuality && ov.cutoffQuality !== defaultCutoff) { overrides.cutoffQuality = ov.cutoffQuality; hasOverrides = true; }
-      }
+      if (this.activeAppType === 'radarr' && ov.language.value !== (p.language || 'Original')) { overrides.language = ov.language.value; hasOverrides = true; }
+      const upVal = ov.upgradeAllowed.value === true || ov.upgradeAllowed.value === 'true';
+      if (upVal !== (p.upgradeAllowed ?? true)) { overrides.upgradeAllowed = upVal; hasOverrides = true; }
+      if (ov.minFormatScore.value !== (p.minFormatScore ?? 0)) { overrides.minFormatScore = ov.minFormatScore.value; hasOverrides = true; }
+      if (ov.minUpgradeFormatScore.value !== (p.minUpgradeFormatScore ?? 1)) { overrides.minUpgradeFormatScore = ov.minUpgradeFormatScore.value; hasOverrides = true; }
+      if (ov.cutoffFormatScore.value !== (p.cutoffFormatScore || p.cutoffScore || 10000)) { overrides.cutoffFormatScore = ov.cutoffFormatScore.value; hasOverrides = true; }
+      const defaultCutoff = p.cutoff || '';
+      if (ov.cutoffQuality && ov.cutoffQuality !== defaultCutoff) { overrides.cutoffQuality = ov.cutoffQuality; hasOverrides = true; }
       if (hasOverrides) body.overrides = overrides;
       // Per-CF score overrides + extra CFs scores
       const allScoreOverrides = { ...this.cfScoreOverrides };

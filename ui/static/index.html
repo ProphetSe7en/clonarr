@@ -3363,7 +3363,10 @@
                     </select>
                   </template>
                   <template x-if="!pdGeneralActive">
-                    <span class="pd-value" x-text="profileDetail?.detail?.profile?.language || 'Original'"></span>
+                    <span class="pd-value"
+                          :style="pdOverrides.language.value !== (profileDetail?.detail?.profile?.language || 'Original') ? 'color:#d29922' : ''"
+                          :title="pdOverrides.language.value !== (profileDetail?.detail?.profile?.language || 'Original') ? 'Overridden — TRaSH default: ' + (profileDetail?.detail?.profile?.language || 'Original') : ''"
+                          x-text="pdOverrides.language.value || profileDetail?.detail?.profile?.language || 'Original'"></span>
                   </template>
                 </div>
                 <!-- Upgrades Allowed -->
@@ -3377,7 +3380,10 @@
                     </label>
                   </template>
                   <template x-if="!pdGeneralActive">
-                    <span class="pd-value" x-text="(profileDetail?.detail?.profile?.upgradeAllowed ?? true) ? 'Yes' : 'No'"></span>
+                    <span class="pd-value"
+                          :style="(pdOverrides.upgradeAllowed.value === true || pdOverrides.upgradeAllowed.value === 'true') !== (profileDetail?.detail?.profile?.upgradeAllowed ?? true) ? 'color:#d29922' : ''"
+                          :title="(pdOverrides.upgradeAllowed.value === true || pdOverrides.upgradeAllowed.value === 'true') !== (profileDetail?.detail?.profile?.upgradeAllowed ?? true) ? 'Overridden — TRaSH default: ' + ((profileDetail?.detail?.profile?.upgradeAllowed ?? true) ? 'Yes' : 'No') : ''"
+                          x-text="(pdOverrides.upgradeAllowed.value === true || pdOverrides.upgradeAllowed.value === 'true') ? 'Yes' : 'No'"></span>
                   </template>
                 </div>
                 <!-- Min Score -->
@@ -3388,7 +3394,10 @@
                            :style="pdOverrides.minFormatScore.value !== (profileDetail?.detail?.profile?.minFormatScore ?? 0) ? 'border-color:#d29922' : ''">
                   </template>
                   <template x-if="!pdGeneralActive">
-                    <span class="pd-value" x-text="profileDetail?.detail?.profile?.minFormatScore ?? 0"></span>
+                    <span class="pd-value"
+                          :style="pdOverrides.minFormatScore.value !== (profileDetail?.detail?.profile?.minFormatScore ?? 0) ? 'color:#d29922' : ''"
+                          :title="pdOverrides.minFormatScore.value !== (profileDetail?.detail?.profile?.minFormatScore ?? 0) ? 'Overridden — TRaSH default: ' + (profileDetail?.detail?.profile?.minFormatScore ?? 0) : ''"
+                          x-text="pdOverrides.minFormatScore.value ?? profileDetail?.detail?.profile?.minFormatScore ?? 0"></span>
                   </template>
                 </div>
                 <!-- Min Upgrade Score -->
@@ -3399,7 +3408,10 @@
                            :style="pdOverrides.minUpgradeFormatScore.value !== (profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1) ? 'border-color:#d29922' : ''">
                   </template>
                   <template x-if="!pdGeneralActive">
-                    <span class="pd-value" x-text="profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1"></span>
+                    <span class="pd-value"
+                          :style="pdOverrides.minUpgradeFormatScore.value !== (profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1) ? 'color:#d29922' : ''"
+                          :title="pdOverrides.minUpgradeFormatScore.value !== (profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1) ? 'Overridden — TRaSH default: ' + (profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1) : ''"
+                          x-text="pdOverrides.minUpgradeFormatScore.value ?? profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1"></span>
                   </template>
                 </div>
                 <!-- Cutoff Score -->
@@ -3410,7 +3422,10 @@
                            :style="pdOverrides.cutoffFormatScore.value !== (profileDetail?.detail?.profile?.cutoffFormatScore || profileDetail?.detail?.profile?.cutoffScore || 10000) ? 'border-color:#d29922' : ''">
                   </template>
                   <template x-if="!pdGeneralActive">
-                    <span class="pd-value" x-text="profileDetail?.detail?.profile?.cutoffFormatScore || profileDetail?.detail?.profile?.cutoffScore || 10000"></span>
+                    <span class="pd-value"
+                          :style="pdOverrides.cutoffFormatScore.value !== (profileDetail?.detail?.profile?.cutoffFormatScore || profileDetail?.detail?.profile?.cutoffScore || 10000) ? 'color:#d29922' : ''"
+                          :title="pdOverrides.cutoffFormatScore.value !== (profileDetail?.detail?.profile?.cutoffFormatScore || profileDetail?.detail?.profile?.cutoffScore || 10000) ? 'Overridden — TRaSH default: ' + (profileDetail?.detail?.profile?.cutoffFormatScore || profileDetail?.detail?.profile?.cutoffScore || 10000) : ''"
+                          x-text="pdOverrides.cutoffFormatScore.value ?? profileDetail?.detail?.profile?.cutoffFormatScore ?? profileDetail?.detail?.profile?.cutoffScore ?? 10000"></span>
                   </template>
                 </div>
                 <!-- Score Set (always read-only) -->
@@ -3451,7 +3466,10 @@
                     </select>
                   </template>
                   <template x-if="!pdQualityActive">
-                    <span class="pd-value" x-text="profileDetail?.detail?.profile?.cutoff || '—'"></span>
+                    <span class="pd-value"
+                          :style="pdOverrides.cutoffQuality && pdOverrides.cutoffQuality !== (profileDetail?.detail?.profile?.cutoff || '') ? 'color:#d29922' : ''"
+                          :title="pdOverrides.cutoffQuality && pdOverrides.cutoffQuality !== (profileDetail?.detail?.profile?.cutoff || '') ? 'Overridden — TRaSH default: ' + (profileDetail?.detail?.profile?.cutoff || '—') : ''"
+                          x-text="pdOverrides.cutoffQuality || profileDetail?.detail?.profile?.cutoff || '—'"></span>
                   </template>
                 </div>
               </div>
