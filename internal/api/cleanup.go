@@ -387,15 +387,17 @@ func scanAllCFs(client *arr.ArrClient, inst core.Instance, action string, keep [
 		return nil, err
 	}
 
-	// Build case-insensitive keep set
+	// Build case-sensitive keep set. CF names match case-sensitively across
+	// the sync engine (see sync.go existingByName lookup), so a Keep List
+	// entry "PCOK" only protects the CF named exactly "PCOK", not "pcok".
 	keepSet := make(map[string]bool, len(keep))
 	for _, name := range keep {
-		keepSet[strings.ToLower(strings.TrimSpace(name))] = true
+		keepSet[strings.TrimSpace(name)] = true
 	}
 
 	items := make([]CleanupItem, 0, len(cfs))
 	for _, cf := range cfs {
-		if keepSet[strings.ToLower(cf.Name)] {
+		if keepSet[cf.Name] {
 			continue
 		}
 		items = append(items, CleanupItem{
@@ -430,7 +432,7 @@ func scanUnsyncedScores(app *core.App, client *arr.ArrClient, inst core.Instance
 	for _, ip := range importedProfiles {
 		for trashID := range ip.FormatItems {
 			if comment, ok := ip.FormatComments[trashID]; ok {
-				syncedCFNames[strings.ToLower(comment)] = true
+				syncedCFNames[comment] = true
 			}
 		}
 	}
@@ -443,14 +445,14 @@ func scanUnsyncedScores(app *core.App, client *arr.ArrClient, inst core.Instance
 			if ad != nil {
 				resolved, _ := core.ResolveProfileCFs(ad, sh.ProfileTrashID)
 				for _, rcf := range resolved {
-					syncedCFNames[strings.ToLower(rcf.Name)] = true
+					syncedCFNames[rcf.Name] = true
 				}
 			}
 			// Include ALL CFs from sync history (covers extra CFs, custom CFs, score overrides)
 			if ad != nil {
 				for _, trashID := range sh.SyncedCFs {
 					if cf, ok := ad.CustomFormats[trashID]; ok {
-						syncedCFNames[strings.ToLower(cf.Name)] = true
+						syncedCFNames[cf.Name] = true
 					}
 				}
 			}
@@ -459,7 +461,7 @@ func scanUnsyncedScores(app *core.App, client *arr.ArrClient, inst core.Instance
 	// Include custom CFs synced to this instance
 	customCFs := app.CustomCFs.List(inst.Type)
 	for _, ccf := range customCFs {
-		syncedCFNames[strings.ToLower(ccf.Name)] = true
+		syncedCFNames[ccf.Name] = true
 	}
 
 
@@ -486,7 +488,7 @@ func scanUnsyncedScores(app *core.App, client *arr.ArrClient, inst core.Instance
 						break
 					}
 				}
-				if cfName == "" || syncedCFNames[strings.ToLower(cfName)] {
+				if cfName == "" || syncedCFNames[cfName] {
 					continue
 				}
 				cfScores[fi.Format] = &cfScoreInfo{
@@ -654,7 +656,7 @@ func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instanc
 	for _, k := range keep {
 		k = strings.TrimSpace(k)
 		if k != "" {
-			keepSet[strings.ToLower(k)] = true
+			keepSet[k] = true
 		}
 	}
 
@@ -689,20 +691,20 @@ func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instanc
 		// User selections — Override extras AND group-enabled CFs both land here
 		for _, cfID := range rule.SelectedCFs {
 			if name := resolveName(cfID); name != "" {
-				managedNames[strings.ToLower(name)] = true
+				managedNames[name] = true
 			}
 		}
 		// Score overrides — a score (even 0) is explicit intent
 		for cfID := range rule.ScoreOverrides {
 			if name := resolveName(cfID); name != "" {
-				managedNames[strings.ToLower(name)] = true
+				managedNames[name] = true
 			}
 		}
 		// TRaSH-source rule: include the TRaSH profile's intrinsic CFs
 		if rule.ProfileSource == "trash" && rule.TrashProfileID != "" {
 			resolved, _ := core.ResolveProfileCFs(ad, rule.TrashProfileID)
 			for _, rcf := range resolved {
-				managedNames[strings.ToLower(rcf.Name)] = true
+				managedNames[rcf.Name] = true
 			}
 		}
 		// Imported/builder rule: include the imported profile's CFs
@@ -710,9 +712,9 @@ func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instanc
 			if ip, ok := app.Profiles.Get(rule.ImportedProfileID); ok {
 				for trashID := range ip.FormatItems {
 					if comment, ok := ip.FormatComments[trashID]; ok && comment != "" {
-						managedNames[strings.ToLower(comment)] = true
+						managedNames[comment] = true
 					} else if cf, ok := ad.CustomFormats[trashID]; ok {
-						managedNames[strings.ToLower(cf.Name)] = true
+						managedNames[cf.Name] = true
 					}
 				}
 			}
@@ -740,7 +742,7 @@ func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instanc
 	for _, idx := range latestPerProfile {
 		for _, cfID := range cfg.SyncHistory[idx].SyncedCFs {
 			if name := resolveName(cfID); name != "" {
-				managedNames[strings.ToLower(name)] = true
+				managedNames[name] = true
 			}
 		}
 	}
@@ -775,11 +777,10 @@ func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instanc
 	var items []CleanupItem
 	var managedItems []ManagedCFRef
 	for _, cf := range cfs {
-		nameLower := strings.ToLower(cf.Name)
-		if keepSet[nameLower] {
+		if keepSet[cf.Name] {
 			continue
 		}
-		if managedNames[nameLower] {
+		if managedNames[cf.Name] {
 			managedItems = append(managedItems, ManagedCFRef{
 				ID:             cf.ID,
 				Name:           cf.Name,

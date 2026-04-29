@@ -14,6 +14,42 @@ import (
 
 // --- Custom CF Handlers ---
 
+// ensureCustomPrefix returns name with a leading "!" if it doesn't already
+// have one. Custom CFs are stored with this prefix to make collision with
+// TRaSH guides CFs structurally impossible — TRaSH never uses "!" in CF
+// names (verified against the entire upstream catalog), so a "!"-prefixed
+// custom is always distinguishable from anything TRaSH publishes.
+//
+// Trims leading whitespace before checking the prefix so " PCOK" still
+// becomes "!PCOK" rather than " PCOK" (would skip prefix unintentionally).
+func ensureCustomPrefix(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if strings.HasPrefix(trimmed, "!") {
+		return trimmed
+	}
+	return "!" + trimmed
+}
+
+// checkCustomCFNameTaken returns the existing CF if a custom CF with this exact
+// name already exists for the given app type, excluding the CF whose ID matches
+// excludeID (used for the update path so renaming a CF to its own name doesn't
+// trip the check). Match is case-sensitive — "!PCOK" and "!pcok" are distinct.
+//
+// Layer 1 of the name-collision safeguards. Pairs with the "!" prefix
+// enforcement above which makes TRaSH-vs-custom collisions impossible by
+// design; this only catches duplicate-within-custom-storage cases.
+func (s *Server) checkCustomCFNameTaken(name, appType, excludeID string) (*core.CustomCF, bool) {
+	for _, ccf := range s.Core.CustomCFs.List(appType) {
+		if ccf.ID == excludeID {
+			continue
+		}
+		if ccf.Name == name {
+			return &ccf, true
+		}
+	}
+	return nil, false
+}
+
 func (s *Server) handleListCustomCFs(w http.ResponseWriter, r *http.Request) {
 	appType := r.PathValue("app")
 	if appType != "radarr" && appType != "sonarr" {
@@ -43,13 +79,41 @@ func (s *Server) handleCreateCustomCFs(w http.ResponseWriter, r *http.Request) {
 
 	// Validate and assign IDs
 	now := time.Now().UTC().Format(time.RFC3339)
+	// Track names from this request to catch in-batch duplicates (e.g.
+	// importing a JSON with two entries of the same name).
+	seenInBatch := make(map[string]bool)
 	for i := range req.CFs {
-		if req.CFs[i].Name == "" {
+		// Validate before prefix — TrimSpace("  ") + "!" would otherwise
+		// produce a "!" name from whitespace-only input.
+		if strings.TrimSpace(req.CFs[i].Name) == "" {
 			writeError(w, 400, "CF name is required")
 			return
 		}
 		if req.CFs[i].AppType != "radarr" && req.CFs[i].AppType != "sonarr" {
 			writeError(w, 400, "Invalid app type for CF: "+req.CFs[i].Name)
+			return
+		}
+		// Force "!" prefix on every custom CF so it cannot collide with a
+		// TRaSH-published CF of the same canonical name.
+		req.CFs[i].Name = ensureCustomPrefix(req.CFs[i].Name)
+		// Layer 1: reject if name already exists (case-sensitive, per app type).
+		batchKey := req.CFs[i].AppType + "|" + req.CFs[i].Name
+		if seenInBatch[batchKey] {
+			writeJSONStatus(w, http.StatusConflict, map[string]any{
+				"error": fmt.Sprintf("Two custom CFs in this batch share the name %q for %s — names must be unique.", req.CFs[i].Name, req.CFs[i].AppType),
+				"code":  "name_collision_batch",
+				"name":  req.CFs[i].Name,
+			})
+			return
+		}
+		seenInBatch[batchKey] = true
+		if existing, taken := s.checkCustomCFNameTaken(req.CFs[i].Name, req.CFs[i].AppType, ""); taken {
+			writeJSONStatus(w, http.StatusConflict, map[string]any{
+				"error":      fmt.Sprintf("A custom CF named %q already exists for %s. Pick a different name.", req.CFs[i].Name, req.CFs[i].AppType),
+				"code":       "name_collision_existing",
+				"name":       req.CFs[i].Name,
+				"existingId": existing.ID,
+			})
 			return
 		}
 		if req.CFs[i].Category == "" {
@@ -101,12 +165,28 @@ func (s *Server) handleUpdateCustomCF(w http.ResponseWriter, r *http.Request) {
 	}
 	cf.ID = id
 
-	if cf.Name == "" {
+	// Validate before prefix — strings.TrimSpace("  ") + "!"-prefix would
+	// otherwise produce a "!" name from whitespace-only input.
+	if strings.TrimSpace(cf.Name) == "" {
 		writeError(w, 400, "CF name is required")
 		return
 	}
 	if cf.AppType != "radarr" && cf.AppType != "sonarr" {
 		writeError(w, 400, "Invalid app type")
+		return
+	}
+	// Force "!" prefix on rename — keeps the structural collision-proofing
+	// guarantee even when the user edits an existing CF's name.
+	cf.Name = ensureCustomPrefix(cf.Name)
+	// Layer 1: reject rename to a name already used by another custom CF in the
+	// same app type. Excludes self so renaming "!PCOK" to "!PCOK" passes through.
+	if existing, taken := s.checkCustomCFNameTaken(cf.Name, cf.AppType, cf.ID); taken {
+		writeJSONStatus(w, http.StatusConflict, map[string]any{
+			"error":      fmt.Sprintf("Another custom CF named %q already exists for %s. Pick a different name.", cf.Name, cf.AppType),
+			"code":       "name_collision_existing",
+			"name":       cf.Name,
+			"existingId": existing.ID,
+		})
 		return
 	}
 	if cf.Category == "" {
@@ -166,13 +246,23 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var toImport []core.CustomCF
+	var skippedCollisions []string
 	for _, acf := range arrCFs {
 		if len(wantedNames) > 0 && !wantedNames[acf.Name] {
 			continue
 		}
+		prefixedName := ensureCustomPrefix(acf.Name)
+		// Layer 1: skip CFs whose prefixed name collides with an existing
+		// custom CF. Surfaced in the response so the user knows which were
+		// skipped (rare — usually means re-importing something already
+		// imported).
+		if _, taken := s.checkCustomCFNameTaken(prefixedName, req.AppType, ""); taken {
+			skippedCollisions = append(skippedCollisions, prefixedName)
+			continue
+		}
 		toImport = append(toImport, core.CustomCF{
 			ID:             core.GenerateCustomID(),
-			Name:           acf.Name,
+			Name:           prefixedName,
 			AppType:        req.AppType,
 			Category:       category,
 			ArrID:          acf.ID,
@@ -183,6 +273,14 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 	}
 
 	if len(toImport) == 0 {
+		if len(skippedCollisions) > 0 {
+			writeJSONStatus(w, http.StatusConflict, map[string]any{
+				"error":             fmt.Sprintf("All %d requested CFs have names that already exist as custom CFs. Rename or delete the existing ones first, or pick different CFs to import.", len(skippedCollisions)),
+				"code":              "name_collision_all_skipped",
+				"skippedCollisions": skippedCollisions,
+			})
+			return
+		}
 		writeError(w, 400, "No matching CFs found in instance")
 		return
 	}
@@ -194,9 +292,10 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, map[string]any{
-		"added":   added,
-		"total":   len(toImport),
-		"skipped": len(toImport) - added,
+		"added":             added,
+		"total":             len(toImport),
+		"skipped":           len(toImport) - added,
+		"skippedCollisions": skippedCollisions,
 	})
 }
 

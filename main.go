@@ -55,7 +55,16 @@ func main() {
 	}
 	customCFsStore := core.NewCustomCFStore(filepath.Join(configDir, "custom", "json"))
 	customCFsStore.MigrateFromFlatDir(filepath.Join(configDir, "custom-cfs"))
+	// Order matters: filenames first (canonical layout for any pre-prefix
+	// data), then prefix the names (which goes through Update and writes a
+	// fresh sanitized filename for the new "!"-prefixed name). Reversed
+	// order can produce a same-cycle rename + filename re-derivation that
+	// is correct but harder to reason about during debugging.
 	customCFsStore.MigrateFilenames()
+	// Prefix every custom CF name with "!" so it can't collide with TRaSH-
+	// published CFs. Idempotent — second run finds everything prefixed and
+	// no-ops. See CustomCFStore.MigratePrefix for the rationale.
+	customCFsStore.MigratePrefix()
 	cfGroupsStore := core.NewCFGroupStore(filepath.Join(configDir, "custom", "json"))
 	cfGroupsStore.MigrateFilenames()
 

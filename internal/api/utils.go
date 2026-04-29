@@ -36,6 +36,18 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
+// writeJSONStatus writes a JSON response with an explicit status code. Used
+// for non-200 successes (e.g. 409 Conflict with structured detail) where
+// writeError's flat {"error": "..."} shape isn't expressive enough.
+func writeJSONStatus(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("writeJSONStatus: encode error: %v", err)
+	}
+}
+
 // decodeJSON reads and decodes JSON from the request body into T, enforcing a size limit.
 // Returns the decoded value and true on success, or writes an error response and returns false.
 func decodeJSON[T any](w http.ResponseWriter, r *http.Request, maxBytes int64) (T, bool) {

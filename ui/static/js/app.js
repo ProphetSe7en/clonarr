@@ -379,7 +379,7 @@ function clonarr() {
     syncPreviewLoading: false,
 
     // Auto-Sync
-    autoSyncSettings: { enabled: false },
+    autoSyncSettings: { enabled: false, paused: false },
     notificationAgents: [],
     agentModal: {
       show: false,
@@ -7380,6 +7380,32 @@ function clonarr() {
           body: JSON.stringify(this.autoSyncSettings)
         });
       } catch (e) { console.error('saveAutoSyncSettings:', e); }
+    },
+
+    // Toggle the global auto-sync pause flag. When paused, scheduled syncs
+    // (TRaSH-pull-driven, container-startup) are skipped. Manual actions
+    // (Sync All, per-rule Sync now, Save & Sync) remain available.
+    async setAutoSyncPaused(paused) {
+      const previous = this.autoSyncSettings;
+      this.autoSyncSettings = { ...this.autoSyncSettings, paused };
+      try {
+        const r = await fetch('/api/auto-sync/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paused })
+        });
+        if (!r.ok) {
+          // Backend rejected — roll back the optimistic local state so the
+          // banner / toggle don't lie about persisted state.
+          this.autoSyncSettings = previous;
+          throw new Error('HTTP ' + r.status);
+        }
+        this.showToast(paused ? 'Auto-sync paused — manual syncs still work' : 'Auto-sync resumed', paused ? 'warning' : 'success', 4000);
+      } catch (e) {
+        console.error('setAutoSyncPaused:', e);
+        this.autoSyncSettings = previous;
+        this.showToast('Failed to update auto-sync state', 'error', 6000);
+      }
     },
 
     // --- Notification Agents ---

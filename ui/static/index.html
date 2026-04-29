@@ -170,6 +170,18 @@
           <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
             TRaSH Guides quality profiles — click a profile to view its contents, customize groups, and sync to your <span x-text="activeAppLabel"></span> instance. Manage sync rules, auto-sync, and overrides from the Sync Rules section below.
           </div>
+          <!-- Auto-sync paused banner -->
+          <template x-if="autoSyncSettings.paused">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:#3b2a05;border:1px solid #d29922;border-radius:6px;color:#e3b341;font-size:13px">
+              <span style="font-size:16px">⏸</span>
+              <div style="flex:1">
+                <div style="font-weight:600">Auto-sync paused</div>
+                <div style="font-size:12px;color:#c9a44a;margin-top:2px">Scheduled and after-pull syncs are skipped. Manual actions ("Sync All", per-rule "Sync now", Save &amp; Sync from a profile) still work.</div>
+              </div>
+              <button class="btn btn-sm" style="border-color:#d29922;color:#e3b341;font-size:12px" @click="setAutoSyncPaused(false)">▶ Resume</button>
+            </div>
+          </template>
+
           <!-- Collapsible Sync Rules (always visible) -->
             <div class="card" style="margin-bottom:20px">
               <div style="display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:8px;border-left:3px solid #e1e4e8" @click="syncRulesExpanded = { ...syncRulesExpanded, [activeAppType]: !syncRulesExpanded[activeAppType] }">
@@ -177,6 +189,13 @@
                 <span style="font-size:13px;font-weight:500">Sync Rules</span>
                 <span style="font-size:13px;color:#aaa;margin-left:auto"
                       x-text="(() => { let count = 0; for (const inst of instancesOfType(activeAppType)) count += sortedSyncRules(inst.id).length; return count > 0 ? count + ' synced profile' + (count !== 1 ? 's' : '') : 'No syncs yet'; })()"></span>
+                <button class="btn btn-sm"
+                        @click.stop="setAutoSyncPaused(!autoSyncSettings.paused)"
+                        :title="autoSyncSettings.paused ? 'Resume auto-sync' : 'Pause auto-sync (scheduled + after-pull). Manual syncs unaffected.'"
+                        :style="autoSyncSettings.paused
+                                ? 'font-size:12px;padding:2px 8px;border-color:#d29922;color:#e3b341;margin-left:8px'
+                                : 'font-size:12px;padding:2px 8px;border-color:#30363d;color:#8b949e;margin-left:8px'"
+                        x-text="autoSyncSettings.paused ? '▶ Resume Auto-Sync' : '⏸ Pause Auto-Sync'"></button>
               </div>
               <div x-show="syncRulesExpanded[activeAppType]" style="border-top:1px solid #21262d">
                 <template x-for="inst in instancesOfType(activeAppType)" :key="'sr-'+inst.id">
@@ -5711,7 +5730,13 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
         <div class="form-group" style="margin-bottom:0">
           <label>Name *</label>
-          <input class="input" x-model="cfEditorForm.name" placeholder="My Custom Format">
+          <input class="input" x-model="cfEditorForm.name" placeholder="!My Custom Format">
+          <div style="font-size:12px;color:#8b949e;margin-top:4px;line-height:1.4">
+            Custom formats are saved with a leading <code style="color:#f0883e">!</code> so they can't collide with TRaSH guides CFs.
+            <template x-if="cfEditorForm.name.trim() && !cfEditorForm.name.trim().startsWith('!')">
+              <span> Will be saved as <code style="color:#3fb950" x-text="'!' + cfEditorForm.name.trim()"></code>.</span>
+            </template>
+          </div>
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label>App Type</label>

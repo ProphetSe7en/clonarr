@@ -18,6 +18,13 @@ func (app *App) AutoSyncAfterPull() {
 	app.CleanupStaleRules()
 
 	cfg := app.Config.Get()
+	if cfg.AutoSync.Paused {
+		// Global pause is on — skip all auto-driven sync. Manual actions
+		// ("Sync All", per-rule Sync now, Save & Sync from a profile) are
+		// unaffected.
+		app.DebugLog.Logf(LogAutoSync, "Auto-sync paused globally — skipping AutoSyncAfterPull")
+		return
+	}
 	if len(cfg.AutoSync.Rules) == 0 {
 		return
 	}
