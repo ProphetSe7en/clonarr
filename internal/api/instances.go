@@ -512,10 +512,17 @@ func (s *Server) handleInstanceProfileExport(w http.ResponseWriter, r *http.Requ
 					q.Items = append(q.Items, sub.Quality.Name)
 				}
 			}
+			// Reverse nested items to match TRaSH/clonarr UI order (top of group = first).
+			// Arr API stores items[0] = bottom, items[last] = top; clonarr renders array
+			// top-down. Without this reverse, imported groups display reversed in clonarr
+			// vs Arr UI.
+			for i, j := 0, len(q.Items)-1; i < j; i, j = i+1, j-1 {
+				q.Items[i], q.Items[j] = q.Items[j], q.Items[i]
+			}
 		}
 		qualities = append(qualities, q)
 	}
-	// Reverse to match TRaSH format (highest priority / allowed first)
+	// Reverse top-level to match TRaSH format (highest priority / allowed first)
 	for i, j := 0, len(qualities)-1; i < j; i, j = i+1, j-1 {
 		qualities[i], qualities[j] = qualities[j], qualities[i]
 	}

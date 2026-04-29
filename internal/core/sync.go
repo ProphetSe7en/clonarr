@@ -1616,6 +1616,14 @@ func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*arr
 					Allowed: true,
 				})
 			}
+			// Reverse so first-in-clonarr-UI (top of group) ends up last in Arr API.
+			// Same convention as the top-level reversal below: Arr renders nested top-down
+			// from items[last]→items[0]. Without this, group members display reversed
+			// between clonarr UI and Arr UI (semantically harmless per Arr's "items in
+			// group are equal", but confusing when user reorders).
+			for i, j := 0, len(nested)-1; i < j; i, j = i+1, j-1 {
+				nested[i], nested[j] = nested[j], nested[i]
+			}
 			if len(nested) > 0 {
 				items = append(items, arr.ArrQualityItem{
 					ID:      groupID,
