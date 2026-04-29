@@ -5124,17 +5124,26 @@ function clonarr() {
         const r = await fetch(`/api/trash/${t}/all-cfs`);
         if (!r.ok) return;
         const d = await r.json();
-        // Build grouped + ungrouped lists
+        // Build grouped + ungrouped lists. Backend marks user-created CFs
+        // with cf.isCustom=true regardless of which category the user
+        // assigned. Pull them all into a dedicated "Custom" group so the
+        // picker matches Custom Formats tab behaviour (one Custom bucket,
+        // not scattered across the user's chosen categories).
         const groups = []; // { name, cfs[] }
         const ungrouped = [];
+        const customCFs = [];
         for (const c of (d.categories || [])) for (const g of c.groups) {
           if (g.groupTrashId) {
             groups.push({ name: g.name, cfs: g.cfs });
           } else {
-            for (const cf of g.cfs) ungrouped.push(cf);
+            for (const cf of g.cfs) {
+              if (cf.isCustom) customCFs.push(cf);
+              else ungrouped.push(cf);
+            }
           }
         }
         if (ungrouped.length > 0) groups.push({ name: 'Other', cfs: ungrouped });
+        if (customCFs.length > 0) groups.push({ name: 'Custom', cfs: customCFs });
         this.extraCFGroups = groups;
         // Ensure all groups start collapsed (Alpine's reactive proxy can make missing keys truthy otherwise)
         for (const g of groups) this.detailSections['extra_' + g.name] = false;
