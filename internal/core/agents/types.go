@@ -56,6 +56,26 @@ type Config struct {
 	// Pushover — third-party push notification service.
 	PushoverUserKey  string `json:"pushoverUserKey,omitempty"`  // user/group key from Pushover dashboard
 	PushoverAppToken string `json:"pushoverAppToken,omitempty"` // application API token from Pushover dashboard
+
+	// ntfy — simple HTTP push notification service (ntfy.sh or self-hosted).
+	NtfyURL              string `json:"ntfyUrl,omitempty"`              // base URL (e.g. https://ntfy.sh, https://ntfy.example.com)
+	NtfyTopic            string `json:"ntfyTopic,omitempty"`            // topic name to publish to
+	NtfyToken            string `json:"ntfyToken,omitempty"`            // optional bearer token (required only for protected topics)
+	NtfyPriorityCritical bool   `json:"ntfyPriorityCritical,omitempty"` // enable delivery for SeverityCritical
+	NtfyPriorityWarning  bool   `json:"ntfyPriorityWarning,omitempty"`  // enable delivery for SeverityWarning
+	NtfyPriorityInfo     bool   `json:"ntfyPriorityInfo,omitempty"`     // enable delivery for SeverityInfo
+	NtfyCriticalValue    *int   `json:"ntfyCriticalValue,omitempty"`    // ntfy priority 1-5 for critical (nil = 5)
+	NtfyWarningValue     *int   `json:"ntfyWarningValue,omitempty"`     // ntfy priority 1-5 for warning (nil = 4)
+	NtfyInfoValue        *int   `json:"ntfyInfoValue,omitempty"`        // ntfy priority 1-5 for info (nil = 3)
+
+	// Apprise — meta-notifier API server that fans out to many backends.
+	// AppriseURL points at an Apprise API server (https://github.com/caronc/apprise-api).
+	// AppriseURLs is a list of Apprise notification URLs to fan out to per
+	// notification (e.g. ["discord://...", "mailto://..."]).
+	// AppriseToken is an optional bearer token for the Apprise API endpoint.
+	AppriseURL   string   `json:"appriseUrl,omitempty"`
+	AppriseToken string   `json:"appriseToken,omitempty"`
+	AppriseURLs  []string `json:"appriseUrls,omitempty"`
 }
 
 // TestResult captures the outcome of one provider-specific test channel.

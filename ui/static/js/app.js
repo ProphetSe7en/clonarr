@@ -7416,7 +7416,15 @@ function clonarr() {
         this.agentModal.type = 'discord';
         this.agentModal.enabled = true;
         this.agentModal.events = { onSyncSuccess: true, onSyncFailure: true, onCleanup: true, onRepoUpdate: false, onChangelog: false };
-        this.agentModal.config = { discordWebhook: '', discordWebhookUpdates: '', gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3, pushoverUserKey: '', pushoverAppToken: '' };
+        this.agentModal.config = {
+          discordWebhook: '', discordWebhookUpdates: '',
+          gotifyUrl: '', gotifyToken: '', gotifyPriorityCritical: true, gotifyPriorityWarning: true, gotifyPriorityInfo: false, gotifyCriticalValue: 8, gotifyWarningValue: 5, gotifyInfoValue: 3,
+          pushoverUserKey: '', pushoverAppToken: '',
+          ntfyUrl: 'https://ntfy.sh', ntfyTopic: '', ntfyToken: '',
+          ntfyPriorityCritical: true, ntfyPriorityWarning: true, ntfyPriorityInfo: false,
+          ntfyCriticalValue: 5, ntfyWarningValue: 4, ntfyInfoValue: 3,
+          appriseUrl: '', appriseToken: '', appriseUrls: [],
+        };
       }
       this.agentModal.show = true;
     },
@@ -7517,7 +7525,12 @@ function clonarr() {
     },
 
     agentIconSrc(type) {
-      return type === 'gotify' ? '/icons/gotify.png' : `/icons/${type}.svg`;
+      // Most providers ship an SVG; Gotify and Apprise ship a PNG bitmap
+      // because no clean SVG is available upstream.
+      if (type === 'gotify' || type === 'apprise') {
+        return `/icons/${type}.png`;
+      }
+      return `/icons/${type}.svg`;
     },
 
     agentModalCanTest() {
@@ -7526,6 +7539,8 @@ function clonarr() {
         case 'discord':   return !!c.discordWebhook;
         case 'gotify':    return !!c.gotifyUrl && !!c.gotifyToken;
         case 'pushover':  return !!c.pushoverUserKey && !!c.pushoverAppToken;
+        case 'ntfy':      return !!c.ntfyUrl && !!c.ntfyTopic;
+        case 'apprise':   return !!c.appriseUrl && (c.appriseUrls || []).some(u => (u || '').trim() !== '');
         default:          return false;
       }
     },

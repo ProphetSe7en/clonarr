@@ -4704,6 +4704,8 @@
           <option value="discord">Discord</option>
           <option value="gotify">Gotify</option>
           <option value="pushover">Pushover</option>
+          <option value="ntfy">ntfy</option>
+          <option value="apprise">Apprise</option>
         </select>
       </div>
       <!-- Type display (edit) -->
@@ -4799,6 +4801,91 @@
               placeholder="App/API token from Pushover"
               autocomplete="one-time-code"
               @input="agentModal.testPassed = false">
+          </div>
+        </div>
+      </template>
+
+      <!-- ── ntfy fields ── -->
+      <template x-if="agentModal.type === 'ntfy'">
+        <div>
+          <div class="form-group">
+            <label>Server URL</label>
+            <input class="input" x-model="agentModal.config.ntfyUrl"
+              placeholder="https://ntfy.sh or https://ntfy.example.com"
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
+            <div style="font-size:12px;color:#8b949e;margin-top:4px">Public ntfy.sh works without a token. Self-hosted servers may require auth.</div>
+          </div>
+          <div class="form-group">
+            <label>Topic</label>
+            <input class="input" x-model="agentModal.config.ntfyTopic"
+              placeholder="my-clonarr-alerts"
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
+          </div>
+          <div class="form-group">
+            <label>Bearer Token <span style="font-weight:400;color:#8b949e">(optional)</span></label>
+            <input type="password" class="input" x-model="agentModal.config.ntfyToken"
+              placeholder="Required only for protected topics"
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
+          </div>
+          <div class="form-group">
+            <label>Priority levels</label>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                <input type="checkbox" x-model="agentModal.config.ntfyPriorityCritical" style="accent-color:#58a6ff">
+                Critical
+                <input type="number" class="input" style="width:56px;text-align:center;margin-left:4px"
+                  min="1" max="5" x-model.number="agentModal.config.ntfyCriticalValue">
+                <span style="font-size:12px;color:#8b949e">— sync failures (1-5, default 5)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                <input type="checkbox" x-model="agentModal.config.ntfyPriorityWarning" style="accent-color:#58a6ff">
+                Warning
+                <input type="number" class="input" style="width:56px;text-align:center;margin-left:4px"
+                  min="1" max="5" x-model.number="agentModal.config.ntfyWarningValue">
+                <span style="font-size:12px;color:#8b949e">— stale cleanup (default 4)</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
+                <input type="checkbox" x-model="agentModal.config.ntfyPriorityInfo" style="accent-color:#58a6ff">
+                Info
+                <input type="number" class="input" style="width:56px;text-align:center;margin-left:4px"
+                  min="1" max="5" x-model.number="agentModal.config.ntfyInfoValue">
+                <span style="font-size:12px;color:#8b949e">— success, updates, changelog (default 3)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Apprise fields ── -->
+      <template x-if="agentModal.type === 'apprise'">
+        <div>
+          <div class="form-group">
+            <label>Apprise API URL</label>
+            <input class="input" x-model="agentModal.config.appriseUrl"
+              placeholder="https://apprise.example.com"
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
+            <div style="font-size:12px;color:#8b949e;margin-top:4px">URL of your Apprise API server (the <code>/notify</code> path is appended automatically).</div>
+          </div>
+          <div class="form-group">
+            <label>Bearer Token <span style="font-weight:400;color:#8b949e">(optional)</span></label>
+            <input type="password" class="input" x-model="agentModal.config.appriseToken"
+              placeholder="Required only if your Apprise server is protected"
+              autocomplete="one-time-code"
+              @input="agentModal.testPassed = false">
+          </div>
+          <div class="form-group">
+            <label>Notification URLs</label>
+            <textarea class="input" rows="4"
+              :value="(agentModal.config.appriseUrls || []).join('\n')"
+              @input="agentModal.config.appriseUrls = $event.target.value.split('\n'); agentModal.testPassed = false"
+              placeholder="discord://webhook_id/token&#10;mailto://user:pass@host&#10;tgram://bot_token/chat_id"
+              autocomplete="one-time-code"
+              style="font-family:monospace;font-size:12px"></textarea>
+            <div style="font-size:12px;color:#8b949e;margin-top:4px">One <a href="https://github.com/caronc/apprise/wiki" target="_blank" rel="noopener" style="color:#58a6ff">Apprise URL</a> per line. Each URL embeds its own credentials and is masked end-to-end.</div>
           </div>
         </div>
       </template>
