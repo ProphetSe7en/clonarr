@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.3.0
+
+Notifications were rebuilt under the hood. Existing setups keep working — nothing to reconfigure.
+
+### What you might notice
+
+- **Better error messages** when a test notification fails. Instead of a generic "failed", you get the actual reason (wrong URL, bad token, network unreachable).
+- **Discord notifications send in the background** so they don't briefly block a sync or pull while the message is being delivered.
+- **Gotify tokens move from the URL into a request header.** Slightly more secure — your token doesn't end up in proxy access logs anymore.
+- **Tokens and keys stay masked in more places** (Settings panel, API responses). Helps if you screenshot Settings or share a config dump.
+
+### Why this release exists
+
+Notification code used to be tangled into the auto-sync code, which made adding new notification types a chore. v2.3.0 separates them out so the next release can plug new types in without rewriting the auto-sync. **NTFY and Apprise land in v2.4** as a result.
+
+### Credit
+
+Big thanks to [@ColeSpringer](https://github.com/ColeSpringer) — the entire refactor is his work (PR #32).
+
 ## v2.2.10
 
 Profiles imported from Recyclarr YAML now show their custom formats correctly when opened in the Profile Builder. Previously the Builder showed 0 CFs and clicking Save Changes wiped the profile's CFs from disk.
