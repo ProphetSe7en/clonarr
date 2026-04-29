@@ -28,40 +28,6 @@ func writeJSON(w http.ResponseWriter, data any) {
 	}
 }
 
-// ==== Credential masking =====================================================
-// Discord webhook URLs and Gotify/Pushover tokens are bearer credentials —
-// whoever holds them can post messages as Clonarr. They must not appear in
-// plaintext in responses so a compromised session, local-bypass peer, or
-// leaked API call log cannot exfiltrate them. Masking pattern:
-//   - GET responses return a placeholder form
-//   - SAVE handlers detect the placeholder on input and preserve the stored
-//     value instead of overwriting with the placeholder (so "Save" without
-//     edits is a no-op for secrets).
-
-const (
-	maskedDiscordWebhook = "https://discord.com/api/webhooks/[MASKED]/[MASKED]"
-	maskedToken          = "••••••••••••••••" // 16 bullets — looks different from any real token
-)
-
-// maskSecret returns the placeholder if s is non-empty; otherwise empty.
-// Empty stays empty so the UI can distinguish "not set" from "set but hidden".
-func maskSecret(s, placeholder string) string {
-	if s == "" {
-		return ""
-	}
-	return placeholder
-}
-
-// preserveIfMasked returns existing when incoming equals the placeholder —
-// i.e. the UI returned the masked value unchanged. Otherwise returns incoming
-// (including empty string, which represents explicit deletion).
-func preserveIfMasked(incoming, existing, placeholder string) string {
-	if incoming == placeholder {
-		return existing
-	}
-	return incoming
-}
-
 // writeError writes a JSON error response.
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
