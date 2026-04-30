@@ -691,3 +691,64 @@ func TestVerifyPassword_TimingEqualization(t *testing.T) {
 			math.Abs(ratio), unknownUserDuration, knownUserBadPwDuration)
 	}
 }
+
+// TestValidatePassword exercises both acceptance paths:
+//  1. 10-15 chars: requires 2 of {upper, lower, digit, symbol}
+//  2. 16+ chars: any class mix accepted (passphrase-friendly)
+//
+// Edge cases covered: short-rejection, single-class short reject,
+// passphrase short of 16 with single class reject, exactly-16
+// single-class accept, diceware-style word phrases.
+func TestValidatePassword(t *testing.T) {
+	cases := []struct {
+		name      string
+		pw        string
+		wantError bool
+	}{
+		// Length floor
+		{"too short", "Abc1!", true},
+		{"exactly 9 still too short", "Aa1!aaaa", true},
+		{"exactly 10 with 2 classes", "Aaaaaaaaa1", false},
+
+		// 10-15 chars: need 2 of 4 classes
+		{"10 chars all lowercase", "alllowerca", true},
+		{"10 chars all uppercase", "ALLUPPERCA", true},
+		{"10 chars all digits", "0123456789", true},
+		{"10 chars upper+lower", "MixedCase1", false},
+		{"10 chars upper+digit", "PASSWORD12", false},
+		{"10 chars symbol+lower", "abcdef!@#$", false},
+		{"15 chars single class", "alllowercaseabc", true},
+
+		// >=16 chars: any class mix (passphrase path)
+		{"16 chars all lowercase", "correctlowercase", false},
+		{"19 chars all lowercase", "correctlowercase19!", false}, // mix accepted too
+		{"diceware 4 words with spaces", "correct horse battery staple", false},
+		{"diceware 4 words no spaces", "correcthorsebatterystaple", false},
+		{"16 chars all uppercase", "ALLCAPSPASSWORD!", false},
+		{"16 chars all digits", "1234567890123456", false},
+		{"long mixed", "Strong P@ssw0rd 4ever!", false},
+
+		// Boundary: 15 single-class (reject), 16 single-class (accept)
+		{"15 chars lowercase reject", "abcdefghijklmno", true},
+		{"16 chars lowercase accept", "abcdefghijklmnop", false},
+
+		// 72-byte bcrypt cap — Fix #3 defends against silent truncation
+		// where two distinct >72-byte passwords would hash to the same
+		// bcrypt output and become interchangeable at login.
+		{"exactly 72 bytes accept", strings.Repeat("a", 72), false},
+		{"73 bytes reject (bcrypt limit)", strings.Repeat("a", 73), true},
+		{"long passphrase past bcrypt limit", "correct horse battery staple is a great long passphrase to test against limits XYZ", true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := validatePassword(c.pw)
+			if c.wantError && err == nil {
+				t.Errorf("validatePassword(%q) returned nil; want error", c.pw)
+			}
+			if !c.wantError && err != nil {
+				t.Errorf("validatePassword(%q) returned %v; want nil", c.pw, err)
+			}
+		})
+	}
+}

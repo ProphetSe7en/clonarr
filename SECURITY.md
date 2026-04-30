@@ -4,8 +4,7 @@
 
 | Version | Security updates |
 |---------|------------------|
-| `v2.0.7` (latest) and later | ✅ Yes |
-| `v2.0.6` | ✅ Yes (bugfix candidate) |
+| `v2.5.1` (latest) and later | ✅ Yes |
 | Earlier `v2.x` releases | ❌ No — please upgrade |
 
 ## Reporting a vulnerability
@@ -50,30 +49,30 @@ Clonarr is a **local admin tool** for managing Radarr/Sonarr profile data. The d
 
 ### What Clonarr does
 
-- **Authentication required by default** (Forms mode, bcrypt cost 12). First-run setup wizard forces admin account creation — no default credentials.
-- **CSRF protection** on all state-mutating endpoints (double-submit cookie pattern).
-- **Security headers**: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
-- **SSRF guards** on Discord + Pushover outbound HTTP (blocklisted internal IP ranges + per-request DNS revalidation).
-- **Secret masking** in all API responses — Arr API keys, webhook URLs, Gotify/Pushover tokens. Empty-on-unchanged-edit preserves stored secrets on save.
-- **Session persistence** to disk (atomic write, survives container restart).
-- **File permissions**: `/config/clonarr.json` written with mode `0600`, `/config/auth.json` `0600` in dir `0700`.
-- **X-Forwarded-For hardening**: only trusted when the direct peer IP matches a configured Trusted Proxy. Rightmost-non-trusted algorithm defeats leftmost-spoofing.
-- **Env-var override** for trust-boundary config (`TRUSTED_NETWORKS`, `TRUSTED_PROXIES`) — pin at host level to defend against UI-takeover attackers.
+- **Login required by default.** First-run setup forces you to create an admin account — there are no default credentials. Passwords are hashed with bcrypt (cost 12) and stored in `/config/auth.json`. Long passwords (16+ characters) skip the upper/lower/digit/symbol class check, so passphrases are welcome.
+- **Brute-force protection on login.** After 5 failed login attempts from the same IP within a minute, further attempts are blocked for the rest of the window with HTTP 429 + a `Retry-After` header. Same protection applies to `/setup` and the change-password endpoint. Failed attempts are logged with the source IP so you can wire them up to fail2ban or similar if you want to ban the source at the firewall.
+- **CSRF protection** on every state-changing request (login, save, sync, delete). Browsers can't be tricked into submitting a request from another site without also possessing your session cookie *and* the matching token from this site.
+- **Security headers**: `X-Frame-Options: DENY` (no embedding in iframes — defeats clickjacking), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
+- **Outbound URLs are checked.** Discord and Pushover webhooks (the two providers where the user typically pastes a URL from a third party) go through an HTTP client that refuses to connect to internal IPs (RFC1918, link-local, loopback) — defeats DNS-rebinding attacks where a malicious webhook hostname secretly resolves to a LAN address like `192.168.x.y` so the server scans your network. Re-checked on every request, not cached. Self-hosted Gotify / ntfy / Apprise use a standard HTTP client because the user controls the destination directly.
+- **Secrets are masked in API responses.** Arr API keys, Discord/Gotify/Pushover/NTFY/Apprise tokens. Editing without changing a secret keeps the stored value (the field stays empty in the form, you don't have to re-enter).
+- **Sessions survive restarts.** Stored on disk in `/config/sessions.json`, written atomically. Container restart doesn't kick everyone out.
+- **File permissions are tight.** `/config/clonarr.json` (mode 0600) and `/config/auth.json` (0600 in dir 0700) — readable only by the container user.
+- **Reverse-proxy headers are honored only from configured proxies.** `X-Forwarded-For` and `X-Forwarded-Proto` are trusted only when the direct peer IP matches your Trusted Proxies list. Stops other containers on the same Docker bridge from spoofing client IPs.
+- **Lock trusted-network and trusted-proxy lists from the container template.** When `TRUSTED_NETWORKS` / `TRUSTED_PROXIES` are set as env vars, the matching UI fields are read-only — an attacker who got into a session can't widen the rules without host access.
+- **Custom-format names can't collide with TRaSH guides CFs.** Two CFs with the same exact name in the same Arr app would resolve to the same CF in Radarr/Sonarr at sync time, producing flip-flopping scores. The Custom Format editor refuses names that already match a TRaSH CF or another custom CF for the same app (case-sensitive, mirrors Radarr/Sonarr's own uniqueness rule). Prevents data corruption rather than relying on the user to spot it in sync history.
 
 ### What Clonarr does NOT do (by design)
 
-- **Encryption at rest of Arr API keys.** Stored plaintext in `/config/clonarr.json` (mode 0600). Same trust model as Radarr/Sonarr themselves — both of those also store their API keys plaintext in `config.xml`. If an attacker has read access to `/config/`, the app cannot meaningfully protect the data from them — any local keystore key would be readable from the same filesystem. **Planned for v2.0.7**: opt-in `CLONARR_SECRET_KEY` env-var for AES-GCM encryption of Arr API keys + notification tokens at rest. Backward-compatible (plaintext kept if env var unset). Useful against backup-disk exfiltration and container-escape scenarios where `/config` leaks but process environment doesn't. If you need this before v2.0.7 ships, open a GitHub issue — we'll prioritize.
-- **Rate limiting on `/login`.** Delegated to the reverse proxy (fail2ban, CrowdSec, SWAG plugins). Basic-auth mode is a CPU-amplification vector without rate-limit — prefer Forms mode or front Clonarr with a proxy that handles auth.
-- **Account lockout.** Same reasoning as rate limiting.
-- **Audit log of admin actions.** The Docker event stream + reverse-proxy access logs cover request-level history. If you need per-action audit, a future release can add it — open an issue.
-- **TLS termination.** Runs plain HTTP on port 6060. Use a reverse proxy (SWAG, Traefik, Caddy, NPM) for TLS — configure `TRUSTED_PROXIES` so `X-Forwarded-Proto: https` is honored for Secure cookies.
+- **Encrypt secrets at rest.** Arr API keys and notification tokens live as plaintext in `/config/clonarr.json` (mode 0600 — readable only by the container user). This matches Radarr/Sonarr themselves: both of those also store their API keys as plaintext in `config.xml`. If an attacker has read access to `/config/`, no local-only key can meaningfully protect the file — any encryption key has to live on the same filesystem. A future opt-in `CLONARR_SECRET_KEY` env var (AES-GCM with the key kept out of `/config`) is on the roadmap if you want defense against backup-disk leaks or container-escape scenarios. Open an issue if you need it sooner.
+- **Audit log of admin actions.** The Docker event stream and reverse-proxy access logs cover request-level history. A dedicated audit log per action is open to feature-request — open an issue.
+- **Terminate TLS itself.** Runs plain HTTP on port 6060. Front it with SWAG / Traefik / Caddy / Nginx Proxy Manager for HTTPS, and add the proxy's IP to **Trusted Proxies** so `X-Forwarded-Proto: https` is honored (ensures Secure cookies are set).
 
 ## Security audit trail
 
-Clonarr's security implementation is backed by an internal trap catalogue (T1–T66) — every finding from past code reviews is preserved with the mitigation pattern and the reason it was flagged. This is a living internal document (not published to this repo) covering the full hardening arc: auth primitives, middleware wiring, sensitive-data redaction, CSRF, security headers, race conditions, info leakage, log injection, and supply-chain. Requests for access to specific trap rationale can be made via the disclosure email above.
+Clonarr's security implementation is backed by an internal review log — every finding from past code reviews is preserved with the fix and why it was flagged. This is a living internal document (not published to this repo) covering the full hardening arc: authentication primitives, middleware wiring, sensitive-data redaction, CSRF, security headers, race conditions, information leakage, log injection, and supply-chain risks. Requests for access to specific finding details can be made via the disclosure email above.
 
 Current CI: `go test -race ./...` + `govulncheck ./...` run on every push and PR against `main`.
 
 ## Changelog of security-relevant changes
 
-See `CHANGELOG.md` — entries flagged **Security** or explicitly reference trap IDs (T1–T66).
+See `CHANGELOG.md` — security-related changes are called out in the entry's overview line and in the "New" or "Bug fixes" sections (e.g. v2.5.1 added login rate limiting and name-collision validation).

@@ -46,6 +46,14 @@ func main() {
 	}
 	if basePath != "" {
 		log.Printf("URL base: %s (serving from this prefix)", basePath)
+		// URL_BASE almost always means "behind a reverse proxy"; without
+		// TRUSTED_PROXIES set, X-Forwarded-Proto won't be honored, Secure
+		// cookies won't be set on HTTPS, and X-Forwarded-For from the proxy
+		// will be ignored. Warn at startup so misconfigurations are visible
+		// in the container log instead of silently breaking session security.
+		if os.Getenv("TRUSTED_PROXIES") == "" {
+			log.Printf("WARNING: URL_BASE is set but TRUSTED_PROXIES is empty — Clonarr won't trust X-Forwarded-Proto from your reverse proxy. Set TRUSTED_PROXIES to your proxy's IP so HTTPS Secure cookies and client-IP resolution work correctly.")
+		}
 	}
 
 	// Initialize stores
@@ -65,16 +73,7 @@ func main() {
 	}
 	customCFsStore := core.NewCustomCFStore(filepath.Join(configDir, "custom", "json"))
 	customCFsStore.MigrateFromFlatDir(filepath.Join(configDir, "custom-cfs"))
-	// Order matters: filenames first (canonical layout for any pre-prefix
-	// data), then prefix the names (which goes through Update and writes a
-	// fresh sanitized filename for the new "!"-prefixed name). Reversed
-	// order can produce a same-cycle rename + filename re-derivation that
-	// is correct but harder to reason about during debugging.
 	customCFsStore.MigrateFilenames()
-	// Prefix every custom CF name with "!" so it can't collide with TRaSH-
-	// published CFs. Idempotent — second run finds everything prefixed and
-	// no-ops. See CustomCFStore.MigratePrefix for the rationale.
-	customCFsStore.MigratePrefix()
 	cfGroupsStore := core.NewCFGroupStore(filepath.Join(configDir, "custom", "json"))
 	cfGroupsStore.MigrateFilenames()
 

@@ -14,40 +14,69 @@ import (
 
 // --- Custom CF Handlers ---
 
-// ensureCustomPrefix returns name with a leading "!" if it doesn't already
-// have one. Custom CFs are stored with this prefix to make collision with
-// TRaSH guides CFs structurally impossible — TRaSH never uses "!" in CF
-// names (verified against the entire upstream catalog), so a "!"-prefixed
-// custom is always distinguishable from anything TRaSH publishes.
-//
-// Trims leading whitespace before checking the prefix so " PCOK" still
-// becomes "!PCOK" rather than " PCOK" (would skip prefix unintentionally).
-func ensureCustomPrefix(name string) string {
-	trimmed := strings.TrimSpace(name)
-	if strings.HasPrefix(trimmed, "!") {
-		return trimmed
-	}
-	return "!" + trimmed
+// cfNameCollision describes which existing CF a candidate name collides
+// with — either a TRaSH-published CF or another custom CF in the same
+// app type. Carries enough info to produce a clear error message and
+// link to the colliding entry in the UI.
+type cfNameCollision struct {
+	Type     string // "trash" or "custom"
+	Name     string
+	TrashID  string // populated when Type == "trash"
+	CustomID string // populated when Type == "custom"
 }
 
-// checkCustomCFNameTaken returns the existing CF if a custom CF with this exact
-// name already exists for the given app type, excluding the CF whose ID matches
-// excludeID (used for the update path so renaming a CF to its own name doesn't
-// trip the check). Match is case-sensitive — "!PCOK" and "!pcok" are distinct.
+// checkCustomCFNameCollision rejects names that would create a
+// same-name conflict at sync time. Two CFs with the byte-identical name
+// in the same app would both resolve to the same Radarr/Sonarr format
+// when the engine looks them up by name, producing flip-flopping
+// scores depending on Go map iteration order.
 //
-// Layer 1 of the name-collision safeguards. Pairs with the "!" prefix
-// enforcement above which makes TRaSH-vs-custom collisions impossible by
-// design; this only catches duplicate-within-custom-storage cases.
-func (s *Server) checkCustomCFNameTaken(name, appType, excludeID string) (*core.CustomCF, bool) {
+// We refuse the conflict at the source instead of trying to dedup at
+// sync time: simpler, no silent winner-picks, and matches Radarr/Sonarr's
+// own "Must be unique" rule for CF names. excludeID lets the update
+// path rename a CF to its own current name (a no-op).
+//
+// Matching is case-sensitive — "PCOK" and "Pcok" are distinct, same as
+// in Arr — and scoped per app type, so "Foo" can exist as a Radarr
+// custom and a Sonarr custom simultaneously (different on-disk dirs,
+// different Arr instances).
+func (s *Server) checkCustomCFNameCollision(name, appType, excludeID string) *cfNameCollision {
+	if ad := s.Core.Trash.GetAppData(appType); ad != nil {
+		for tid, tcf := range ad.CustomFormats {
+			if tcf != nil && tcf.Name == name {
+				return &cfNameCollision{Type: "trash", Name: name, TrashID: tid}
+			}
+		}
+	}
 	for _, ccf := range s.Core.CustomCFs.List(appType) {
 		if ccf.ID == excludeID {
 			continue
 		}
 		if ccf.Name == name {
-			return &ccf, true
+			return &cfNameCollision{Type: "custom", Name: name, CustomID: ccf.ID}
 		}
 	}
-	return nil, false
+	return nil
+}
+
+// writeCollisionError translates a cfNameCollision into a 409 JSON
+// response with a per-type message + machine-readable code so the UI
+// can surface the conflict next to the offending field.
+func writeCollisionError(w http.ResponseWriter, col *cfNameCollision, appType string) {
+	body := map[string]any{
+		"name": col.Name,
+	}
+	switch col.Type {
+	case "trash":
+		body["error"] = fmt.Sprintf("Name %q is already used by a TRaSH-published CF for %s. Pick a different name — sharing a name with a TRaSH CF causes flip-flopping scores at sync time.", col.Name, appType)
+		body["code"] = "name_collision_trash"
+		body["trashId"] = col.TrashID
+	default: // "custom"
+		body["error"] = fmt.Sprintf("Another custom CF named %q already exists for %s. Pick a different name.", col.Name, appType)
+		body["code"] = "name_collision_existing"
+		body["existingId"] = col.CustomID
+	}
+	writeJSONStatus(w, http.StatusConflict, body)
 }
 
 func (s *Server) handleListCustomCFs(w http.ResponseWriter, r *http.Request) {
@@ -83,9 +112,8 @@ func (s *Server) handleCreateCustomCFs(w http.ResponseWriter, r *http.Request) {
 	// importing a JSON with two entries of the same name).
 	seenInBatch := make(map[string]bool)
 	for i := range req.CFs {
-		// Validate before prefix — TrimSpace("  ") + "!" would otherwise
-		// produce a "!" name from whitespace-only input.
-		if strings.TrimSpace(req.CFs[i].Name) == "" {
+		req.CFs[i].Name = strings.TrimSpace(req.CFs[i].Name)
+		if req.CFs[i].Name == "" {
 			writeError(w, 400, "CF name is required")
 			return
 		}
@@ -93,10 +121,10 @@ func (s *Server) handleCreateCustomCFs(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "Invalid app type for CF: "+req.CFs[i].Name)
 			return
 		}
-		// Force "!" prefix on every custom CF so it cannot collide with a
-		// TRaSH-published CF of the same canonical name.
-		req.CFs[i].Name = ensureCustomPrefix(req.CFs[i].Name)
-		// Layer 1: reject if name already exists (case-sensitive, per app type).
+		// Reject if name already exists in clonarr storage (case-sensitive,
+		// per app type). Collision with TRaSH names by intent is allowed —
+		// user picks the name knowing it will overwrite TRaSH's version on
+		// sync, or picks a different name to coexist.
 		batchKey := req.CFs[i].AppType + "|" + req.CFs[i].Name
 		if seenInBatch[batchKey] {
 			writeJSONStatus(w, http.StatusConflict, map[string]any{
@@ -107,13 +135,8 @@ func (s *Server) handleCreateCustomCFs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		seenInBatch[batchKey] = true
-		if existing, taken := s.checkCustomCFNameTaken(req.CFs[i].Name, req.CFs[i].AppType, ""); taken {
-			writeJSONStatus(w, http.StatusConflict, map[string]any{
-				"error":      fmt.Sprintf("A custom CF named %q already exists for %s. Pick a different name.", req.CFs[i].Name, req.CFs[i].AppType),
-				"code":       "name_collision_existing",
-				"name":       req.CFs[i].Name,
-				"existingId": existing.ID,
-			})
+		if col := s.checkCustomCFNameCollision(req.CFs[i].Name, req.CFs[i].AppType, ""); col != nil {
+			writeCollisionError(w, col, req.CFs[i].AppType)
 			return
 		}
 		if req.CFs[i].Category == "" {
@@ -165,9 +188,10 @@ func (s *Server) handleUpdateCustomCF(w http.ResponseWriter, r *http.Request) {
 	}
 	cf.ID = id
 
-	// Validate before prefix — strings.TrimSpace("  ") + "!"-prefix would
-	// otherwise produce a "!" name from whitespace-only input.
-	if strings.TrimSpace(cf.Name) == "" {
+	// Trim before validation so whitespace-only names hit the empty-name
+	// guard cleanly instead of slipping through the collision check.
+	cf.Name = strings.TrimSpace(cf.Name)
+	if cf.Name == "" {
 		writeError(w, 400, "CF name is required")
 		return
 	}
@@ -175,18 +199,13 @@ func (s *Server) handleUpdateCustomCF(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Invalid app type")
 		return
 	}
-	// Force "!" prefix on rename — keeps the structural collision-proofing
-	// guarantee even when the user edits an existing CF's name.
-	cf.Name = ensureCustomPrefix(cf.Name)
-	// Layer 1: reject rename to a name already used by another custom CF in the
-	// same app type. Excludes self so renaming "!PCOK" to "!PCOK" passes through.
-	if existing, taken := s.checkCustomCFNameTaken(cf.Name, cf.AppType, cf.ID); taken {
-		writeJSONStatus(w, http.StatusConflict, map[string]any{
-			"error":      fmt.Sprintf("Another custom CF named %q already exists for %s. Pick a different name.", cf.Name, cf.AppType),
-			"code":       "name_collision_existing",
-			"name":       cf.Name,
-			"existingId": existing.ID,
-		})
+	// Reject rename to a name already used by another custom CF or any
+	// TRaSH-published CF in the same app type (case-sensitive). Excludes
+	// self so renaming "PCOK" to "PCOK" passes through. TRaSH-name
+	// rejection prevents the score-flip-flop class of bug — see helper
+	// docstring for details.
+	if col := s.checkCustomCFNameCollision(cf.Name, cf.AppType, cf.ID); col != nil {
+		writeCollisionError(w, col, cf.AppType)
 		return
 	}
 	if cf.Category == "" {
@@ -247,37 +266,46 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 
 	var toImport []core.CustomCF
 	var skippedCollisions []string
+	var skippedTrashCollisions []string
 	for _, acf := range arrCFs {
 		if len(wantedNames) > 0 && !wantedNames[acf.Name] {
 			continue
 		}
-		prefixedName := ensureCustomPrefix(acf.Name)
-		// Layer 1: skip CFs whose prefixed name collides with an existing
-		// custom CF. Surfaced in the response so the user knows which were
-		// skipped (rare — usually means re-importing something already
-		// imported).
-		if _, taken := s.checkCustomCFNameTaken(prefixedName, req.AppType, ""); taken {
-			skippedCollisions = append(skippedCollisions, prefixedName)
+		// Skip CFs whose name collides with an existing custom or any
+		// TRaSH-published CF (case-sensitive, per app type). Surfaced in
+		// the response so the user knows which were skipped and why —
+		// custom-collision usually means re-importing the same CF;
+		// trash-collision means the user's Arr CF shares a name with
+		// TRaSH's, which would cause flip-flopping at sync time.
+		if col := s.checkCustomCFNameCollision(acf.Name, req.AppType, ""); col != nil {
+			if col.Type == "trash" {
+				skippedTrashCollisions = append(skippedTrashCollisions, acf.Name)
+			} else {
+				skippedCollisions = append(skippedCollisions, acf.Name)
+			}
 			continue
 		}
 		toImport = append(toImport, core.CustomCF{
-			ID:             core.GenerateCustomID(),
-			Name:           prefixedName,
-			AppType:        req.AppType,
-			Category:       category,
-			ArrID:          acf.ID,
-			Specifications: acf.Specifications,
-			SourceInstance: inst.Name,
-			ImportedAt:     now,
+			ID:              core.GenerateCustomID(),
+			Name:            acf.Name,
+			AppType:         req.AppType,
+			Category:        category,
+			ArrID:           acf.ID,
+			IncludeInRename: acf.IncludeCustomFormatWhenRenaming,
+			Specifications:  acf.Specifications,
+			SourceInstance:  inst.Name,
+			ImportedAt:      now,
 		})
 	}
 
 	if len(toImport) == 0 {
-		if len(skippedCollisions) > 0 {
+		totalSkipped := len(skippedCollisions) + len(skippedTrashCollisions)
+		if totalSkipped > 0 {
 			writeJSONStatus(w, http.StatusConflict, map[string]any{
-				"error":             fmt.Sprintf("All %d requested CFs have names that already exist as custom CFs. Rename or delete the existing ones first, or pick different CFs to import.", len(skippedCollisions)),
-				"code":              "name_collision_all_skipped",
-				"skippedCollisions": skippedCollisions,
+				"error":                  fmt.Sprintf("All %d requested CFs have names that collide with existing CFs (%d with TRaSH, %d with customs). Rename the source CFs in your Arr instance, or pick different CFs to import.", totalSkipped, len(skippedTrashCollisions), len(skippedCollisions)),
+				"code":                   "name_collision_all_skipped",
+				"skippedCollisions":      skippedCollisions,
+				"skippedTrashCollisions": skippedTrashCollisions,
 			})
 			return
 		}
@@ -292,10 +320,11 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, map[string]any{
-		"added":             added,
-		"total":             len(toImport),
-		"skipped":           len(toImport) - added,
-		"skippedCollisions": skippedCollisions,
+		"added":                  added,
+		"total":                  len(toImport),
+		"skipped":                len(toImport) - added,
+		"skippedCollisions":      skippedCollisions,
+		"skippedTrashCollisions": skippedTrashCollisions,
 	})
 }
 
