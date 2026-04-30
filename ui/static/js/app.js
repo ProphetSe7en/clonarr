@@ -7514,9 +7514,9 @@ function clonarr() {
       // Most providers ship an SVG; Gotify and Apprise ship a PNG bitmap
       // because no clean SVG is available upstream.
       if (type === 'gotify' || type === 'apprise') {
-        return `/icons/${type}.png`;
+        return `icons/${type}.png`;
       }
-      return `/icons/${type}.svg`;
+      return `icons/${type}.svg`;
     },
 
     agentModalCanTest() {
