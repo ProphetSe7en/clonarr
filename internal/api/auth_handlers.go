@@ -101,6 +101,7 @@ func (h *AuthHandlers) handleSetupSubmit(w http.ResponseWriter, r *http.Request)
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	if err := r.ParseForm(); err != nil {
+		h.logAuthFailed(r, "setup", "", "invalid_form")
 		h.renderSetupError(w, r, "", "Invalid form data")
 		return
 	}
@@ -109,10 +110,12 @@ func (h *AuthHandlers) handleSetupSubmit(w http.ResponseWriter, r *http.Request)
 	confirm := r.FormValue("password_confirm")
 
 	if password != confirm {
+		h.logAuthFailed(r, "setup", username, "password_mismatch")
 		h.renderSetupError(w, r, username, "Passwords do not match")
 		return
 	}
 	if err := h.Store.Setup(username, password); err != nil {
+		h.logAuthFailed(r, "setup", username, "store_setup_error")
 		h.renderSetupError(w, r, username, err.Error())
 		return
 	}
@@ -126,6 +129,41 @@ func (h *AuthHandlers) handleSetupSubmit(w http.ResponseWriter, r *http.Request)
 	}
 	h.setSessionCookie(w, r, sessionID)
 	http.Redirect(w, r, h.BasePath+"/", http.StatusFound)
+}
+
+// logAuthFailed emits a structured log line for failed login or setup
+// attempts in fail2ban-friendly format. Resolves the client IP via
+// TRUSTED_PROXIES (so reverse-proxied deployments log the real client,
+// not the proxy hop). When reason is empty, the line omits the
+// reason= token; otherwise reason is included to help downstream log
+// analysis distinguish "wrong password" from "form parse error" etc.
+//
+//	auth: login_failed ip=192.0.2.10 username="admin" user_agent="..."
+//	auth: setup_failed ip=192.0.2.10 username="admin" reason=password_mismatch user_agent="..."
+//
+// Called from both handleLoginSubmit (action="login") and
+// handleSetupSubmit (action="setup").
+func (h *AuthHandlers) logAuthFailed(r *http.Request, action, username, reason string) {
+	cfg := h.Store.Config()
+	clientIP := netsec.ParseClientIP(r, cfg.TrustedProxies)
+	ipStr := "unknown"
+	if clientIP != nil {
+		ipStr = clientIP.String()
+	}
+	// User-Agent is attacker-controlled and uncapped by spec — truncate
+	// before logging so a bot-net flood with 8 KB UAs can't pollute
+	// /var/log within a few minutes (5/min/IP × N IPs adds up).
+	ua := r.Header.Get("User-Agent")
+	if len(ua) > 200 {
+		ua = ua[:200] + "…"
+	}
+	if reason == "" {
+		log.Printf("auth: %s_failed ip=%s username=%q user_agent=%q",
+			action, ipStr, username, ua)
+		return
+	}
+	log.Printf("auth: %s_failed ip=%s username=%q reason=%s user_agent=%q",
+		action, ipStr, username, reason, ua)
 }
 
 func (h *AuthHandlers) renderSetupError(w http.ResponseWriter, r *http.Request, username, errMsg string) {
@@ -215,6 +253,7 @@ func (h *AuthHandlers) handleLoginSubmit(w http.ResponseWriter, r *http.Request)
 	password := r.FormValue("password")
 
 	if !h.Store.VerifyPassword(username, password) {
+		h.logAuthFailed(r, "login", username, "")
 		// Generic error — do not distinguish "wrong user" from "wrong pw".
 		h.renderLoginError(w, r, username, "Invalid username or password")
 		return
@@ -573,15 +612,22 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 
 	authHandlers := &AuthHandlers{Store: store, Version: version, BasePath: basePath}
 
+	// Per-IP rate limit on credential-acceptance endpoints. Stops brute-
+	// force on /setup, /login, /api/auth/change-password without an
+	// external Redis dependency. 5 attempts/minute/IP, 429 with
+	// Retry-After on overflow. PUT /api/config is excluded — it requires
+	// an authenticated session, so it's post-brute-force surface.
+	rateLimit := auth.AuthRateLimitMiddleware(store)
+
 	mux.HandleFunc("GET /setup", authHandlers.handleSetupPage)
-	mux.HandleFunc("POST /setup", authHandlers.handleSetupSubmit)
+	mux.Handle("POST /setup", rateLimit(http.HandlerFunc(authHandlers.handleSetupSubmit)))
 	mux.HandleFunc("GET /login", authHandlers.handleLoginPage)
-	mux.HandleFunc("POST /login", authHandlers.handleLoginSubmit)
+	mux.Handle("POST /login", rateLimit(http.HandlerFunc(authHandlers.handleLoginSubmit)))
 	mux.HandleFunc("POST /logout", authHandlers.handleLogout)
 	mux.HandleFunc("GET /api/auth/status", authHandlers.handleAuthStatus)
 	mux.HandleFunc("GET /api/auth/api-key", authHandlers.handleGetAPIKey)
 	mux.HandleFunc("POST /api/auth/regenerate-api-key", authHandlers.handleRegenAPIKey)
-	mux.HandleFunc("POST /api/auth/change-password", authHandlers.handleChangePassword)
+	mux.Handle("POST /api/auth/change-password", rateLimit(http.HandlerFunc(authHandlers.handleChangePassword)))
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true}`))

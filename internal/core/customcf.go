@@ -43,7 +43,7 @@ func (cf *CustomCF) GetAppType() string { return cf.AppType }
 
 // CustomCFStore manages custom CFs in app-type-scoped subdirectories.
 // Files are stored in {dir}/{appType}/cf/ to avoid cross-app name collisions.
-// Same-named CFs in different apps (e.g. "!LQ" in both Radarr and Sonarr)
+// Same-named CFs in different apps (e.g. "MyLQ" in both Radarr and Sonarr)
 // are stored in separate directories and never collide.
 type CustomCFStore struct {
 	dir    string
@@ -161,47 +161,6 @@ func (cs *CustomCFStore) Update(cf CustomCF) error {
 		return fmt.Errorf("unknown app type: %s", cf.AppType)
 	}
 	return store.Update(cf)
-}
-
-// MigratePrefix prepends "!" to every custom CF name that doesn't already
-// start with one. Runs on startup, idempotent. Together with the prefix
-// enforcement on create/update/import, this guarantees that custom CFs
-// can never collide name-wise with TRaSH-published CFs (TRaSH never uses
-// "!" — verified against the upstream catalog).
-//
-// The CF's stable identity is its `custom:<id>` key, used by sync rules
-// and history records. Renaming only changes the display/sync name, so
-// existing rule references stay valid. Filenames are derived from the
-// (sanitized) name, so the on-disk file gets renamed too via Update().
-//
-// First-sync impact: Arr instances still hold the un-prefixed name from
-// previous syncs. Next sync rebuilds them as "!<name>" via the standard
-// add/remove flow — old name becomes orphan, new name created. One-time
-// notification noise; clean state afterwards.
-//
-// Failures are logged with the CF name + app type. A failed rename leaves
-// the CF un-prefixed; on the next container startup the migration retries.
-func (cs *CustomCFStore) MigratePrefix() {
-	var migrated, failed int
-	for _, appType := range []string{"radarr", "sonarr"} {
-		cfs := cs.List(appType)
-		for _, ccf := range cfs {
-			if strings.HasPrefix(ccf.Name, "!") {
-				continue
-			}
-			oldName := ccf.Name
-			ccf.Name = "!" + ccf.Name
-			if err := cs.Update(ccf); err != nil {
-				log.Printf("custom-cf migration: failed to prefix %q (%s): %v — will retry on next startup", oldName, appType, err)
-				failed++
-				continue
-			}
-			migrated++
-		}
-	}
-	if migrated > 0 || failed > 0 {
-		log.Printf("custom-cf migration: %d names prefixed with !, %d failed", migrated, failed)
-	}
 }
 
 // migrateFromFlatDir migrates custom CFs from the old flat /config/custom-cfs/

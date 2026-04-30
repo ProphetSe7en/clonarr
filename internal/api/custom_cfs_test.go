@@ -1,29 +1,322 @@
 package api
 
-import "testing"
+import (
+	"bytes"
+	"clonarr/internal/core"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
-// TestEnsureCustomPrefix verifies the "!"-prefix helper covers the cases the
-// create/update/import handlers depend on:
-//   - leading "!" preserved
-//   - leading whitespace trimmed before the check (so " PCOK" -> "!PCOK")
-//   - already-correct names round-trip unchanged
-func TestEnsureCustomPrefix(t *testing.T) {
-	cases := []struct {
-		in, want string
-	}{
-		{"PCOK", "!PCOK"},
-		{"!PCOK", "!PCOK"},
-		{"  PCOK", "!PCOK"},        // leading whitespace
-		{"PCOK  ", "!PCOK"},        // trailing whitespace also trimmed
-		{"  !PCOK  ", "!PCOK"},     // both sides + already prefixed
-		{"!", "!"},                 // pathological — caller validates emptiness
-		{"!!Foo", "!!Foo"},         // already prefixed (with extra !), no double-bang
-		{"My Format", "!My Format"},
+// initGitRepo runs `git init` + a stub commit in dir. LoadFromDisk
+// requires a .git directory + valid HEAD; without this the parse path
+// short-circuits before reading any CF JSON.
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	cmds := [][]string{
+		{"git", "-C", dir, "init", "-q"},
+		{"git", "-C", dir, "config", "user.email", "test@example.com"},
+		{"git", "-C", dir, "config", "user.name", "test"},
+		{"git", "-C", dir, "config", "commit.gpgsign", "false"},
+		{"git", "-C", dir, "commit", "--allow-empty", "-q", "-m", "init"},
 	}
-	for _, c := range cases {
-		got := ensureCustomPrefix(c.in)
-		if got != c.want {
-			t.Errorf("ensureCustomPrefix(%q) = %q, want %q", c.in, got, c.want)
+	for _, c := range cmds {
+		if out, err := exec.Command(c[0], c[1:]...).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", c, err, out)
 		}
+	}
+}
+
+// setupTestAppWithCFs builds an App with a CustomCFStore + a TrashStore
+// pre-populated by writing real CF JSON files into the TRaSH data dir
+// and calling LoadFromDisk. Going through the actual file-loading path
+// (rather than reaching into private fields) keeps these tests honest:
+// they exercise the same code that production uses.
+//
+// trashCFsByApp maps app type → list of (trashID, name) pairs for the
+// TRaSH-published CFs to seed. customCFs are added to the custom store
+// directly via Add().
+func setupTestAppWithCFs(t *testing.T, trashCFsByApp map[string][][2]string, customCFs []core.CustomCF) *core.App {
+	t.Helper()
+	tempDir := t.TempDir()
+
+	// Config — minimal, just enough for the handlers to load.
+	config := core.NewConfigStore(tempDir)
+	dummyCfg := core.Config{}
+	cfgData, _ := json.MarshalIndent(dummyCfg, "", "  ")
+	os.WriteFile(filepath.Join(tempDir, "clonarr.json"), cfgData, 0644)
+	if err := config.Load(); err != nil {
+		t.Fatalf("Load config: %v", err)
+	}
+
+	// TRaSH data — real JSON files in {tempDir}/trash-guides/docs/json/{app}/cf/.
+	// LoadFromDisk parses these into AppData.CustomFormats keyed by trash_id.
+	// LoadFromDisk requires a .git dir, so we init an empty repo first.
+	trashDir := filepath.Join(tempDir, "trash-guides")
+	if err := os.MkdirAll(trashDir, 0755); err != nil {
+		t.Fatalf("mkdir trashDir: %v", err)
+	}
+	initGitRepo(t, trashDir)
+	trash := core.NewTrashStore(tempDir)
+	for app, cfs := range trashCFsByApp {
+		cfDir := filepath.Join(trashDir, "docs", "json", app, "cf")
+		if err := os.MkdirAll(cfDir, 0755); err != nil {
+			t.Fatalf("mkdir cfDir: %v", err)
+		}
+		for _, pair := range cfs {
+			trashID, name := pair[0], pair[1]
+			data := fmt.Sprintf(`{"trash_id":%q,"name":%q}`, trashID, name)
+			fpath := filepath.Join(cfDir, trashID+".json")
+			if err := os.WriteFile(fpath, []byte(data), 0644); err != nil {
+				t.Fatalf("write trash CF: %v", err)
+			}
+		}
+	}
+	if err := trash.LoadFromDisk(); err != nil {
+		t.Fatalf("LoadFromDisk: %v", err)
+	}
+
+	// Custom CF store — Add() handles ID generation if missing.
+	customStore := core.NewCustomCFStore(filepath.Join(tempDir, "custom"))
+	if len(customCFs) > 0 {
+		if _, err := customStore.Add(customCFs); err != nil {
+			t.Fatalf("seed custom CFs: %v", err)
+		}
+	}
+
+	return &core.App{
+		Config:    config,
+		Trash:     trash,
+		CustomCFs: customStore,
+		DebugLog:  core.NewDebugLogger(tempDir),
+	}
+}
+
+// postCustomCF wraps the create handler with a single-CF body.
+func postCustomCF(t *testing.T, server *Server, name, appType string) *httptest.ResponseRecorder {
+	t.Helper()
+	body := map[string]any{
+		"cfs": []core.CustomCF{{Name: name, AppType: appType}},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	r := httptest.NewRequest(http.MethodPost, "/api/custom-cfs", bytes.NewReader(bodyBytes))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.handleCreateCustomCFs(w, r)
+	return w
+}
+
+// putCustomCF wraps the update handler.
+func putCustomCF(t *testing.T, server *Server, id, newName, appType string) *httptest.ResponseRecorder {
+	t.Helper()
+	body := core.CustomCF{Name: newName, AppType: appType}
+	bodyBytes, _ := json.Marshal(body)
+	r := httptest.NewRequest(http.MethodPut, "/api/custom-cfs/"+id, bytes.NewReader(bodyBytes))
+	r.SetPathValue("id", id)
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.handleUpdateCustomCF(w, r)
+	return w
+}
+
+func decodeTestJSON(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	var m map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&m); err != nil {
+		t.Fatalf("decode response: %v (body=%q)", err, w.Body.String())
+	}
+	return m
+}
+
+// --- Create-path tests ---
+
+func TestCreateCustomCF_RejectsTrashCollision(t *testing.T) {
+	app := setupTestAppWithCFs(t, map[string][][2]string{
+		"radarr": {{"abc123", "PCOK"}},
+	}, nil)
+	server := &Server{Core: app}
+
+	w := postCustomCF(t, server, "PCOK", "radarr")
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 (body=%q)", w.Code, w.Body.String())
+	}
+	body := decodeTestJSON(t, w)
+	if body["code"] != "name_collision_trash" {
+		t.Errorf("code = %v, want name_collision_trash", body["code"])
+	}
+	if body["trashId"] != "abc123" {
+		t.Errorf("trashId = %v, want abc123", body["trashId"])
+	}
+}
+
+func TestCreateCustomCF_RejectsCustomCollision(t *testing.T) {
+	app := setupTestAppWithCFs(t, nil, []core.CustomCF{
+		{Name: "MyFormat", AppType: "radarr", Category: "Custom"},
+	})
+	server := &Server{Core: app}
+
+	w := postCustomCF(t, server, "MyFormat", "radarr")
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", w.Code)
+	}
+	body := decodeTestJSON(t, w)
+	if body["code"] != "name_collision_existing" {
+		t.Errorf("code = %v, want name_collision_existing", body["code"])
+	}
+}
+
+func TestCreateCustomCF_AllowsUniqueName(t *testing.T) {
+	app := setupTestAppWithCFs(t, map[string][][2]string{
+		"radarr": {{"abc123", "PCOK"}},
+	}, []core.CustomCF{
+		{Name: "OtherCF", AppType: "radarr", Category: "Custom"},
+	})
+	server := &Server{Core: app}
+
+	w := postCustomCF(t, server, "MyUniqueName", "radarr")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateCustomCF_AllowsSameNameDifferentAppType(t *testing.T) {
+	// TRaSH ships "PCOK" for radarr. A sonarr custom named "PCOK"
+	// is fine — different on-disk dirs, different Arr instances.
+	app := setupTestAppWithCFs(t, map[string][][2]string{
+		"radarr": {{"abc123", "PCOK"}},
+	}, nil)
+	server := &Server{Core: app}
+
+	w := postCustomCF(t, server, "PCOK", "sonarr")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateCustomCF_CaseSensitiveDistinct(t *testing.T) {
+	// Match Arr's own rule: byte-exact case-sensitive. TRaSH "PCOK"
+	// and a custom "Pcok" are distinct names — Arr accepts both.
+	app := setupTestAppWithCFs(t, map[string][][2]string{
+		"radarr": {{"abc123", "PCOK"}},
+	}, nil)
+	server := &Server{Core: app}
+
+	w := postCustomCF(t, server, "Pcok", "radarr")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
+	}
+}
+
+// --- Update-path tests ---
+
+func TestUpdateCustomCF_AllowsRenameToOwnName(t *testing.T) {
+	app := setupTestAppWithCFs(t, nil, []core.CustomCF{
+		{Name: "MyCF", AppType: "radarr", Category: "Custom"},
+	})
+	// Discover the generated ID.
+	cfs := app.CustomCFs.List("radarr")
+	if len(cfs) != 1 {
+		t.Fatalf("expected 1 seeded CF, got %d", len(cfs))
+	}
+	id := cfs[0].ID
+	server := &Server{Core: app}
+
+	w := putCustomCF(t, server, id, "MyCF", "radarr")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateCustomCF_RejectsRenameToTrashName(t *testing.T) {
+	// This is the bug-exposing case from the v2.5.1 investigation:
+	// user renamed `!PCOK` → `PCOK`, which collides with TRaSH's PCOK
+	// CF and produces flip-flopping scores at sync time.
+	app := setupTestAppWithCFs(t, map[string][][2]string{
+		"radarr": {{"abc123", "PCOK"}},
+	}, []core.CustomCF{
+		{Name: "!PCOK", AppType: "radarr", Category: "Custom"},
+	})
+	cfs := app.CustomCFs.List("radarr")
+	id := cfs[0].ID
+	server := &Server{Core: app}
+
+	w := putCustomCF(t, server, id, "PCOK", "radarr")
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 (body=%q)", w.Code, w.Body.String())
+	}
+	body := decodeTestJSON(t, w)
+	if body["code"] != "name_collision_trash" {
+		t.Errorf("code = %v, want name_collision_trash", body["code"])
+	}
+}
+
+func TestUpdateCustomCF_RejectsRenameToOtherCustomName(t *testing.T) {
+	app := setupTestAppWithCFs(t, nil, []core.CustomCF{
+		{Name: "FirstCF", AppType: "radarr", Category: "Custom"},
+		{Name: "SecondCF", AppType: "radarr", Category: "Custom"},
+	})
+	cfs := app.CustomCFs.List("radarr")
+	if len(cfs) != 2 {
+		t.Fatalf("expected 2 seeded CFs, got %d", len(cfs))
+	}
+	// Pick the FirstCF and try renaming it to SecondCF.
+	var firstID string
+	for _, c := range cfs {
+		if c.Name == "FirstCF" {
+			firstID = c.ID
+			break
+		}
+	}
+	server := &Server{Core: app}
+
+	w := putCustomCF(t, server, firstID, "SecondCF", "radarr")
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", w.Code)
+	}
+	body := decodeTestJSON(t, w)
+	if body["code"] != "name_collision_existing" {
+		t.Errorf("code = %v, want name_collision_existing", body["code"])
+	}
+}
+
+// --- In-batch duplicate test ---
+
+func TestCreateCustomCF_RejectsBatchDuplicates(t *testing.T) {
+	// Two entries in the same request both named "Foo" — the existing
+	// in-batch check should fire before either is persisted.
+	app := setupTestAppWithCFs(t, nil, nil)
+	server := &Server{Core: app}
+
+	body := map[string]any{
+		"cfs": []core.CustomCF{
+			{Name: "Foo", AppType: "radarr"},
+			{Name: "Foo", AppType: "radarr"},
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	r := httptest.NewRequest(http.MethodPost, "/api/custom-cfs", bytes.NewReader(bodyBytes))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.handleCreateCustomCFs(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 (body=%q)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "name_collision_batch") {
+		t.Errorf("expected name_collision_batch code in body, got %q", w.Body.String())
 	}
 }

@@ -3672,6 +3672,10 @@ function clonarr() {
           let errMsg = 'Save failed';
           try { const err = await res.json(); errMsg = err.error || errMsg; } catch(_) {}
           this.cfEditorResult = { error: true, message: errMsg };
+          // Re-enable the Save button so the user can adjust the name
+          // and retry — the trailing reset below is unreachable after
+          // this `return`, so reset locally.
+          this.cfEditorSaving = false;
           return;
         }
 
@@ -3963,7 +3967,20 @@ function clonarr() {
             this.importCFResult = { error: true, message: result.error || 'Import failed' };
             return;
           }
-          this.importCFResult = { error: false, message: `Imported ${result.added} CF(s)${result.skipped > 0 ? ` (${result.skipped} skipped as duplicates)` : ''}` };
+          // Surface trash-name collisions distinctly from custom-name dupes —
+          // the user needs to know if their Arr CF shares a name with a
+          // TRaSH-published CF, since that would flip-flop scores at sync time.
+          const trashSkipped = (result.skippedTrashCollisions || []).length;
+          const customSkipped = (result.skippedCollisions || []).length;
+          let suffix = '';
+          if (trashSkipped > 0 && customSkipped > 0) {
+            suffix = ` (${trashSkipped} skipped — name collides with TRaSH; ${customSkipped} skipped as duplicates)`;
+          } else if (trashSkipped > 0) {
+            suffix = ` (${trashSkipped} skipped — name collides with TRaSH-published CF; rename in your Arr instance to import)`;
+          } else if (customSkipped > 0) {
+            suffix = ` (${customSkipped} skipped as duplicates)`;
+          }
+          this.importCFResult = { error: false, message: `Imported ${result.added} CF(s)${suffix}` };
           // Mark imported CFs as existing
           for (const cf of this.importCFList) {
             if (cf.selected) cf.exists = true;

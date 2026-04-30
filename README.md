@@ -97,8 +97,9 @@ Free, open source, and self-hosted.
 ### Other
 - **Browser navigation** — back/forward buttons work (URL hash routing with History API)
 - **TRaSH changelog** — clickable dropdown in header showing recent guide updates
-- **Discord notifications** — auto-sync results and TRaSH repo update summaries
-- **Gotify notifications** — push notifications with configurable priority levels
+- **Notifications** — Discord, Gotify, Pushover, NTFY, Apprise (auto-sync results, TRaSH update summaries, configurable priority per severity)
+- **Reverse-proxy subpath hosting** — host at `https://your-domain.com/clonarr` via `URL_BASE` env var
+- **Login brute-force protection** — 5 failed attempts/IP/minute → temporary 429 lockout
 - **Developer mode** — TRaSH JSON export, trash_id generation, score set editing
 - **Multi-instance** — manage multiple Radarr and Sonarr instances
 - **Dynamic language support** — all languages from your Arr instance available in dropdowns
@@ -280,6 +281,28 @@ Behind SWAG / Authelia / Traefik / Caddy that terminates TLS:
 
 Clonarr will only trust `X-Forwarded-*` headers when the direct peer IP matches a configured Trusted Proxy — prevents header spoofing from other containers on the same bridge network.
 
+#### Subpath hosting (e.g. `https://example.com/clonarr`)
+
+If you want Clonarr at a path prefix instead of a subdomain, set `URL_BASE` on the container to match the prefix your proxy uses, then point the proxy at port 6060.
+
+```yaml
+environment:
+  - URL_BASE=/clonarr
+```
+
+Example NGINX block:
+
+```nginx
+location /clonarr/ {
+    proxy_pass http://clonarr-host:6060/clonarr/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Leading slash required, no trailing slash. Leave `URL_BASE` empty for root-path access (default).
+
 ### Lost password recovery
 
 No email reset flow — by design, `/config/auth.json` is authoritative. To recover:
@@ -293,11 +316,16 @@ This is safe on a machine where you have `/config` access. If someone ELSE can d
 
 ## Security Notes
 
-- Radarr/Sonarr instance API keys, Discord webhooks, Gotify tokens, and Pushover credentials are stored in plaintext in `/config/clonarr.json`. Protect that file the same way you protect Radarr/Sonarr's `config.xml`.
-- Admin credentials are bcrypt-hashed in `/config/auth.json` — never in plaintext on disk.
-- All state-changing API calls are CSRF-protected (double-submit cookie). Scripts using the API key bypass CSRF automatically.
-- The app sets `X-Frame-Options: DENY` (prevents clickjacking), `X-Content-Type-Options: nosniff`, and `Referrer-Policy: same-origin`.
-- Discord and Pushover outbound calls run through an SSRF-safe HTTP client that refuses internal IP targets with per-request revalidation (defeats DNS rebinding). Gotify uses a plain client since self-hosted Gotify on LAN is legitimate.
+- **Login is required by default.** Admin password is bcrypt-hashed in `/config/auth.json` — never plaintext.
+- **Brute-force protection.** 5 failed logins from the same IP within a minute → blocked until a minute has passed since the oldest of those 5 attempts (HTTP 429 + `Retry-After`). Same on the setup and change-password endpoints. Failed attempts are logged with the source IP so fail2ban can pick them up if you want firewall-level bans.
+- **Long passwords are welcome.** Minimum 10 characters; 16+ skips the upper/lower/digit/symbol class rule, so passphrases like `correct horse battery staple` pass.
+- **Custom format names can't collide with TRaSH CFs.** Saving a custom CF with a name that matches a TRaSH guides CF (or another custom for the same app) is refused — sharing a name caused syncs to flip-flop the score back and forth. Names are case-sensitive (`PCOK` and `Pcok` are distinct), matching Radarr/Sonarr's own rule.
+- **Secrets stay on disk.** Arr API keys, Discord/Gotify/Pushover/NTFY/Apprise tokens are stored in plaintext in `/config/clonarr.json` (mode 0600). Protect that file the same way you protect Radarr/Sonarr's `config.xml`.
+- **CSRF protection** on every state-changing request. Scripts authenticating with `X-Api-Key` bypass CSRF — that's intentional, key-holders are trusted.
+- **Outbound webhooks check destinations.** Discord and Pushover (the two where users paste a URL from a third party) go through an HTTP client that refuses internal IPs and re-checks on every request — defeats DNS-rebinding attacks where a malicious webhook hostname secretly resolves to a LAN address. Self-hosted Gotify / ntfy / Apprise use a standard client (you control the destination).
+- **Security headers** set on every response: `X-Frame-Options: DENY` (no embedding in iframes), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
+
+See `SECURITY.md` for the full posture, supported-version policy, and how to report a vulnerability.
 
 ## Disclaimer
 

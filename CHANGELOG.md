@@ -1,5 +1,64 @@
 # Changelog
 
+## v2.5.1
+
+Reverse-proxy subpath hosting, login brute-force protection, and a
+fix for the custom-format name conflicts that caused flip-flopping
+scores after sync.
+
+### New
+
+- **Run Clonarr under a subpath.** Set `URL_BASE=/clonarr` on the
+  container to host it at e.g. `https://your-domain.com/clonarr`
+  behind SWAG / Traefik / NPM. Leave empty (default) for normal root
+  access. Thanks to [@ColeSpringer](https://github.com/ColeSpringer)
+  (PR #39).
+
+- **Login brute-force protection.** 5 failed login attempts from the
+  same IP within a minute → blocked until a minute has passed since
+  the oldest attempt (HTTP 429 + Retry-After). Same on the setup and
+  change-password screens. Failed attempts log the source IP so
+  fail2ban can ban at the firewall if you want.
+
+- **Long passwords don't need symbols.** 16+ character passwords skip
+  the upper/lower/digit/symbol rule, so `correct horse battery staple`
+  passes. Minimum length still 10.
+
+### Bug fixes
+
+- **Custom formats can't share a name with a TRaSH CF anymore.** If
+  you'd named a custom CF the same as a TRaSH CF (e.g. your `PCOK` vs
+  TRaSH's `PCOK`), every sync flipped the score back and forth — both
+  matched the same CF in Radarr/Sonarr. Save now refuses the
+  collision with a clear message. Names are case-sensitive (`PCOK`
+  and `Pcok` are distinct), matching Radarr/Sonarr's own rule.
+
+  **Already have colliding customs?** Rename them in the CF Editor or
+  delete them — existing collisions aren't auto-fixed.
+
+- **"Include in Rename" survives import-from-instance.** Importing a
+  custom format from your Radarr/Sonarr always landed with the flag
+  off, even when the source had it on. Fixed — re-import to pick it
+  up, or toggle manually.
+
+- **Save button no longer freezes after a collision error.** You can
+  fix the name and click Save again immediately instead of starting
+  over.
+
+### Removed
+
+- **The `!`-prefix workaround is gone.** v2.4 saved your custom CFs
+  with a leading `!` so they couldn't collide with TRaSH names.
+  v2.5.1's name-collision check above does the same job without
+  changing what you type. Your existing `!`-prefixed customs stay as
+  they are — nothing renames automatically. Drop the `!` yourself in
+  the CF Editor if you want to.
+
+### Credit
+
+`URL_BASE` reverse-proxy support: [@ColeSpringer](https://github.com/ColeSpringer)
+(PR #39).
+
 ## v2.5.0
 
 Cleaner Settings page. Recyclarr YAML export paused while we verify it.
