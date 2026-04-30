@@ -52,6 +52,62 @@ func TestCompareCFCategories_Tiering(t *testing.T) {
 	}
 }
 
+// CompareCFGroups drives sort across cf-groups using the TRaSH `group` integer.
+// The contract:
+//   - Tier 3 (custom): user-authored groups always last
+//   - Tier 1 (has explicit Group): sorted by integer, alphabetical tiebreak
+//   - Tier 2 (no Group): alphabetical fallback in middle band
+func TestCompareCFGroups_Tiering(t *testing.T) {
+	intp := func(n int) *int { return &n }
+
+	cases := []struct {
+		desc                                   string
+		aName                                  string
+		aGroup                                 *int
+		aCustom                                bool
+		bName                                  string
+		bGroup                                 *int
+		bCustom                                bool
+		want                                   int // -1, 0, +1
+	}{
+		// Both have Group — compare by integer
+		{"both have group, lower wins", "[Audio]", intp(1), false, "[German]", intp(11), false, -1},
+		{"both have group, higher loses", "[German]", intp(11), false, "[Audio]", intp(1), false, 1},
+		{"both have group, same value → alphabetical", "[Banana]", intp(5), false, "[Apple]", intp(5), false, 1},
+		{"both have group, same value, alpha A wins", "[Apple]", intp(5), false, "[Banana]", intp(5), false, -1},
+		// Group=0 is a real value, not "absent" — lowest possible
+		{"group=0 is highest priority, beats group=1", "[Z]", intp(0), false, "[A]", intp(1), false, -1},
+		{"group=0 distinguishable from nil", "[Z]", intp(0), false, "[A]", nil, false, -1},
+		// Tier 1 vs Tier 2 — explicit group always beats no-group
+		{"has-group beats no-group", "[Anime]", intp(81), false, "[Other]", nil, false, -1},
+		{"no-group loses to has-group", "[Other]", nil, false, "[Anime]", intp(81), false, 1},
+		// Both Tier 2 — alphabetical
+		{"both no-group, alphabetical", "[Apple]", nil, false, "[Banana]", nil, false, -1},
+		{"both no-group, alphabetical reverse", "[Banana]", nil, false, "[Apple]", nil, false, 1},
+		// Custom always last regardless of Group
+		{"custom always last vs has-group", "[My Custom]", intp(1), true, "[Other]", nil, false, 1},
+		{"custom always last vs no-group", "[My Custom]", nil, true, "[Other]", nil, false, 1},
+		{"non-custom beats custom even when custom has Group=0", "[Other]", nil, false, "[My Custom]", intp(0), true, -1},
+		// Both custom — alphabetical fallback
+		{"both custom alphabetical", "[A]", nil, true, "[B]", nil, true, -1},
+		// Equal
+		{"identical → 0", "[Same]", intp(5), false, "[Same]", intp(5), false, 0},
+	}
+	for _, c := range cases {
+		got := CompareCFGroups(c.aName, c.aGroup, c.aCustom, c.bName, c.bGroup, c.bCustom)
+		switch {
+		case got < 0:
+			got = -1
+		case got > 0:
+			got = 1
+		}
+		if got != c.want {
+			t.Errorf("%s: CompareCFGroups(%q,%v,%v, %q,%v,%v) = %d, want %d",
+				c.desc, c.aName, c.aGroup, c.aCustom, c.bName, c.bGroup, c.bCustom, got, c.want)
+		}
+	}
+}
+
 // Ensure the SQP detection is case-insensitive — TRaSH normally uses the
 // upper-case "[SQP]" prefix but defensive coding for any drift.
 func TestCategoryTier_SQPCaseInsensitive(t *testing.T) {

@@ -1682,9 +1682,22 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 	optionalArrIDs := make(map[int]bool)
 	requiredGroups, optionalGroups := core.ProfileCFGroups(ad, trashProfileID)
 	catMap := make(map[string][]OptionalGroupState)
+	// Track the min `group` value across cf-groups within each category for
+	// the parent sort below, plus a flag for any custom group present.
+	catMinGroup := make(map[string]*int)
+	catIsCustom := make(map[string]bool)
 	for _, groups := range [][]core.ProfileCFGroup{requiredGroups, optionalGroups} {
 		for _, pg := range groups {
 			category, shortName := core.ParseCategoryPrefix(pg.Name)
+			if category == "Custom" {
+				catIsCustom[category] = true
+			}
+			if pg.Group != nil {
+				if cur, ok := catMinGroup[category]; !ok || *pg.Group < *cur {
+					g := *pg.Group
+					catMinGroup[category] = &g
+				}
+			}
 			descLower := strings.ToLower(pg.TrashDescription)
 			exclusive := strings.Contains(descLower, "only score or enable one") ||
 				strings.Contains(descLower, "only enable one")
@@ -1732,7 +1745,9 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 		catNames = append(catNames, cat)
 	}
 	sort.Slice(catNames, func(i, j int) bool {
-		return core.CompareCFCategories(catNames[i], catNames[j]) < 0
+		ai, bi := catNames[i], catNames[j]
+		return core.CompareCFGroups(ai, catMinGroup[ai], catIsCustom[ai],
+			bi, catMinGroup[bi], catIsCustom[bi]) < 0
 	})
 	for _, cat := range catNames {
 		comp.OptionalCategories = append(comp.OptionalCategories, CompareCategory{

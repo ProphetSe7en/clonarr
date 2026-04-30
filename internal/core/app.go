@@ -40,6 +40,7 @@ type App struct {
 	CFGroups       *CFGroupStore
 	DebugLog       *DebugLogger
 	Version        string
+	DevFeatures    bool         // set from CLONARR_DEV_FEATURES env at startup; gates contributor-only UI (TRaSH schema fields, Recyclarr import/export)
 	HTTPClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls
 	NotifyClient   *http.Client // shared HTTP client for Discord/Gotify notifications
 	SafeClient     *http.Client // shared HTTP client with SSRF blocklist (Pushover, Discord)

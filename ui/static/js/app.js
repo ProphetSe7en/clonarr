@@ -18,6 +18,11 @@ function clonarr() {
     // keep it off (nothing to lock to).
     cfgbHashLocked: false,
     cfgbDefault: false,
+    // cfgbGroup is the TRaSH-style sort-order integer: lower = higher in the
+    // cf-group list. Null when not set (group lands in "Other" tier between
+    // numbered groups and custom). Per TRaSH convention: 1-9 English public,
+    // 11-19 German, 21-29 French, 81-89 Anime, 91-99 SQP.
+    cfgbGroup: null,
     cfgbCFs: [],                             // [{trashId, name, groupTrashId, groupName, isCustom}] — flattened from /api/trash/{app}/all-cfs
     cfgbGroups: [],                          // [{groupTrashId, name, count}] — actual TRaSH cf-groups for the dropdown
     cfgbGroupFilter: 'all',                  // 'all' | 'custom' | 'other' | a TRaSH groupTrashId
@@ -1948,6 +1953,31 @@ function clonarr() {
       return (a || '').localeCompare(b || '');
     },
 
+    // Mirror of backend CompareCFGroups (internal/core/trash.go). Sorts
+    // cf-groups by the TRaSH-style `group` integer field. Tiers, applied in
+    // order:
+    //   1. Tier 3 (custom): user-authored groups always sort last
+    //   2. Tier 1 (has `group` set): sorts by integer, alphabetical tiebreak
+    //   3. Tier 2 (no `group`): alphabetical fallback
+    // Backend convention: 1-9 English public, 11-19 German, 21-29 French,
+    // 81-89 Anime, 91-99 SQP. `groupNum` may be null/undefined for cf-groups
+    // that don't carry the field (TRaSH pre-rollout, user groups left empty).
+    _compareCFGroups(aName, aGroup, aCustom, bName, bGroup, bCustom) {
+      // Tier 3: custom always last.
+      if (aCustom !== bCustom) return aCustom ? 1 : -1;
+      const aHas = aGroup !== null && aGroup !== undefined;
+      const bHas = bGroup !== null && bGroup !== undefined;
+      if (aHas && bHas) {
+        if (aGroup !== bGroup) return aGroup - bGroup;
+        // tiebreak alphabetical
+      } else if (aHas) {
+        return -1;
+      } else if (bHas) {
+        return 1;
+      }
+      return (aName || '').localeCompare(bName || '');
+    },
+
     // Get all groups as a flat sorted list (not nested under categories).
     // Drops the prior "defaultEnabled first" sub-sort — alphabetical only,
     // matching the rest of the UI. defaultEnabled groups are still visually
@@ -1960,11 +1990,11 @@ function clonarr() {
           groups.push({ ...g, _category: cat.category });
         }
       }
-      groups.sort((a, b) => {
-        const c = this._compareCFCategories(a._category, b._category);
-        if (c !== 0) return c;
-        return (a.shortName || '').localeCompare(b.shortName || '');
-      });
+      // Sort by the backend's `group` integer (TRaSH convention). Backend
+      // populates g.group + g.isCustom on each CFPickerGroup payload.
+      groups.sort((a, b) =>
+        this._compareCFGroups(a.shortName || '', a.group, !!a.isCustom,
+                              b.shortName || '', b.group, !!b.isCustom));
       return groups;
     },
 
@@ -2689,7 +2719,10 @@ function clonarr() {
       if (appType && !this.cfBrowseData[appType]) {
         await this.loadCFBrowse(appType);
       }
-      this.exportTab = 'yaml';
+      // Default to TRaSH JSON unless contributor mode is on (Recyclarr YAML
+      // tab is hidden when CLONARR_DEV_FEATURES is unset, so opening on it
+      // would leave the modal showing nothing).
+      this.exportTab = this.config?.devFeatures ? 'yaml' : 'trash';
       this.exportCopied = false;
       this.generateExport();
       this.showExportModal = true;
@@ -2713,10 +2746,15 @@ function clonarr() {
     },
 
     generateRecyclarrYAML(p) {
-      const appType = p.appType || 'radarr';
-      const hasTrashId = !!p.trashProfileId;
+      // v8-only: profile must be guide-backed (have trashProfileId). v7 export
+      // was dropped in v2.5 — Recyclarr removed v7 includes upstream and we
+      // focus only on v8 going forward. Custom-built profiles without a
+      // trashProfileId can't currently be exported to Recyclarr YAML.
+      if (!p.trashProfileId) {
+        return `# This profile was custom-built and isn't linked to a TRaSH guide entry,\n# so it can't be exported as Recyclarr YAML. Use the TRaSH JSON tab\n# instead — that format works for any clonarr profile.`;
+      }
 
-      // v8 format when profile has trashProfileId, v7 otherwise
+      const appType = p.appType || 'radarr';
       const lines = [];
       lines.push(`${appType}:`);
       lines.push(`  exported-profile:`);
@@ -2726,98 +2764,20 @@ function clonarr() {
       }
       lines.push(``);
       lines.push(`    quality_profiles:`);
-      if (hasTrashId) {
-        // v8: reference profile by trash_id — guide handles qualities, cutoff, scores
-        lines.push(`      - trash_id: ${p.trashProfileId}  # ${p.name}`);
-        // Name override if user renamed the profile
-        const trashProfiles = this.trashProfiles?.[p.appType || 'radarr'] || [];
-        const origProfile = trashProfiles.find(tp => tp.trashId === p.trashProfileId);
-        if (origProfile && p.name && p.name !== origProfile.name) {
-          lines.push(`        name: ${p.name}`);
-        }
-        lines.push(`        reset_unmatched_scores:`);
-        lines.push(`          enabled: true`);
-      } else {
-        // v7: reference profile by name
-        lines.push(`      - name: ${p.name}`);
-        if (p.scoreSet) {
-          lines.push(`        score_set: ${p.scoreSet}`);
-        }
-        if (p.upgradeAllowed || p.cutoff || p.cutoffScore) {
-          lines.push(`        upgrade:`);
-          lines.push(`          allowed: ${p.upgradeAllowed ? 'true' : 'false'}`);
-          if (p.cutoff) lines.push(`          until_quality: ${p.cutoff}`);
-          if (p.cutoffScore) lines.push(`          until_score: ${p.cutoffScore}`);
-        }
-        if (p.minFormatScore !== undefined && p.minFormatScore !== null) {
-          lines.push(`        min_format_score: ${p.minFormatScore}`);
-        }
-        if (p.minUpgradeFormatScore !== undefined && p.minUpgradeFormatScore !== null) {
-          lines.push(`        min_upgrade_format_score: ${p.minUpgradeFormatScore}`);
-        }
+      // v8: reference profile by trash_id — guide handles qualities, cutoff, scores
+      lines.push(`      - trash_id: ${p.trashProfileId}  # ${p.name}`);
+      // Name override if user renamed the profile
+      const trashProfiles = this.trashProfiles?.[p.appType || 'radarr'] || [];
+      const origProfile = trashProfiles.find(tp => tp.trashId === p.trashProfileId);
+      if (origProfile && p.name && p.name !== origProfile.name) {
+        lines.push(`        name: ${p.name}`);
       }
-      if (!hasTrashId && p.resetUnmatchedScores) {
-        lines.push(`        reset_unmatched_scores:`);
-        lines.push(`          enabled: true`);
-        if (p.resetExcept && p.resetExcept.length > 0) {
-          lines.push(`          except:`);
-          for (const name of p.resetExcept) {
-            lines.push(`            - "${name}"`);
-          }
-        }
-      }
-      if (!hasTrashId && p.qualities && p.qualities.length > 0) {
-        lines.push(`        quality_sort: top`);
-        lines.push(`        qualities:`);
-        for (const q of p.qualities) {
-          lines.push(`          - name: ${q.name}`);
-          if (q.items && q.items.length > 0) {
-            lines.push(`            qualities:`);
-            for (const item of q.items) {
-              lines.push(`              - ${item}`);
-            }
-          }
-          if (q.allowed === false) {
-            lines.push(`            enabled: false`);
-          }
-        }
-      }
+      lines.push(`        reset_unmatched_scores:`);
+      lines.push(`          enabled: true`);
 
-      if (hasTrashId) {
-        // v8: use custom_format_groups
-        this._generateV8CFGroups(p, lines);
-      } else {
-        // v7: use custom_formats with explicit scores
-        this._generateV7CFs(p, lines);
-      }
+      this._generateV8CFGroups(p, lines);
 
       return lines.join('\n');
-    },
-
-    _generateV7CFs(p, lines) {
-      const scoreGroups = {};
-      for (const [tid, score] of Object.entries(p.formatItems || {})) {
-        const key = String(score);
-        if (!scoreGroups[key]) scoreGroups[key] = [];
-        const comment = (p.formatComments || {})[tid];
-        scoreGroups[key].push({ tid, comment });
-      }
-      if (Object.keys(scoreGroups).length > 0) {
-        lines.push(``);
-        lines.push(`    custom_formats:`);
-        const sortedScores = Object.keys(scoreGroups).sort((a, b) => Number(b) - Number(a));
-        for (const score of sortedScores) {
-          const cfs = scoreGroups[score];
-          lines.push(`      - trash_ids:`);
-          for (const cf of cfs) {
-            const comment = cf.comment ? ` # ${cf.comment}` : '';
-            lines.push(`          - ${cf.tid}${comment}`);
-          }
-          lines.push(`        assign_scores_to:`);
-          lines.push(`          - name: ${p.name}`);
-          lines.push(`            score: ${score}`);
-        }
-      }
     },
 
     _generateV8CFGroups(p, lines) {
@@ -2825,10 +2785,6 @@ function clonarr() {
       // The YAML only needs custom_format_groups to specify which optional groups to include.
       const appType = p.appType || 'radarr';
       const groups = this.cfBrowseData[appType]?.groups || [];
-      if (groups.length === 0) {
-        this._generateV7CFs(p, lines);
-        return;
-      }
 
       const profileCFs = new Set(Object.keys(p.formatItems || {}));
 
@@ -3183,6 +3139,10 @@ function clonarr() {
           categories.push({
             category: categoryClass,
             displayName,
+            // Carry group integer through for the new sort. Falsy / null when
+            // the cf-group JSON has no `group` field set.
+            groupNum: (group.group ?? null),
+            isCustom: false,
             groups: [{ name: group.name, shortName: shortName || displayName, cfs }],
             totalCFs: cfs.length,
             trashDescription: group.trash_description || '',
@@ -3199,7 +3159,7 @@ function clonarr() {
       }
       if (ungrouped.length > 0) {
         ungrouped.sort((a, b) => a.name.localeCompare(b.name));
-        categories.push({ category: 'Other', displayName: 'Other', groups: [{ name: 'Other', shortName: 'Other', cfs: ungrouped }], totalCFs: ungrouped.length });
+        categories.push({ category: 'Other', displayName: 'Other', groupNum: null, isCustom: false, groups: [{ name: 'Other', shortName: 'Other', cfs: ungrouped }], totalCFs: ungrouped.length });
       }
 
       // Inject custom CFs
@@ -3207,17 +3167,15 @@ function clonarr() {
       if (customCFs.length > 0) {
         const allCustomCFs = customCFs.map(ccf => ({ trashId: ccf.id, name: ccf.name, description: '', score: undefined, isCustom: true }));
         allCustomCFs.sort((a, b) => a.name.localeCompare(b.name));
-        categories.push({ category: 'Custom', displayName: 'Custom', groups: [{ name: 'Custom Formats', shortName: 'Custom Formats', cfs: allCustomCFs }], totalCFs: allCustomCFs.length, isCustom: true });
+        categories.push({ category: 'Custom', displayName: 'Custom', groupNum: null, isCustom: true, groups: [{ name: 'Custom Formats', shortName: 'Custom Formats', cfs: allCustomCFs }], totalCFs: allCustomCFs.length });
       }
 
-      // Tier-based sort (see _compareCFCategories): regular TRaSH categories
-      // alphabetical, then SQP-prefix categories, then Other, then Custom.
-      // Within same category, alphabetical on displayName.
-      return categories.sort((a, b) => {
-        const c = this._compareCFCategories(a.category, b.category);
-        if (c !== 0) return c;
-        return a.displayName.localeCompare(b.displayName);
-      });
+      // Group-integer sort (see _compareCFGroups): cf-groups with explicit
+      // `group` field sort first by integer, then "Other" tier, then "Custom"
+      // tier last. Display-name alphabetical tiebreak within tiers.
+      return categories.sort((a, b) =>
+        this._compareCFGroups(a.displayName, a.groupNum, !!a.isCustom,
+                              b.displayName, b.groupNum, !!b.isCustom));
     },
 
     // --- CF Editor (Create/Edit) ---
@@ -9708,6 +9666,7 @@ function clonarr() {
       this.cfgbDescription = '';
       this.cfgbTrashID = '';
       this.cfgbDefault = false;
+      this.cfgbGroup = null;
       this.cfgbCFFilter = '';
       this.cfgbGroupFilter = 'all';
       this.cfgbSelectedCFs = {};
@@ -9763,6 +9722,9 @@ function clonarr() {
       this.cfgbDescription = g.trash_description || '';
       this.cfgbTrashID = g.trash_id || '';
       this.cfgbDefault = g.default === 'true' || g.default === true;
+      // group is integer or absent. Treat absent as null so the input field
+      // stays blank rather than showing 0.
+      this.cfgbGroup = (typeof g.group === 'number') ? g.group : null;
       this.cfgbCFFilter = '';
       this.cfgbGroupFilter = 'all';
       const selCFs = {}, reqCFs = {}, defCFs = {};
@@ -9832,6 +9794,7 @@ function clonarr() {
       this.cfgbDescription = g.trash_description || '';
       this.cfgbTrashID = g.trash_id || '';
       this.cfgbDefault = g.default === 'true' || g.default === true;
+      this.cfgbGroup = (typeof g.group === 'number') ? g.group : null;
       this.cfgbCFFilter = '';
       this.cfgbGroupFilter = 'all';
       const selCFs = {}, reqCFs = {}, defCFs = {};
@@ -9914,6 +9877,13 @@ function clonarr() {
         trash_description: desc,
       };
       if (this.cfgbDefault) payload.default = 'true';
+      // Emit `group` integer when set. Position matches TRaSH's profile-JSON
+      // convention: after `default`, before `custom_formats`. Absent when
+      // the user leaves the input empty so JSON round-trips cleanly with
+      // upstream cf-groups that don't carry the field.
+      if (typeof this.cfgbGroup === 'number' && !Number.isNaN(this.cfgbGroup)) {
+        payload.group = this.cfgbGroup;
+      }
       payload.custom_formats = selectedCFs.map(c => {
         const entry = {
           name: c.name,

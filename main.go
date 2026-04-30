@@ -74,6 +74,14 @@ func main() {
 	debugLogStore := core.NewDebugLogger(configDir)
 	debugLogStore.SetEnabled(cfgStore.Get().DebugLogging)
 
+	// CLONARR_DEV_FEATURES gates contributor-only UI (TRaSH schema fields, Recyclarr
+	// import/export). Read once at startup; restart required to change. Not exposed
+	// in the Unraid template — must be added manually via Extra Parameters.
+	devFeatures := os.Getenv("CLONARR_DEV_FEATURES") == "true"
+	if devFeatures {
+		log.Printf("CLONARR_DEV_FEATURES=true — contributor features enabled")
+	}
+
 	app := &core.App{
 		Config:       cfgStore,
 		Trash:        trashStore,
@@ -82,6 +90,7 @@ func main() {
 		CFGroups:     cfGroupsStore,
 		DebugLog:     debugLogStore,
 		Version:      Version,
+		DevFeatures:  devFeatures,
 		HTTPClient:   &http.Client{Timeout: 30 * time.Second},
 		NotifyClient: &http.Client{Timeout: 10 * time.Second},
 		SafeClient:   netsec.NewSafeHTTPClient(10*time.Second, nil),

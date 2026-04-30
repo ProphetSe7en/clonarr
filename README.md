@@ -57,8 +57,8 @@ Free, open source, and self-hosted.
 - **TRaSH group system** — formatItems (mandatory CFs) + CF groups (optional, toggleable)
 - **Three-state CF pills** — Req (required in group), Opt (optional in group), Fmt (in formatItems)
 - **Golden Rule and Miscellaneous** variant dropdowns as sub-section in Quality card
-- **Export** — TRaSH JSON (strict official format) + optional group includes snippets + Recyclarr YAML (v7/v8)
-- **Import** — Recyclarr YAML, TRaSH JSON, Clonarr backup, Arr instance profiles
+- **Export** — TRaSH JSON (strict official format) + optional group includes snippets. Recyclarr YAML export is currently paused while we verify the output against current Recyclarr docs
+- **Import** — Recyclarr YAML, TRaSH JSON, Clonarr backup, Arr instance profiles. `.yml` files and Recyclarr include files are supported in both paste and upload modes
 
 ### Scoring Sandbox
 - Test how releases score against any profile — paste release names or search via Prowlarr
@@ -216,7 +216,7 @@ Config is stored in `/config/clonarr.json`. Profiles are stored as individual JS
 Clonarr is built on the work of several projects:
 
 - **[TRaSH Guides](https://trash-guides.info/)** — All Custom Format data, quality profiles, scoring systems, and naming schemes. Clonarr is a frontend for TRaSH's guide data.
-- **[Recyclarr](https://github.com/recyclarr/recyclarr)** — YAML import/export format compatibility (v7 + v8). Clonarr can import and export Recyclarr-compatible configs.
+- **[Recyclarr](https://github.com/recyclarr/recyclarr)** — YAML import compatibility. Recyclarr YAML import works (including v7 configs for migration) and include files are supported. Recyclarr YAML export is currently paused while we verify the output against current Recyclarr docs (v8-only — v7 generation has been dropped).
 - **[Notifiarr](https://notifiarr.com/)** — Inspiration for the sync behavior rules (Add/Remove/Reset) and profile sync workflow.
 - **[Radarr](https://radarr.video/) / [Sonarr](https://sonarr.tv/)** — API v3 integration for CF management, profile sync, quality sizes, naming, and the Parse API used by the Scoring Sandbox.
 

@@ -30,11 +30,14 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	for i, a := range cfg.AutoSync.NotificationAgents {
 		cfg.AutoSync.NotificationAgents[i].Config = maskAgentConfig(a.Type, a.Config)
 	}
-	// Wrap config with version for frontend
+	// Wrap config with version + devFeatures for frontend.
+	// devFeatures is env-only (CLONARR_DEV_FEATURES), not persisted to clonarr.json,
+	// so it's exposed alongside the config rather than as part of it.
 	writeJSON(w, struct {
 		core.Config
-		Version string `json:"version"`
-	}{cfg, s.Core.Version})
+		Version     string `json:"version"`
+		DevFeatures bool   `json:"devFeatures"`
+	}{cfg, s.Core.Version, s.Core.DevFeatures})
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
@@ -132,6 +135,17 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 				writeError(w, 400, fmt.Sprintf("trustedNetworks: %v", perr))
 				return
 			}
+		}
+	}
+	// trashSchemaFields is gated by CLONARR_DEV_FEATURES env. When the env
+	// is unset, the UI hides the toggle entirely — this guard catches direct
+	// API calls (curl) and partial PUTs that happen to include the field.
+	// Submissions matching the existing on-disk value are accepted (no-op).
+	if req.TrashSchemaFields != nil && !s.Core.DevFeatures {
+		existing := s.Core.Config.Get().TrashSchemaFields
+		if *req.TrashSchemaFields != existing {
+			writeError(w, 403, "trashSchemaFields is locked. Set CLONARR_DEV_FEATURES=true in your container template (Extra Parameters) and restart to enable contributor features.")
+			return
 		}
 	}
 

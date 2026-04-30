@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.5.0
+
+Cleaner Settings page. Recyclarr YAML export paused while we verify it.
+A new sort field for CF Group Builder.
+
+### Changes
+
+- **Cleaner Settings page.** Removed a few advanced toggles that only
+  TRaSH-Guides contributors really needed. Most users won't notice;
+  contributors can still get them back if needed.
+
+- **Recyclarr YAML export is paused.** The Recyclarr YAML tab in the
+  export modal is hidden while we verify the output against current
+  Recyclarr docs. TRaSH JSON export still works for everyone — use that
+  for backup or sharing. Importing Recyclarr YAML (paste, .yml file
+  upload, include files) is unchanged and works as before.
+
+- **CF Group Builder — new "Group" sort field.** Adds an optional
+  number to each CF group that controls its position in the list. Lower
+  number sorts higher; same number sorts alphabetically. Optional — leave
+  empty for default placement. Once the upstream guide adopts the same
+  field, the order updates automatically on next pull.
+
 ## v2.4.0
 
 A round of fixes and quality-of-life additions on top of v2.3.0's notification refactor.

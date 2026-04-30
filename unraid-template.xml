@@ -21,8 +21,10 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/ui/static/icons/clonarr.png</Icon>
-  <Date>2026-04-29</Date>
+  <Date>2026-04-30</Date>
   <Changes>
+### 2026-04-30
+- v2.5.0: **Cleaner Settings page + Recyclarr YAML export paused + new sort field on CF Group Builder.** Removed a few advanced toggles that only TRaSH-Guides contributors really needed; most users won't notice. Recyclarr YAML export tab is hidden while we verify the output against current Recyclarr docs — TRaSH JSON export still works for backup or sharing, and Recyclarr YAML import (paste, .yml upload, include files) is unchanged. CF Group Builder gets an optional "Group" number for sort order; lower number sorts higher up, leave empty for default placement. Once the upstream guide adopts the same field, the order updates automatically on next pull.
 ### 2026-04-29
 - v2.4.0: **NTFY + Apprise notifications, Pause Auto-Sync, several bug fixes.** New: ntfy.sh + self-hosted ntfy + Apprise API support; Pause Auto-Sync toggle on TRaSH-sync tab to skip scheduled/restart syncs while keeping manual ones. Fixed: case-sensitive CF name matching (no more wrong-CF-gets-the-score with mixed-case duplicates), Hide Overrides actually hides instead of silently dropping your overrides on save, tooltip clipping on small viewports, Custom CFs in own picker group, quality-group member order matching Arr UI. Custom formats now saved with leading `!` so they can never collide with TRaSH names — existing customs migrate automatically on startup. **First sync after updating may show extra "reset to 0" + "added !X" notifications** while old names get replaced; click Pause Auto-Sync first if you want to avoid the notification burst. Closes #31.
 - v2.3.0: **Notifications rebuilt under the hood.** Existing Discord/Gotify/Pushover setups keep working — nothing to reconfigure. Better error messages when a test fails, Gotify tokens move from URL to request header, sensitive fields stay masked in more places. Sets up NTFY and Apprise to land in v2.4 next. Big credit to @ColeSpringer (PR #32) for the entire refactor.

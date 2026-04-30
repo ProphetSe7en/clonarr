@@ -44,8 +44,13 @@ type TrashCFGroup struct {
 	TrashID          string         `json:"trash_id"`
 	TrashDescription string         `json:"trash_description"`
 	Default          string         `json:"default"`
-	CustomFormats    []CFGroupEntry `json:"custom_formats"`
-	QualityProfiles  struct {
+	// Group drives sort order across cf-group display sites. Lower value sorts
+	// earlier; ties break alphabetically. Pointer + omitempty so absent JSON
+	// stays absent on round-trip and zero is distinguishable from unset.
+	// Mirrors the convention TRaSH uses on profile JSONs (see TrashQualityProfile.Group).
+	Group           *int           `json:"group,omitempty"`
+	CustomFormats   []CFGroupEntry `json:"custom_formats"`
+	QualityProfiles struct {
 		Include map[string]string `json:"include"`
 	} `json:"quality_profiles"`
 }
@@ -1096,7 +1101,12 @@ type CFPickerGroup struct {
 	DefaultEnabled   bool            `json:"defaultEnabled"`
 	Exclusive        bool            `json:"exclusive"`
 	IncludeProfiles  []string        `json:"includeProfiles,omitempty"`
-	CFs              []CategorizedCF `json:"cfs"`
+	// Group drives sort order across cf-group display sites — see CompareCFGroups.
+	// Populated from the TRaSH cf-group JSON's `group` field (or user-authored CFGroup
+	// for custom groups). Pointer + omitempty so absent stays absent over JSON.
+	Group    *int            `json:"group,omitempty"`
+	IsCustom bool            `json:"isCustom,omitempty"`
+	CFs      []CategorizedCF `json:"cfs"`
 }
 
 // CFPickerCategory groups CF groups by category for the profile builder.
@@ -1158,6 +1168,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 			DefaultEnabled:   defaultEnabled,
 			Exclusive:        exclusive,
 			IncludeProfiles:  includeProfiles,
+			Group:            group.Group,
 		}
 
 		for _, cfEntry := range group.CustomFormats {
@@ -1227,27 +1238,46 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 		catGroupMap[cat] = append(catGroupMap[cat], CFPickerGroup{
 			Name:      "Custom",
 			ShortName: "Custom",
+			IsCustom:  true,
 			CFs:       cfs,
 		})
 	}
 
 	// Build sorted categories
 	var categories []CFPickerCategory
+	// Per-category aggregate state for sort: min Group across the cat's groups,
+	// and whether any group in the cat is custom (used to pin "Custom" last).
+	catMinGroup := make(map[string]*int)
+	catIsCustom := make(map[string]bool)
 	for cat, groups := range catGroupMap {
-		// Sort groups: defaultEnabled first, then alphabetically
+		// Sort groups: defaultEnabled first, then by Group/IsCustom (TRaSH-style sort)
 		sort.Slice(groups, func(i, j int) bool {
 			if groups[i].DefaultEnabled != groups[j].DefaultEnabled {
 				return groups[i].DefaultEnabled
 			}
-			return groups[i].ShortName < groups[j].ShortName
+			return CompareCFGroups(groups[i].ShortName, groups[i].Group, groups[i].IsCustom,
+				groups[j].ShortName, groups[j].Group, groups[j].IsCustom) < 0
 		})
+		// Aggregate min Group + custom for the parent category sort
+		for i := range groups {
+			if groups[i].IsCustom {
+				catIsCustom[cat] = true
+			}
+			if groups[i].Group != nil {
+				if cur, ok := catMinGroup[cat]; !ok || *groups[i].Group < *cur {
+					g := *groups[i].Group
+					catMinGroup[cat] = &g
+				}
+			}
+		}
 		categories = append(categories, CFPickerCategory{
 			Category: cat,
 			Groups:   groups,
 		})
 	}
 	sort.Slice(categories, func(i, j int) bool {
-		return CompareCFCategories(categories[i].Category, categories[j].Category) < 0
+		ai, bi := categories[i].Category, categories[j].Category
+		return CompareCFGroups(ai, catMinGroup[ai], catIsCustom[ai], bi, catMinGroup[bi], catIsCustom[bi]) < 0
 	})
 
 	var sets []string
@@ -1454,7 +1484,10 @@ type ProfileCFGroup struct {
 	Name             string                `json:"name"`
 	TrashDescription string                `json:"trashDescription"`
 	Required         bool                  `json:"required"` // true if all CFs in group have required=true
-	CFs              []ProfileCFGroupEntry `json:"cfs"`
+	// Group drives sort order — see CompareCFGroups. Populated from the
+	// source cf-group JSON's `group` field (or absent if the source has none).
+	Group *int                  `json:"group,omitempty"`
+	CFs   []ProfileCFGroupEntry `json:"cfs"`
 }
 
 // ProfileCFGroups returns CF groups that are linked to a profile via quality_profiles.include,
@@ -1502,6 +1535,7 @@ func ProfileCFGroups(ad *AppData, profileTrashID string) (required []ProfileCFGr
 		pg := ProfileCFGroup{
 			Name:             group.Name,
 			TrashDescription: group.TrashDescription,
+			Group:            group.Group,
 		}
 
 		// Determine required/optional from ALL CFs in the group (not just filtered)
@@ -1568,7 +1602,12 @@ type CategoryCFGroup struct {
 	TrashDescription string                `json:"trashDescription"`
 	DefaultEnabled   bool                  `json:"defaultEnabled"` // group.Default == "true"
 	Exclusive        bool                  `json:"exclusive"`      // only one CF can be active (Golden Rule)
-	CFs              []ProfileCFGroupEntry `json:"cfs"`
+	// Group drives sort order — see CompareCFGroups. Populated from the source
+	// cf-group JSON's `group` field. Absent (nil) on cf-groups that don't carry
+	// the field (TRaSH groups pre-rollout, user-authored groups left empty).
+	Group    *int                  `json:"group,omitempty"`
+	IsCustom bool                  `json:"isCustom,omitempty"`
+	CFs      []ProfileCFGroupEntry `json:"cfs"`
 }
 
 // CFCategory groups CategoryCFGroups under a shared category name.
@@ -1656,6 +1695,55 @@ func CompareCFCategories(a, b string) int {
 		return -1
 	}
 	if a > b {
+		return 1
+	}
+	return 0
+}
+
+// CompareCFGroups returns -1/0/+1 for sorting cf-groups by their TRaSH-style
+// `group` integer field. Tier ordering, applied in this order:
+//
+//  1. Tier 3 (Custom): user-authored cf-groups always sort last so user data
+//     stays visually separated from TRaSH-derived data.
+//  2. Tier 1 (has explicit Group): sorts by the integer (lower = earlier),
+//     alphabetical tiebreak on name when integers match.
+//  3. Tier 2 (no Group): falls into the "Other" middle band, alphabetical.
+//
+// Mirrors the convention TRaSH uses on profile JSONs (1-9 English public,
+// 11-19 German, 21-29 French, 81-89 Anime, 91-99 SQP). Pointer args make
+// "absent" distinguishable from "explicitly 0".
+func CompareCFGroups(aName string, aGroup *int, aCustom bool, bName string, bGroup *int, bCustom bool) int {
+	// Tier 3: Custom always last.
+	if aCustom != bCustom {
+		if aCustom {
+			return 1
+		}
+		return -1
+	}
+
+	// Tier 1 vs Tier 2: explicit Group pins above no-Group.
+	aHas, bHas := aGroup != nil, bGroup != nil
+	if aHas && bHas {
+		if *aGroup != *bGroup {
+			if *aGroup < *bGroup {
+				return -1
+			}
+			return 1
+		}
+		// Same Group integer → alphabetical tiebreak.
+	}
+	if aHas && !bHas {
+		return -1
+	}
+	if !aHas && bHas {
+		return 1
+	}
+
+	// Both Tier 1 with same Group, OR both Tier 2 → alphabetical.
+	if aName < bName {
+		return -1
+	}
+	if aName > bName {
 		return 1
 	}
 	return 0
@@ -1773,6 +1861,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 			TrashDescription: group.TrashDescription,
 			DefaultEnabled:   defaultEnabled,
 			Exclusive:        exclusive,
+			Group:            group.Group,
 		}
 
 		for _, cfEntry := range group.CustomFormats {
@@ -1812,16 +1901,31 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 		catMap[category] = append(catMap[category], cg)
 	}
 
-	// Build sorted result
+	// Build sorted result. Aggregate per-category min Group + IsCustom for the
+	// parent sort (categories sort by their lowest Group integer, falling
+	// through to alphabetical when no group in the category carries a Group).
 	var categories []CFCategory
+	catMinGroup := make(map[string]*int)
+	catIsCustom := make(map[string]bool)
 	for cat, groups := range catMap {
-		// Sort groups: defaultEnabled first, then alphabetically by shortName
 		sort.Slice(groups, func(i, j int) bool {
 			if groups[i].DefaultEnabled != groups[j].DefaultEnabled {
 				return groups[i].DefaultEnabled
 			}
-			return groups[i].ShortName < groups[j].ShortName
+			return CompareCFGroups(groups[i].ShortName, groups[i].Group, groups[i].IsCustom,
+				groups[j].ShortName, groups[j].Group, groups[j].IsCustom) < 0
 		})
+		for i := range groups {
+			if groups[i].IsCustom {
+				catIsCustom[cat] = true
+			}
+			if groups[i].Group != nil {
+				if cur, ok := catMinGroup[cat]; !ok || *groups[i].Group < *cur {
+					g := *groups[i].Group
+					catMinGroup[cat] = &g
+				}
+			}
+		}
 		categories = append(categories, CFCategory{
 			Category: cat,
 			Groups:   groups,
@@ -1829,7 +1933,8 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 	}
 
 	sort.Slice(categories, func(i, j int) bool {
-		return CompareCFCategories(categories[i].Category, categories[j].Category) < 0
+		ai, bi := categories[i].Category, categories[j].Category
+		return CompareCFGroups(ai, catMinGroup[ai], catIsCustom[ai], bi, catMinGroup[bi], catIsCustom[bi]) < 0
 	})
 
 	return categories
@@ -1910,6 +2015,7 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 			TrashDescription: group.TrashDescription,
 			DefaultEnabled:   defaultEnabled,
 			Exclusive:        exclusive,
+			Group:            group.Group,
 		}
 
 		for _, cfEntry := range group.CustomFormats {
@@ -1948,16 +2054,13 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 		groups = append(groups, cg)
 	}
 
-	// Sort groups by category tier, then alphabetical on category, then on
-	// group name. defaultEnabled-first sub-sort dropped here as part of the
-	// v2.2.4 unification — alphabetical-only matches the rest of the UI and
-	// defaultEnabled groups stay visually distinct via the green pill.
+	// Sort groups using the cf-group `group` integer (TRaSH-Guides convention).
+	// defaultEnabled-first sub-sort dropped as part of the v2.2.4 unification —
+	// alphabetical-only matches the rest of the UI and defaultEnabled groups
+	// stay visually distinct via the green pill.
 	sort.Slice(groups, func(i, j int) bool {
-		c := CompareCFCategories(groups[i].Category, groups[j].Category)
-		if c != 0 {
-			return c < 0
-		}
-		return groups[i].Name < groups[j].Name
+		return CompareCFGroups(groups[i].Name, groups[i].Group, groups[i].IsCustom,
+			groups[j].Name, groups[j].Group, groups[j].IsCustom) < 0
 	})
 
 	// formatItems CFs NOT in any group → "Profile" section
@@ -2087,6 +2190,7 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 			TrashDescription: group.TrashDescription,
 			DefaultEnabled:   true,
 			Exclusive:        exclusive,
+			Group:            group.Group,
 		}
 
 		for _, cfEntry := range group.CustomFormats {
@@ -2128,15 +2232,11 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 		groups = append(groups, cg)
 	}
 
-	// Sort groups by category tier, then alphabetical on category, then on
-	// group name. defaultEnabled-first sub-sort dropped (see v2.2.4 sort
-	// unification — same logic as ProfileDetailData above).
+	// Sort groups using the cf-group `group` integer (TRaSH-Guides convention).
+	// Same logic as ProfileDetailData above.
 	sort.Slice(groups, func(i, j int) bool {
-		c := CompareCFCategories(groups[i].Category, groups[j].Category)
-		if c != 0 {
-			return c < 0
-		}
-		return groups[i].Name < groups[j].Name
+		return CompareCFGroups(groups[i].Name, groups[i].Group, groups[i].IsCustom,
+			groups[j].Name, groups[j].Group, groups[j].IsCustom) < 0
 	})
 
 	// CFs in imported profile but NOT in any group → formatItemNames

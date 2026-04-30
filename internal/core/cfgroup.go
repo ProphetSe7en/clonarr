@@ -26,7 +26,14 @@ type CFGroup struct {
 	TrashDescription string `json:"trash_description"`
 	// "true" when the group is default-on; omitted (empty string → omitempty)
 	// when opt-in, matching TRaSH's convention in optional-*.json files.
-	Default         string                 `json:"default,omitempty"`
+	Default string `json:"default,omitempty"`
+	// Group drives sort order in cf-group display sites. Lower value sorts
+	// earlier; ties break alphabetically; absent groups land in an "Other"
+	// tier between numbered groups and Custom (user-authored). Pointer +
+	// omitempty so absent JSON round-trips cleanly and zero is distinguishable
+	// from unset. Mirrors TRaSH's profile-JSON convention (1-9 English public,
+	// 11-19 German, 21-29 French, 81-89 Anime, 91-99 SQP).
+	Group           *int                   `json:"group,omitempty"`
 	CustomFormats   []CFGroupCF            `json:"custom_formats"`
 	QualityProfiles CFGroupQualityProfiles `json:"quality_profiles"`
 }
