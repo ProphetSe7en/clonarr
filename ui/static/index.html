@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-base="{{.BasePath}}">
 <head>
 <meta charset="UTF-8">
+<base href="{{.BasePath}}/">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clonarr</title>
-<link rel="icon" type="image/png" href="/icons/clonarr.png">
+<link rel="icon" type="image/png" href="icons/clonarr.png">
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<link rel="stylesheet" href="/css/styles.css">
+<link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
@@ -14,7 +15,7 @@
 
   <!-- Top Navigation -->
   <div class="topnav">
-    <div class="logo"><img src="/icons/clonarr.png" alt="" style="width:28px;height:28px;border-radius:6px;vertical-align:middle;margin-right:8px">Clonarr</div>
+    <div class="logo"><img src="icons/clonarr.png" alt="" style="width:28px;height:28px;border-radius:6px;vertical-align:middle;margin-right:8px">Clonarr</div>
     <div class="tabs">
       <div class="tab" :class="{ active: currentSection === 'profiles' }" @click="switchSection('profiles')">Profiles</div>
       <div class="tab" :class="{ active: currentSection === 'custom-formats' }" @click="switchSection('custom-formats')">Custom Formats</div>
@@ -103,7 +104,7 @@
         <div style="display:flex;align-items:center;gap:8px">
           <span x-text="authStatus.username" :title="'Logged in as ' + authStatus.username"
                 style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-          <form method="POST" action="/logout" style="margin:0">
+          <form method="POST" action="logout" style="margin:0">
             <input type="hidden" name="csrf_token" :value="csrfToken()">
             <button type="submit" class="btn btn-secondary" style="padding:4px 10px;font-size:11px" title="Log out">Logout</button>
           </form>
@@ -4646,6 +4647,13 @@
               <span x-show="config.trashSchemaFields" style="font-size:12px;color:#d29922">Active</span>
             </div>
           </div>
+          <div class="setting-row" x-show="authStatus.urlBase">
+            <div class="setting-label">URL Base</div>
+            <div class="setting-value">
+              <input type="text" :value="authStatus.urlBase" disabled style="width:220px;opacity:0.7">
+              <span style="font-size:12px;color:#aaa;margin-left:8px">Set via <code>URL_BASE</code> env var. Restart to change.</span>
+            </div>
+          </div>
           <div class="setting-row">
             <div class="setting-label">Debug Logging</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px">
@@ -4653,7 +4661,7 @@
                 <input type="checkbox" x-model="config.debugLogging" @change="saveConfig(['debugLogging'])" style="accent-color:#58a6ff">
                 <span style="font-size:12px;color:#aaa">Write to /config/debug.log (max 1MB, auto-rotates)</span>
               </label>
-              <a x-show="config.debugLogging" class="btn btn-sm" href="/api/debug/log/download" download="clonarr-debug.log" style="text-decoration:none;margin-left:8px">Download</a>
+              <a x-show="config.debugLogging" class="btn btn-sm" href="api/debug/log/download" download="clonarr-debug.log" style="text-decoration:none;margin-left:8px">Download</a>
             </div>
           </div>
         </div>
@@ -6151,7 +6159,7 @@
 
 <div id="cf-tooltip-portal" onmouseenter="clearTimeout(window._tooltipHideTimer)" onmouseleave="const el=document.getElementById('cf-tooltip-portal'); window._tooltipHideTimer=setTimeout(()=>{if(el)el.style.display='none'},200)"></div>
 
-<script src="/js/api.js"></script>
-<script src="/js/app.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

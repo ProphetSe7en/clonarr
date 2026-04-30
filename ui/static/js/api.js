@@ -21,9 +21,24 @@
 //         legitimate use is the disable-auth modal, where 401 means
 //         "confirm_password incorrect" not "session expired".
 (function() {
+  // Read the base path from the <html data-base="..."> attribute injected
+  // at serve time by the Go template. Avoids JS-context escaping issues that
+  // arise when embedding path values inside <script> string literals.
+  const BASE = (document.documentElement.dataset.base || '').replace(/\/$/, '');
+
+  // Prepend BASE to root-relative paths so all fetch('/api/...') calls reach
+  // the correct sub-path when URL_BASE is set. Has no effect when BASE is ''.
+  function rewriteInput(input) {
+    if (BASE === '') return input;
+    if (typeof input === 'string' && input.startsWith('/') && !input.startsWith(BASE + '/')) {
+      return BASE + input;
+    }
+    return input;
+  }
+
   const origFetch = window.fetch.bind(window);
   window.fetch = async function(input, init) {
-    const request = new Request(input, init);
+    const request = new Request(rewriteInput(input), init);
     const method = request.method.toUpperCase();
     const headers = new Headers(request.headers);
     if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
@@ -36,8 +51,8 @@
     const resp = await origFetch(new Request(request, { headers }));
     if (resp.status === 401 && !skipLoginRedirect) {
       const path = window.location.pathname;
-      if (path !== '/login' && path !== '/setup') {
-        window.location.href = '/login';
+      if (path !== BASE + '/login' && path !== BASE + '/setup') {
+        window.location.href = BASE + '/login';
         return new Promise(() => {});
       }
     }

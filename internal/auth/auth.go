@@ -100,6 +100,11 @@ type Config struct {
 	TrustedNetworksRaw string
 	TrustedProxiesRaw  string
 	SessionTTL       time.Duration
+	// BasePath is the URL prefix when Clonarr is mounted at a sub-path
+	// (e.g. "/clonarr"). Empty means serve from root. Set via URL_BASE env
+	// var; never user-editable at runtime. Affects cookie Path, redirect
+	// targets, and form action URLs so browser-visible URLs include the prefix.
+	BasePath         string
 	AuthFilePath     string // default /config/auth.json
 	SessionsFilePath string // default /config/sessions.json — survives container restart
 	MaxSessions      int    // cap on concurrent sessions; 0 → 10000
@@ -700,6 +705,39 @@ func init() {
 	dummyHash = h
 }
 
+// NormalizeBasePath validates and normalizes a URL_BASE env-var value.
+// Returns the canonical base path (no trailing slash) or "" for root.
+// A leading "/" is required; "/" alone normalizes to "". Trailing slashes
+// are stripped. Double-slashes, query/fragment chars, and dot-segments
+// are rejected.
+func NormalizeBasePath(raw string) (string, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" || s == "/" {
+		return "", nil
+	}
+	if !strings.HasPrefix(s, "/") {
+		return "", fmt.Errorf("URL_BASE must start with '/' (got %q)", raw)
+	}
+	s = strings.TrimRight(s, "/")
+	if strings.Contains(s, "//") {
+		return "", fmt.Errorf("URL_BASE must not contain '//' (got %q)", raw)
+	}
+	if strings.ContainsAny(s, "?#") {
+		return "", fmt.Errorf("URL_BASE must not contain '?' or '#' (got %q)", raw)
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("URL_BASE must not contain control characters")
+		}
+	}
+	for seg := range strings.SplitSeq(s[1:], "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return "", fmt.Errorf("URL_BASE has invalid path segment %q", seg)
+		}
+	}
+	return s, nil
+}
+
 // ===== Endpoint classification =====
 
 // publicExact is a set of paths that are always treated as public.
@@ -756,7 +794,7 @@ func (s *Store) Middleware(next http.Handler) http.Handler {
 
 		// If not configured yet, force users to the setup wizard.
 		if !s.IsConfigured() {
-			http.Redirect(w, r, "/setup", http.StatusFound)
+			http.Redirect(w, r, s.cfg.BasePath+"/setup", http.StatusFound)
 			return
 		}
 
@@ -798,7 +836,7 @@ func (s *Store) Middleware(next http.Handler) http.Handler {
 				http.SetCookie(w, &http.Cookie{
 					Name:     SessionCookieName,
 					Value:    "",
-					Path:     "/",
+					Path:     s.cfg.BasePath + "/",
 					MaxAge:   -1,
 					HttpOnly: true,
 					SameSite: http.SameSiteLaxMode,
@@ -808,7 +846,7 @@ func (s *Store) Middleware(next http.Handler) http.Handler {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
-			http.Redirect(w, r, "/login", http.StatusFound)
+			http.Redirect(w, r, s.cfg.BasePath+"/login", http.StatusFound)
 
 		case ModeBasic:
 			user, pass, ok := r.BasicAuth()

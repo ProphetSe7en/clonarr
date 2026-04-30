@@ -90,7 +90,7 @@ function clonarr() {
     disableAuthPassword: '',
     disableAuthError: '',
     // Auth status (for logout button + no-auth banner)
-    authStatus: { configured: false, authenticated: false, username: '', localBypass: false, authentication: '', authenticationRequired: '', trustedNetworksLocked: false, trustedProxiesLocked: false, trustedNetworksEffective: '', trustedProxiesEffective: '' },
+    authStatus: { configured: false, authenticated: false, username: '', localBypass: false, authentication: '', authenticationRequired: '', trustedNetworksLocked: false, trustedProxiesLocked: false, trustedNetworksEffective: '', trustedProxiesEffective: '', urlBase: '' },
     authStatusLoadError: false, // true after 2 fetchAuthStatus retries fail → Security save button warns
     noAuthBannerDismissed: false,
     securitySaveMsg: '',
@@ -641,6 +641,7 @@ function clonarr() {
           trustedProxiesLocked: !!data.trusted_proxies_locked,
           trustedNetworksEffective: data.trusted_networks_effective || '',
           trustedProxiesEffective: data.trusted_proxies_effective || '',
+          urlBase: data.url_base || '',
         };
         // When env-locked, reflect the effective value in the disabled input
         // so the user can see what's actually enforced. Only applies if
@@ -4507,8 +4508,8 @@ function clonarr() {
 
     instanceIconUrl(inst) {
       const is4k = /4k|uhd/i.test(inst.name);
-      if (inst.type === 'radarr') return is4k ? '/icons/radarr4kNew.png' : '/icons/radarrNew.png';
-      return is4k ? '/icons/sonarr4k.png' : '/icons/sonarr.png';
+      if (inst.type === 'radarr') return is4k ? 'icons/radarr4kNew.png' : 'icons/radarrNew.png';
+      return is4k ? 'icons/sonarr4k.png' : 'icons/sonarr.png';
     },
 
     trashProfileCount(type) {
