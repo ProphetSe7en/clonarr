@@ -71,7 +71,7 @@ EXPOSE 6060
 
 # Healthcheck to ensure the container is routing traffic properly
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD sh -c 'wget -qO- "http://localhost:${PORT}/api/health" || exit 1'
+  CMD sh -c 'wget -qO- "http://localhost:${PORT}${URL_BASE:-}/api/health" || exit 1'
 
 # Use tini as the init system to handle process reaping and signal forwarding
 ENTRYPOINT ["/sbin/tini", "--", "/entrypoint.sh"]

@@ -28,8 +28,9 @@ import (
 
 // AuthHandlers bundles the dependencies needed by each handler.
 type AuthHandlers struct {
-	Store   *auth.Store
-	Version string
+	Store    *auth.Store
+	Version  string
+	BasePath string // URL prefix, e.g. "/clonarr" — empty for root
 }
 
 // ---------- Setup wizard ----------
@@ -60,7 +61,7 @@ var setupTmpl = template.Must(template.New("setup").Parse(`<!DOCTYPE html>
   <h1>Welcome to Clonarr</h1>
   <p class="sub">Authentication is now required. Create the admin account to continue — you'll use this login every time you access Clonarr from outside your local network.</p>
   {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
-  <form method="POST" action="/setup">
+  <form method="POST" action="{{.BasePath}}/setup">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <label>Username</label>
     <input type="text" name="username" value="{{.Username}}" required autofocus autocomplete="username">
@@ -79,13 +80,14 @@ var setupTmpl = template.Must(template.New("setup").Parse(`<!DOCTYPE html>
 func (h *AuthHandlers) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	// If already configured, bounce to main app (don't let anyone hit this twice).
 	if h.Store.IsConfigured() {
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, h.BasePath+"/", http.StatusFound)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := setupTmpl.Execute(w, map[string]any{
 		"Version":   h.Version,
+		"BasePath":  h.BasePath,
 		"CSRFToken": h.Store.EnsureCSRFCookie(w, r),
 	}); err != nil {
 		log.Printf("setup page render: %v", err)
@@ -119,11 +121,11 @@ func (h *AuthHandlers) handleSetupSubmit(w http.ResponseWriter, r *http.Request)
 	sessionID, err := h.Store.CreateSession()
 	if err != nil {
 		log.Printf("setup: create session after setup: %v", err)
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Redirect(w, r, h.BasePath+"/login", http.StatusFound)
 		return
 	}
 	h.setSessionCookie(w, r, sessionID)
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, h.BasePath+"/", http.StatusFound)
 }
 
 func (h *AuthHandlers) renderSetupError(w http.ResponseWriter, r *http.Request, username, errMsg string) {
@@ -132,6 +134,7 @@ func (h *AuthHandlers) renderSetupError(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusBadRequest)
 	if err := setupTmpl.Execute(w, map[string]any{
 		"Version":   h.Version,
+		"BasePath":  h.BasePath,
 		"Username":  username,
 		"Error":     errMsg,
 		"CSRFToken": h.Store.EnsureCSRFCookie(w, r),
@@ -165,7 +168,7 @@ var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 <div class="card">
   <h1>Clonarr</h1>
   {{if .Error}}<div class="err">{{.Error}}</div>{{end}}
-  <form method="POST" action="/login{{if .NextEncoded}}?next={{.NextEncoded}}{{end}}">
+  <form method="POST" action="{{.BasePath}}/login{{if .NextEncoded}}?next={{.NextEncoded}}{{end}}">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <label>Username</label>
     <input type="text" name="username" value="{{.Username}}" required autofocus autocomplete="username">
@@ -181,7 +184,7 @@ var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 func (h *AuthHandlers) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	// Not configured yet — force setup first.
 	if !h.Store.IsConfigured() {
-		http.Redirect(w, r, "/setup", http.StatusFound)
+		http.Redirect(w, r, h.BasePath+"/setup", http.StatusFound)
 		return
 	}
 	next := sanitizeNext(r.URL.Query().Get("next"))
@@ -189,6 +192,7 @@ func (h *AuthHandlers) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if err := loginTmpl.Execute(w, map[string]any{
 		"Version":     h.Version,
+		"BasePath":    h.BasePath,
 		"Next":        next,
 		"NextEncoded": url.QueryEscape(next),
 		"CSRFToken":   h.Store.EnsureCSRFCookie(w, r),
@@ -199,7 +203,7 @@ func (h *AuthHandlers) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandlers) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 	if !h.Store.IsConfigured() {
-		http.Redirect(w, r, "/setup", http.StatusFound)
+		http.Redirect(w, r, h.BasePath+"/setup", http.StatusFound)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 8192)
@@ -226,7 +230,7 @@ func (h *AuthHandlers) handleLoginSubmit(w http.ResponseWriter, r *http.Request)
 
 	next := sanitizeNext(r.URL.Query().Get("next"))
 	if next == "" {
-		next = "/"
+		next = h.BasePath + "/"
 	}
 	http.Redirect(w, r, next, http.StatusFound)
 }
@@ -238,6 +242,7 @@ func (h *AuthHandlers) renderLoginError(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusUnauthorized)
 	if err := loginTmpl.Execute(w, map[string]any{
 		"Version":     h.Version,
+		"BasePath":    h.BasePath,
 		"Username":    username,
 		"Error":       errMsg,
 		"Next":        next,
@@ -256,12 +261,12 @@ func (h *AuthHandlers) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.SessionCookieName,
 		Value:    "",
-		Path:     "/",
+		Path:     h.BasePath + "/",
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, "/login", http.StatusFound)
+	http.Redirect(w, r, h.BasePath+"/login", http.StatusFound)
 }
 
 // ---------- Auth status (public — UI reads this to render correct state) ----------
@@ -290,6 +295,7 @@ func (h *AuthHandlers) handleAuthStatus(w http.ResponseWriter, r *http.Request) 
 		"authenticated":           authenticated,
 		"authentication":          string(cfg.Mode),        // needed for no-auth banner in UI
 		"authentication_required": string(cfg.Requirement), // needed for UI dropdown state
+		"url_base":                h.BasePath,
 	}
 	if adminEquivalent {
 		resp["username"] = h.Store.Username()
@@ -415,7 +421,7 @@ func (h *AuthHandlers) setSessionCookie(w http.ResponseWriter, r *http.Request, 
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.SessionCookieName,
 		Value:    sessionID,
-		Path:     "/",
+		Path:     h.BasePath + "/",
 		MaxAge:   int(ttl / time.Second),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
@@ -479,7 +485,7 @@ func requireAuthForAPI(w http.ResponseWriter) {
 //
 // Refuses to start (log.Fatal) on any unsafe combination (unknown enum
 // values) or on malformed auth.json.
-func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string, mux *http.ServeMux) *auth.Store {
+func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string, basePath string, mux *http.ServeMux) *auth.Store {
 	cfg := auth.DefaultConfig()
 
 	appCfg := configStore.Get()
@@ -492,6 +498,7 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 	if appCfg.SessionTTLDays > 0 {
 		cfg.SessionTTL = time.Duration(appCfg.SessionTTLDays) * 24 * time.Hour
 	}
+	cfg.BasePath = basePath
 	// Env-var override for trust-boundary config.
 	if envNets := strings.TrimSpace(os.Getenv("TRUSTED_NETWORKS")); envNets != "" {
 		nets, err := netsec.ParseTrustedNetworks(envNets)
@@ -564,7 +571,7 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 		}
 	})
 
-	authHandlers := &AuthHandlers{Store: store, Version: version}
+	authHandlers := &AuthHandlers{Store: store, Version: version, BasePath: basePath}
 
 	mux.HandleFunc("GET /setup", authHandlers.handleSetupPage)
 	mux.HandleFunc("POST /setup", authHandlers.handleSetupSubmit)

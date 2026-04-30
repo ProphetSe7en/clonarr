@@ -3,9 +3,24 @@ package api
 import (
 	"clonarr/internal/auth"
 	"clonarr/internal/core"
+	"html/template"
 	"net/http"
 	"sync"
 )
+
+// IndexHandler renders index.html as a Go template so BasePath can be injected
+// at serve time. Registered at "GET /{$}" (exact root match) so Go 1.22+
+// ServeMux prefers it over the catch-all FileServer for GET /.
+type IndexHandler struct {
+	Tmpl     *template.Template
+	BasePath string
+}
+
+func (h *IndexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = h.Tmpl.Execute(w, map[string]any{"BasePath": h.BasePath})
+}
 
 // Server wraps the core application and provides HTTP handlers.
 type Server struct {

@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -36,6 +38,14 @@ func main() {
 	dataDir := os.Getenv("DATA_DIR")
 	if dataDir == "" {
 		dataDir = filepath.Join(configDir, "data")
+	}
+
+	basePath, err := auth.NormalizeBasePath(os.Getenv("URL_BASE"))
+	if err != nil {
+		log.Fatalf("URL_BASE invalid: %v", err)
+	}
+	if basePath != "" {
+		log.Printf("URL base: %s (serving from this prefix)", basePath)
 	}
 
 	// Initialize stores
@@ -211,7 +221,7 @@ func main() {
 	})
 
 	// ==== Authentication =====================================================
-	authStore := api.InitAuth(ctx, cfgStore, Version, mux)
+	authStore := api.InitAuth(ctx, cfgStore, Version, basePath, mux)
 	server.AuthStore = authStore
 
 	// Static files
@@ -219,6 +229,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create static file system: %v", err)
 	}
+	// Render index.html as a template so BasePath can be injected at serve
+	// time. "GET /{$}" is an exact-match in Go 1.22+ ServeMux and takes
+	// priority over the catch-all "/" for GET / requests.
+	indexBytes, err := fs.ReadFile(staticFS, "index.html")
+	if err != nil {
+		log.Fatalf("Failed to read index.html: %v", err)
+	}
+	indexTmpl, err := template.New("index").Parse(string(indexBytes))
+	if err != nil {
+		log.Fatalf("Failed to parse index.html as template: %v", err)
+	}
+	mux.Handle("GET /{$}", &api.IndexHandler{Tmpl: indexTmpl, BasePath: basePath})
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
 	// Background: reap expired sessions every 5 min
@@ -236,10 +258,17 @@ func main() {
 	})
 
 	// Middleware chain — outermost first:
-	//   SecurityHeaders → CSRF → Auth → mux
+	//   [BasePath] → SecurityHeaders → CSRF → Auth → mux
+	// withBasePath wraps the chain only when URL_BASE is set: it 301-redirects
+	// the bare base path (no trailing slash) to base/, 404s anything outside
+	// the base, and strips the prefix before the inner handlers see the path.
+	// Inner handlers keep using root-relative paths (/api/..., /login, etc.).
 	var handler http.Handler = authStore.Middleware(mux)
 	handler = authStore.CSRFMiddleware(handler)
 	handler = auth.SecurityHeadersMiddleware(handler)
+	if basePath != "" {
+		handler = withBasePath(basePath, handler)
+	}
 
 	serverHTTP := &http.Server{
 		Addr:         ":" + port,
@@ -267,4 +296,28 @@ func main() {
 	if err := serverHTTP.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("HTTP server error: %v", err)
 	}
+}
+
+// withBasePath wraps a handler so it is only reachable under base (e.g.
+// "/clonarr"). It:
+//   - 301-redirects the bare base path (no trailing slash) → base/
+//   - 404s anything whose path does not start with base/
+//   - strips the prefix before passing to the inner handler, so inner code
+//     continues to work with root-relative paths (/api/..., /login, etc.)
+func withBasePath(base string, inner http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == base {
+			target := base + "/"
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, base+"/") {
+			http.NotFound(w, r)
+			return
+		}
+		http.StripPrefix(base, inner).ServeHTTP(w, r)
+	})
 }

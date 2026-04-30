@@ -69,7 +69,7 @@ func (s *Store) EnsureCSRFCookie(w http.ResponseWriter, r *http.Request) string 
 	http.SetCookie(w, &http.Cookie{
 		Name:     CSRFCookieName,
 		Value:    token,
-		Path:     "/",
+		Path:     s.cfg.BasePath + "/",
 		HttpOnly: false, // JavaScript MUST read this cookie to echo it back
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secure,
