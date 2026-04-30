@@ -140,6 +140,7 @@ The TRaSH repository is cloned to `/config/data/trash-guides/` and updated autom
 | `PUID` | No | `99` | User ID for file ownership |
 | `PGID` | No | `100` | Group ID for file ownership |
 | `PORT` | No | `6060` | Web UI port (inside container) |
+| `URL_BASE` | No | *(empty)* | URL path prefix for reverse proxy subpath hosting, such as `/clonarr`. Leave empty for standard root-path access. |
 | `TRUSTED_NETWORKS` | No | *(empty — uses Radarr-parity defaults)* | Lock **Trusted Networks** at host level. Comma-separated IPs/CIDRs (`192.168.86.0/24, 10.66.0.0/24`). When set, the UI field is disabled and cannot be changed via the web interface — only by editing the template and restarting. Useful for defense-in-depth: prevents a UI-takeover attacker from expanding the trust boundary. |
 | `TRUSTED_PROXIES` | No | *(empty)* | Lock **Trusted Proxies** at host level. Comma-separated IPs. Same UI-disabled behavior as `TRUSTED_NETWORKS`. Only needed when Clonarr sits behind a reverse proxy that terminates TLS (SWAG, Authelia, Traefik). |
 
