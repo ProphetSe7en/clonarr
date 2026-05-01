@@ -136,7 +136,11 @@ func decodeTestJSON(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 
 // --- Create-path tests ---
 
-func TestCreateCustomCF_RejectsTrashCollision(t *testing.T) {
+func TestCreateCustomCF_AllowsTrashNameMatch(t *testing.T) {
+	// User is free to name a custom CF the same as a TRaSH-published CF.
+	// We don't dictate naming. The cross-usage flip-flop risk (TRaSH+custom
+	// with the same name in different profiles syncing to the same Arr)
+	// is detected at sync-plan time, not at create time.
 	app := setupTestAppWithCFs(t, map[string][][2]string{
 		"radarr": {{"abc123", "PCOK"}},
 	}, nil)
@@ -144,15 +148,8 @@ func TestCreateCustomCF_RejectsTrashCollision(t *testing.T) {
 
 	w := postCustomCF(t, server, "PCOK", "radarr")
 
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409 (body=%q)", w.Code, w.Body.String())
-	}
-	body := decodeTestJSON(t, w)
-	if body["code"] != "name_collision_trash" {
-		t.Errorf("code = %v, want name_collision_trash", body["code"])
-	}
-	if body["trashId"] != "abc123" {
-		t.Errorf("trashId = %v, want abc123", body["trashId"])
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
 	}
 }
 
@@ -239,10 +236,12 @@ func TestUpdateCustomCF_AllowsRenameToOwnName(t *testing.T) {
 	}
 }
 
-func TestUpdateCustomCF_RejectsRenameToTrashName(t *testing.T) {
-	// This is the bug-exposing case from the v2.5.1 investigation:
-	// user renamed `!PCOK` → `PCOK`, which collides with TRaSH's PCOK
-	// CF and produces flip-flopping scores at sync time.
+func TestUpdateCustomCF_AllowsRenameToTrashName(t *testing.T) {
+	// Renaming a custom CF to a name that matches a TRaSH-published CF
+	// is allowed. Common case: user wants to drop the `!` prefix that
+	// v2.4 forced onto their customs and revert to their original name,
+	// which may share a name with a TRaSH CF. We don't block — they
+	// own the naming choice.
 	app := setupTestAppWithCFs(t, map[string][][2]string{
 		"radarr": {{"abc123", "PCOK"}},
 	}, []core.CustomCF{
@@ -254,12 +253,8 @@ func TestUpdateCustomCF_RejectsRenameToTrashName(t *testing.T) {
 
 	w := putCustomCF(t, server, id, "PCOK", "radarr")
 
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409 (body=%q)", w.Code, w.Body.String())
-	}
-	body := decodeTestJSON(t, w)
-	if body["code"] != "name_collision_trash" {
-		t.Errorf("code = %v, want name_collision_trash", body["code"])
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
 	}
 }
 
