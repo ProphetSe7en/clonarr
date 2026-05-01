@@ -82,6 +82,8 @@ func main() {
 
 	debugLogStore := core.NewDebugLogger(configDir)
 	debugLogStore.SetEnabled(cfgStore.Get().DebugLogging)
+	activityLogStore := core.NewActivityLogger(configDir)
+	activityLogStore.SetEnabled(cfgStore.Get().DebugLogging)
 
 	// CLONARR_DEV_FEATURES gates contributor-only UI (TRaSH schema fields, Recyclarr
 	// import/export). Read once at startup; restart required to change. Not exposed
@@ -98,6 +100,7 @@ func main() {
 		CustomCFs:    customCFsStore,
 		CFGroups:     cfGroupsStore,
 		DebugLog:     debugLogStore,
+		ActivityLog:  activityLogStore,
 		Version:      Version,
 		DevFeatures:  devFeatures,
 		HTTPClient:   &http.Client{Timeout: 30 * time.Second},
@@ -154,7 +157,7 @@ func main() {
 				return
 			}
 			server.AutoSyncQualitySizes()
-			app.AutoSyncAfterPull()
+			app.AutoSyncAfterPull(core.SourceAutoPullStartup)
 			return
 		}
 
@@ -162,7 +165,7 @@ func main() {
 			log.Printf("Startup TRaSH clone/pull failed: %v", err)
 		} else {
 			server.AutoSyncQualitySizes()
-			app.AutoSyncAfterPull()
+			app.AutoSyncAfterPull(core.SourceAutoPullStartup)
 		}
 	})
 
@@ -206,7 +209,7 @@ func main() {
 						log.Printf("Scheduled TRaSH pull completed (no changes)")
 					}
 					server.AutoSyncQualitySizes()
-					app.AutoSyncAfterPull()
+					app.AutoSyncAfterPull(core.SourceAutoPullInterval)
 				}
 			case newInterval := <-app.PullUpdateCh:
 				setTicker(core.ParsePullInterval(newInterval))

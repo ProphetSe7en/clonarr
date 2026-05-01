@@ -185,6 +185,9 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		if req.DebugLogging != nil {
 			cfg.DebugLogging = *req.DebugLogging
 			s.Core.DebugLog.SetEnabled(*req.DebugLogging)
+			if s.Core.ActivityLog != nil {
+				s.Core.ActivityLog.SetEnabled(*req.DebugLogging)
+			}
 		}
 		if req.Prowlarr != nil {
 			// Preserve existing API key if masked
@@ -242,8 +245,14 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			newAuthCfg.SessionTTL = time.Duration(cfg.SessionTTLDays) * 24 * time.Hour
 		}
 		if !s.AuthStore.TrustedProxiesLocked() {
-			if ips, perr := netsec.ParseTrustedProxies(cfg.TrustedProxies); perr == nil {
+			if ips, hostnames, perr := netsec.ResolveTrustedProxies(cfg.TrustedProxies); perr == nil {
 				newAuthCfg.TrustedProxies = ips
+				newAuthCfg.TrustedProxyHostnames = hostnames
+				// Persist the raw CSV so the periodic refresh can rebuild
+				// literals precisely instead of deriving them by subtracting
+				// dynamic IPs (which fails when a literal IP equals one of
+				// a hostname's resolved IPs — pinned compose IPs).
+				newAuthCfg.TrustedProxiesRaw = cfg.TrustedProxies
 			}
 		}
 		if !s.AuthStore.TrustedNetworksLocked() {

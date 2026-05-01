@@ -1,5 +1,73 @@
 # Changelog
 
+## v2.5.3
+
+Scoring Sandbox overhaul, hostname-friendly `TRUSTED_PROXIES`, plus a
+handful of sync fixes — a couple of which change behaviour you might
+notice.
+
+### New
+
+- **Score Sets in the Scoring Sandbox.** Save a chosen group of
+  scored releases under a name and switch between sets later. The
+  table filters to the active set so you can re-test the same group
+  against profile changes without losing it. Add to existing, remove
+  rows, or rename — releases stay in your results either way.
+
+- **The sandbox now mirrors how Sonarr/Radarr actually pick
+  releases.** Sort by Score puts a higher allowed quality first
+  even at a lower score (Quality trumps Score, per TRaSH).
+  Qualities grouped together (e.g. `Bluray-1080p / WEB-DL-1080p /
+  WEBRip-1080p`) tie on rank and break on score. PASS/FAIL flags
+  releases whose quality isn't in your profile — Arr would reject
+  them anyway. Hover the pill or quality cell for the reason.
+
+- **Hostname-friendly `TRUSTED_PROXIES`.** Use container names
+  instead of IPs, e.g. `TRUSTED_PROXIES=proxy` for a compose service
+  called `proxy`. Hostnames are re-resolved every minute so a proxy
+  container restart with a new IP is picked up automatically.
+  Closes #40.
+
+### Changed
+
+- **Sync rules auto-disable when Arr rejects them.** A sync that
+  fails because Arr returns a clear configuration error
+  (HTTP 400 / 409 / 422) now disables the rule and surfaces the
+  reason — no more silent retry-loop. Transient errors (5xx,
+  network, timeouts) leave the rule alone. Re-enable manually after
+  fixing the issue.
+
+- **Sync All uses your current rule overrides.** Previously it
+  could pick up overrides from an older sync-history entry. If you
+  changed overrides on a rule and hadn't run an individual sync
+  since, your next Sync All applies the new ones.
+
+- **Apply doesn't overwrite the saved rule when sync fails.** A
+  failed sync no longer saves the rejected values back into the
+  rule — it stays at its last working state.
+
+### Fixed
+
+- **Min Score validation in the profile editor.** Live tooltip on
+  the Min Score field shows the highest score reachable for the
+  profile you're configuring; Apply blocks values above the max
+  with a clear toast. Min Upgrade Score auto-corrects to 1 if you
+  type 0 or negative (Sonarr/Radarr's own rule).
+
+- **Clearer error messages when Arr rejects a sync.** Multi-line
+  validation errors collapse to one readable line; the failure
+  reason shows up on the rule and in sync history.
+
+### Under the hood
+
+- Debug log redesigned. Each operation gets a tagged ID so related
+  lines are easy to grep, with structured traces of CF changes,
+  score actions, and apply results.
+
+### Credit
+
+Issue #40 (`TRUSTED_PROXIES` hostnames): [@UnknownSilicon](https://github.com/UnknownSilicon).
+
 ## v2.5.2
 
 ### Changed

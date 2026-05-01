@@ -17,23 +17,46 @@ func (s *Server) handleTrashStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTrashPull(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Core.Config.Get()
 	utils.SafeGo("manual-trash-pull", func() {
+		op := s.Core.DebugLog.BeginOp(core.OpTrash, core.SourceManualPull, "url="+cfg.TrashRepo.URL+" branch="+cfg.TrashRepo.Branch)
+		endResult := "error: unknown"
+		defer func() { op.End(endResult) }()
 		prevCommit := s.Core.Trash.CurrentCommit()
 		if err := s.Core.Trash.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
 			log.Printf("TRaSH pull failed: %v", err)
 			s.Core.DebugLog.Logf(core.LogError, "TRaSH pull failed: %v", err)
 			s.Core.Trash.SetPullError(err.Error())
+			endResult = "error: pull failed"
+			return
+		}
+		newCommit := s.Core.Trash.CurrentCommit()
+		commitChanged := prevCommit != "" && newCommit != prevCommit
+		if commitChanged {
+			s.Core.NotifyRepoUpdate(prevCommit, newCommit)
+		}
+		s.Core.DebugLog.Logf(core.LogAutoSync, "TRaSH pull completed — running auto-sync")
+		s.AutoSyncQualitySizes()
+		// AutoSyncAfterPull opens its own AUTOSYNC operation; it is not a
+		// child of this TRASH op so the trace clearly separates the pull
+		// from the rules it triggers.
+		s.Core.AutoSyncAfterPull(core.SourceManualPull)
+		if commitChanged {
+			endResult = "ok | new commit " + shortCommit(newCommit)
 		} else {
-			newCommit := s.Core.Trash.CurrentCommit()
-			if prevCommit != "" && newCommit != prevCommit {
-				s.Core.NotifyRepoUpdate(prevCommit, newCommit)
-			}
-			s.Core.DebugLog.Logf(core.LogAutoSync, "TRaSH pull completed — running auto-sync")
-			s.AutoSyncQualitySizes()
-			s.Core.AutoSyncAfterPull()
+			endResult = "ok | no change"
 		}
 	})
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]string{"status": "pulling"})
+}
+
+// shortCommit returns the first 7 characters of a git commit hash for
+// inclusion in human-readable log messages. Returns the full string if
+// it's already short.
+func shortCommit(hash string) string {
+	if len(hash) <= 7 {
+		return hash
+	}
+	return hash[:7]
 }
 
 func (s *Server) handleTrashCFs(w http.ResponseWriter, r *http.Request) {

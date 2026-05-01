@@ -5,9 +5,11 @@ import (
 	"clonarr/internal/core"
 
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -39,7 +41,7 @@ func (s *Server) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	}
 	customCFs := s.Core.CustomCFs.List(inst.Type)
 	lastSyncedCFs := s.Core.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
-	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient)
+	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient, nil)
 	if err != nil {
 		log.Printf("Dry-run error for %s: %v", inst.Name, err)
 		writeError(w, 400, err.Error())
@@ -71,9 +73,35 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Open an operation scope for this sync. Source distinguishes a
+	// Profile Builder save (imported profile) from a TRaSH-direct sync
+	// so post-mortem reads can grep for one or the other. Frontend-side
+	// rollback re-uses this endpoint with historic state — currently
+	// indistinguishable from a manual TRaSH-direct sync at the API; if
+	// we ever add a request flag, switch the source here.
+	source := core.SourceManualTrashRule
+	if req.ImportedProfileID != "" {
+		source = core.SourceManualBuilder
+	}
+	// Resolve the Arr profile name from sync history so the op trace
+	// reads "instance=Radarr-4K profile='Standard Movies' (#49)" rather
+	// than the bare ID — debug logs are user-facing too.
+	arrProfileLabel := fmt.Sprintf("arrProfileId=%d", req.ArrProfileID)
+	if req.ArrProfileID != 0 {
+		if hist := s.Core.Config.GetLatestSyncEntry(req.InstanceID, req.ArrProfileID); hist != nil && hist.ArrProfileName != "" {
+			arrProfileLabel = fmt.Sprintf("profile=%q (#%d)", hist.ArrProfileName, req.ArrProfileID)
+		}
+	}
+	op := s.Core.DebugLog.BeginOp(core.OpSync, source, fmt.Sprintf("instance=%s %s", inst.Name, arrProfileLabel))
+	// Default end result; reassigned on the success path below so an early
+	// return through any error branch records what went wrong.
+	endResult := "error: unknown"
+	defer func() { op.End(endResult) }()
+
 	// C5: Only one sync per instance at a time
 	mu := s.Core.GetSyncMutex(inst.ID)
 	if !mu.TryLock() {
+		endResult = "error: sync already in progress"
 		writeError(w, 409, "Sync already in progress for this instance")
 		return
 	}
@@ -85,6 +113,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	if req.ImportedProfileID != "" {
 		p, ok := s.Core.Profiles.Get(req.ImportedProfileID)
 		if !ok {
+			endResult = "error: imported profile not found"
 			writeError(w, 404, "Imported profile not found")
 			return
 		}
@@ -93,30 +122,45 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	customCFs := s.Core.CustomCFs.List(inst.Type)
 	lastSyncedCFs := s.Core.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
 	behavior := core.ResolveSyncBehavior(req.Behavior)
-	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient)
+	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient, op)
 	if err != nil {
 		log.Printf("Apply plan error for %s: %v", inst.Name, err)
 		s.Core.DebugLog.Logf(core.LogError, "Apply plan error for %s: %v", inst.Name, err)
+		endResult = fmt.Sprintf("error: plan failed: %v", err)
 		writeError(w, 500, "Failed to build sync plan")
 		return
 	}
 
-	result, err := core.ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, behavior, s.Core.HTTPClient)
+	result, err := core.ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, behavior, s.Core.HTTPClient, op)
 	if err != nil {
 		log.Printf("Apply exec error for %s: %v", inst.Name, err)
 		s.Core.DebugLog.Logf(core.LogError, "Apply exec error for %s: %v", inst.Name, err)
+		endResult = fmt.Sprintf("error: execute failed: %v", err)
 		writeError(w, 500, "Failed to execute sync")
 		return
 	}
 
-	s.Core.DebugLog.Logf(core.LogSync, "Apply: %q → %s | arrProfileId=%d | mode=%s | %d created, %d updated, %d scores | %d errors",
-		plan.ProfileName, inst.Name, req.ArrProfileID, func() string {
+	// Apply log line: prefer the Arr profile name (from plan/result)
+	// over the raw ID. result.ArrProfileName is set in update mode;
+	// in create mode the new profile isn't named yet so we fall back
+	// to the trash profile name with the new ID in parens.
+	arrName := result.ArrProfileName
+	if arrName == "" {
+		arrName = plan.ArrProfileName
+	}
+	applyTarget := fmt.Sprintf("Arr profile #%d", req.ArrProfileID)
+	if arrName != "" {
+		applyTarget = fmt.Sprintf("%q (#%d)", arrName, req.ArrProfileID)
+	}
+	s.Core.DebugLog.Logf(core.LogSync, "Apply: %q → %s | %s | mode=%s | %d created, %d updated, %d scores | %d errors",
+		plan.ProfileName, inst.Name, applyTarget, func() string {
 			if req.ArrProfileID == 0 {
 				return "create"
 			}
 			return "update"
 		}(),
 		result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, len(result.Errors))
+	endResult = fmt.Sprintf("ok | %d created, %d updated, %d scores, %d errors", result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, len(result.Errors))
 	if len(result.Errors) > 0 {
 		for _, e := range result.Errors {
 			s.Core.DebugLog.Logf(core.LogError, "Apply error: %s", e)
@@ -240,7 +284,55 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure an auto-sync rule exists for this profile (disabled by default)
-	// If a rule exists but source type changed (builder↔TRaSH), update it to match
+	// If a rule exists but source type changed (builder↔TRaSH), update it to match.
+	//
+	// Skip the rule-update path entirely when the apply produced errors —
+	// otherwise a sync that Arr rejected (e.g. unsatisfiable min-score, CF
+	// with empty condition name) would persist the failing config and every
+	// subsequent auto-sync would re-attempt with the same bad data. Keep
+	// the previous rule state instead so the user has to address the errors
+	// before progress is locked in. Sync history (saved above) still records
+	// the failed attempt for visibility. Profile-creation handles its own
+	// rule update earlier in this function on the result.ProfileCreated
+	// path; that block stays separate because it's about discovering the
+	// new ArrProfileID, not persisting user intent.
+	if len(result.Errors) > 0 {
+		log.Printf("Sync: skipping rule update for %s — sync had %d error(s); rule keeps previous state", inst.Name, len(result.Errors))
+		s.Core.DebugLog.Logf(core.LogSync, "Apply: skipping rule update — %d error(s) returned by Arr; previous rule state preserved", len(result.Errors))
+		op.Logf("apply: rule update skipped — %d error(s) returned, previous rule state preserved", len(result.Errors))
+
+		// Auto-disable the rule only when EVERY error is a user-config
+		// problem (HTTP 400/409/422). Transient/external errors
+		// (5xx, 401/403, ListX fetch failures, raw network errors)
+		// keep the rule enabled so the next tick / next manual click
+		// can retry — disabling on a server blip would leave the user
+		// with a wrongly-disabled rule. We always set LastSyncError
+		// for visibility in the UI badge regardless of disable
+		// decision. Connection errors return as Go-level err earlier
+		// and never reach this path.
+		errSummary := strings.Join(result.Errors, " | ")
+		if req.ArrProfileID > 0 {
+			shouldDisable := core.AllUserConfigErrors(result.Errors)
+			s.Core.Config.Update(func(cfg *core.Config) {
+				for i := range cfg.AutoSync.Rules {
+					if cfg.AutoSync.Rules[i].InstanceID == inst.ID && cfg.AutoSync.Rules[i].ArrProfileID == req.ArrProfileID {
+						cfg.AutoSync.Rules[i].LastSyncError = errSummary
+						if shouldDisable {
+							cfg.AutoSync.Rules[i].Enabled = false
+						}
+						return
+					}
+				}
+			})
+			if shouldDisable {
+				op.Logf("apply: rule auto-disabled — every error is user-config (HTTP 400/409/422); error badge will appear in UI; user must address errors and manually re-enable")
+			} else {
+				op.Logf("apply: rule kept enabled — at least one error is transient/external (5xx, 401/403, network); will retry next tick or next manual click")
+			}
+		}
+		writeJSON(w, result)
+		return
+	}
 	arrID := req.ArrProfileID
 	if result.ProfileCreated {
 		arrID = result.ArrProfileID
@@ -255,16 +347,20 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 				// Rule exists — update source type and selections if they changed
 				if r.ProfileSource != newSource || r.TrashProfileID != req.ProfileTrashID || r.ImportedProfileID != req.ImportedProfileID {
 					s.Core.DebugLog.Logf(core.LogSync, "Auto-sync rule %s: updating source %s→%s for Arr profile %d", r.ID, r.ProfileSource, newSource, arrID)
-					cfg.AutoSync.Rules[i].ProfileSource = newSource
-					cfg.AutoSync.Rules[i].TrashProfileID = req.ProfileTrashID
-					cfg.AutoSync.Rules[i].ImportedProfileID = req.ImportedProfileID
-					cfg.AutoSync.Rules[i].SelectedCFs = req.SelectedCFs
-					cfg.AutoSync.Rules[i].ScoreOverrides = req.ScoreOverrides
-					cfg.AutoSync.Rules[i].QualityOverrides = req.QualityOverrides
-					cfg.AutoSync.Rules[i].QualityStructure = req.QualityStructure
-					cfg.AutoSync.Rules[i].Behavior = req.Behavior
-					cfg.AutoSync.Rules[i].Overrides = req.Overrides
 				}
+				cfg.AutoSync.Rules[i].ProfileSource = newSource
+				cfg.AutoSync.Rules[i].TrashProfileID = req.ProfileTrashID
+				cfg.AutoSync.Rules[i].ImportedProfileID = req.ImportedProfileID
+				cfg.AutoSync.Rules[i].SelectedCFs = req.SelectedCFs
+				cfg.AutoSync.Rules[i].ScoreOverrides = req.ScoreOverrides
+				cfg.AutoSync.Rules[i].QualityOverrides = req.QualityOverrides
+				cfg.AutoSync.Rules[i].QualityStructure = req.QualityStructure
+				cfg.AutoSync.Rules[i].Behavior = req.Behavior
+				cfg.AutoSync.Rules[i].Overrides = req.Overrides
+				// Clean sync — clear any LastSyncError set by a previous
+				// failed attempt so the error badge disappears in the UI
+				// once the user has actually fixed the bad config.
+				cfg.AutoSync.Rules[i].LastSyncError = ""
 				return
 			}
 		}

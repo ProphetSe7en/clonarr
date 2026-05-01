@@ -213,9 +213,65 @@ func TestParseTrustedProxies_Valid(t *testing.T) {
 }
 
 func TestParseTrustedProxies_InvalidFailsLoud(t *testing.T) {
-	_, err := ParseTrustedProxies("172.17.0.1, not-an-ip, 10.0.0.5")
+	// Genuinely malformed entry — has whitespace inside, can't be a
+	// hostname (issue #40 added hostname support so "not-an-ip" alone
+	// now passes parse-time validation as a syntactically-valid name
+	// that just happens to fail DNS lookup).
+	_, err := ParseTrustedProxies("172.17.0.1, bad host, 10.0.0.5")
 	if err == nil {
 		t.Error("expected error on invalid entry (fail loud)")
+	}
+}
+
+func TestResolveTrustedProxies_HostnamesAccepted(t *testing.T) {
+	// Hostname syntax must pass parse-time validation. Lookup is
+	// allowed to fail (lab/CI may not have DNS for "proxy"), but the
+	// hostname slice should still come back so a refresh can retry.
+	ips, hostnames, err := ResolveTrustedProxies("172.17.0.1, proxy")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(hostnames) != 1 || hostnames[0] != "proxy" {
+		t.Errorf("hostnames: got %v, want [\"proxy\"]", hostnames)
+	}
+	// Must contain at least the literal IP.
+	gotLiteral := false
+	for _, ip := range ips {
+		if ip.String() == "172.17.0.1" {
+			gotLiteral = true
+			break
+		}
+	}
+	if !gotLiteral {
+		t.Errorf("ips: literal 172.17.0.1 missing from %v", ips)
+	}
+}
+
+func TestIsValidHostname(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"proxy", true},
+		{"reverse-proxy", true},
+		{"sub.domain.example", true},
+		{"a", true},
+		{"", false},
+		{"bad host", false},                                                          // space
+		{"-leading-hyphen", false},                                                   // label starts with hyphen
+		{"trailing-hyphen-", false},                                                  // label ends with hyphen
+		{"double..dot", false},                                                       // empty label
+		{".leading-dot", false},                                                      // empty first label
+		{"trailing-dot.", false},                                                     // empty last label
+		{"under_score", false},                                                       // underscore not allowed
+		{strings.Repeat("a", 254), false},                                            // total length > 253
+		{strings.Repeat("a", 64) + ".x", false},                                      // label > 63
+	}
+	for _, c := range cases {
+		got := isValidHostname(c.in)
+		if got != c.want {
+			t.Errorf("isValidHostname(%q) = %v, want %v", c.in, got, c.want)
+		}
 	}
 }
 

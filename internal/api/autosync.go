@@ -354,20 +354,32 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 	}
 	customCFs := s.Core.CustomCFs.List(inst.Type)
 
-	plan, err := core.BuildSyncPlan(ad, inst, syncReq, imported, customCFs, nil, s.Core.HTTPClient)
+	op := s.Core.DebugLog.BeginOp(core.OpSync, core.SourceManualResume, fmt.Sprintf("rule=%s instance=%s restore", rule.ID, inst.Name))
+	endResult := "error: unknown"
+	defer func() { op.End(endResult) }()
+
+	plan, err := core.BuildSyncPlan(ad, inst, syncReq, imported, customCFs, nil, s.Core.HTTPClient, op)
 	if err != nil {
+		endResult = fmt.Sprintf("error: plan failed: %v", err)
 		writeError(w, 500, "Failed to build restore plan: "+err.Error())
 		return
 	}
 	behavior := core.ResolveSyncBehavior(syncReq.Behavior)
-	result, err := core.ExecuteSyncPlan(ad, inst, syncReq, plan, imported, customCFs, behavior, s.Core.HTTPClient)
+	result, err := core.ExecuteSyncPlan(ad, inst, syncReq, plan, imported, customCFs, behavior, s.Core.HTTPClient, op)
 	if err != nil {
+		endResult = fmt.Sprintf("error: execute failed: %v", err)
 		writeError(w, 502, "Failed to recreate profile in Arr: "+err.Error())
 		return
 	}
 	if !result.ProfileCreated || result.ArrProfileID == 0 {
+		endResult = "error: profile creation did not succeed"
 		writeError(w, 502, "Profile creation in Arr did not succeed")
 		return
+	}
+	if result.ArrProfileName != "" {
+		endResult = fmt.Sprintf("ok | restored %q (#%d)", result.ArrProfileName, result.ArrProfileID)
+	} else {
+		endResult = fmt.Sprintf("ok | restored Arr profile #%d", result.ArrProfileID)
 	}
 
 	// Persist: clear OrphanedAt, update ArrProfileID; mirror onto history.

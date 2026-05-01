@@ -223,28 +223,129 @@ func ParseTrustedNetworks(csv string) ([]*net.IPNet, error) {
 	return out, nil
 }
 
-// ParseTrustedProxies parses a comma-separated list of IP addresses.
-// Returns an error on any invalid entry — misconfiguration should be loud,
-// not silently produce an empty list (which would disable XFF parsing and
-// break reverse-proxy deployments).
+// ParseTrustedProxies parses a comma-separated list of trusted-proxy
+// entries (IPs or hostnames) and resolves hostnames to IPs at parse
+// time. Returns the combined []net.IP — equivalent to dropping the
+// hostname list from ResolveTrustedProxies. Kept as a thin wrapper so
+// existing callers that don't need re-resolution stay simple. New code
+// that should track container-IP changes (e.g. proxy container restart
+// in docker-compose) should use ResolveTrustedProxies + a periodic
+// refresh.
+//
+// Returns an error on syntactic problems — misconfiguration should be
+// loud, not silently produce an empty list (which would disable XFF
+// parsing and break reverse-proxy deployments). DNS lookup failures
+// for syntactically-valid hostnames are NOT errors here: container-
+// start-order issues (the proxy isn't up yet) are recoverable on the
+// next refresh.
 func ParseTrustedProxies(csv string) ([]net.IP, error) {
+	ips, _, err := ResolveTrustedProxies(csv)
+	return ips, err
+}
+
+// ParseTrustedProxyEntries splits a CSV of trusted-proxy entries into
+// literal IPs and hostname strings WITHOUT resolving anything. Used as
+// the parse-only step shared between initial-resolution at startup
+// and periodic refresh — both need to know which entries are static
+// literals vs which need DNS lookup.
+//
+// Returns an error only for SYNTAX problems (an entry that is neither
+// a valid IP nor a valid hostname). Empty CSV returns (nil, nil, nil).
+func ParseTrustedProxyEntries(csv string) (literalIPs []net.IP, hostnames []string, err error) {
 	csv = strings.TrimSpace(csv)
 	if csv == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
-	var out []net.IP
 	for _, piece := range strings.Split(csv, ",") {
 		piece = strings.TrimSpace(piece)
 		if piece == "" {
 			continue
 		}
-		ip := net.ParseIP(piece)
-		if ip == nil {
-			return nil, fmt.Errorf("invalid IP in trusted_proxies: %q", piece)
+		if ip := net.ParseIP(piece); ip != nil {
+			literalIPs = append(literalIPs, ip)
+			continue
 		}
-		out = append(out, ip)
+		// Not a literal IP — treat as hostname. Validate syntax so we
+		// reject pure garbage (whitespace, control chars) at parse time
+		// rather than waiting for the lookup to fail at refresh time.
+		if !isValidHostname(piece) {
+			return nil, nil, fmt.Errorf("invalid entry in trusted_proxies: %q (expected IP or hostname)", piece)
+		}
+		hostnames = append(hostnames, piece)
 	}
-	return out, nil
+	return literalIPs, hostnames, nil
+}
+
+// ResolveTrustedProxies parses a CSV of IP addresses and/or hostnames,
+// resolves each hostname to one or more IPs via the system resolver,
+// and returns:
+//   - ips: combined []net.IP (literal IPs ∪ resolved hostnames)
+//   - hostnames: original hostname strings — caller should retain
+//     these to drive periodic re-resolution (issue #40 use-case:
+//     docker-compose container IPs can change across restarts)
+//   - err: only for SYNTAX problems. DNS-resolution failures for
+//     syntactically valid hostnames are logged and skipped — the
+//     caller's refresh cycle gets another chance.
+//
+// Empty CSV returns (nil, nil, nil) for parity with the old behaviour.
+func ResolveTrustedProxies(csv string) ([]net.IP, []string, error) {
+	literalIPs, hostnames, err := ParseTrustedProxyEntries(csv)
+	if err != nil {
+		return nil, nil, err
+	}
+	out := append([]net.IP(nil), literalIPs...)
+	if len(hostnames) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, host := range hostnames {
+			addrs, lerr := net.DefaultResolver.LookupHost(ctx, host)
+			if lerr != nil {
+				// Common cause in compose: proxy container not up yet.
+				// Soft-fail so startup doesn't block; refresh recovers.
+				continue
+			}
+			for _, a := range addrs {
+				if ip := net.ParseIP(a); ip != nil {
+					out = append(out, ip)
+				}
+			}
+		}
+	}
+	return out, hostnames, nil
+}
+
+// isValidHostname checks that s is a syntactically valid hostname per
+// RFC 1123 (letters, digits, hyphens, dots; labels can't start/end with
+// hyphen; max 253 chars; no whitespace or other separators that would
+// confuse a CSV parse). Used as the parse-time gate so DNS lookup
+// failures stay "transient" while genuinely malformed entries fail
+// loud.
+func isValidHostname(s string) bool {
+	if len(s) == 0 || len(s) > 253 {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '.':
+		default:
+			return false
+		}
+	}
+	for _, label := range strings.Split(s, ".") {
+		if len(label) == 0 {
+			return false // double-dot or leading/trailing dot
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		if len(label) > 63 {
+			return false
+		}
+	}
+	return true
 }
 
 // ErrBlockedDestination is returned by SafeHTTPClient when the resolved
