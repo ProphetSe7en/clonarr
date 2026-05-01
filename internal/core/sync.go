@@ -93,6 +93,15 @@ type SyncSummary struct {
 	ScoresToSet     int  `json:"scoresToSet"`
 	ScoresUnchanged int  `json:"scoresUnchanged"`
 	ScoresToZero    int  `json:"scoresToZero"` // extra CFs that will be zeroed out
+	// MaxPossibleScore is the sum of every positive CF score that will be
+	// in the profile after this sync runs. This is exactly what
+	// Sonarr/Radarr enforce as the upper limit for Min Format Score
+	// — values above this produce "Minimum Custom Format Score can never
+	// be satisfied". Computed by walking the same CF set that
+	// ExecuteSyncPlan would push (selected CFs + extras + score
+	// overrides), so it stays authoritative even when frontend can't
+	// see all the data shapes (grouped CFs, score-set lookups, etc.).
+	MaxPossibleScore int `json:"maxPossibleScore"`
 }
 
 // --- Sync Request ---
@@ -147,7 +156,11 @@ func resolveScore(trashID string, trashCF *TrashCF, scoreCtx string, cfScoreOver
 // Supports both TRaSH profiles (via ProfileTrashID) and imported/custom profiles (via ImportedProfile).
 // customCFs allows syncing user-created CFs (IDs starting with "custom:").
 // lastSyncedCFs is the CF snapshot from the previous sync (used by "add_new" mode).
-func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *ImportedProfile, customCFs []CustomCF, lastSyncedCFs []string, httpClient *http.Client) (*SyncPlan, error) {
+// op is the diagnostic operation scope from the calling handler — internal
+// logging emits via op.Logf so lines are tagged with the operation ID for
+// post-mortem extraction. Nil op disables structured logging (fall-back path
+// used by the test suite + any caller that doesn't open an operation).
+func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *ImportedProfile, customCFs []CustomCF, lastSyncedCFs []string, httpClient *http.Client, op *Operation) (*SyncPlan, error) {
 	if ad == nil {
 		return nil, fmt.Errorf("no TRaSH data for %s", instance.Type)
 	}
@@ -467,6 +480,17 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			}
 		}
 
+		// Log the current Arr profile snapshot so the trace shows what
+		// state we were sync'ing against. Helpful when the user reports
+		// "X didn't change" — we can verify what X was at plan-build time.
+		curLangName := "Unknown"
+		if targetProfile.Language != nil {
+			curLangName = targetProfile.Language.Name
+		}
+		op.Logf("plan: current Arr profile %q — Language=%s MinScore=%d UpgradeAllowed=%v Cutoff=%s",
+			targetProfile.Name, curLangName, targetProfile.MinFormatScore, targetProfile.UpgradeAllowed,
+			cutoffIDToName(targetProfile.Cutoff, targetProfile.Items))
+
 		// --- Preview: settings changes ---
 		// Compute desired settings (same logic as ExecuteSyncPlan)
 		desiredMinFormatScore := profile.MinFormatScore
@@ -526,6 +550,16 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 				}
 				plan.SettingsPreview = append(plan.SettingsPreview, fmt.Sprintf("Language: %s → %s", prevLang, desiredLanguage))
 			}
+			// Log the language decision regardless of whether it's a change.
+			// The earlier bug (v2.5.2) was that the engine silently kept the
+			// old Arr value when the user reverted to TRaSH default; emitting
+			// the desired Language and its source on every plan-build makes
+			// that class of bug visible in the trace immediately.
+			langSource := "TRaSH default"
+			if req.Overrides != nil && req.Overrides.Language != nil {
+				langSource = "override"
+			}
+			op.Logf("plan: language desired=%q (%s) current=%q", desiredLanguage, langSource, prevLang)
 		}
 		// Cutoff quality name change
 		prevCutoffName := cutoffIDToName(targetProfile.Cutoff, targetProfile.Items)
@@ -649,6 +683,38 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 		}
 	}
 
+	// Compute MaxPossibleScore: the post-sync sum of every positive
+	// CF score in the profile's formatItems. ScoreActions is the source
+	// of truth — it records exactly what each CF's score will be after
+	// this plan executes ("set"/"update"/"unchanged" carry NewScore =
+	// post-sync value; "zero" carries 0 and naturally drops out of a
+	// >0 filter).
+	//
+	// Caveat for do_not_adjust behavior: CFs that aren't in the managed
+	// set keep their current Arr score and aren't recorded in
+	// ScoreActions. Those are skipped here, so the value can under-
+	// report for users on do_not_adjust. The default behavior
+	// (reset_to_zero) covers them — Arr-only CFs become 0 and don't
+	// contribute. If do_not_adjust users hit a Min-Score validation
+	// surprise we can revisit, but the data plumbing to surface
+	// targetProfile.FormatItems at this point is cleaner deferred.
+	for _, sa := range plan.ScoreActions {
+		if sa.NewScore > 0 {
+			plan.Summary.MaxPossibleScore += sa.NewScore
+		}
+	}
+
+	// Emit a single plan-summary line so the trace shows the engine's
+	// final intent. Settings preview lines are joined for grep-friendly
+	// retrieval (e.g. searching for "Language: " across logs).
+	settings := "(none)"
+	if len(plan.SettingsPreview) > 0 {
+		settings = strings.Join(plan.SettingsPreview, " | ")
+	}
+	op.Logf("plan: %d CFs to create, %d update, %d unchanged | %d scores to set, %d to zero | maxPossibleScore=%d | settings: %s",
+		plan.Summary.CFsToCreate, plan.Summary.CFsToUpdate, plan.Summary.CFsUnchanged,
+		plan.Summary.ScoresToSet, plan.Summary.ScoresToZero, plan.Summary.MaxPossibleScore, settings)
+
 	return plan, nil
 }
 
@@ -672,7 +738,9 @@ type SyncResult struct {
 }
 
 // ExecuteSyncPlan applies a previously built sync plan.
-func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *SyncPlan, imported *ImportedProfile, customCFs []CustomCF, behavior SyncBehavior, httpClient *http.Client) (*SyncResult, error) {
+// op is the diagnostic operation scope; internal logging (HTTP calls,
+// post-apply verify) emits via op.Logf when non-nil.
+func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *SyncPlan, imported *ImportedProfile, customCFs []CustomCF, behavior SyncBehavior, httpClient *http.Client, op *Operation) (*SyncResult, error) {
 	if ad == nil {
 		return nil, fmt.Errorf("no TRaSH data for %s", instance.Type)
 	}
@@ -902,11 +970,14 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
+		startCreate := time.Now()
 		created, err := client.CreateProfile(arrProfile)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("create profile: %v", err))
+			result.Errors = append(result.Errors, friendlyProfileErr("create profile", err))
+			op.Logf("HTTP: POST qualityprofile → ERROR in %dms: %s", time.Since(startCreate).Milliseconds(), flattenForLog(redactSecrets(err.Error())))
 			return result, nil
 		}
+		op.Logf("HTTP: POST qualityprofile → 201 Created (id=%d) in %dms", created.ID, time.Since(startCreate).Milliseconds())
 
 		result.ProfileCreated = true
 		result.ArrProfileID = created.ID
@@ -1375,14 +1446,36 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		if updated {
 			log.Printf("Sync: sending profile update to %s (quality=%v, items=%d, formatItems=%d)",
 				instance.Name, result.QualityUpdated, len(targetProfile.Items), len(targetProfile.FormatItems))
+			start := time.Now()
 			if err := client.UpdateProfile(targetProfile); err != nil {
 				log.Printf("Sync: profile update failed: %v", err)
-				result.Errors = append(result.Errors, fmt.Sprintf("update profile scores: %v", err))
+				result.Errors = append(result.Errors, friendlyProfileErr("update profile", err))
+				op.Logf("HTTP: PUT qualityprofile id=%d → ERROR in %dms: %s", targetProfile.ID, time.Since(start).Milliseconds(), flattenForLog(redactSecrets(err.Error())))
 			} else {
 				log.Printf("Sync: profile update successful")
+				op.Logf("HTTP: PUT qualityprofile id=%d → 200 OK in %dms", targetProfile.ID, time.Since(start).Milliseconds())
+				// Post-apply verify: re-fetch the profile and log the
+				// resulting Language/MinScore/etc so the trace can prove
+				// Arr accepted the change. Re-fetch is best-effort —
+				// failure here doesn't undo the apply.
+				if verified, err := client.ListProfiles(); err == nil {
+					for i := range verified {
+						if verified[i].ID == targetProfile.ID {
+							vp := verified[i]
+							lang := "Unknown"
+							if vp.Language != nil {
+								lang = vp.Language.Name
+							}
+							op.Logf("verify: post-apply Arr state — Language=%s MinScore=%d UpgradeAllowed=%v",
+								lang, vp.MinFormatScore, vp.UpgradeAllowed)
+							break
+						}
+					}
+				}
 			}
 		} else {
 			log.Printf("Sync: no profile changes to send")
+			op.Logf("apply: no profile changes to send")
 		}
 	}
 
@@ -1605,12 +1698,128 @@ func BuildArrProfile(
 // + lowercase-substring so it survives Arr-version wording variants like
 // "Must be unique", "must be unique", "Name must be unique.", and nested
 // FluentValidation messages.
+//
+// For other Arr errors that come back as a structured FluentValidation
+// JSON body — `[{"propertyName":"","errorMessage":"...","severity":"error"}]`
+// — we extract the `errorMessage` field(s) so the user-facing toast
+// shows plain text instead of raw JSON. Non-JSON errors fall through to
+// the original "%v" formatting.
 func friendlyArrErr(verb, cfName string, err error) string {
 	msg := err.Error()
 	if strings.Contains(strings.ToLower(msg), "must be unique") {
 		return fmt.Sprintf("%s %s failed: another CF with the same name (case-insensitive) already exists in Arr. Resolve in Arr — delete one of the duplicate CFs, or rename them so they differ by more than just case — then re-sync.", verb, cfName)
 	}
+	if extracted := extractArrErrorMessages(msg); extracted != "" {
+		return fmt.Sprintf("%s %s failed: %s", verb, cfName, extracted)
+	}
 	return fmt.Sprintf("%s %s: %v", verb, cfName, err)
+}
+
+// friendlyProfileErr formats an Arr error from CreateProfile or
+// UpdateProfile so the user-facing message is the FluentValidation
+// errorMessage(s) rather than the raw JSON body. Falls back to the
+// usual `<verb>: %v` shape for non-JSON errors. Used at the two
+// profile-level Arr call sites where there's no per-CF "name" to
+// include in the prefix — that case is what friendlyArrErr handles.
+func friendlyProfileErr(verb string, err error) string {
+	if extracted := extractArrErrorMessages(err.Error()); extracted != "" {
+		return fmt.Sprintf("%s failed: %s", verb, extracted)
+	}
+	return fmt.Sprintf("%s: %v", verb, err)
+}
+
+// IsUserConfigError classifies an Arr-returned error as something the
+// user can fix by editing their rule (auto-disable is appropriate) vs
+// a transient or external problem (auto-disable would be wrong). Only
+// 400/409 — FluentValidation rejections and uniqueness conflicts —
+// count as user-config. 5xx server blips, 401/403 auth issues, ListX
+// fetch failures, and unwrapped network/IO errors are all transient
+// and should NOT trigger auto-disable.
+//
+// Used by the auto-disable paths in handleApply and runAutoSyncRule.
+// If ALL errors in result.Errors are user-config, disabling is safe.
+// If ANY error is transient, we keep the rule enabled so it retries
+// next tick (and surface the error via LastSyncError for visibility).
+//
+// Detection works on the error-string convention `HTTP %d: ...` that
+// arr.NewArrClient produces. Errors without that prefix are treated as
+// transient (network/IO/unwrapped) since they didn't make it to a
+// well-formed Arr response.
+func IsUserConfigError(s string) bool {
+	idx := strings.Index(s, "HTTP ")
+	if idx < 0 {
+		return false // no HTTP prefix → likely transient
+	}
+	rest := s[idx+5:]
+	if len(rest) < 3 {
+		return false
+	}
+	code := rest[:3]
+	switch code {
+	case "400", "409", "422":
+		return true // bad request / conflict / unprocessable — user config
+	}
+	return false
+}
+
+// AllUserConfigErrors returns true when every entry in errs is a
+// user-config error per IsUserConfigError. An empty slice returns
+// false — no errors means no disable decision needed in the first
+// place.
+func AllUserConfigErrors(errs []string) bool {
+	if len(errs) == 0 {
+		return false
+	}
+	for _, e := range errs {
+		if !IsUserConfigError(e) {
+			return false
+		}
+	}
+	return true
+}
+
+// extractArrErrorMessages tries to pull the human-readable errorMessage
+// fields out of an Arr FluentValidation JSON response embedded in an
+// error string. Returns "" when the input isn't JSON or doesn't match
+// the expected shape, signalling the caller to use a fallback format.
+//
+// The Arr error-string convention is `HTTP 4xx: <body>` so we strip the
+// HTTP-status prefix before parsing. Multiple errorMessage fields are
+// joined with "; " so a single toast surfaces every issue at once.
+func extractArrErrorMessages(s string) string {
+	body := s
+	// Strip "HTTP NNN: " prefix added by the Arr client wrapper.
+	if idx := strings.Index(body, "HTTP "); idx >= 0 {
+		if colon := strings.Index(body[idx:], ": "); colon > 0 {
+			body = body[idx+colon+2:]
+		}
+	}
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "[") && !strings.HasPrefix(body, "{") {
+		return ""
+	}
+	type arrFluent struct {
+		PropertyName string `json:"propertyName"`
+		ErrorMessage string `json:"errorMessage"`
+		Severity     string `json:"severity"`
+	}
+	var multi []arrFluent
+	if err := json.Unmarshal([]byte(body), &multi); err == nil && len(multi) > 0 {
+		messages := make([]string, 0, len(multi))
+		for _, e := range multi {
+			if e.ErrorMessage != "" {
+				messages = append(messages, e.ErrorMessage)
+			}
+		}
+		if len(messages) > 0 {
+			return strings.Join(messages, "; ")
+		}
+	}
+	var single arrFluent
+	if err := json.Unmarshal([]byte(body), &single); err == nil && single.ErrorMessage != "" {
+		return single.ErrorMessage
+	}
+	return ""
 }
 
 // resolveQualityItems converts TRaSH quality items to Arr format using quality definitions.

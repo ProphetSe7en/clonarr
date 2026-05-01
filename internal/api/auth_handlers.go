@@ -557,20 +557,35 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 	}
 
 	if envProxies := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES")); envProxies != "" {
-		ips, err := netsec.ParseTrustedProxies(envProxies)
+		ips, hostnames, err := netsec.ResolveTrustedProxies(envProxies)
 		if err != nil {
 			log.Fatalf("auth: invalid TRUSTED_PROXIES env var: %v", err)
 		}
+		// Count literal IPs by re-parsing — log line shouldn't lie when a
+		// hostname resolves to multiple IPs (multi-A or IPv4+IPv6).
+		literals, _, _ := netsec.ParseTrustedProxyEntries(envProxies)
 		cfg.TrustedProxies = ips
+		cfg.TrustedProxyHostnames = hostnames
 		cfg.TrustedProxiesLocked = true
 		cfg.TrustedProxiesRaw = envProxies
-		log.Printf("auth: trusted_proxies locked by TRUSTED_PROXIES env var (%d entries)", len(ips))
+		if len(hostnames) > 0 {
+			log.Printf("auth: trusted_proxies locked by TRUSTED_PROXIES env var (%d effective IPs: %d literal, %d hostnames re-resolved every 60s)", len(ips), len(literals), len(hostnames))
+		} else {
+			log.Printf("auth: trusted_proxies locked by TRUSTED_PROXIES env var (%d entries)", len(ips))
+		}
 	} else if appCfg.TrustedProxies != "" {
-		ips, err := netsec.ParseTrustedProxies(appCfg.TrustedProxies)
+		ips, hostnames, err := netsec.ResolveTrustedProxies(appCfg.TrustedProxies)
 		if err != nil {
 			log.Fatalf("auth: invalid trustedProxies config: %v", err)
 		}
 		cfg.TrustedProxies = ips
+		cfg.TrustedProxyHostnames = hostnames
+		// Persist the raw CSV so RefreshTrustedProxies's literal-rebuild
+		// path is precise even on the UI-edit (non-env-locked) flow.
+		// Without this the refresh would have to derive literals by
+		// subtracting dynamic IPs from current — error-prone when a
+		// literal IP equals a resolved hostname's IP.
+		cfg.TrustedProxiesRaw = appCfg.TrustedProxies
 	}
 
 	if err := auth.ValidateConfig(cfg); err != nil {
@@ -605,6 +620,28 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 			case <-t.C:
 				if store.Config().Mode == auth.ModeNone {
 					log.Printf("auth: WARNING — authentication is still DISABLED. Every request is admin. Re-enable auth or restrict to 127.0.0.1.")
+				}
+			}
+		}
+	})
+
+	// Periodic re-resolution of hostname entries in TRUSTED_PROXIES.
+	// docker-compose proxy containers can change IPs across restarts;
+	// without this the trusted-list goes stale and X-Forwarded-For
+	// from the proxy is silently dropped (looks like a misconfiguration
+	// to the user). 60s tick balances responsiveness against DNS load.
+	// No-op when no hostnames were configured.
+	utils.SafeGo("auth-trusted-proxy-refresh", func() {
+		t := time.NewTicker(60 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				count, changed := store.RefreshTrustedProxies()
+				if changed {
+					log.Printf("auth: trusted_proxies re-resolved (%d effective IPs after hostname refresh)", count)
 				}
 			}
 		}

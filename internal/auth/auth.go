@@ -20,6 +20,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -94,11 +95,19 @@ type Config struct {
 	TrustedNetworksLocked bool
 	TrustedProxiesLocked  bool
 	// TrustedNetworksRaw / TrustedProxiesRaw hold the original comma-separated
-	// string from the env var (populated only when *Locked is true). Used by
-	// the UI to display the effective value in the disabled input so users
-	// can see what's actually enforced without inspecting the Docker template.
+	// string for the field. TrustedNetworksRaw is populated only when
+	// *Locked is true (used by the UI to display the env-enforced value
+	// in the disabled input). TrustedProxiesRaw is populated on BOTH the
+	// env-lock path AND the UI-edit path — RefreshTrustedProxies uses it
+	// as the source-of-truth for which entries are literals vs hostnames
+	// when reconstructing the effective IP list each tick.
 	TrustedNetworksRaw string
 	TrustedProxiesRaw  string
+	// TrustedProxyHostnames retains the hostname entries (NOT IPs) from
+	// the trusted-proxies CSV so a background refresher can re-resolve
+	// them as container IPs change (docker-compose restart). Empty when
+	// the CSV contained only literal IPs, or when the field is unset.
+	TrustedProxyHostnames []string
 	SessionTTL       time.Duration
 	// BasePath is the URL prefix when Clonarr is mounted at a sub-path
 	// (e.g. "/clonarr"). Empty means serve from root. Set via URL_BASE env
@@ -153,6 +162,14 @@ type Store struct {
 	// WriteFile + Rename in writeSessionsSnapshot — not while any in-memory
 	// state is locked, so this doesn't cross the main mu critical path.
 	persistMu sync.Mutex
+
+	// trustedProxyResolved is the last-good resolution result per
+	// hostname. Updated by RefreshTrustedProxies on successful lookups
+	// only; keeps the previous IPs for any hostname that fails this
+	// tick so a transient DNS hiccup or single-container restart
+	// doesn't drop legitimate proxies from the trust list. Protected
+	// by mu.
+	trustedProxyResolved map[string][]net.IP
 }
 
 // NewStore creates a Store with the given config. Credentials are loaded
@@ -162,8 +179,9 @@ func NewStore(cfg Config) *Store {
 		cfg.MaxSessions = 10000
 	}
 	return &Store{
-		cfg:      cfg,
-		sessions: make(map[string]sessionEntry),
+		cfg:                  cfg,
+		sessions:             make(map[string]sessionEntry),
+		trustedProxyResolved: make(map[string][]net.IP),
 	}
 }
 
@@ -568,9 +586,139 @@ func (s *Store) UpdateConfig(cfg Config) error {
 	}
 	if s.cfg.TrustedProxiesLocked {
 		cfg.TrustedProxies = s.cfg.TrustedProxies
+		cfg.TrustedProxyHostnames = s.cfg.TrustedProxyHostnames
 	}
 	s.cfg = cfg
 	return nil
+}
+
+// RefreshTrustedProxies re-resolves hostname entries in the trusted-
+// proxy list and replaces the live IP slice with literals + the
+// resolution. Per-hostname last-good caching keeps the previous IPs
+// for any hostname that fails this tick — so a single-container
+// restart in docker-compose doesn't drop the OTHER proxies from the
+// trust list. All-fail tick is just the natural extension: every
+// hostname's previous IPs are kept.
+//
+// No-op when there are no hostnames to re-resolve (literal-IP-only
+// configs skip the work entirely). Returns (effective IP count,
+// changed) so the caller can suppress noisy "no change" log lines.
+//
+// Concurrency: the snapshot of hostnames + raw CSV is taken under
+// RLock; DNS lookups happen lock-free; the final write is under Lock.
+// A concurrent UpdateConfig that lands between the snapshot and write
+// is detected via the hostnames-snapshot equality check at write time
+// and aborts the refresh so the UI edit isn't clobbered.
+func (s *Store) RefreshTrustedProxies() (int, bool) {
+	s.mu.RLock()
+	hostnamesSnap := append([]string(nil), s.cfg.TrustedProxyHostnames...)
+	rawSnap := s.cfg.TrustedProxiesRaw
+	currentIPs := append([]net.IP(nil), s.cfg.TrustedProxies...)
+	s.mu.RUnlock()
+
+	if len(hostnamesSnap) == 0 {
+		return len(currentIPs), false
+	}
+
+	// Re-resolve each hostname. Successful resolutions update the
+	// last-good cache; failures leave the cache unchanged so the
+	// previous IPs survive a transient hiccup.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	freshlyResolved := map[string][]net.IP{}
+	for _, host := range hostnamesSnap {
+		addrs, err := net.DefaultResolver.LookupHost(ctx, host)
+		if err != nil {
+			continue
+		}
+		ips := []net.IP{}
+		for _, a := range addrs {
+			if ip := net.ParseIP(a); ip != nil {
+				ips = append(ips, ip)
+			}
+		}
+		freshlyResolved[host] = ips
+	}
+
+	// Reconstruct the effective IP list: literals from the raw CSV +
+	// per-hostname IPs (fresh if resolved this tick, last-good
+	// otherwise). Using the raw CSV as literals-source is precise even
+	// when a literal IP happens to equal a hostname's current
+	// resolution.
+	literalIPs, _, _ := netsec.ParseTrustedProxyEntries(rawSnap)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Race-guard: if the hostname set changed during DNS, abort —
+	// don't write IPs that don't match the current config.
+	if !stringSlicesEqual(hostnamesSnap, s.cfg.TrustedProxyHostnames) {
+		return len(s.cfg.TrustedProxies), false
+	}
+
+	// Update the last-good cache for hostnames we just resolved.
+	if s.trustedProxyResolved == nil {
+		s.trustedProxyResolved = make(map[string][]net.IP)
+	}
+	for host, ips := range freshlyResolved {
+		s.trustedProxyResolved[host] = ips
+	}
+	// Drop cached entries for hostnames that are no longer configured
+	// (UpdateConfig before this tick removed them). Keeps the cache
+	// from growing across UI edits.
+	keep := map[string]struct{}{}
+	for _, h := range hostnamesSnap {
+		keep[h] = struct{}{}
+	}
+	for h := range s.trustedProxyResolved {
+		if _, ok := keep[h]; !ok {
+			delete(s.trustedProxyResolved, h)
+		}
+	}
+
+	newIPs := append([]net.IP(nil), literalIPs...)
+	for _, host := range hostnamesSnap {
+		newIPs = append(newIPs, s.trustedProxyResolved[host]...)
+	}
+	changed := !ipSlicesEqual(currentIPs, newIPs)
+	s.cfg.TrustedProxies = newIPs
+	return len(newIPs), changed
+}
+
+// stringSlicesEqual is the order-sensitive multiset for hostname
+// snapshots — a re-order via UpdateConfig still aborts to be safe.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ipSlicesEqual returns true when both slices contain the same IPs
+// (order-insensitive). Used by RefreshTrustedProxies to suppress
+// noisy "no change" log lines on every tick.
+func ipSlicesEqual(a, b []net.IP) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := map[string]int{}
+	for _, ip := range a {
+		seen[ip.String()]++
+	}
+	for _, ip := range b {
+		seen[ip.String()]--
+	}
+	for _, n := range seen {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // CleanupExpiredSessions removes expired sessions. The main goroutine

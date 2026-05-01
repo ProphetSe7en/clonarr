@@ -39,6 +39,7 @@ type App struct {
 	CustomCFs      *CustomCFStore
 	CFGroups       *CFGroupStore
 	DebugLog       *DebugLogger
+	ActivityLog    *ActivityLogger
 	Version        string
 	DevFeatures    bool         // set from CLONARR_DEV_FEATURES env at startup; gates contributor-only UI (TRaSH schema fields, Recyclarr import/export)
 	HTTPClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls

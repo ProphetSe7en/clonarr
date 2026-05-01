@@ -5,6 +5,12 @@ function clonarr() {
     activeAppType: 'radarr',     // NEW — 'radarr' or 'sonarr', independent of section
     advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'scoring', 'group-builder'
 
+    // Debug-log download options. When true, the Download button hits
+    // ?activity=1 and the server bundles activity.log alongside debug.log
+    // in a ZIP. Default off — most bug reports only need the operation
+    // trace (debug.log alone).
+    includeActivityLog: false,
+
     // CF Group Builder state — advancedTab === 'group-builder'
     // Mirrors the on-disk shape of TRaSH cf-groups/*.json so export is a straight serialize.
     cfgbName: '',
@@ -408,8 +414,8 @@ function clonarr() {
 
     // Scoring Sandbox (per app-type state)
     sandbox: {
-      radarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, searching: false, searchAbort: null, instanceProfiles: [], showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', filterToSelected: false, dragSrc: null, dragOver: null },
-      sonarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, searching: false, searchAbort: null, instanceProfiles: [], showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', filterToSelected: false, dragSrc: null, dragOver: null },
+      radarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, searching: false, searchAbort: null, instanceProfiles: [], showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', filterToSelected: false, dragSrc: null, dragOver: null, scoreSets: [], activeScoreSet: '' },
+      sonarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, searching: false, searchAbort: null, instanceProfiles: [], showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', filterToSelected: false, dragSrc: null, dragOver: null, scoreSets: [], activeScoreSet: '' },
     },
     prowlarrTestResult: null,
     prowlarrTesting: false,
@@ -430,6 +436,84 @@ function clonarr() {
 
     get maintenanceInstance() {
       return this.instances.find(i => i.id === this.maintenanceInstanceId) || null;
+    },
+
+    // Max possible Min Score for the profile-as-currently-configured.
+    // Mirrors backend's BuildSyncPlan computation but runs client-side
+    // off the data already loaded into the editor — no dry-run / HTTP
+    // round-trip needed. The value is the post-sync sum of every
+    // positive Custom Format score that will be in the profile after
+    // Save & Sync, which is exactly what Sonarr/Radarr validates Min
+    // Score against.
+    //
+    // Sources walked (matches backend's allCFTrashIDs ∪ overrides):
+    //   1. detail.formatItemNames        — TRaSH profile.formatItems (always synced)
+    //   2. detail.trashGroups[].cfs      — group CFs that are toggled on
+    //   3. selectedOptionalCFs[trashId]  — individually toggled optional CFs
+    //   4. extraCFs                      — user-added extras (their explicit score)
+    //   5. cfScoreOverrides              — per-CF score overrides (when active)
+    //
+    // Returns null when no profile is loaded so the tooltip / red
+    // border can hide. Caveat: do_not_adjust removeMode keeps existing
+    // Arr scores for CFs not in the managed set; those aren't visible
+    // here. Backend has the same caveat in its plan computation.
+    get pdMaxPossibleScore() {
+      const detail = this.profileDetail?.detail;
+      if (!detail) return null;
+      const cfMap = new Map(); // trashId → score
+      // 1. profile.formatItems
+      for (const fi of (detail.formatItemNames || [])) {
+        cfMap.set(fi.trashId, fi.score ?? 0);
+      }
+      // 2 + 3. Active groups: required CFs + individually toggled optionals
+      const groups = detail.trashGroups || [];
+      for (const group of groups) {
+        const grpKey = '__grp_' + group.name;
+        const grpOn = (this.selectedOptionalCFs[grpKey] !== undefined)
+          ? this.selectedOptionalCFs[grpKey]
+          : group.defaultEnabled;
+        if (!grpOn) continue;
+        for (const cf of group.cfs) {
+          const indOn = this.selectedOptionalCFs[cf.trashId];
+          if (cf.required || indOn) {
+            if (!cfMap.has(cf.trashId)) cfMap.set(cf.trashId, cf.score ?? 0);
+          }
+        }
+      }
+      // 4. Extra CFs — user-added with their explicit scores
+      for (const [tid, score] of Object.entries(this.extraCFs || {})) {
+        cfMap.set(tid, score);
+      }
+      // 5. Score overrides — always applied to CFs already in the set
+      // (matches backend, which uses body.scoreOverrides regardless of
+      // the override-panel active flag). The active flag only controls
+      // whether overrides PULL IN new CFs not already in formatItems /
+      // groups / extras — that's the override-panel "add CF" affordance.
+      if (this.cfScoreOverrides) {
+        for (const [tid, score] of Object.entries(this.cfScoreOverrides)) {
+          if (cfMap.has(tid)) {
+            cfMap.set(tid, score);
+          } else if (this.cfScoreOverrideActive) {
+            cfMap.set(tid, score);
+          }
+        }
+      }
+      // Sum positives — matches backend's `if sa.NewScore > 0` filter
+      let sum = 0;
+      for (const score of cfMap.values()) {
+        if (typeof score === 'number' && score > 0) sum += score;
+      }
+      return sum;
+    },
+
+    // True when the user's Min Format Score override exceeds the max
+    // computable from the profile-as-configured. Drives the red border
+    // + the pre-flight gate in applySync.
+    get pdMinScoreInvalid() {
+      const max = this.pdMaxPossibleScore;
+      if (max === null) return false;
+      const min = this.pdOverrides?.minFormatScore?.value ?? 0;
+      return min > max;
     },
 
     // True when the name typed in the CF Editor is byte-exact match
@@ -457,6 +541,18 @@ function clonarr() {
       // spread-reassignment inside only fires when something actually changed, so the watch
       // settles after one tick.
       this.$watch('pb.qualityItems', () => this.pbEnsureQualityIds());
+      // Scoring Sandbox must run loadSandbox whenever the page becomes
+      // visible — otherwise sb.instanceId stays empty and Score Selected
+      // returns early + Instance Profiles dropdown stays empty. The
+      // existing call from switchAppType only fires on app-type change,
+      // not on direct URL/hash navigation or section/sub-tab switches.
+      const ensureSandbox = () => {
+        if (this.currentSection === 'advanced' && this.advancedTab === 'scoring') {
+          this.loadSandbox(this.activeAppType);
+        }
+      };
+      this.$watch('advancedTab', ensureSandbox);
+      this.$watch('currentSection', ensureSandbox);
       await this.loadConfig();
       this.fetchAuthStatus(); // render header user-menu and banner state early
       await this.loadInstances();
@@ -508,6 +604,8 @@ function clonarr() {
       this.loadAutoSyncRules();
       this.loadSandboxResults('radarr');
       this.loadSandboxResults('sonarr');
+      this.sandboxLoadScoreSets('radarr');
+      this.sandboxLoadScoreSets('sonarr');
       // Load sync history for all instances (also triggers stale cleanup)
       for (const inst of this.instances) {
         await this.loadInstanceProfiles(inst);
@@ -576,6 +674,11 @@ function clonarr() {
       }, 30000);
       // Re-test instances every 60 seconds
       setInterval(() => this.testAllInstances(), 60000);
+      // Initial-state coverage: the watchers above only fire when
+      // currentSection / advancedTab actually CHANGE. If the user
+      // landed on the scoring tab from URL/localStorage at boot, the
+      // watchers stay silent so we call once explicitly.
+      ensureSandbox();
     },
 
     async loadConfig() {
@@ -3618,6 +3721,15 @@ function clonarr() {
         this.cfEditorResult = { error: true, message: 'All specifications must have a type selected' };
         return;
       }
+      // Whitespace-only or empty spec names slip past Arr's own length
+      // checks but produce a "Condition name(s) cannot be empty or
+      // consist of only spaces" 400 on first sync. Catch it here so the
+      // user gets the feedback at save time.
+      const blankSpecIdx = f.specifications.findIndex(s => !s.name || !s.name.trim());
+      if (blankSpecIdx >= 0) {
+        this.cfEditorResult = { error: true, message: `Specification #${blankSpecIdx + 1} needs a name (e.g. "Match WEB-DL").` };
+        return;
+      }
 
       const category = f.category === '' ? f.newCategory.trim() : f.category;
       if (!category) {
@@ -5570,6 +5682,30 @@ function clonarr() {
 
     // --- Instance Profile Compare ---
 
+    // Resolve the human-readable name of an Arr profile for the given
+    // instance + profile ID. Used by toasts / debug-log lines that
+    // would otherwise show the raw ID — meaningless to users who
+    // identify their profiles by name. Lookup order:
+    //   1. instProfiles cache (live data fetched at startup, refreshed
+    //      via loadInstanceProfiles whenever the user navigates near
+    //      a profile flow)
+    //   2. sync-history entries — every successful sync writes
+    //      arrProfileName, so this catches profiles that weren't in
+    //      the live cache yet
+    //   3. empty string if neither has it (caller should fall back to
+    //      "Arr profile #N" formatting)
+    resolveArrProfileName(instId, arrProfileId) {
+      if (!instId || !arrProfileId) return '';
+      const profs = this.instProfiles?.[instId];
+      if (Array.isArray(profs)) {
+        const p = profs.find(x => x.id === arrProfileId);
+        if (p?.name) return p.name;
+      }
+      const hist = this.syncHistory?.[instId] || [];
+      const h = hist.find(x => x.arrProfileId === arrProfileId && x.arrProfileName);
+      return h?.arrProfileName || '';
+    },
+
     async loadInstanceProfiles(inst) {
       this.instProfilesLoading = {...this.instProfilesLoading, [inst.id]: true};
       try {
@@ -6702,6 +6838,26 @@ function clonarr() {
           }
         }
       }
+      // Auto-coerce Min Upgrade Score to 1 if the user typed 0 or
+      // negative. Sonarr/Radarr's own UI does the same client-side,
+      // so matching that behaviour avoids a confusing round-trip
+      // through Arr's 400. The blur handler on the input already
+      // does this when the user moves focus; this is the safety net
+      // for the "user edits then immediately clicks Apply without
+      // blurring the field" case.
+      if ((this.pdOverrides?.minUpgradeFormatScore?.value ?? 1) < 1) {
+        this.pdOverrides.minUpgradeFormatScore.value = 1;
+      }
+      // Block Apply when Min Score exceeds the authoritative max from
+      // the latest dry-run plan. The plan computes maxPossibleScore by
+      // walking exactly the CF set ExecuteSyncPlan will push, so this
+      // matches what Sonarr/Radarr would validate — no edge cases.
+      if (this.pdMinScoreInvalid) {
+        const min = this.pdOverrides?.minFormatScore?.value ?? 0;
+        const max = this.pdMaxPossibleScore;
+        this.showToast(`Min Score ${min} can't be reached — max for this profile after sync is ${max} (sum of every positive Custom Format score). Lower Min Score, raise CF scores, or add CFs with positive scores before saving.`, 'error', 9000);
+        return;
+      }
       this.syncing = true;
       this.debugLog('UI', `Apply: "${this.syncForm.profileName}" → ${this.syncForm.instanceName}`);
       try {
@@ -6748,13 +6904,21 @@ function clonarr() {
         if (inst) await this.loadInstanceProfiles(inst);
         await this.loadAutoSyncRules();
         await this.loadSyncHistory(this.syncForm.instanceId);
+        // Skip the rule auto-update PUT when the sync had errors. The
+        // backend already chose not to persist the bad overrides
+        // (handleApply early-returns past the rule upsert on errors)
+        // and may have auto-disabled the rule. Re-PUT'ing the form's
+        // current overrides here would silently overwrite the rule's
+        // selectedCFs / overrides / scoreOverrides with the same bad
+        // data the backend just rejected, defeating the safeguard.
+        const hadErrors = !!result?.error || (Array.isArray(result?.errors) && result.errors.length > 0);
         // Auto-update existing auto-sync rule with current settings
         const syncBody = this.buildSyncBody();
         const arrId = parseInt(this.syncForm.arrProfileId) || 0;
         const existingRule = arrId > 0
           ? this.autoSyncRules.find(r => r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrId)
           : null;
-        if (existingRule) {
+        if (existingRule && !hadErrors) {
           const updated = {
             ...existingRule,
             selectedCFs: this.getAllSelectedCFIds(),
@@ -6940,37 +7104,71 @@ function clonarr() {
     },
 
     async setRuleSyncError(instanceId, arrProfileId, error) {
-      const rule = this.autoSyncRules.find(r => r.instanceId === instanceId && r.arrProfileId === arrProfileId);
-      if (!rule) return;
-      rule.lastSyncError = error;
+      // Backend now manages LastSyncError + Enabled state directly:
+      // handleApply sets both on errors (auto-disable + record message)
+      // and clears LastSyncError on a clean success. Just refresh the
+      // cache so the UI reflects backend state. PUT'ing the whole rule
+      // here used to clobber the auto-disable with a stale enabled=true
+      // from the local cache — that's why "Sync All" + individual
+      // sync from history wasn't surfacing the disabled state.
       try {
-        await fetch(`/api/auto-sync/rules/${rule.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(rule)
-        });
         await this.loadAutoSyncRules();
       } catch (e) { /* best effort */ }
     },
 
     async syncAllForInstance(inst, builderOnly = false) {
-      // Use sortedSyncRules which deduplicates to latest entry per arrProfileId.
-      // Before the ring-buffer, syncHistory had one entry per profile. Now it can
-      // have up to 10 — iterating all would sync older entries with different
-      // selectedCFs, causing score oscillation (each old entry undoes the next).
-      const all = this.sortedSyncRules(inst.id);
-      const entries = (builderOnly ? all.filter(sh => sh.importedProfileId) : all.filter(sh => !sh.importedProfileId))
-        .filter(sh => {
-          const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
-          return rule?.enabled;
-        });
-      if (!entries.length) {
+      // Iterate auto-sync RULES, not sync-history entries. Earlier this
+      // function pulled the latest sync-history entry per arrProfileId
+      // and re-played its overrides — but a failed sync's bad overrides
+      // (e.g. unsatisfiable Min Score) were ALSO recorded in history,
+      // so any subsequent Sync All would re-attempt the same bad data
+      // and produce yet another bad-data entry, locking the user in a
+      // loop even after they'd corrected the rule.
+      //
+      // The auto-sync rule is the user's saved intent (overrides,
+      // selectedCFs, etc.). History is just the record. Sync All should
+      // execute current intent, not replay broken attempts.
+      const rules = this.autoSyncRules.filter(r => {
+        if (r.instanceId !== inst.id || !r.enabled) return false;
+        return builderOnly ? r.profileSource === 'imported' : r.profileSource !== 'imported';
+      });
+      if (!rules.length) {
         this.showToast(`Sync All (${inst.name}): no profiles with auto-sync enabled`, 'warning', 4000);
         return;
       }
+      // quickSync expects a sync-history-entry shape. Adapt each rule
+      // into one without using the actual history. selectedCFs flips
+      // from string[] (rule) to {[id]: bool} (history shape) so
+      // quickSync's existing Object.keys(...).filter(...) call still
+      // works without modification.
+      const ruleToHistoryShape = (r) => {
+        const cfMap = {};
+        for (const id of (r.selectedCFs || [])) cfMap[id] = true;
+        // Rules don't carry the Arr profile name (storage is by ID),
+        // so resolve it from the live instance profile cache or the
+        // sync-history fallback. Toast / Discord / log all read from
+        // profileName so this lookup decides what users see.
+        const arrName = this.resolveArrProfileName(r.instanceId, r.arrProfileId);
+        const profileName = arrName
+          ? `${arrName} (#${r.arrProfileId})`
+          : `Arr profile #${r.arrProfileId}`;
+        return {
+          profileTrashId: r.trashProfileId || '',
+          importedProfileId: r.importedProfileId || '',
+          arrProfileId: r.arrProfileId,
+          arrProfileName: arrName,
+          profileName: profileName,
+          selectedCFs: cfMap,
+          scoreOverrides: r.scoreOverrides || null,
+          qualityOverrides: r.qualityOverrides || null,
+          qualityStructure: r.qualityStructure || null,
+          overrides: r.overrides || null,
+          behavior: r.behavior || null,
+        };
+      };
       const results = [];
-      for (const sh of entries) {
-        results.push(await this.quickSync(inst, sh, true));
+      for (const rule of rules) {
+        results.push(await this.quickSync(inst, ruleToHistoryShape(rule), true));
       }
       const lines = results.map(r => {
         if (!r.ok) return `${r.name} — FAILED: ${r.error}`;
@@ -8427,11 +8625,17 @@ function clonarr() {
           if (r.ok) sb.indexers = await r.json();
         } catch (e) { /* ignore */ }
       }
-      // Load instance profiles for the "Score against" dropdown
+      // Load instance profiles for the "Score against" dropdown.
+      // Sort alphabetically so the dropdown is browsable — Arr returns
+      // them in id order which feels random to the user.
       if (sb.instanceId && sb.instanceProfiles.length === 0) {
         try {
           const r = await fetch(`/api/instances/${sb.instanceId}/profiles`);
-          if (r.ok) sb.instanceProfiles = await r.json();
+          if (r.ok) {
+            const profs = await r.json();
+            sb.instanceProfiles = (profs || []).slice().sort((a, b) =>
+              (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+          }
         } catch (e) { /* ignore */ }
       }
     },
@@ -8442,7 +8646,11 @@ function clonarr() {
       if (sb.instanceId) {
         try {
           const r = await fetch(`/api/instances/${sb.instanceId}/profiles`);
-          if (r.ok) sb.instanceProfiles = await r.json();
+          if (r.ok) {
+            const profs = await r.json();
+            sb.instanceProfiles = (profs || []).slice().sort((a, b) =>
+              (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+          }
         } catch (e) { /* ignore */ }
       }
       // Re-score if using instance profile
@@ -8468,24 +8676,110 @@ function clonarr() {
       return results;
     },
 
+    // Quality rank map from the active profile (name → numeric rank,
+    // higher = better). Group members share the group's rank so they
+    // tie when the sandbox sorts by quality, and the score key inside
+    // the sort breaks the tie within a group. Releases with a quality
+    // not in the profile rank as -1 (sort below every allowed quality
+    // — Radarr wouldn't pick them anyway). Backend builds the map; we
+    // just read from the cached profile-scores response.
+    _sandboxQualityRank(appType, profileKey) {
+      // profileKey override is for the compare row, which scores
+      // against sb.compareKey (a different profile). Defaults to the
+      // active sb.profileKey for sort + primary status.
+      const sb = this.sandbox[appType];
+      const key = profileKey ?? sb.profileKey;
+      const cacheKey = appType + ':' + key;
+      return this._profileScoreCache[cacheKey]?.qualityRanks || {};
+    },
+
+    // Pass / fail status for a sandbox result, simulating what
+    // Sonarr/Radarr would do with the same release in interactive
+    // search. TRaSH-confirmed checks (in this order):
+    //   1. Quality must be in the profile's allowed list
+    //      ("Only checked qualities are wanted").
+    //   2. CF score (matched + unmatched penalties) must reach Min
+    //      Format Score.
+    // The first failing check decides the reason; passing both yields
+    // PASS. scoring is the per-release scoring object (sb.results[i]
+    // .scoring or .scoringB for the compare profile); profileKey lets
+    // the compare row use sb.compareKey instead of the primary key.
+    // Tri-state quality-allowed check for visual styling.
+    // Returns true if the release's parsed quality is in the active
+    // profile's allowed list; false if a profile IS selected but the
+    // quality is not allowed (so we can red-line / strike the cell);
+    // null when there's no profile loaded or no quality parsed (so the
+    // UI falls back to neutral styling instead of falsely flagging).
+    sandboxQualityAllowed(res, appType, profileKey) {
+      const ranks = this._sandboxQualityRank(appType, profileKey);
+      const haveProfile = Object.keys(ranks).length > 0;
+      const quality = res?.parsed?.quality || '';
+      if (!haveProfile || !quality) return null;
+      return quality in ranks;
+    },
+
+    sandboxResultStatus(res, scoring, appType, profileKey) {
+      if (!scoring) return { pass: false, reason: 'No score yet', code: 'unscored' };
+      const ranks = this._sandboxQualityRank(appType, profileKey);
+      const haveProfile = Object.keys(ranks).length > 0;
+      const quality = res?.parsed?.quality || '';
+      // Quality-allowed gate. Without a loaded profile we skip this so
+      // the status doesn't lie when the user hasn't picked one yet.
+      if (haveProfile && quality && !(quality in ranks)) {
+        return { pass: false, reason: `Quality "${quality}" not allowed in profile`, code: 'quality' };
+      }
+      const total = scoring.total ?? 0;
+      const min = scoring.minScore || 0;
+      if (total < min) {
+        return { pass: false, reason: `Score ${total} below Min ${min}`, code: 'score' };
+      }
+      return { pass: true, reason: '', code: 'pass' };
+    },
+
     // Sorted results. sortCol 'manual' (or empty) preserves the underlying sb.results
     // order — set by drag-reorder so manual ordering survives until the user clicks
     // a column header to re-sort.
+    //
+    // Score and Quality sorts both rank by the active profile's quality
+    // first — TRaSH/Radarr's "current logic" rule states a higher
+    // quality always trumps score, so a 1080p release outranks a 720p
+    // one regardless of score. Group members (e.g. Bluray-1080p +
+    // WEBDL-1080p + WEBRip-1080p in a "1080p" group) share rank, so
+    // within the group score breaks the tie — that matches Radarr's
+    // own behaviour where qualities inside a group are interchangeable.
     sortedSandboxResults(appType) {
       const sb = this.sandbox[appType];
       const results = [...(sb.results || [])];
       const col = sb.sortCol;
       if (!col || col === 'manual') return results;
       const dir = sb.sortDir === 'asc' ? 1 : -1;
+      const qRank = (col === 'score' || col === 'quality') ? this._sandboxQualityRank(appType) : null;
+      const rankOf = (r) => {
+        const q = r.parsed?.quality || '';
+        return (qRank && q in qRank) ? qRank[q] : -1;
+      };
       results.sort((a, b) => {
         switch (col) {
-          case 'score': return dir * ((a.scoring?.total ?? -99999) - (b.scoring?.total ?? -99999));
+          case 'score': {
+            // Quality first (dir flips both keys together), score within quality.
+            const dq = rankOf(a) - rankOf(b);
+            if (dq !== 0) return dir * dq;
+            return dir * ((a.scoring?.total ?? -99999) - (b.scoring?.total ?? -99999));
+          }
+          case 'quality': {
+            // Pure quality sort — title as tie-break for stable display.
+            const dq = rankOf(a) - rankOf(b);
+            if (dq !== 0) return dir * dq;
+            return (a.title || '').localeCompare(b.title || '');
+          }
           case 'status': {
-            const aPass = (a.scoring?.total ?? 0) >= (a.scoring?.minScore || 0) ? 1 : 0;
-            const bPass = (b.scoring?.total ?? 0) >= (b.scoring?.minScore || 0) ? 1 : 0;
+            // Use the same Sonarr/Radarr-aware status as the display
+            // (quality allowed AND score >= min) so sort matches what
+            // the user sees in the Status pill.
+            const aPass = this.sandboxResultStatus(a, a.scoring, appType).pass ? 1 : 0;
+            const bPass = this.sandboxResultStatus(b, b.scoring, appType).pass ? 1 : 0;
             return dir * (aPass - bPass);
           }
-          case 'quality': return dir * (a.parsed?.quality || '').localeCompare(b.parsed?.quality || '');
           case 'group': return dir * (a.parsed?.releaseGroup || '').localeCompare(b.parsed?.releaseGroup || '');
           case 'title': return dir * a.title.localeCompare(b.title);
         }
@@ -8494,12 +8788,23 @@ function clonarr() {
       return results;
     },
 
-    // Sort then apply the "Show selected only" filter. Table uses this instead of
-    // sortedSandboxResults directly so the filter lives in one place.
+    // Sort then apply the active score-set filter and the "Show
+    // selected only" filter. Table uses this instead of
+    // sortedSandboxResults directly so the filter chain lives in one
+    // place. Score-set filter narrows by saved title list (Set lookup
+    // is O(1) so this stays cheap even with many results); the
+    // selected filter then narrows further if active.
     visibleSandboxResults(appType) {
       const sb = this.sandbox[appType];
       this._sbEnsureIds(sb.results || []);
       let results = this.sortedSandboxResults(appType);
+      if (sb.activeScoreSet) {
+        const set = (sb.scoreSets || []).find(s => s.id === sb.activeScoreSet);
+        if (set) {
+          const setTitles = new Set(set.titles || []);
+          results = results.filter(r => setTitles.has(r.title));
+        }
+      }
       if (sb.filterToSelected) results = results.filter(r => r._selected === true);
       return results;
     },
@@ -8654,9 +8959,14 @@ function clonarr() {
         if (!r.ok) { const e = await r.json().catch(() => ({})); this.showToast(e.error || 'Batch parse failed', 'error', 8000); return; }
         const results = await r.json();
         const scored = await Promise.all(results.map(result => this.calculateScoring(result, appType)));
-        sb.results = [...scored, ...sb.results];
+        const before = sb.results.length;
+        sb.results = this._sandboxMergeNew(scored, sb.results);
+        const replaced = scored.length - (sb.results.length - before);
         this.saveSandboxResults(appType);
         sb.bulkInput = '';
+        if (replaced > 0) {
+          this.showToast(`Re-scored ${replaced} duplicate title${replaced > 1 ? 's' : ''} already in the list.`, 'info', 4000);
+        }
       } catch (e) { this.showToast('Batch parse error: ' + e.message, 'error', 8000); }
       finally { sb.parsing = false; }
     },
@@ -8766,6 +9076,217 @@ function clonarr() {
       try { localStorage.setItem('clonarr-sandbox-' + appType, JSON.stringify(data)); } catch (e) {}
     },
 
+    // Merge freshly scored items into the existing results list, with
+    // title-based dedupe — fresh items take precedence so re-scoring the
+    // same title overwrites the old entry instead of stacking duplicates
+    // (the prior behaviour produced "12 releases" lists where 4 were the
+    // same title from earlier Score Selected runs).
+    _sandboxMergeNew(newItems, existing) {
+      const seen = new Set();
+      const out = [];
+      for (const r of (newItems || [])) {
+        if (!r || !r.title || seen.has(r.title)) continue;
+        seen.add(r.title);
+        out.push(r);
+      }
+      for (const r of (existing || [])) {
+        if (!r || !r.title || seen.has(r.title)) continue;
+        seen.add(r.title);
+        out.push(r);
+      }
+      return out;
+    },
+
+    // --- Score Sets ---
+    // A score set is a named collection of release titles that the user
+    // wants to test repeatedly against profile changes. Implemented as a
+    // saved title-list filter on top of the normal results list, so:
+    //   - Adding new releases to a set is just append-titles.
+    //   - Activating a set filters visibleSandboxResults to those titles.
+    //   - Score Selected still adds to the unfiltered main results — set
+    //     contents are explicitly curated, never auto-grown.
+    // Persisted to localStorage per app-type so sets survive reloads
+    // alongside the existing results storage.
+
+    sandboxSaveScoreSets(appType) {
+      const sb = this.sandbox[appType];
+      try {
+        localStorage.setItem('clonarr-sandbox-sets-' + appType, JSON.stringify(sb.scoreSets || []));
+        localStorage.setItem('clonarr-sandbox-active-' + appType, sb.activeScoreSet || '');
+      } catch (e) { /* quota — best-effort */ }
+    },
+
+    sandboxLoadScoreSets(appType) {
+      const sb = this.sandbox[appType];
+      try {
+        const raw = localStorage.getItem('clonarr-sandbox-sets-' + appType);
+        if (raw) {
+          const sets = JSON.parse(raw);
+          if (Array.isArray(sets)) sb.scoreSets = sets;
+        }
+        const active = localStorage.getItem('clonarr-sandbox-active-' + appType) || '';
+        // Only restore active if the set still exists — avoids ghost
+        // filter that hides everything because the set was deleted.
+        if (active && (sb.scoreSets || []).some(s => s.id === active)) {
+          sb.activeScoreSet = active;
+        } else {
+          sb.activeScoreSet = '';
+        }
+      } catch (e) { /* corrupt JSON — ignore, start fresh */ }
+    },
+
+    _sandboxNewSetId() {
+      return (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'set-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    },
+
+    async sandboxCreateScoreSetFromSelected(appType) {
+      const sb = this.sandbox[appType];
+      // Dedupe selected titles up-front. Score Selected can produce
+      // multiple identical-title rows over multiple sessions; saving
+      // those into a set as duplicates wastes storage and clutters the
+      // count display ("12 releases" when only 9 are unique).
+      const selectedTitles = [...new Set(
+        (sb.results || []).filter(r => r._selected === true).map(r => r.title)
+      )];
+      if (selectedTitles.length === 0) {
+        this.showToast('Select one or more releases first.', 'info', 4000);
+        return;
+      }
+      const name = await new Promise(resolve => {
+        this.inputModal = {
+          show: true,
+          title: 'Save Score Set',
+          message: `Save ${selectedTitles.length} selected release${selectedTitles.length > 1 ? 's' : ''} as a new score set. Use the score sets dropdown later to filter the results to just this group.`,
+          placeholder: 'e.g. SQP test 1080p',
+          value: '',
+          confirmLabel: 'Save',
+          onConfirm: (val) => resolve((val || '').trim()),
+          onCancel: () => resolve('')
+        };
+      });
+      if (!name) return;
+      const set = { id: this._sandboxNewSetId(), name, titles: selectedTitles };
+      sb.scoreSets = [...(sb.scoreSets || []), set];
+      // Switch to the new set and clear the row selection so the user
+      // sees exactly what they just saved.
+      sb.activeScoreSet = set.id;
+      sb.results.forEach(r => r._selected = false);
+      sb.filterToSelected = false;
+      this.sandboxSaveScoreSets(appType);
+      this.showToast(`Saved score set "${name}" (${selectedTitles.length} release${selectedTitles.length > 1 ? 's' : ''}).`, 'info', 4000);
+    },
+
+    sandboxAddSelectedToScoreSet(appType, scoreSetId) {
+      const sb = this.sandbox[appType];
+      const selectedTitles = (sb.results || []).filter(r => r._selected === true).map(r => r.title);
+      if (selectedTitles.length === 0) {
+        this.showToast('Select one or more releases first.', 'info', 4000);
+        return;
+      }
+      const set = (sb.scoreSets || []).find(s => s.id === scoreSetId);
+      if (!set) return;
+      const existing = new Set(set.titles || []);
+      let added = 0;
+      for (const t of selectedTitles) {
+        if (!existing.has(t)) {
+          existing.add(t);
+          added++;
+        }
+      }
+      set.titles = [...existing];
+      sb.scoreSets = [...sb.scoreSets]; // reactivity
+      sb.results.forEach(r => r._selected = false);
+      this.sandboxSaveScoreSets(appType);
+      const skipped = selectedTitles.length - added;
+      const msg = added > 0
+        ? `Added ${added} release${added > 1 ? 's' : ''} to "${set.name}"${skipped > 0 ? ` (${skipped} already in set)` : ''}.`
+        : `All ${selectedTitles.length} already in "${set.name}".`;
+      this.showToast(msg, 'info', 4000);
+    },
+
+    sandboxSetActiveScoreSet(appType, id) {
+      const sb = this.sandbox[appType];
+      sb.activeScoreSet = id || '';
+      this.sandboxSaveScoreSets(appType);
+    },
+
+    // Remove every checkbox-selected release from the active score set.
+    // Releases stay in sb.results — only their membership in the set is
+    // dropped. Selection-driven so the user controls scope by check vs
+    // un-check, and the same checkbox UX that drives Add-to-existing /
+    // New set drives this too.
+    sandboxRemoveSelectedFromScoreSet(appType) {
+      const sb = this.sandbox[appType];
+      if (!sb.activeScoreSet) return;
+      const set = (sb.scoreSets || []).find(s => s.id === sb.activeScoreSet);
+      if (!set) return;
+      const selectedTitles = new Set(
+        (sb.results || []).filter(r => r._selected === true).map(r => r.title)
+      );
+      if (selectedTitles.size === 0) {
+        this.showToast('Select one or more releases first.', 'info', 4000);
+        return;
+      }
+      const before = (set.titles || []).length;
+      set.titles = (set.titles || []).filter(t => !selectedTitles.has(t));
+      const removed = before - set.titles.length;
+      if (removed === 0) return;
+      sb.scoreSets = [...sb.scoreSets];
+      sb.results.forEach(r => r._selected = false);
+      this.sandboxSaveScoreSets(appType);
+      this.showToast(`Removed ${removed} release${removed > 1 ? 's' : ''} from "${set.name}" (still in results).`, 'info', 4000);
+    },
+
+    async sandboxDeleteScoreSet(appType, id) {
+      const sb = this.sandbox[appType];
+      const set = (sb.scoreSets || []).find(s => s.id === id);
+      if (!set) return;
+      const ok = await new Promise(resolve => {
+        this.confirmModal = {
+          show: true,
+          title: 'Delete score set?',
+          message: `Delete "${set.name}" (${(set.titles || []).length} release${(set.titles || []).length === 1 ? '' : 's'})? This only removes the saved set — the underlying releases stay in your results.`,
+          confirmLabel: 'Delete',
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false)
+        };
+      });
+      if (!ok) return;
+      sb.scoreSets = (sb.scoreSets || []).filter(s => s.id !== id);
+      if (sb.activeScoreSet === id) sb.activeScoreSet = '';
+      this.sandboxSaveScoreSets(appType);
+    },
+
+    async sandboxRenameScoreSet(appType, id) {
+      const sb = this.sandbox[appType];
+      const set = (sb.scoreSets || []).find(s => s.id === id);
+      if (!set) return;
+      const name = await new Promise(resolve => {
+        this.inputModal = {
+          show: true,
+          title: 'Rename Score Set',
+          message: 'Choose a new name for this score set.',
+          placeholder: 'Score set name',
+          value: set.name,
+          confirmLabel: 'Rename',
+          onConfirm: (val) => resolve((val || '').trim()),
+          onCancel: () => resolve('')
+        };
+      });
+      if (!name || name === set.name) return;
+      set.name = name;
+      sb.scoreSets = [...sb.scoreSets];
+      this.sandboxSaveScoreSets(appType);
+    },
+
+    sandboxActiveScoreSetName(appType) {
+      const sb = this.sandbox[appType];
+      const set = (sb.scoreSets || []).find(s => s.id === sb.activeScoreSet);
+      return set ? set.name : '';
+    },
+
     async loadSandboxResults(appType) {
       try {
         const raw = localStorage.getItem('clonarr-sandbox-' + appType);
@@ -8773,7 +9294,14 @@ function clonarr() {
         const data = JSON.parse(raw);
         if (!Array.isArray(data) || data.length === 0) return;
         const sb = this.sandbox[appType];
-        sb.results = data;
+        // One-time dedupe of historical duplicates: users who hit Score
+        // Selected on the same title across multiple sessions before the
+        // dedupe landed have stacks of identical rows. Re-merging the
+        // restored array against an empty existing list collapses them.
+        sb.results = this._sandboxMergeNew(data, []);
+        if (sb.results.length !== data.length) {
+          this.saveSandboxResults(appType); // persist the cleanup
+        }
         // Re-apply scoring if profile is selected
         if (sb.profileKey) {
           const profileData = await this.fetchProfileScores(sb.profileKey, appType);
@@ -8785,7 +9313,22 @@ function clonarr() {
     async sandboxScoreSelected(appType) {
       const sb = this.sandbox[appType];
       const selected = (sb.searchResults || []).filter(r => r._selected);
-      if (selected.length === 0 || !sb.instanceId) return;
+      if (selected.length === 0) return;
+      // Defensive auto-init: Score Selected used to silently no-op when
+      // sb.instanceId was empty (loadSandbox hadn't run yet on this
+      // page-load). Auto-pick the first instance of this type and load
+      // its profiles so the dropdown + scoring start working
+      // immediately. Toast + return only if the user genuinely has no
+      // matching instance.
+      if (!sb.instanceId) {
+        const insts = this.instancesOfType(appType);
+        if (insts.length === 0) {
+          this.showToast(`Configure a ${appType} instance in Settings before scoring.`, 'error', 6000);
+          return;
+        }
+        sb.instanceId = insts[0].id;
+        await this.sandboxInstanceChanged(appType);
+      }
       sb.parsing = true;
       if (selected.length > 30) {
         this.showToast(`Parsing ${selected.length} titles, this may take a moment...`, 'info', 6000);
@@ -8800,10 +9343,15 @@ function clonarr() {
         if (!r.ok) { const e = await r.json().catch(() => ({})); this.showToast(e.error || 'Parse failed', 'error', 8000); return; }
         const results = await r.json();
         const scored = await Promise.all(results.map(result => this.calculateScoring(result, appType)));
-        sb.results = [...scored, ...sb.results];
+        const before = sb.results.length;
+        sb.results = this._sandboxMergeNew(scored, sb.results);
+        const replaced = scored.length - (sb.results.length - before);
         this.saveSandboxResults(appType);
         // Clear selections
         sb.searchResults.forEach(r => r._selected = false);
+        if (replaced > 0) {
+          this.showToast(`Re-scored ${replaced} duplicate title${replaced > 1 ? 's' : ''} already in the list.`, 'info', 4000);
+        }
       } catch (e) { this.showToast('Score error: ' + e.message, 'error', 8000); }
       finally { sb.parsing = false; }
     },

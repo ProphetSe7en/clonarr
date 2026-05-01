@@ -13,7 +13,12 @@ import (
 // autoSyncAfterPull runs after a successful TRaSH repo pull.
 // For each enabled rule, checks if the repo commit changed since last sync,
 // builds a dry-run plan, and applies if there are actual changes.
-func (app *App) AutoSyncAfterPull() {
+//
+// trigger names what kicked off this run so the parent AUTOSYNC operation
+// in the log can be filtered: SourceAutoPullStartup (container start),
+// SourceAutoPullInterval (scheduled tick), SourceManualPull (user clicked
+// Pull in the UI).
+func (app *App) AutoSyncAfterPull(trigger string) {
 	// Clean up stale rules/history for Arr profiles that no longer exist
 	app.CleanupStaleRules()
 
@@ -34,6 +39,19 @@ func (app *App) AutoSyncAfterPull() {
 		return
 	}
 
+	if trigger == "" {
+		trigger = SourceAutoPullInterval
+	}
+	commitShort := currentCommit
+	if len(currentCommit) > 7 {
+		commitShort = currentCommit[:7]
+	}
+	tick := app.DebugLog.BeginOp(OpAutoSync, trigger, fmt.Sprintf("commit=%s rules=%d", commitShort, len(cfg.AutoSync.Rules)))
+	endResult := "ok | tick complete"
+	defer func() { tick.End(endResult) }()
+
+	var changed, noChange, errorCount int
+	var changedSummary []string
 	for _, rule := range cfg.AutoSync.Rules {
 		if !rule.Enabled {
 			continue
@@ -48,12 +66,49 @@ func (app *App) AutoSyncAfterPull() {
 			continue // no repo changes since last sync
 		}
 
-		app.runAutoSyncRule(rule, currentCommit)
+		outcome, summary := app.runAutoSyncRule(rule, currentCommit, tick)
+		switch outcome {
+		case outcomeChanged:
+			changed++
+			if summary != "" {
+				changedSummary = append(changedSummary, summary)
+			}
+		case outcomeNoChange:
+			noChange++
+		case outcomeError:
+			errorCount++
+		}
 	}
+	if len(changedSummary) > 0 {
+		// One line listing exactly which rules produced changes. Skipped
+		// when nothing changed so the trace stays concise on quiet ticks.
+		tick.Logf("changed: %s", strings.Join(changedSummary, " | "))
+	}
+	endResult = fmt.Sprintf("ok | %d changed, %d no-op, %d errors", changed, noChange, errorCount)
 }
 
+// ruleOutcome describes the result classification of a single auto-sync
+// rule evaluation, used by AutoSyncAfterPull to compose the tick summary
+// without re-parsing log lines.
+type ruleOutcome int
+
+const (
+	outcomeNoChange ruleOutcome = iota
+	outcomeChanged
+	outcomeError
+)
+
 // runAutoSyncRule evaluates and applies a single auto-sync rule.
-func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
+// parent is the AUTOSYNC tick that triggered this rule; passed in so
+// the per-rule SYNC sub-operation can attach to it for nested-trace
+// extraction. Nil parent is fine — the sub-op falls back to a
+// standalone op.
+//
+// Returns the outcome classification (changed / no-change / error) and
+// a one-line summary string for the changed case (empty for the others).
+// The caller composes these into the tick-summary line so the trace
+// shows exactly which rules contributed work without per-rule fanout.
+func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent *Operation) (ruleOutcome, string) {
 	// Re-check rule still exists (may have been deleted since snapshot was taken)
 	cfg := app.Config.Get()
 	ruleExists := false
@@ -66,14 +121,14 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	if !ruleExists {
 		log.Printf("Auto-sync: skipping rule %s — removed or disabled since pull started", rule.ID)
 		app.DebugLog.Logf(LogAutoSync, "Rule %s: skipped — removed or disabled since pull started", rule.ID)
-		return
+		return outcomeNoChange, ""
 	}
 
 	inst, ok := app.Config.GetInstance(rule.InstanceID)
 	if !ok {
 		log.Printf("Auto-sync: skipping rule %s — instance %s not found", rule.ID, rule.InstanceID)
 		app.DebugLog.Logf(LogAutoSync, "Rule %s: skipped — instance %s not found", rule.ID, rule.InstanceID)
-		return
+		return outcomeError, ""
 	}
 
 	// Per-instance mutex — skip if manual sync is running
@@ -81,18 +136,33 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	if !mu.TryLock() {
 		log.Printf("Auto-sync: skipping rule %s — sync already in progress for %s", rule.ID, inst.Name)
 		app.DebugLog.Logf(LogAutoSync, "Rule %s: skipped — sync already in progress for %s", rule.ID, inst.Name)
-		return
+		return outcomeNoChange, ""
 	}
 	defer mu.Unlock()
 
+	// Background-tick rules don't open per-rule sub-operations — the
+	// tick summary already lists which rules produced changes, and a
+	// 50-rule tick where 47 are no-op would otherwise emit 300+ lines
+	// just on begin/end markers. Manual syncs (handleApply, restore,
+	// etc.) keep their full op-tagged trace because that's what bug
+	// reports are usually pulled from. Autosync errors still surface
+	// via the existing app.DebugLog.Logf(LogError, ...) lines below
+	// and via the tick summary's error count.
+	//
+	// op stays nil — passed through to BuildSyncPlan/ExecuteSyncPlan
+	// where the nil-safe op.Logf calls compile to no-ops. If a future
+	// Phase wants per-rule autosync detail (e.g. for failure
+	// investigation), open a sub-op only when an error is detected and
+	// the trace is worth keeping.
+	var op *Operation
+
 	log.Printf("Auto-sync: evaluating rule %s (instance=%s, profile=%s)", rule.ID, inst.Name, rule.TrashProfileID)
-	app.DebugLog.Logf(LogAutoSync, "Rule %s: evaluating %q → %s (arrProfileId=%d, overrides=%v)",
-		rule.ID, rule.TrashProfileID, inst.Name, rule.ArrProfileID, rule.Overrides != nil)
 
 	ad := app.Trash.GetAppData(inst.Type)
 	if ad == nil {
 		app.UpdateAutoSyncRuleError(rule.ID, "no TRaSH data for "+inst.Type)
-		return
+		app.DebugLog.Logf(LogError, "Auto-sync rule %s: no TRaSH data for %s", rule.ID, inst.Type)
+		return outcomeError, ""
 	}
 
 	// Build sync request from rule
@@ -117,7 +187,8 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		p, ok := app.Profiles.Get(req.ImportedProfileID)
 		if !ok {
 			app.UpdateAutoSyncRuleError(rule.ID, "imported profile not found: "+req.ImportedProfileID)
-			return
+			app.DebugLog.Logf(LogError, "Auto-sync rule %s: imported profile not found: %s", rule.ID, req.ImportedProfileID)
+			return outcomeError, ""
 		}
 		imported = &p
 	}
@@ -125,7 +196,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 	// Dry-run plan
 	customCFs := app.CustomCFs.List(inst.Type)
 	lastSyncedCFs := app.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
-	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.HTTPClient)
+	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.HTTPClient, op)
 	if err != nil {
 		errMsg := fmt.Sprintf("plan failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
@@ -142,7 +213,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 				profileName = p.Name
 			}
 			app.NotifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", friendlyMsg))
-			return
+			return outcomeError, ""
 		}
 
 		app.UpdateAutoSyncRuleError(rule.ID, errMsg)
@@ -164,19 +235,21 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			profileName = p.Name
 		}
 		app.NotifyAutoSync(rule, inst, profileName, nil, fmt.Errorf("%s", errMsg))
-		return
+		return outcomeError, ""
 	}
 
 	if !plan.HasChanges() {
-		// No actual changes — update commit hash, clear error
+		// No actual changes — update commit hash, clear error. The op end
+		// marker carries the "no changes" verdict so we don't emit an
+		// extra Logf line here; the per-rule trace stays at 2 lines
+		// (begin + end) for the common no-op path.
 		log.Printf("Auto-sync: rule %s — no changes for %s", rule.ID, inst.Name)
-		app.DebugLog.Logf(LogAutoSync, "Rule %s: no changes for %s", rule.ID, inst.Name)
 		app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
-		return
+		return outcomeNoChange, ""
 	}
 
 	// Apply
-	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.HTTPClient)
+	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.HTTPClient, op)
 	if err != nil {
 		if IsConnectionError(err) {
 			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
@@ -184,20 +257,51 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable during apply: %v", rule.ID, inst.Name, err)
 			app.UpdateAutoSyncRuleError(rule.ID, friendlyMsg)
 			app.NotifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", friendlyMsg))
-			return
+			return outcomeError, ""
 		}
 		errMsg := fmt.Sprintf("apply failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
 		app.DebugLog.Logf(LogError, "Auto-sync rule %s: apply failed: %s", rule.ID, errMsg)
 		app.UpdateAutoSyncRuleError(rule.ID, errMsg)
 		app.NotifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", errMsg))
-		return
+		return outcomeError, ""
 	}
 
 	log.Printf("Auto-sync: rule %s applied — %d CFs created, %d updated, %d scores on %s",
 		rule.ID, result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, inst.Name)
-	app.DebugLog.Logf(LogAutoSync, "Rule %s: applied — %d created, %d updated, %d scores on %s",
-		rule.ID, result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, inst.Name)
+
+	// Arr returned errors. Decide whether to auto-disable the rule.
+	// Only disable when EVERY error is a user-fixable config problem
+	// (HTTP 400 / 409 / 422 — FluentValidation rejections, conflicts).
+	// 5xx, 401/403, ListX fetch failures, raw network errors are all
+	// transient or external — retrying is the right move, not disabling
+	// the rule and bothering the user. The error summary is still
+	// recorded in LastSyncError so the UI shows the badge either way.
+	if len(result.Errors) > 0 {
+		errSummary := strings.Join(result.Errors, " | ")
+		shouldDisable := AllUserConfigErrors(result.Errors)
+		if shouldDisable {
+			log.Printf("Auto-sync: rule %s disabled — Arr returned %d user-config error(s): %s", rule.ID, len(result.Errors), errSummary)
+			app.DebugLog.Logf(LogError, "Auto-sync rule %s: disabling — Arr returned %d user-config error(s): %s", rule.ID, len(result.Errors), flattenForLog(redactSecrets(errSummary)))
+			app.UpdateAutoSyncRuleError(rule.ID, errSummary)
+			app.Config.Update(func(cfg *Config) {
+				for i := range cfg.AutoSync.Rules {
+					if cfg.AutoSync.Rules[i].ID == rule.ID {
+						cfg.AutoSync.Rules[i].Enabled = false
+						return
+					}
+				}
+			})
+			app.NotifyAutoSync(rule, inst, plan.ProfileName, result, fmt.Errorf("auto-sync disabled — %s", errSummary))
+		} else {
+			log.Printf("Auto-sync: rule %s — Arr returned %d transient/external error(s); rule kept enabled, will retry next tick: %s", rule.ID, len(result.Errors), errSummary)
+			app.DebugLog.Logf(LogError, "Auto-sync rule %s: transient error(s), kept enabled: %s", rule.ID, flattenForLog(redactSecrets(errSummary)))
+			app.UpdateAutoSyncRuleError(rule.ID, errSummary)
+			// No NotifyAutoSync — the next tick will retry; only emit a
+			// notification when we actually disable.
+		}
+		return outcomeError, ""
+	}
 
 	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
 
@@ -342,6 +446,40 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string) {
 		}
 		app.AutoSyncMu.Unlock()
 	}
+
+	// Classify the outcome based on the actual apply result, not the
+	// plan summary. plan.HasChanges() is intentionally optimistic in
+	// update mode (it always returns true so settings-level changes
+	// — which can only be detected at apply time — never get
+	// short-circuited). After apply we have ground truth: if nothing
+	// was created, updated, scored, quality-touched, or settings-
+	// changed, it's a no-op even if HasChanges() said go.
+	noWork := result.CFsCreated == 0 && result.CFsUpdated == 0 &&
+		result.ScoresUpdated == 0 && !result.QualityUpdated &&
+		len(result.SettingsDetails) == 0
+	if noWork {
+		return outcomeNoChange, ""
+	}
+
+	// Build a one-line summary for the parent tick. Format mirrors the
+	// manual-sync toast: profile name + the largest user-visible signal,
+	// so the tick line lists exactly what changed without expanding the
+	// full sub-op trace inline.
+	bits := []string{}
+	if result.CFsCreated > 0 {
+		bits = append(bits, fmt.Sprintf("%d created", result.CFsCreated))
+	}
+	if result.CFsUpdated > 0 {
+		bits = append(bits, fmt.Sprintf("%d updated", result.CFsUpdated))
+	}
+	if result.ScoresUpdated > 0 {
+		bits = append(bits, fmt.Sprintf("%d scores", result.ScoresUpdated))
+	}
+	if len(result.SettingsDetails) > 0 {
+		bits = append(bits, fmt.Sprintf("%d settings", len(result.SettingsDetails)))
+	}
+	summary := fmt.Sprintf("%q on %s: %s", plan.ProfileName, inst.Name, strings.Join(bits, ", "))
+	return outcomeChanged, summary
 }
 
 // applyOrphanMarking is the pure-logic core of soft-tombstone cleanup —

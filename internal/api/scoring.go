@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
 	"encoding/json"
@@ -357,10 +358,20 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 		Score   int    `json:"score"`
 	}
 
+	// QualityRanks maps each ALLOWED quality name to its rank in the
+	// active profile (low rank = lower priority, group members share
+	// the group's outer rank). Disallowed qualities are omitted so the
+	// sandbox can use absence-in-map as the "Sonarr/Radarr would reject
+	// this quality" signal — that turns the sandbox PASS/FAIL into a
+	// real Sonarr/Radarr search-result simulation, not just a score
+	// threshold check.
 	result := struct {
-		Scores   []ScoreEntry `json:"scores"`
-		MinScore int          `json:"minScore"`
-	}{}
+		Scores       []ScoreEntry   `json:"scores"`
+		MinScore     int            `json:"minScore"`
+		QualityRanks map[string]int `json:"qualityRanks"`
+	}{
+		QualityRanks: map[string]int{},
+	}
 
 	if strings.HasPrefix(profileKey, "trash:") {
 		trashID := strings.TrimPrefix(profileKey, "trash:")
@@ -371,10 +382,27 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		// Find profile for minFormatScore
+		// Find profile for minFormatScore + quality ranks. Outer index
+		// is the rank; group members share the group's index. Only
+		// Allowed=true items are recorded so the sandbox can use map-
+		// absence as the "Sonarr/Radarr would reject this quality"
+		// signal — TRaSH guide confirms "Only checked qualities are
+		// wanted" for both Radarr and Sonarr.
 		for _, p := range ad.Profiles {
 			if p.TrashID == trashID {
 				result.MinScore = p.MinFormatScore
+				for idx, it := range p.Items {
+					if !it.Allowed {
+						continue
+					}
+					if len(it.Items) > 0 {
+						for _, sub := range it.Items {
+							result.QualityRanks[sub] = idx
+						}
+					} else {
+						result.QualityRanks[it.Name] = idx
+					}
+				}
 				break
 			}
 		}
@@ -426,6 +454,20 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		result.MinScore = prof.MinFormatScore
+		// Quality ranks — only Allowed items, same outer-index-as-rank
+		// rule as trash branch (see comment there).
+		for idx, it := range prof.Qualities {
+			if !it.Allowed {
+				continue
+			}
+			if len(it.Items) > 0 {
+				for _, sub := range it.Items {
+					result.QualityRanks[sub] = idx
+				}
+			} else {
+				result.QualityRanks[it.Name] = idx
+			}
+		}
 
 		ad := s.Core.Trash.GetAppData(appType)
 		for trashID, score := range prof.FormatItems {
@@ -472,6 +514,24 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 						Score:   fi.Score,
 					})
 				}
+				// Quality ranks — only Allowed items. Outer index is the
+				// rank; group members share the group's outer index.
+				// Arr returns nested ArrQualityItem so we walk inside
+				// each outer item without bumping the rank.
+				for idx, it := range p.Items {
+					if !it.Allowed {
+						continue
+					}
+					if len(it.Items) > 0 {
+						for _, sub := range it.Items {
+							if sub.Quality != nil && sub.Quality.Name != "" {
+								result.QualityRanks[sub.Quality.Name] = idx
+							}
+						}
+					} else if it.Quality != nil && it.Quality.Name != "" {
+						result.QualityRanks[it.Quality.Name] = idx
+					}
+				}
 				break
 			}
 		}
@@ -493,11 +553,14 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 }
 
 // handleDebugLog receives frontend log messages.
-// Category + Message reach /config/debug.log, which admins download via
-// handleDebugDownload after incidents. An authenticated caller who can
-// inject control characters (newlines, escape sequences) could forge
-// `[TIMESTAMP] [CATEGORY] …` lines to pollute the forensic trail. We
-// whitelist Category and sanitize Message before logging.
+// Category + Message reach a log file. UI/navigation events route to
+// /config/activity.log (kept separate so debug.log stays focused on
+// operations); other categories fall back to /config/debug.log for
+// backwards compatibility with anything the frontend explicitly tags
+// as SYNC/ERROR/etc. An authenticated caller who can inject control
+// characters (newlines, escape sequences) could forge `[TIMESTAMP]
+// [CATEGORY] …` lines to pollute the forensic trail — we whitelist
+// Category and sanitize Message before writing.
 func (s *Server) handleDebugLog(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Category string `json:"category"`
@@ -511,7 +574,12 @@ func (s *Server) handleDebugLog(w http.ResponseWriter, r *http.Request) {
 	if !isValidLogCategory(req.Category) {
 		req.Category = "UI"
 	}
-	s.Core.DebugLog.Log(req.Category, sanitizeLogField(req.Message))
+	msg := sanitizeLogField(req.Message)
+	if req.Category == core.LogUI && s.Core.ActivityLog != nil {
+		s.Core.ActivityLog.Logf(req.Category, "%s", msg)
+	} else {
+		s.Core.DebugLog.Log(req.Category, msg)
+	}
 	w.WriteHeader(204)
 }
 
@@ -545,10 +613,24 @@ func sanitizeLogField(st string) string {
 	return string(b)
 }
 
-// handleDebugDownload serves the debug log file for download.
+// handleDebugDownload serves the debug log file for download. When the
+// `activity` query parameter is truthy, it bundles debug.log together
+// with activity.log in a ZIP — needed for full bug-report context, but
+// optional so the typical case (operation trace only) stays a small
+// plain-text download.
+//
+// Query: ?activity=1 → ZIP with both logs
+// Otherwise          → plain debug.log
 func (s *Server) handleDebugDownload(w http.ResponseWriter, r *http.Request) {
-	path := s.Core.DebugLog.FilePath()
-	f, err := os.Open(path)
+	wantActivity := r.URL.Query().Get("activity") == "1"
+	debugPath := s.Core.DebugLog.FilePath()
+
+	if wantActivity {
+		s.serveLogsZip(w, debugPath)
+		return
+	}
+
+	f, err := os.Open(debugPath)
 	if err != nil {
 		writeError(w, 404, "No debug log file found")
 		return
@@ -563,4 +645,35 @@ func (s *Server) handleDebugDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", fi.Size()))
 	io.Copy(w, f)
+}
+
+// serveLogsZip streams a ZIP containing debug.log + (if present)
+// activity.log to the response. Missing files are silently skipped so
+// partial state (e.g. fresh install with no activity yet) doesn't fail
+// the download. Errors during streaming are unrecoverable on the wire,
+// so we only check for openable files up-front.
+func (s *Server) serveLogsZip(w http.ResponseWriter, debugPath string) {
+	w.Header().Set("Content-Disposition", "attachment; filename=\"clonarr-logs.zip\"")
+	w.Header().Set("Content-Type", "application/zip")
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	addFile := func(srcPath, archiveName string) {
+		f, err := os.Open(srcPath)
+		if err != nil {
+			return // missing file — skip, not an error
+		}
+		defer f.Close()
+		entry, err := zw.Create(archiveName)
+		if err != nil {
+			return
+		}
+		io.Copy(entry, f)
+	}
+
+	addFile(debugPath, "clonarr-debug.log")
+	if s.Core.ActivityLog != nil {
+		addFile(s.Core.ActivityLog.FilePath(), "clonarr-activity.log")
+	}
 }

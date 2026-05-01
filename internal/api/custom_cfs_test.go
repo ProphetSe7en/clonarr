@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"clonarr/internal/arr"
 	"clonarr/internal/core"
 	"encoding/json"
 	"fmt"
@@ -98,11 +99,25 @@ func setupTestAppWithCFs(t *testing.T, trashCFsByApp map[string][][2]string, cus
 	}
 }
 
-// postCustomCF wraps the create handler with a single-CF body.
+// postCustomCF wraps the create handler with a single-CF body. A
+// minimal one-spec body is included so the request passes the
+// no-conditions validation; tests that want to exercise spec-level
+// validation use postCustomCFWithSpecs directly.
 func postCustomCF(t *testing.T, server *Server, name, appType string) *httptest.ResponseRecorder {
 	t.Helper()
+	return postCustomCFWithSpecs(t, server, name, appType, []arr.ArrSpecification{
+		{Name: "default", Implementation: "ReleaseTitleSpecification"},
+	})
+}
+
+// postCustomCFWithSpecs lets tests pass a custom specifications slice.
+// Used to exercise the new conditions-validation paths (empty list,
+// whitespace-only spec name, etc.) without changing the happy-path
+// helper that the existing collision tests rely on.
+func postCustomCFWithSpecs(t *testing.T, server *Server, name, appType string, specs []arr.ArrSpecification) *httptest.ResponseRecorder {
+	t.Helper()
 	body := map[string]any{
-		"cfs": []core.CustomCF{{Name: name, AppType: appType}},
+		"cfs": []core.CustomCF{{Name: name, AppType: appType, Specifications: specs}},
 	}
 	bodyBytes, _ := json.Marshal(body)
 	r := httptest.NewRequest(http.MethodPost, "/api/custom-cfs", bytes.NewReader(bodyBytes))
@@ -115,7 +130,16 @@ func postCustomCF(t *testing.T, server *Server, name, appType string) *httptest.
 // putCustomCF wraps the update handler.
 func putCustomCF(t *testing.T, server *Server, id, newName, appType string) *httptest.ResponseRecorder {
 	t.Helper()
-	body := core.CustomCF{Name: newName, AppType: appType}
+	body := core.CustomCF{
+		Name:    newName,
+		AppType: appType,
+		// Minimal valid spec — same convention as postCustomCF — so
+		// the conditions-validation path passes for tests that are
+		// only exercising rename/collision logic.
+		Specifications: []arr.ArrSpecification{
+			{Name: "default", Implementation: "ReleaseTitleSpecification"},
+		},
+	}
 	bodyBytes, _ := json.Marshal(body)
 	r := httptest.NewRequest(http.MethodPut, "/api/custom-cfs/"+id, bytes.NewReader(bodyBytes))
 	r.SetPathValue("id", id)
@@ -296,10 +320,11 @@ func TestCreateCustomCF_RejectsBatchDuplicates(t *testing.T) {
 	app := setupTestAppWithCFs(t, nil, nil)
 	server := &Server{Core: app}
 
+	specs := []arr.ArrSpecification{{Name: "default", Implementation: "ReleaseTitleSpecification"}}
 	body := map[string]any{
 		"cfs": []core.CustomCF{
-			{Name: "Foo", AppType: "radarr"},
-			{Name: "Foo", AppType: "radarr"},
+			{Name: "Foo", AppType: "radarr", Specifications: specs},
+			{Name: "Foo", AppType: "radarr", Specifications: specs},
 		},
 	}
 	bodyBytes, _ := json.Marshal(body)
@@ -313,5 +338,57 @@ func TestCreateCustomCF_RejectsBatchDuplicates(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "name_collision_batch") {
 		t.Errorf("expected name_collision_batch code in body, got %q", w.Body.String())
+	}
+}
+
+// --- Specification validation tests ---
+
+func TestCreateCustomCF_RejectsEmptySpecsList(t *testing.T) {
+	// A CF with no conditions can't match anything in Arr — Arr returns
+	// "specifications are required" on sync. Catch it at create time so
+	// the user gets immediate feedback instead of a confusing 400 later.
+	app := setupTestAppWithCFs(t, nil, nil)
+	server := &Server{Core: app}
+
+	w := postCustomCFWithSpecs(t, server, "EmptyCF", "radarr", nil)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (body=%q)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "no conditions") {
+		t.Errorf("expected 'no conditions' message, got %q", w.Body.String())
+	}
+}
+
+func TestCreateCustomCF_RejectsBlankSpecName(t *testing.T) {
+	// Whitespace-only spec name slips past simple length checks but Arr
+	// rejects it with "Condition name(s) cannot be empty or consist of
+	// only spaces". This test pins the early-rejection behaviour so the
+	// user can't accidentally save an unsyncable CF.
+	app := setupTestAppWithCFs(t, nil, nil)
+	server := &Server{Core: app}
+
+	w := postCustomCFWithSpecs(t, server, "BadSpec", "radarr", []arr.ArrSpecification{
+		{Name: "   ", Implementation: "ReleaseTitleSpecification"},
+	})
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (body=%q)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "no name") {
+		t.Errorf("expected 'no name' message, got %q", w.Body.String())
+	}
+}
+
+func TestCreateCustomCF_AllowsValidSpec(t *testing.T) {
+	app := setupTestAppWithCFs(t, nil, nil)
+	server := &Server{Core: app}
+
+	w := postCustomCFWithSpecs(t, server, "GoodSpec", "radarr", []arr.ArrSpecification{
+		{Name: "Match WEB-DL", Implementation: "ReleaseTitleSpecification"},
+	})
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 (body=%q)", w.Code, w.Body.String())
 	}
 }

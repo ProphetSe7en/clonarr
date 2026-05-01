@@ -427,6 +427,11 @@ func TestFriendlyArrErr(t *testing.T) {
 		{"name-prefix", "Name must be unique.", "already exists in Arr"},
 		{"nested", `[{"propertyName":"Name","errorMessage":"Must be unique."}]`, "already exists in Arr"},
 		{"unrelated", "connection refused", "connection refused"},
+		{"min-score-fluent", `HTTP 400: [{"propertyName":"","errorMessage":"Minimum Custom Format Score can never be satisfied","severity":"error"}]`, "Minimum Custom Format Score can never be satisfied"},
+		{"empty-condition-fluent", `HTTP 400: [{"propertyName":"","errorMessage":"Condition name(s) cannot be empty or consist of only spaces","severity":"error"}]`, "Condition name(s) cannot be empty"},
+		{"multi-error-fluent", `HTTP 400: [{"errorMessage":"first problem"},{"errorMessage":"second problem"}]`, "first problem; second problem"},
+		{"single-object-fluent", `HTTP 400: {"propertyName":"foo","errorMessage":"single message","severity":"error"}`, "single message"},
+		{"non-json", `HTTP 400: not json at all`, "not json at all"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -438,7 +443,91 @@ func TestFriendlyArrErr(t *testing.T) {
 	}
 }
 
+// TestFriendlyProfileErr covers the profile-level (no-CF-name) variant
+// used by CreateProfile / UpdateProfile errors. Real example caught
+// during phase 3 testing was a Min Format Score that Arr rejected as
+// unsatisfiable; the user saw raw JSON until this helper landed.
+func TestFriendlyProfileErr(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"min-score", `HTTP 400: [{"propertyName":"","errorMessage":"Minimum Custom Format Score can never be satisfied","severity":"error"}]`, "update profile failed: Minimum Custom Format Score can never be satisfied"},
+		{"non-json", `connection refused`, "update profile: connection refused"},
+		{"empty-json", `HTTP 400: []`, "update profile: HTTP 400: []"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := friendlyProfileErr("update profile", &stringErr{c.in})
+			if got != c.want {
+				t.Errorf("friendlyProfileErr(%q): got %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
 type stringErr struct{ s string }
 
 func (e *stringErr) Error() string { return e.s }
+
+// TestIsUserConfigError pins the auto-disable classifier so the user
+// doesn't get rules disabled on transient or external errors. The user
+// is paranoid about false-positive disables — every "yes" in this table
+// must reflect a genuine user-fixable config problem.
+func TestIsUserConfigError(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{"400 spec validation", `HTTP 400: [{"errorMessage":"Condition name(s) cannot be empty"}]`, true},
+		{"400 min-score", `HTTP 400: [{"errorMessage":"Minimum Custom Format Score can never be satisfied"}]`, true},
+		{"409 unique-name", `create PCOK failed: HTTP 409: ...`, true},
+		{"422 unprocessable", `HTTP 422: invalid quality structure`, true},
+
+		{"500 server", `HTTP 500: Internal Server Error`, false},
+		{"502 bad gateway", `HTTP 502: upstream proxy error`, false},
+		{"503 unavailable", `HTTP 503: maintenance`, false},
+		{"401 auth", `HTTP 401: Unauthorized`, false},
+		{"403 forbidden", `HTTP 403: Forbidden`, false},
+
+		{"connection refused", `connection refused`, false},
+		{"network timeout", `i/o timeout`, false},
+		{"no HTTP prefix", `re-fetch CFs: failed to dial`, false},
+		{"empty string", ``, false},
+		{"truncated HTTP prefix", `HTTP 4`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := IsUserConfigError(c.in)
+			if got != c.want {
+				t.Errorf("IsUserConfigError(%q) = %v, want %v", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestAllUserConfigErrors pins the all-must-be-user-config rule so a
+// single transient error in a mixed-error batch keeps the rule enabled.
+func TestAllUserConfigErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []string
+		want bool
+	}{
+		{"empty", nil, false},
+		{"all user-config", []string{`HTTP 400: x`, `HTTP 409: y`}, true},
+		{"one transient mixed in", []string{`HTTP 400: x`, `HTTP 502: y`}, false},
+		{"all transient", []string{`HTTP 500: x`, `connection refused`}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := AllUserConfigErrors(c.in)
+			if got != c.want {
+				t.Errorf("AllUserConfigErrors(%v) = %v, want %v", c.in, got, c.want)
+			}
+		})
+	}
+}
 
