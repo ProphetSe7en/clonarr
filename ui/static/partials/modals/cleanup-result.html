@@ -1,0 +1,213 @@
+{{define "modals/cleanup-result"}}
+  <!-- Cleanup results modal (shared across tabs) -->
+  <template x-if="cleanupResult">
+    <div class="modal-overlay" @click.self="cleanupResult = null">
+      <div class="modal" style="max-width:700px">
+        <div class="modal-header">
+          <div class="modal-title" x-text="cleanupActionLabel(cleanupResult.action) + ' — ' + cleanupResult.instance"></div>
+          <button class="modal-close" @click="cleanupResult = null">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height:500px;overflow-y:auto">
+          <!-- Apply result -->
+          <template x-if="cleanupResult.applied === true">
+            <div style="text-align:center;padding:24px">
+              <div style="font-size:32px;margin-bottom:8px">&#10003;</div>
+              <div style="color:#3fb950;font-size:15px;font-weight:600;margin-bottom:12px">Cleanup Complete</div>
+              <div style="font-size:13px;color:#aaa">
+                <template x-for="[k,v] in Object.entries(cleanupResult.applyResult)" :key="k">
+                  <div x-text="k + ': ' + v" style="margin:2px 0"></div>
+                </template>
+              </div>
+            </div>
+          </template>
+          <!-- Apply error -->
+          <template x-if="cleanupResult.applied === false">
+            <div style="padding:16px">
+              <div style="padding:10px;background:#3d1b1b;border:1px solid #f85149;border-radius:6px;font-size:13px;color:#f85149">
+                Apply failed: <span x-text="cleanupResult.applyError"></span>
+              </div>
+            </div>
+          </template>
+          <!-- Scan results (before apply) -->
+          <template x-if="cleanupResult.applied === undefined">
+            <div>
+              <template x-if="cleanupResult.affectCount === 0">
+                <div style="text-align:center;padding:24px;color:#3fb950;font-size:14px">Nothing to clean up — all clear.</div>
+              </template>
+              <template x-if="cleanupResult.affectCount > 0">
+                <div>
+                  <!-- Summary for delete-all operations -->
+                  <template x-if="['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
+                    <div style="text-align:center;padding:20px 16px">
+                      <div style="font-size:36px;margin-bottom:8px;color:#d29922">&#9888;</div>
+                      <div style="font-size:15px;color:#e1e4e8;margin-bottom:4px">
+                        <strong x-text="cleanupResult.affectCount"></strong> <span x-text="cleanupResult.affectCount === 1 ? 'custom format' : 'custom formats'"></span> will be deleted
+                      </div>
+                    </div>
+                  </template>
+                  <!-- Detailed list for scan operations -->
+                  <template x-if="!['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
+                    <div>
+                      <div style="font-size:13px;color:#e1e4e8;margin-bottom:12px">
+                        Found <strong x-text="cleanupResult.affectCount"></strong> unmanaged items out of <span x-text="cleanupResult.totalCount"></span> total CFs.
+                        <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag)">
+                          <span style="color:#aaa">
+                            (<span x-text="cleanupResult.items.filter(i => i.renamingFlag).length"></span> tagged for filename rendering — see info below)
+                          </span>
+                        </template>
+                      </div>
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.namingUsesCustomFormats && cleanupResult.items.some(i => i.renamingFlag)">
+                        <div style="margin-bottom:12px;padding:12px 14px;background:#0f2238;border:1px solid #2a4d7a;border-radius:6px;font-size:13px;color:#b3c7dc;line-height:1.6">
+                          <div style="font-weight:600;color:#79b8ff;margin-bottom:6px;font-size:14px">ⓘ About filename-rendering CFs</div>
+                          Your file naming format on this instance contains <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">{Custom Formats}</code>.
+                          The CFs marked <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:12px;font-weight:500">rename tag</span> below contribute their names to filenames Radarr/Sonarr renders after import (e.g. <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">[AMZN]</code>, <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">[v2]</code>).
+                          Deleting them removes those tags from <em>future</em> renames; existing files on disk are unaffected. If you re-sync any TRaSH or builder profile that includes them, they're recreated automatically.
+                        </div>
+                      </template>
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr' && !cleanupResult.namingUsesCustomFormats && cleanupResult.items.some(i => i.renamingFlag)">
+                        <div style="margin-bottom:12px;padding:12px 14px;background:#0d2818;border:1px solid #1f6f3d;border-radius:6px;font-size:13px;color:#b3d4be;line-height:1.6">
+                          <div style="font-weight:600;color:#3fb950;margin-bottom:6px;font-size:14px">ⓘ Filename-rendering CFs are inert here</div>
+                          Some CFs below have a "rename tag" flag, but your file naming format on this instance does <strong>not</strong> use the <code style="background:#161b22;padding:1px 5px;border-radius:3px;font-size:12px">{Custom Formats}</code> token, so the flag has no functional effect. Safe to delete.
+                        </div>
+                      </template>
+
+                      <!-- Filter tabs (unused-by-clonarr only) -->
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr'">
+                        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+                          <button class="btn"
+                            :style="cleanupFilter === 'all' ? 'background:#1f6feb;border-color:#1f6feb;color:#fff' : ''"
+                            @click="cleanupFilter = 'all'"
+                            x-text="'All unmanaged (' + cleanupResult.items.length + ')'"></button>
+                          <template x-if="cleanupResult.items.some(i => i.renamingFlag)">
+                            <button class="btn"
+                              :style="cleanupFilter === 'rename-flagged' ? 'background:#d29922;border-color:#d29922;color:#000' : ''"
+                              @click="cleanupFilter = 'rename-flagged'"
+                              x-text="'Rename-tagged only (' + cleanupResult.items.filter(i => i.renamingFlag).length + ')'"></button>
+                          </template>
+                          <template x-if="(cleanupResult.managedItems || []).length > 0">
+                            <button class="btn"
+                              :style="cleanupFilter === 'managed' ? 'background:#238636;border-color:#238636;color:#fff' : ''"
+                              @click="cleanupFilter = 'managed'"
+                              x-text="'Managed by Clonarr (' + (cleanupResult.managedItems || []).length + ')'"></button>
+                          </template>
+                        </div>
+                      </template>
+
+                      <!-- Items table — unmanaged + rename-flagged variants -->
+                      <template x-if="cleanupResult.action !== 'unused-by-clonarr' || cleanupFilter !== 'managed'">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px">
+                          <thead>
+                            <tr style="text-align:left;color:#aaa;border-bottom:1px solid #30363d">
+                              <th style="padding:6px 8px;font-weight:500">Custom Format</th>
+                              <th style="padding:6px 8px;font-weight:500;width:120px">Tag</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="item in (cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'rename-flagged' ? cleanupResult.items.filter(i => i.renamingFlag) : cleanupResult.items)" :key="item.id">
+                              <tr style="border-bottom:1px solid #21262d">
+                                <td style="padding:6px 8px;color:#e1e4e8">
+                                  <span x-text="item.name"></span>
+                                  <span x-show="item.detail" style="color:#aaa;display:block;font-size:11px;margin-top:2px" x-text="item.detail"></span>
+                                </td>
+                                <td style="padding:6px 8px">
+                                  <template x-if="item.renamingFlag">
+                                    <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500" title="includeCustomFormatWhenRenaming=true on this CF">rename tag</span>
+                                  </template>
+                                </td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </template>
+
+                      <!-- Managed-by-clonarr table — read-only, with profile usage column -->
+                      <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'managed'">
+                        <div>
+                          <div style="font-size:12px;color:#aaa;margin-bottom:8px;line-height:1.5">
+                            These CFs are referenced by one of your sync rules (selected, score-overridden, or required by the rule's TRaSH/builder profile). They cannot be deleted from this view. The "Used in profile(s)" column shows which Arr quality profile(s) currently have the CF at a non-zero score.
+                          </div>
+                          <table style="width:100%;border-collapse:collapse;font-size:12px">
+                            <thead>
+                              <tr style="text-align:left;color:#aaa;border-bottom:1px solid #30363d">
+                                <th style="padding:6px 8px;font-weight:500">Custom Format</th>
+                                <th style="padding:6px 8px;font-weight:500">Used in profile(s)</th>
+                                <th style="padding:6px 8px;font-weight:500;width:120px">Tag</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <template x-for="item in (cleanupResult.managedItems || [])" :key="item.id">
+                                <tr style="border-bottom:1px solid #21262d">
+                                  <td style="padding:6px 8px;color:#e1e4e8;font-weight:500" x-text="item.name"></td>
+                                  <td style="padding:6px 8px;color:#aaa">
+                                    <template x-if="(item.usedInProfiles || []).length > 0">
+                                      <div style="display:flex;flex-wrap:wrap;gap:4px">
+                                        <template x-for="prof in (item.usedInProfiles || [])" :key="prof">
+                                          <span style="background:#0d2818;border:1px solid #1f6f3d;color:#7ee787;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:500;line-height:1.4" x-text="prof"></span>
+                                        </template>
+                                      </div>
+                                    </template>
+                                    <template x-if="(item.usedInProfiles || []).length === 0">
+                                      <span style="color:#666;font-style:italic;font-size:11px">— (in sync rule but not yet at non-zero score in any profile)</span>
+                                    </template>
+                                  </td>
+                                  <td style="padding:6px 8px">
+                                    <template x-if="item.renamingFlag">
+                                      <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500">rename tag</span>
+                                    </template>
+                                  </td>
+                                </tr>
+                              </template>
+                            </tbody>
+                          </table>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                  <template x-if="cleanupResult.action === 'delete-cfs-and-scores'">
+                    <div style="margin-top:12px;padding:10px;background:#3d1b1b;border:1px solid #f85149;border-radius:6px;font-size:12px;color:#f85149">
+                      This will permanently delete all custom formats and reset all scores to 0. This action cannot be undone.
+                    </div>
+                  </template>
+                  <template x-if="cleanupResult.action === 'delete-cfs-keep-scores'">
+                    <div style="margin-top:12px;padding:10px;background:#3d2e0a;border:1px solid #d29922;border-radius:6px;font-size:12px;color:#d29922">
+                      This will delete all custom formats. Scores will be preserved in profiles so CFs can be re-added later.
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+        <div class="modal-footer" x-show="cleanupResult.applied === undefined && cleanupResult.affectCount > 0 && !(cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'managed')">
+          <button class="btn" @click="cleanupResult = null">Cancel</button>
+          <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag)">
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-danger" style="padding:5px 10px;font-size:12px" @click="cleanupApply({ skipRenameFlagged: true })" :disabled="cleanupApplying" title="Keep CFs tagged for filename rendering">
+                <span x-show="cleanupApplying" class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+                <span x-show="!cleanupApplying" x-text="'Delete safe (' + cleanupResult.items.filter(i => !i.renamingFlag).length + ')'"></span>
+              </button>
+              <button class="btn" style="padding:5px 10px;font-size:12px;background:transparent;border:1px solid #f85149;color:#f85149" @click="cleanupApply({ skipRenameFlagged: false })" :disabled="cleanupApplying" title="Also delete CFs tagged for filename rendering">
+                <span x-show="cleanupApplying" class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+                <span x-show="!cleanupApplying" x-text="'Delete all (' + cleanupResult.affectCount + ')'"></span>
+              </button>
+            </div>
+          </template>
+          <template x-if="!(cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag))">
+            <button class="btn" :class="['delete-cfs-and-scores','delete-cfs-keep-scores','unused-by-clonarr'].includes(cleanupResult.action) ? 'btn-danger' : 'btn-primary'"
+              @click="cleanupApply()" :disabled="cleanupApplying">
+              <span x-show="cleanupApplying" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+              <span x-show="!cleanupApplying" x-text="((cleanupResult.action?.startsWith('delete') || cleanupResult.action === 'unused-by-clonarr') ? 'Delete' : 'Apply') + ' (' + cleanupResult.affectCount + ' items)'"></span>
+            </button>
+          </template>
+        </div>
+        <!-- Managed-tab close-only footer -->
+        <div class="modal-footer" x-show="cleanupResult.applied === undefined && cleanupResult.action === 'unused-by-clonarr' && cleanupFilter === 'managed'">
+          <button class="btn btn-primary" @click="cleanupResult = null">Close</button>
+        </div>
+        <div class="modal-footer" x-show="cleanupResult.applied !== undefined">
+          <button class="btn btn-primary" @click="cleanupResult = null">Close</button>
+        </div>
+      </div>
+    </div>
+  </template>
+{{end}}

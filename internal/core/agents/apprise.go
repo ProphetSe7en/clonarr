@@ -44,6 +44,42 @@ func (appriseProvider) Type() string {
 	return "apprise"
 }
 
+// DisplayName returns the human-readable label shown in the agent-type dropdown.
+func (appriseProvider) DisplayName() string {
+	return "Apprise"
+}
+
+// FieldSpec describes the form layout for the Apprise agent modal.
+func (appriseProvider) FieldSpec() FieldSpec {
+	return FieldSpec{
+		Groups: []FieldGroup{
+			{Kind: "field", Field: &Field{
+				Name:        "appriseUrl",
+				Kind:        "url",
+				Label:       "Apprise API URL",
+				Placeholder: "https://apprise.example.com",
+				HelpHTML:    `URL of your Apprise API server (the <code>/notify</code> path is appended automatically).`,
+				Required:    true,
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "appriseToken",
+				Kind:        "password",
+				Label:       "Bearer Token",
+				LabelHint:   "(optional)",
+				Placeholder: "Required only if your Apprise server is protected",
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "appriseUrls",
+				Kind:        "stringList",
+				Label:       "Notification URLs",
+				Placeholder: "discord://webhook_id/token\nmailto://user:pass@host\ntgram://bot_token/chat_id",
+				HelpHTML:    `One <a href="https://github.com/caronc/apprise/wiki" target="_blank" rel="noopener">Apprise URL</a> per line. Each URL embeds its own credentials and is masked end-to-end.`,
+				Required:    true,
+			}},
+		},
+	}
+}
+
 // Async returns true because Apprise sends are dispatched in background workers.
 func (appriseProvider) Async() bool {
 	return true

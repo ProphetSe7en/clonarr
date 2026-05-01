@@ -1,0 +1,418 @@
+{{define "sections/settings"}}
+  <!-- ==================== SETTINGS PAGE ==================== -->
+  <div class="page" x-show="currentSection === 'settings'" x-cloak>
+    <div style="font-size:18px;font-weight:600;margin-bottom:4px">Settings</div>
+    <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">Configure Clonarr — instances, TRaSH repository, Prowlarr, notifications, and display.</div>
+
+    <div class="settings-layout">
+      <!-- Sidebar nav -->
+      <div class="settings-sidebar">
+        <div class="settings-nav" :class="settingsSection === 'instances' && 'settings-nav-active'" @click="settingsSection = 'instances'; pushNav()">Instances</div>
+        <div class="settings-nav" :class="settingsSection === 'trash' && 'settings-nav-active'" @click="settingsSection = 'trash'; pushNav()">TRaSH Guides</div>
+        <div class="settings-nav" x-show="config.devMode" :class="settingsSection === 'prowlarr' && 'settings-nav-active'" @click="settingsSection = 'prowlarr'; pushNav()">Prowlarr</div>
+        <div class="settings-nav" :class="settingsSection === 'notifications' && 'settings-nav-active'" @click="settingsSection = 'notifications'; pushNav()">Notifications</div>
+        <div class="settings-nav" :class="settingsSection === 'display' && 'settings-nav-active'" @click="settingsSection = 'display'; pushNav()">Display</div>
+        <div class="settings-nav" :class="settingsSection === 'security' && 'settings-nav-active'" @click="settingsSection = 'security'; pushNav(); fetchApiKey()">Security</div>
+        <div class="settings-nav" :class="settingsSection === 'advanced' && 'settings-nav-active'" @click="settingsSection = 'advanced'; pushNav()">Advanced</div>
+      </div>
+
+      <!-- Content panel -->
+      <div class="settings-content">
+
+        <!-- ===== Instances ===== -->
+        <div x-show="settingsSection === 'instances'">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div class="settings-section-title">Instances</div>
+              <div class="settings-section-desc">Connect your Radarr and Sonarr instances.</div>
+            </div>
+            <button class="btn btn-sm btn-primary" @click="openInstanceModal()">+ Add Instance</button>
+          </div>
+          <template x-if="instances.length === 0">
+            <div style="color:#aaa;font-size:13px;padding:8px 0">No instances configured. Add your first Radarr or Sonarr instance.</div>
+          </template>
+          <template x-for="inst in [...instances].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))" :key="inst.id">
+            <div class="inst-row">
+              <img class="inst-icon" :src="instanceIconUrl(inst)" :alt="inst.type">
+              <div style="font-size:13px;font-weight:500;min-width:80px" x-text="inst.name"></div>
+              <div style="font-size:13px;color:#aaa;margin-left:4px" x-text="inst.url"></div>
+              <div style="margin-left:auto;text-align:right;white-space:nowrap">
+                <template x-if="instanceStatus[inst.id] === 'testing'">
+                  <span class="status-testing"><span class="spinner"></span></span>
+                </template>
+                <template x-if="instanceStatus[inst.id] === 'connected'">
+                  <span class="status-connected">Connected<span x-show="instanceVersion[inst.id]" style="color:#aaa;font-weight:400;font-size:13px" x-text="' · v' + instanceVersion[inst.id]"></span></span>
+                </template>
+                <template x-if="instanceStatus[inst.id] === 'failed'">
+                  <span class="status-failed">Failed</span>
+                </template>
+                <template x-if="!instanceStatus[inst.id]">
+                  <span style="font-size:12px;color:#aaa">Not tested</span>
+                </template>
+              </div>
+              <button class="btn btn-sm" style="margin-left:8px" @click="testInstance(inst)">Test</button>
+              <button class="btn btn-sm" style="margin-left:4px" @click="openInstanceModal(inst)">Edit</button>
+              <button class="btn btn-sm btn-danger" style="margin-left:4px" @click="deleteInstance(inst)">Delete</button>
+            </div>
+          </template>
+        </div>
+
+        <!-- ===== TRaSH Guides ===== -->
+        <div x-show="settingsSection === 'trash'">
+          <div class="settings-section-title">TRaSH Guides</div>
+          <div class="settings-section-desc">Repository settings and sync status.</div>
+          <div class="setting-row">
+            <div class="setting-label">Repository URL</div>
+            <div class="setting-value">
+              <input class="input" style="width:400px" x-model="config.trashRepo.url" @change="saveConfig()" autocomplete="one-time-code">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Branch</div>
+            <div class="setting-value">
+              <input class="input" style="width:150px" x-model="config.trashRepo.branch" @change="saveConfig()">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Pull Interval</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+              <select class="input" style="width:180px" x-model="config.pullInterval" @change="saveConfig(['pullInterval'])">
+                <template x-for="opt in (manifest.pullIntervalPresets || [])" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+              <span style="font-size:12px;color:#aaa">Auto-pull TRaSH data at this interval</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Status</div>
+            <div class="setting-value" style="font-size:13px">
+              <template x-if="trashStatus.cloned">
+                <span>
+                  Commit <code x-text="trashStatus.commitHash" style="background:#21262d;padding:2px 6px;border-radius:4px;font-size:12px"></code>
+                  — Radarr: <span x-text="trashStatus.radarrCFs"></span> CFs, <span x-text="trashStatus.radarrProfiles"></span> profiles
+                  — Sonarr: <span x-text="trashStatus.sonarrCFs"></span> CFs, <span x-text="trashStatus.sonarrProfiles"></span> profiles
+                </span>
+              </template>
+              <template x-if="!trashStatus.cloned">
+                <span style="color:#aaa">Not cloned yet. Click Pull in the nav bar.</span>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Prowlarr ===== -->
+        <div x-show="settingsSection === 'prowlarr'">
+          <div class="settings-section-title">Prowlarr</div>
+          <div class="settings-section-desc">Connect Prowlarr to enable release searching in the Scoring Sandbox.</div>
+          <div class="setting-row">
+            <div class="setting-label">Connection</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" x-model="config.prowlarr.enabled" @change="saveConfig(['prowlarr'])" style="accent-color:#58a6ff">
+              </label>
+              <input class="input" style="width:250px" x-model="config.prowlarr.url" @change="saveConfig(['prowlarr'])" placeholder="http://prowlarr:9696" autocomplete="one-time-code">
+              <input class="input" style="width:250px" x-model="config.prowlarr.apiKey" @change="saveConfig(['prowlarr'])" placeholder="API key" autocomplete="one-time-code">
+              <button class="btn btn-sm" @click="testProwlarr()" :disabled="prowlarrTesting || !config.prowlarr?.url || !config.prowlarr?.apiKey">
+                <span x-show="prowlarrTesting" class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>
+                <span x-show="!prowlarrTesting">Test</span>
+              </button>
+              <span x-show="prowlarrTestResult" style="font-size:12px">
+                <span :style="prowlarrTestResult?.ok ? 'color:#3fb950' : 'color:#f85149'" x-text="prowlarrTestResult?.message"></span>
+                <span x-show="prowlarrTestResult?.version" style="color:#aaa;font-size:13px" x-text="' · v' + prowlarrTestResult?.version"></span>
+              </span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Radarr categories</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:8px">
+              <input class="input" style="width:250px;font-family:monospace;font-size:12px"
+                     :value="(config.prowlarr.radarrCategories || []).join(', ')"
+                     @change="config.prowlarr.radarrCategories = parseCategoryList($event.target.value); saveConfig(['prowlarr'])"
+                     placeholder="2000 (default)">
+              <span style="font-size:12px;color:#8b949e">Category IDs for movie searches</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Sonarr categories</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:8px">
+              <input class="input" style="width:250px;font-family:monospace;font-size:12px"
+                     :value="(config.prowlarr.sonarrCategories || []).join(', ')"
+                     @change="config.prowlarr.sonarrCategories = parseCategoryList($event.target.value); saveConfig(['prowlarr'])"
+                     placeholder="5000 (default)">
+              <span style="font-size:12px;color:#8b949e">Category IDs for TV searches</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:#8b949e;margin-top:8px;padding-top:8px;border-top:1px solid #21262d;line-height:1.5">
+            Leave blank for defaults. Add sub-IDs (e.g. <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#c9d1d9">2000, 2040, 2045</code>) if your indexer only tags specific sub-categories and root-only searches return no results.
+          </div>
+        </div>
+
+        <!-- ===== Notifications ===== -->
+        <div x-show="settingsSection === 'notifications'">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div class="settings-section-title">Notifications</div>
+              <div class="settings-section-desc">Auto-sync event notifications via Discord, Gotify, and Pushover.</div>
+            </div>
+            <button class="btn btn-sm btn-primary"
+              @click="openAgentModal()">+ Add notification agent</button>
+          </div>
+          <template x-if="notificationAgents.length === 0">
+            <div style="color:#aaa;font-size:13px;padding:8px 0">No notification agents configured. Add Discord, Gotify, or Pushover to receive auto-sync alerts.</div>
+          </template>
+          <template x-for="agent in notificationAgents" :key="agent.id">
+            <div class="inst-row">
+              <img class="inst-icon" :src="agentIconSrc(agent.type)" :alt="agent.type">
+              <div style="font-size:13px;font-weight:500;min-width:120px" x-text="agent.name || agent.type"></div>
+              <div style="font-size:12px;color:#8b949e;text-transform:capitalize;margin-right:4px" x-text="agent.type"></div>
+              <!-- Enable toggle -->
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#8b949e;margin-left:4px" @click.stop>
+                <input type="checkbox" :checked="agent.enabled"
+                  @change="toggleAgentEnabled(agent)"
+                  style="accent-color:#58a6ff">
+                <span x-text="agent.enabled ? 'Enabled' : 'Disabled'"></span>
+              </label>
+              <!-- Test result -->
+              <div style="margin-left:auto;display:flex;align-items:center;gap:6px;white-space:nowrap" @click.stop>
+                <template x-if="notifAgentStatus[agent.id] && notifAgentStatus[agent.id].testing">
+                  <span class="status-testing"><span class="spinner"></span></span>
+                </template>
+                <template x-if="notifAgentStatus[agent.id] && !notifAgentStatus[agent.id].testing && notifAgentStatus[agent.id].results.length > 0">
+                  <span style="display:inline-flex;align-items:center;gap:6px">
+                    <template x-for="r in notifAgentStatus[agent.id].results" :key="r.label">
+                      <span :class="r.status === 'ok' ? 'status-connected' : 'status-failed'"
+                        x-text="notifAgentStatus[agent.id].results.length > 1 ? r.label + ': ' + (r.status === 'ok' ? '✓' : '✗') : (r.status === 'ok' ? 'Sent!' : (r.error || 'Failed'))"></span>
+                    </template>
+                  </span>
+                </template>
+              </div>
+              <button class="btn btn-sm" style="margin-left:8px"
+                :disabled="notifAgentStatus[agent.id]?.testing === true"
+                @click="testNotificationAgent(agent)">Test</button>
+              <button class="btn btn-sm" style="margin-left:4px" @click="openAgentModal(agent)">Edit</button>
+              <button class="btn btn-sm btn-danger" style="margin-left:4px" @click="deleteNotificationAgent(agent)">Delete</button>
+            </div>
+          </template>
+        </div>
+
+        <!-- ===== Display ===== -->
+        <div x-show="settingsSection === 'display'">
+          <div class="settings-section-title">Display</div>
+          <div class="settings-section-desc">UI appearance settings.</div>
+          <div class="setting-row">
+            <div class="setting-label">UI Scale</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:12px">
+              <template x-for="opt in [{label:'Compact',value:'1'},{label:'Default',value:'1.1'},{label:'Large',value:'1.2'}]" :key="opt.value">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">
+                  <input type="radio" name="uiScale" :value="opt.value" :checked="uiScale === opt.value" @change="setUIScale(opt.value)" style="accent-color:#58a6ff">
+                  <span x-text="opt.label" :style="uiScale === opt.value ? 'color:#e1e4e8' : 'color:#aaa'"></span>
+                </label>
+              </template>
+              <span style="font-size:13px;color:#8b949e" x-text="uiScale === '1' ? '(current default)' : Math.round(parseFloat(uiScale) * 100) + '%'"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Security ===== -->
+        <div x-show="settingsSection === 'security'">
+          <div class="settings-section-title">Security</div>
+          <div class="settings-section-desc">Authentication, API key, and password. Same pattern as Radarr/Sonarr.</div>
+
+          <div class="setting-row">
+            <div class="setting-label">Authentication</div>
+            <div class="setting-value">
+              <select class="input" style="max-width:220px" x-model="config.authentication" @change="configDirty = true">
+                <template x-for="opt in (manifest.authModes || [])" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+              <div class="setting-help">How users log in. <strong>Forms</strong> for most users. <strong>Basic</strong> behind a reverse proxy that handles login. <strong>None</strong> disables auth entirely — only safe behind another auth layer or on a machine not reachable from other devices.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Authentication Required</div>
+            <div class="setting-value">
+              <select class="input" style="max-width:280px" x-model="config.authenticationRequired" @change="configDirty = true">
+                <template x-for="opt in (manifest.authRequiredModes || [])" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+              <div class="setting-help"><strong>Enabled</strong> requires a password from every request including your LAN. <strong>Disabled for Trusted Networks</strong> lets devices on the networks listed below skip the login page.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Trusted Networks</div>
+            <div class="setting-value">
+              <input type="text" class="input" placeholder="e.g. 192.168.86.0/24, 10.66.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
+              <div class="setting-help" x-show="authStatus.trustedNetworksLocked" x-cloak style="color:#d29922">
+                <strong>Locked by <code>TRUSTED_NETWORKS</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container. Unsetting the env var unlocks this field.
+              </div>
+              <div class="setting-help" x-show="!authStatus.trustedNetworksLocked">
+                IPs or CIDR subnets that skip login when <em>Authentication Required</em> is "Disabled for Trusted Networks". Every address in this list gets full admin access without a password.
+                <br><br>
+                <strong>Leave empty</strong> falls back to all private networks (<code>10.x</code>, <code>172.16-31.x</code> incl. Docker bridges, <code>192.168.x</code>, link-local, IPv6 ULA). Convenient but treats any container on your Docker host and any device on your home WiFi as admin.
+                <br><br>
+                <strong>Set explicitly</strong> to narrow: <code>192.168.86.0/24</code> (home VLAN), <code>10.66.0.0/24</code> (WireGuard), <code>192.168.86.22/32</code> (one device). Loopback is always trusted so healthchecks work.
+                <br><br>
+                <strong>Lock via env var</strong> <code>TRUSTED_NETWORKS</code> (comma-separated CIDRs) in the Unraid template to prevent this field from being changed through the UI — useful if you want host-level control over the trust boundary.
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Trusted Proxies</div>
+            <div class="setting-value">
+              <input type="text" class="input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
+              <div class="setting-help" x-show="authStatus.trustedProxiesLocked" x-cloak style="color:#d29922">
+                <strong>Locked by <code>TRUSTED_PROXIES</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container.
+              </div>
+              <div class="setting-help" x-show="!authStatus.trustedProxiesLocked">Only needed if Clonarr runs behind a reverse proxy (SWAG, Authelia, etc). List the proxy's IP so <code>X-Forwarded-For</code> is trusted. Leave empty for direct access. Lock via env var <code>TRUSTED_PROXIES</code> in the Unraid template for host-level control.</div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">Session TTL (days)</div>
+            <div class="setting-value">
+              <input type="number" class="input" style="max-width:100px"
+                :min="manifest.sessionTtlBounds.min" :max="manifest.sessionTtlBounds.max"
+                x-model.number="config.sessionTtlDays" @input="configDirty = true">
+              <div class="setting-help" x-text="'How long a login stays valid before re-authentication. Default 30. Max ' + manifest.sessionTtlBounds.max + '.'"></div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label"></div>
+            <div class="setting-value">
+              <button class="btn btn-primary" @click="saveSecurityConfig()" :disabled="pwChangeSaving">
+                <span x-show="!pwChangeSaving">Save security settings</span>
+                <span x-show="pwChangeSaving">Saving...</span>
+              </button>
+              <span x-show="securitySaveMsg" x-text="securitySaveMsg" :style="securitySaveOk ? 'color:#3fb950;margin-left:10px;font-size:13px' : 'color:#f85149;margin-left:10px;font-size:13px'"></span>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #30363d;margin:20px 0"></div>
+
+          <!-- API Key -->
+          <div class="setting-row">
+            <div class="setting-label">API Key</div>
+            <div class="setting-value">
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="text" class="input" style="flex:1;font-family:monospace;font-size:12px" readonly
+                       :value="securityApiKeyVisible ? securityApiKey : (securityApiKey ? '••••••••••••••••••••••••••••••••' : 'Loading...')">
+                <button class="btn btn-secondary" @click="securityApiKeyVisible = !securityApiKeyVisible" x-text="securityApiKeyVisible ? 'Hide' : 'Show'"></button>
+                <button class="btn btn-secondary" @click="copyApiKey()" x-text="securityApiKeyCopied ? 'Copied!' : 'Copy'"></button>
+              </div>
+              <div class="setting-help">For scripts and Homepage widgets. Send as <code>X-Api-Key: &lt;key&gt;</code> header. Query parameter (<code>?apikey=</code>) also works but leaks to logs and browser history — prefer the header.</div>
+              <div style="margin-top:8px" x-show="!securityRegenConfirm">
+                <button class="btn btn-danger" style="font-size:12px" @click="securityRegenConfirm = true">Regenerate API Key</button>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px" x-show="securityRegenConfirm">
+                <button class="btn btn-danger" @click="regenerateApiKey()" :disabled="securityRegenerating">
+                  <span x-show="!securityRegenerating">Confirm regenerate (old key stops working immediately)</span>
+                  <span x-show="securityRegenerating">Regenerating...</span>
+                </button>
+                <button class="btn btn-secondary" @click="securityRegenConfirm = false">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #30363d;margin:20px 0"></div>
+
+          <!-- Password change -->
+          <div class="settings-section-title" style="font-size:14px;margin-bottom:12px">Change password</div>
+          <div class="setting-row">
+            <div class="setting-label">Current password</div>
+            <div class="setting-value">
+              <input type="password" class="input" style="max-width:280px" autocomplete="current-password" x-model="pwChange.current">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">New password</div>
+            <div class="setting-value">
+              <input type="password" class="input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.next">
+              <div class="setting-help">At least 10 characters, with at least 2 of: uppercase, lowercase, digit, symbol.</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Confirm new password</div>
+            <div class="setting-value">
+              <input type="password" class="input" style="max-width:280px" autocomplete="new-password" x-model="pwChange.confirm">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label"></div>
+            <div class="setting-value">
+              <button class="btn btn-primary" @click="changePassword()" :disabled="pwChangeSaving || !pwChange.current || !pwChange.next || !pwChange.confirm">
+                <span x-show="!pwChangeSaving">Change password</span>
+                <span x-show="pwChangeSaving">Saving...</span>
+              </button>
+              <span x-show="pwChangeMsg" x-text="pwChangeMsg" :style="pwChangeOk ? 'color:#3fb950;margin-left:10px;font-size:13px' : 'color:#f85149;margin-left:10px;font-size:13px'"></span>
+              <div class="setting-help">Changing your password signs out other sessions. You will remain logged in on this browser.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Advanced ===== -->
+        <div x-show="settingsSection === 'advanced'">
+          <div class="settings-section-title">Advanced</div>
+          <div class="settings-section-desc">Power-user features and debug logging. Enable only what you need.</div>
+          <div class="setting-row">
+            <div class="setting-label">Advanced Mode</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" :checked="config.devMode" @change="toggleAdvancedMode($event.target.checked)">
+                <span style="font-size:13px;color:#aaa">Adds the Advanced tab (Profile Builder, Scoring Sandbox, CF Group Builder) and the Prowlarr integration settings.</span>
+              </label>
+              <span x-show="config.devMode" style="font-size:12px;color:#d29922">Active</span>
+            </div>
+          </div>
+          <div class="setting-row" x-show="config.devFeatures">
+            <div class="setting-label" title="Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.">Show TRaSH schema fields <span style="font-size:11px;color:#7d8590;font-weight:normal">(CLONARR_DEV_FEATURES)</span></div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" :checked="config.trashSchemaFields" @change="config.trashSchemaFields = $event.target.checked; saveConfig(['trashSchemaFields'])">
+                <span style="font-size:13px;color:#aaa">Surfaces trash_id, trash_scores, group number, and HTML description fields in CF editor, Profile Builder and CF Group Builder. For TRaSH-Guides contributors only.</span>
+              </label>
+              <span x-show="config.trashSchemaFields" style="font-size:12px;color:#d29922">Active</span>
+            </div>
+          </div>
+          <div class="setting-row" x-show="authStatus.urlBase">
+            <div class="setting-label">URL Base</div>
+            <div class="setting-value">
+              <input type="text" :value="authStatus.urlBase" disabled style="width:220px;opacity:0.7">
+              <span style="font-size:12px;color:#aaa;margin-left:8px">Set via <code>URL_BASE</code> env var. Restart to change.</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Debug Logging</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" x-model="config.debugLogging" @change="saveConfig(['debugLogging'])" style="accent-color:#58a6ff">
+                <span style="font-size:12px;color:#aaa">Write to /config/debug.log (max 1MB, auto-rotates)</span>
+              </label>
+              <template x-if="config.debugLogging">
+                <span style="display:flex;align-items:center;gap:8px;margin-left:8px">
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa"
+                         title="Bundle UI navigation events (activity.log) into the download. Off by default — most bug reports only need the operation trace.">
+                    <input type="checkbox" x-model="includeActivityLog" style="accent-color:#58a6ff">
+                    <span>Include activity log</span>
+                  </label>
+                  <a class="btn btn-sm"
+                     :href="includeActivityLog ? 'api/debug/log/download?activity=1' : 'api/debug/log/download'"
+                     :download="includeActivityLog ? 'clonarr-logs.zip' : 'clonarr-debug.log'"
+                     style="text-decoration:none">Download</a>
+                </span>
+              </template>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+{{end}}

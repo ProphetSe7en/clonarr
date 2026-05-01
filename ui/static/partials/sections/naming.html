@@ -1,0 +1,167 @@
+{{define "sections/naming"}}
+      <!-- ===== File Naming sub-tab ===== -->
+      <div class="page" x-show="currentSection === 'naming'">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">File Naming</div>
+        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">TRaSH recommended naming schemes for folders and files. Select a media server tab and an instance to compare and apply.</div>
+        <!-- Shared info cards — text sourced verbatim from TRaSH-Guides:
+             includes/starr/renaming-description-faq.md
+             includes/{sonarr,radarr}/{imdb-vs-tvdb,imdb-vs-tmdb}.md
+             includes/{sonarr,radarr}/{tvdb-imdb-info,tmdb-imdb-info}.md -->
+        <div class="card" style="padding:14px 16px;margin:12px 0 0">
+          <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px">Why use a naming scheme?</div>
+          <div style="font-size:12px;color:#aaa;line-height:1.6">
+            While naming is a personal choice, adding non-recoverable information to your filenames is strongly recommended for several good reasons.
+          </div>
+          <div style="font-size:12px;color:#aaa;line-height:1.6;margin-top:8px">
+            <strong style="color:#c9d1d9">Non-recoverable information</strong> includes:
+            <ul style="margin:4px 0 0 18px;padding:0">
+              <li><strong style="color:#c9d1d9">Quality source</strong> — HDTV, WEB-DL, Blu-ray, Remux, etc.</li>
+              <li><strong style="color:#c9d1d9">Release group</strong> — the team that created the release</li>
+              <li><strong style="color:#c9d1d9">Edition type</strong> — Director's Cut, Theatrical, Unrated, etc.</li>
+              <li><strong style="color:#c9d1d9">Repack/Proper status</strong> — whether it's a fixed version</li>
+            </ul>
+          </div>
+          <div style="font-size:12px;color:#aaa;line-height:1.6;margin-top:8px">
+            Including these details enables easy re-imports (files won't get wrongly identified as HDTV or WEB-DL quality),
+            prevents duplicate downloads, and stops download loops because Radarr/Sonarr always know what you already have.
+            Media servers like Plex, Emby and Jellyfin display titles and metadata rather than the actual filename, so the length doesn't matter for viewing.
+          </div>
+        </div>
+        <div class="card" style="padding:14px 16px;margin:12px 0 0">
+          <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px" x-text="activeAppType === 'radarr' ? 'IMDb vs TMDb' : 'IMDb vs TVDb'"></div>
+          <div style="font-size:12px;color:#aaa;line-height:1.6" x-text="activeAppType === 'radarr'
+            ? 'While both IMDb and TMDb IDs are unique, TMDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TMDb as its metadata source, they can be seen as \'more aligned\' with Radarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'
+            : 'While both IMDb and TVDb IDs are unique, TVDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TVDb as its metadata source, they can be seen as \'more aligned\' with Sonarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'"></div>
+          <div style="font-size:12px;color:#58a6ff;line-height:1.6;margin-top:8px;padding:8px 10px;background:#0d1117;border-left:3px solid #58a6ff;border-radius:3px"
+               x-text="activeAppType === 'radarr'
+                 ? 'TMDb is usually better as it guarantees a match, IMDb only gets matched if the TMDb entry has the correct IMDb ID association.'
+                 : 'TVDb is usually better as it guarantees a match, IMDb only gets matched if the TVDb entry has the correct IMDb ID association.'"></div>
+        </div>
+        <template x-if="getNaming(activeAppType)">
+          <div>
+            <!-- Naming card: instance + tabs + content -->
+            <div class="card" style="margin:16px 0 0;overflow:visible">
+              <!-- Instance selector -->
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #21262d">
+                <span style="font-size:13px;color:#aaa">Instance:</span>
+                <select class="input" style="width:200px;font-size:12px;padding:4px 8px"
+                  @change="namingSelectedInstance = { ...namingSelectedInstance, [activeAppType]: $event.target.value }; if ($event.target.value) { const _inst = instances.find(i => i.id === $event.target.value); if (_inst) testInstance(_inst); } loadInstanceNaming(activeAppType)">
+                  <option value="" :selected="!namingSelectedInstance[activeAppType]">Select instance...</option>
+                  <template x-for="inst in instancesOfType(activeAppType)" :key="inst.id">
+                    <option :value="inst.id" x-text="inst.name" :selected="namingSelectedInstance[activeAppType] === inst.id"></option>
+                  </template>
+                </select>
+                <template x-if="namingSelectedInstance[activeAppType] && instanceStatus[namingSelectedInstance[activeAppType]] === 'connected'">
+                  <span style="font-size:13px;color:#3fb950">Connected</span>
+                </template>
+                <template x-if="namingSelectedInstance[activeAppType] && instanceStatus[namingSelectedInstance[activeAppType]] === 'failed'">
+                  <span style="font-size:13px;color:#f85149">Connection failed</span>
+                </template>
+                <template x-if="namingSelectedInstance[activeAppType] && !instanceStatus[namingSelectedInstance[activeAppType]]">
+                  <span style="font-size:13px;color:#d29922">Not tested</span>
+                </template>
+                <template x-if="!namingSelectedInstance[activeAppType]">
+                  <span style="font-size:13px;color:#aaa">Select an instance to enable sync</span>
+                </template>
+              </div>
+              <!-- Media server tabs -->
+              <div style="display:flex;align-items:center;border-bottom:1px solid #21262d;padding:0 16px">
+                <div class="subtab" :class="{ active: (namingMediaServer[activeAppType] || 'standard') === 'standard' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'standard'}">Standard</div>
+                <div class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'plex' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'plex'}">Plex</div>
+                <div class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'emby' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'emby'}">Emby</div>
+                <div class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'jellyfin' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'jellyfin'}">Jellyfin</div>
+              </div>
+
+              <!-- Current naming from instance (compact) -->
+              <template x-if="namingInstanceData[activeAppType]">
+                <div style="padding:8px 16px;background:#0d1117;border-bottom:1px solid #21262d;font-size:13px;display:flex;gap:16px;flex-wrap:wrap">
+                  <template x-if="activeAppType === 'radarr'">
+                    <div style="display:flex;gap:16px;flex-wrap:wrap">
+                      <div><span style="color:#aaa">File:</span> <span style="font-family:monospace;color:#aaa" x-text="namingInstanceData[activeAppType].standardMovieFormat || '(not set)'"></span></div>
+                      <div><span style="color:#aaa">Folder:</span> <span style="font-family:monospace;color:#aaa" x-text="namingInstanceData[activeAppType].movieFolderFormat || '(not set)'"></span></div>
+                      <div><span style="color:#aaa">Rename:</span> <span :style="namingInstanceData[activeAppType].renameMovies ? 'color:#3fb950' : 'color:#f85149'" x-text="namingInstanceData[activeAppType].renameMovies ? 'On' : 'Off'"></span></div>
+                    </div>
+                  </template>
+                  <template x-if="activeAppType === 'sonarr'">
+                    <div style="display:flex;gap:16px;flex-wrap:wrap">
+                      <div><span style="color:#aaa">Episode:</span> <span style="font-family:monospace;color:#aaa" x-text="namingInstanceData[activeAppType].standardEpisodeFormat || '(not set)'"></span></div>
+                      <div><span style="color:#aaa">Series:</span> <span style="font-family:monospace;color:#aaa" x-text="namingInstanceData[activeAppType].seriesFolderFormat || '(not set)'"></span></div>
+                      <div><span style="color:#aaa">Rename:</span> <span :style="namingInstanceData[activeAppType].renameEpisodes ? 'color:#3fb950' : 'color:#f85149'" x-text="namingInstanceData[activeAppType].renameEpisodes ? 'On' : 'Off'"></span></div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
+              <div style="padding:16px">
+                <!-- Naming apply result -->
+                <template x-if="namingApplyResult[activeAppType]">
+                  <div style="padding:8px 12px;margin-bottom:12px;border-left:3px solid #3fb950;background:#0d1117;border-radius:4px">
+                    <div style="font-size:12px;color:#3fb950" x-text="namingApplyResult[activeAppType]"></div>
+                  </div>
+                </template>
+
+              <!-- Naming sections rendered by media server tab -->
+              <template x-for="section in getNamingSections(activeAppType, namingMediaServer[activeAppType] || 'standard', namingPlexSingleEntry[activeAppType])" :key="section.key">
+                <div style="margin-bottom:16px">
+                  <!-- Edition Tags box (only for Plex file sections)
+                       Text sourced verbatim from TRaSH-Guides:
+                       docs/Radarr/Radarr-recommended-naming-scheme.md (!!! danger admonition under the Plex section) -->
+                  <template x-if="section.showEditionToggle">
+                    <div style="border:1px solid #21262d;border-left:3px solid #d29922;border-radius:6px;padding:14px 16px;margin-bottom:12px">
+                      <div style="display:flex;align-items:flex-start;gap:12px">
+                        <div style="flex:1">
+                          <div style="font-weight:600;margin-bottom:6px;color:#e1e4e8;font-size:13px">Edition Tags</div>
+                          <div style="font-size:12px;color:#aaa;line-height:1.6">
+                            If you use the <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> part of the recommended file name, Plex will recognize the movie edition and add it to the Plex interface — for example, Director's Cut.
+                          </div>
+                          <div style="font-size:12px;color:#aaa;line-height:1.6;margin-top:6px">
+                            However, this means that if you have two copies of a movie with different editions in a single <strong style="color:#c9d1d9">merged library</strong> — for example, a 1080p Director's Cut and a 2160p Theatrical Edition — these will appear as <strong style="color:#f85149">two separate items</strong> in Plex.
+                          </div>
+                          <div style="font-size:12px;color:#aaa;line-height:1.6;margin-top:6px">
+                            If you want a movie to appear only once per library when you keep more than one copy of a movie, replace <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{edition-{Edition Tags}}</code> with <code style="background:#21262d;padding:1px 5px;border-radius:3px;color:#d2a8ff">{Edition Tags}</code>.
+                          </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px;flex-shrink:0">
+                          <label class="toggle"><input type="checkbox" :checked="namingPlexSingleEntry[activeAppType]" @change="namingPlexSingleEntry = {...namingPlexSingleEntry, [activeAppType]: $event.target.checked}"><span class="slider"></span></label>
+                          <span style="font-size:12px;white-space:nowrap" :style="namingPlexSingleEntry[activeAppType] ? 'color:#3fb950' : 'color:#aaa'" x-text="namingPlexSingleEntry[activeAppType] ? 'Single entry' : 'Per edition'"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div style="font-weight:600;margin-bottom:4px;color:#e1e4e8" x-text="section.label"></div>
+                  <div x-show="section.description" style="font-size:13px;color:#aaa;margin-bottom:10px;line-height:1.5" x-text="section.description"></div>
+
+                  <template x-for="scheme in section.schemes" :key="scheme.key">
+                    <div style="margin-bottom:10px;padding:8px;background:#0d1117;border-radius:4px;border:1px solid #21262d">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                        <span style="font-size:12px;font-weight:600;color:#c9d1d9" x-text="scheme.label"></span>
+                        <span x-show="scheme.recommended" style="font-size:12px;background:#238636;color:#fff;padding:1px 6px;border-radius:3px">Recommended</span>
+                        <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                          <span style="font-size:12px;color:#58a6ff;cursor:pointer" @click="copyToClipboard(scheme.pattern)">Copy</span>
+                          <template x-if="namingSelectedInstance[activeAppType]">
+                            <span style="font-size:12px;color:#d29922;cursor:pointer"
+                              @click="$el.textContent='Syncing...'; $el.style.color='#8b949e'; applyNamingScheme(activeAppType, section.key, scheme).then(() => { $el.textContent='✓ Synced'; $el.style.color='#3fb950'; setTimeout(() => { $el.textContent='Sync'; $el.style.color='#d29922'; }, 2000); })">Sync</span>
+                          </template>
+                        </span>
+                      </div>
+                      <div x-show="scheme.description" style="font-size:13px;color:#aaa;margin-bottom:6px;line-height:1.4" x-text="scheme.description"></div>
+                      <div style="font-family:monospace;font-size:13px;color:#9ecbaa;background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px 8px;word-break:break-all" x-text="scheme.pattern"></div>
+                      <div x-show="scheme.example" style="font-family:monospace;font-size:12px;color:#aaa;margin-top:4px;word-break:break-all">
+                        <strong style="color:#aaa;font-weight:600">Movie:</strong> <span x-text="scheme.example"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template x-if="!getNaming(activeAppType)">
+          <div class="empty-state">
+            <div class="desc">Pull TRaSH data to see naming schemes</div>
+          </div>
+        </template>
+      </div>
+{{end}}

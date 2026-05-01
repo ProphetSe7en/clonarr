@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -519,13 +520,20 @@ func requireAuthForAPI(w http.ResponseWriter) {
 }
 
 // InitAuth loads auth settings from the main config store (JSON), validates,
-// loads existing credentials from /config/auth.json, and returns the store
-// + handlers ready to wire into the mux.
+// loads existing credentials from {configDir}/auth.json, and returns the
+// store + handlers ready to wire into the mux.
+//
+// configDir is the same path the rest of the stores use (set via CONFIG_DIR
+// env var; default "/config"). Passing it explicitly here means auth.json
+// and sessions.json land alongside the rest of the application data instead
+// of falling back to the auth package's default path independently.
 //
 // Refuses to start (log.Fatal) on any unsafe combination (unknown enum
 // values) or on malformed auth.json.
-func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string, basePath string, mux *http.ServeMux) *auth.Store {
+func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string, basePath string, configDir string, mux *http.ServeMux) *auth.Store {
 	cfg := auth.DefaultConfig()
+	cfg.AuthFilePath = filepath.Join(configDir, "auth.json")
+	cfg.SessionsFilePath = filepath.Join(configDir, "sessions.json")
 
 	appCfg := configStore.Get()
 	if appCfg.Authentication != "" {

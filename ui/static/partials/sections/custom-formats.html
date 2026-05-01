@@ -1,0 +1,111 @@
+{{define "sections/custom-formats"}}
+      <!-- ===== Custom Formats sub-tab ===== -->
+      <div class="page" x-show="currentSection === 'custom-formats'">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">Custom Formats</div>
+        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">All Custom Formats from TRaSH Guides, organized by category. Use Create to build a custom format from scratch, or Import to add existing formats from an Arr instance or JSON.</div>
+
+        <template x-if="getCFBrowseGroups(activeAppType).length > 0">
+          <div>
+            <div style="padding:0 0 12px;display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:14px;color:#aaa">
+                Showing <strong style="color:#e1e4e8" x-text="(getCFBrowseGroups(activeAppType) || []).reduce((acc, c) => acc + (c.totalCFs || 0), 0)"></strong> Custom Formats.
+              </div>
+              <div style="display:flex;gap:8px;margin-left:12px;flex-shrink:0">
+                <button class="btn btn-sm" style="background:#1f6feb;color:#fff;white-space:nowrap" @click="openCFEditor('create', activeAppType)">Create</button>
+                <button class="btn btn-sm" style="background:#238636;color:#fff;white-space:nowrap" @click="openImportCFModal(activeAppType)">Import</button>
+              </div>
+            </div>
+            <template x-for="cat in getCFBrowseGroups(activeAppType)" :key="cat.displayName">
+              <div class="detail-section" :class="getCategoryClass(cat.category)" style="margin-bottom:8px">
+                <div class="detail-section-header" @click="toggleDetailSection('cfb_' + cat.displayName)" style="cursor:pointer"
+                     :style="cat.isCustom ? 'border-left:3px solid #d29922;background:#1a1500' : ''">
+                  <div class="detail-section-label" :style="cat.isCustom ? 'color:#d29922' : ''" x-text="cat.displayName"></div>
+                  <div class="detail-section-count" x-text="cat.totalCFs + ' CFs'"></div>
+                  <span class="detail-section-chevron" :class="{ open: detailSections['cfb_' + cat.displayName] }">&#9654;</span>
+                </div>
+                <div x-show="detailSections['cfb_' + cat.displayName]">
+                  <template x-for="group in cat.groups" :key="group.name">
+                    <div class="cf-section">
+                      <!-- Single group in category: show CFs directly -->
+                      <template x-if="cat.groups.length === 1">
+                        <div :style="group.cfs.length >= 30 ? 'display:grid;grid-template-columns:repeat(3,1fr);gap:0 12px' : group.cfs.length >= 10 ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:0 12px' : ''">
+                          <template x-for="cf in group.cfs" :key="cf.trashId">
+                            <div>
+                              <div class="cf-row">
+                                <div class="cf-name" style="flex:1">
+                                  <span x-text="cf.name"></span>
+                                  <span x-show="cf.isCustom" style="font-size:12px;color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
+                                  <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:#58a6ff;cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" title="Edit">&#9998;</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:#f85149;cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" title="Delete">&#10005;</span>
+                                </div>
+                                <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
+                                     x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+                      <!-- Single-CF group in multi-group category: show inline -->
+                      <template x-if="cat.groups.length > 1 && group.cfs.length === 1">
+                        <div>
+                          <template x-for="cf in group.cfs" :key="cf.trashId">
+                            <div>
+                              <div class="cf-row">
+                                <div class="cf-name" style="flex:1">
+                                  <span x-text="cf.name"></span>
+                                  <span x-show="cf.isCustom" style="font-size:12px;color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
+                                  <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:#58a6ff;cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" title="Edit">&#9998;</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:#f85149;cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" title="Delete">&#10005;</span>
+                                </div>
+                                <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
+                                     x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+                      <!-- Multi-CF group: collapsible sub-headers -->
+                      <template x-if="cat.groups.length > 1 && group.cfs.length > 1">
+                        <div>
+                          <div class="cf-section-title" style="cursor:pointer;user-select:none"
+                               @click="toggleGroupExpanded('cfb_' + cat.displayName, group.shortName)">
+                            <div style="display:flex;align-items:center;gap:8px">
+                              <span class="detail-section-chevron" style="font-size:12px"
+                                    :class="{ open: groupExpanded['cfb_' + cat.displayName + '/' + group.shortName] }">&#9654;</span>
+                              <span x-text="group.shortName"></span>
+                              <span style="font-size:13px;color:#aaa" x-text="group.cfs.length + ' CFs'"></span>
+                            </div>
+                          </div>
+                          <div x-show="groupExpanded['cfb_' + cat.displayName + '/' + group.shortName]"
+                               :style="group.cfs.length >= 30 ? 'display:grid;grid-template-columns:repeat(3,1fr);gap:0 12px' : group.cfs.length >= 10 ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:0 12px' : ''">
+                            <template x-for="cf in group.cfs" :key="cf.trashId">
+                              <div>
+                                <div class="cf-row">
+                                  <div class="cf-name" style="flex:1">
+                                    <span x-text="cf.name"></span>
+                                    <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
+                                  </div>
+                                  <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
+                                       x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
+                                </div>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+        <template x-if="getCFBrowseGroups(activeAppType).length === 0">
+          <div class="empty-state">
+            <div class="desc">Pull TRaSH data to see Custom Formats</div>
+          </div>
+        </template>
+      </div>
+{{end}}

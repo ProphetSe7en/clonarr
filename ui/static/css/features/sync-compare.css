@@ -1,0 +1,132 @@
+  /* Synced profiles section */
+  .synced-section { background: var(--bg-page); border-bottom: 1px solid var(--border-subtle); }
+  .synced-header { display: flex; align-items: center; padding: 10px 20px; font-size:13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--bg-muted); }
+  .synced-row { display: flex; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--bg-muted); font-size: 13px; }
+  .synced-row:last-child { border-bottom: none; }
+  .synced-row:hover { background: var(--bg-card); }
+  .synced-profile-name { font-weight: 500; color: var(--accent-blue); }
+  .synced-arrow { color: var(--text-secondary); margin: 0 8px; font-size:13px; }
+  .synced-arr-name { color: var(--text-primary); }
+  .synced-meta { font-size:13px; color: var(--text-muted); margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .synced-actions { display: flex; gap: 6px; }
+
+  /* Arr comparison badges */
+  .arr-badge { font-size:13px; padding: 1px 6px; border-radius: 3px; margin-left: 8px; }
+  .arr-badge.exists { color: var(--accent-green); background: var(--accent-green-bg); }
+  .arr-badge.missing { color: var(--accent-red); background: var(--accent-red-bg); }
+  .arr-score-diff { font-size:13px; color: var(--text-muted); margin-left: 4px; }
+  .arr-score-diff .old { text-decoration: line-through; opacity: 0.6; }
+  .arr-score-diff .arrow { margin: 0 2px; }
+
+  /* Dry-run banner */
+  .dryrun-bar { background: var(--accent-blue-muted); border: 1px solid var(--accent-blue-hover); border-radius: 8px; padding: 12px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; max-height: 40vh; overflow-y: auto; }
+  .dryrun-bar .text { flex: 1; font-size: 13px; color: var(--accent-sky); }
+  .dryrun-bar .text strong { color: var(--text-primary); }
+  /* Sync result */
+  .result-banner { border-radius: 8px; padding: 14px 20px; margin-bottom: 16px; max-height: 40vh; overflow-y: auto; }
+  .result-banner.success { background: var(--accent-green-bg); border: 1px solid var(--accent-green-strong); color: var(--accent-green); }
+  .result-banner.error { background: var(--accent-red-bg); border: 1px solid var(--accent-red-strong); color: var(--accent-red); }
+  .result-banner .result-title { font-weight: 600; font-size: 14px; }
+  .result-banner .result-detail { font-size: 12px; margin-top: 4px; opacity: 0.8; }
+
+  /* Test result inline */
+  .test-result { font-size: 12px; margin-top: 6px; padding: 4px 8px; border-radius: 4px; }
+  .test-result.ok { color: var(--accent-green); background: var(--accent-green-bg); }
+  .test-result.fail { color: var(--accent-red); background: var(--accent-red-bg); }
+
+  /* Toggle switch */
+  .toggle { position: relative; display: inline-block; width: 26px; height: 14px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border-subtle); border-radius: 7px; transition: 0.2s; }
+  .toggle .slider:before { content: ''; position: absolute; height: 10px; width: 10px; left: 2px; bottom: 2px; background: var(--text-secondary); border-radius: 50%; transition: 0.2s; }
+  .toggle input:checked + .slider { background: var(--accent-green-strong); }
+  .toggle input:checked + .slider:before { transform: translateX(12px); background: var(--text-on-accent); }
+  .toggle input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+  /* toggle-sm is a further-compact variant used in inline bars */
+  .toggle-sm { width: 22px; height: 12px; }
+  .toggle-sm .slider:before { width: 8px; height: 8px; }
+  .toggle-sm input:checked + .slider:before { transform: translateX(10px); }
+
+  /* Instance profile compare */
+  .inst-profiles-section { padding: 0; }
+  .inst-profile-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--bg-muted); cursor: pointer; }
+  .inst-profile-row:hover { background: var(--bg-card); }
+  .inst-profile-row.active { background: var(--bg-panel); border-left: 3px solid var(--accent-blue); }
+  /* .compare-panel removed — div unwrapped in refactor */
+  .compare-summary { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .compare-stat { font-size: 12px; padding: 4px 10px; border-radius: 4px; }
+  .compare-stat.missing { background: var(--accent-red-bg); color: var(--accent-red); }
+  .compare-stat.wrong { background: var(--accent-orange-bg); color: var(--accent-orange); }
+  .compare-stat.match { background: var(--accent-green-bg); color: var(--accent-green); }
+  .compare-stat.extra { background: var(--fill-blue-soft); color: var(--accent-blue); }
+  .compare-cf-row { display: flex; align-items: center; padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--bg-card); }
+  .compare-cf-name { flex: 1; color: var(--text-body); min-width: 0; }
+  .compare-cf-scores { display: flex; gap: 4px; align-items: center; width: 150px; flex-shrink: 0; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+  .compare-cf-actions { width: 58px; flex-shrink: 0; text-align: right; display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
+  .compare-cf-scores .old { text-decoration: line-through; opacity: 0.5; }
+  .compare-cf-scores .arrow { color: var(--text-secondary); }
+  .compare-section-title { font-size:13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); padding: 8px 0 4px; letter-spacing: 0.5px; }
+  .compare-section-header { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; }
+  .compare-section-header .compare-section-title { padding: 0; }
+  .compare-section-toggle { font-size:12px; color: var(--accent-blue); cursor: pointer; margin-left: auto; }
+  .compare-section-toggle:hover { text-decoration: underline; }
+  /* Compare settings table — 4-col layout so Current and TRaSH values line up vertically instead of wrapping inline. Source: clonarr-compare-redesign-v3.html mockup. */
+  .cmp-settings-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .cmp-settings-table thead th {
+    text-align: left; padding: 6px 10px; color: var(--text-secondary); font-weight: 600;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+    background: var(--alpha-subtle); border-bottom: 1px solid var(--bg-muted);
+  }
+  .cmp-settings-table th.cb { width: 28px; padding-right: 0; }
+  .cmp-settings-table th.col-name { width: 28%; }
+  .cmp-settings-table th.col-value { width: 22%; }
+  .cmp-settings-table th.col-new { width: 22%; }
+  .cmp-settings-table tbody td { padding: 5px 10px; border-top: 1px solid var(--bg-muted); vertical-align: middle; }
+  .cmp-settings-table tbody tr.sub-header td {
+    background: var(--alpha-subtle); color: var(--text-secondary);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+    padding: 4px 10px;
+  }
+  .cmp-settings-table td.cb { padding-right: 0; width: 28px; }
+  .cmp-settings-table td.name { color: var(--text-body); font-weight: 500; }
+  .cmp-settings-table td.current { color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, monospace; }
+  /* Fixed-width badge slot inside the Current cell so alignment is consistent whether or not
+     a row has an override. Empty span for non-override rows, small "OR" chip for override rows. */
+  .cmp-override-badge { display: inline-block; width: 22px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; font-family: -apple-system, system-ui, sans-serif; margin-right: 6px; vertical-align: middle; text-align: center; }
+  .cmp-override-badge.on { color: var(--accent-blue); background: var(--fill-blue-soft); padding: 1px 0; border-radius: 6px; cursor: help; }
+  .cmp-settings-table td.target-diff { color: var(--accent-orange); font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
+  .cmp-settings-table td.target-match { color: var(--accent-green); font-family: ui-monospace, SFMono-Regular, monospace; }
+  .cmp-settings-table td.new-fixed { color: var(--accent-green); font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
+  .cmp-settings-table td.new-unchanged { color: var(--text-muted-secondary); font-family: ui-monospace, SFMono-Regular, monospace; font-style: italic; }
+  .cmp-settings-table td.actions { text-align: right; }
+
+  /* Compare view filter chips — sized to match the diff chips in the summary bar */
+  .compare-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted); font-size: 12px; line-height: 1.4; cursor: pointer; user-select: none; transition: border-color 0.12s, color 0.12s, background 0.12s; }
+  .compare-chip:hover { border-color: var(--accent-blue); color: var(--text-body); }
+  .compare-chip.active { background: var(--accent-blue); color: var(--bg-page); border-color: var(--accent-blue); font-weight: 600; }
+  .compare-chip-wrong.active { background: var(--accent-orange); border-color: var(--accent-orange); }
+  .compare-chip-missing.active { background: var(--accent-red); border-color: var(--accent-red); color: var(--text-on-accent); }
+  .compare-chip-extra.active { background: var(--accent-blue); border-color: var(--accent-blue); color: var(--bg-page); }
+  .compare-chip-match.active { background: var(--accent-green); border-color: var(--accent-green); color: var(--bg-page); }
+  .compare-cf-check { display: flex; align-items: center; margin-right: 8px; }
+  .compare-cf-check input { width: 14px; height: 14px; accent-color: var(--accent-blue); cursor: pointer; }
+  .compare-cat { margin-bottom: 8px; }
+  .compare-cat-title { font-size:13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 0 3px; border-bottom: 1px solid var(--bg-muted); margin-bottom: 4px; }
+  .compare-opt-group { border: 1px solid var(--bg-muted); border-radius: 4px; margin-bottom: 4px; overflow: hidden; }
+  .compare-opt-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; background: var(--bg-card); }
+  .compare-opt-header:hover { background: var(--bg-elevated); }
+  .compare-opt-icon { width: 14px; text-align: center; font-size:13px; }
+  .compare-opt-name { color: var(--text-body); flex: 1; }
+  .compare-opt-group.has-actions .compare-opt-header { border-left: 2px solid var(--accent-orange); }
+  .compare-opt-count { font-size:13px; color: var(--text-muted); min-width: 30px; text-align: right; }
+  .compare-opt-chevron { color: var(--text-secondary); font-size:12px; transition: transform 0.15s; }
+  .compare-opt-group.expanded .compare-opt-chevron { transform: rotate(90deg); }
+  .compare-opt-cfs { display: none; padding: 0 10px; }
+  .compare-opt-group.expanded .compare-opt-cfs { display: block; }
+  .compare-opt-cf-icon { width: 14px; text-align: center; font-size:13px; margin-right: 8px; }
+  .compare-opt-rec { font-size:11px; padding: 1px 4px; border-radius: 2px; background: var(--accent-green-bg); color: var(--accent-green); margin-left: 4px; }
+  .compare-action-label { font-size:11px; padding: 1px 5px; border-radius: 2px; margin-left: 6px; white-space: nowrap; }
+  .compare-action-label.add { background: var(--accent-green-bg); color: var(--accent-green); }
+  .compare-action-label.fix { background: var(--accent-orange-bg); color: var(--accent-orange); }
+  .compare-action-label.remove { background: var(--accent-red-bg); color: var(--accent-red-soft); }
+  .compare-action-label.wrong { background: var(--accent-orange-bg); color: var(--accent-orange); }

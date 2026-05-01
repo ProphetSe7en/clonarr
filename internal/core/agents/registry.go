@@ -57,6 +57,16 @@ type Provider interface {
 	// goroutine (via the asyncRun callback in DispatchAgent). Providers
 	// targeting external APIs with potentially high latency return true.
 	Async() bool
+
+	// FieldSpec returns the form layout the UI renders for this provider.
+	// Field Names must match Config struct json tags so the generic agent
+	// modal can bind inputs to agentModal.config[Name] and round-trip the
+	// values through the existing CRUD endpoints unchanged.
+	FieldSpec() FieldSpec
+
+	// DisplayName returns the human-readable label for the provider type
+	// (e.g. "Discord", "ntfy"). Used by the agent-type dropdown.
+	DisplayName() string
 }
 
 const (
@@ -175,6 +185,33 @@ func SupportedTypes() []string {
 	}
 	sort.Strings(types)
 	return types
+}
+
+// AgentTypeMeta is the manifest payload for one registered provider.
+type AgentTypeMeta struct {
+	Type      string    `json:"type"`
+	Label     string    `json:"label"`
+	FieldSpec FieldSpec `json:"fieldSpec"`
+}
+
+// AllAgentTypeMeta returns the list of registered providers with their
+// display labels and field specs. Sorted alphabetically by Type for stable
+// ordering in the UI.
+func AllAgentTypeMeta() []AgentTypeMeta {
+	types := SupportedTypes()
+	out := make([]AgentTypeMeta, 0, len(types))
+	for _, t := range types {
+		p, ok := GetProvider(t)
+		if !ok {
+			continue
+		}
+		out = append(out, AgentTypeMeta{
+			Type:      t,
+			Label:     p.DisplayName(),
+			FieldSpec: p.FieldSpec(),
+		})
+	}
+	return out
 }
 
 // unknownTypeError formats a user-facing error that lists all registered

@@ -36,6 +36,33 @@ func (pushoverProvider) Type() string {
 	return "pushover"
 }
 
+// DisplayName returns the human-readable label shown in the agent-type dropdown.
+func (pushoverProvider) DisplayName() string {
+	return "Pushover"
+}
+
+// FieldSpec describes the form layout for the Pushover agent modal.
+func (pushoverProvider) FieldSpec() FieldSpec {
+	return FieldSpec{
+		Groups: []FieldGroup{
+			{Kind: "field", Field: &Field{
+				Name:        "pushoverUserKey",
+				Kind:        "password",
+				Label:       "User Key",
+				Placeholder: "Your Pushover user key",
+				Required:    true,
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "pushoverAppToken",
+				Kind:        "password",
+				Label:       "App Token",
+				Placeholder: "App/API token from Pushover",
+				Required:    true,
+			}},
+		},
+	}
+}
+
 // Async returns true because Pushover sends are dispatched in background workers.
 func (pushoverProvider) Async() bool {
 	return true

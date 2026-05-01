@@ -113,8 +113,8 @@ type ImportedProfile struct {
 	CfStateOverrides      map[string]string `json:"cfStateOverrides,omitempty"`  // per-CF state overrides (required/optional)
 	VariantGoldenRule     string            `json:"variantGoldenRule,omitempty"` // builder: HD/UHD/none
 	VariantMisc           string            `json:"variantMisc,omitempty"`       // builder: Standard/SQP/none
-	TrashDescription      string            `json:"trashDescription,omitempty"`  // dev mode: profile description for TRaSH export
-	GroupNum              int               `json:"groupNum,omitempty"`          // dev mode: profile group number
+	TrashDescription      string            `json:"trashDescription,omitempty"`  // TRaSH schema: profile description for export
+	GroupNum              int               `json:"groupNum,omitempty"`          // TRaSH schema: profile group number
 	ImportedAt            string            `json:"importedAt"`
 }
 

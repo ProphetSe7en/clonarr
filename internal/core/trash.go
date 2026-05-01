@@ -1657,7 +1657,7 @@ func ParseCategoryPrefix(name string) (string, string) {
 
 // getCategoryOrder returns the display order for a CF category.
 // CategoryTier returns the sort tier for a CF category. Mirrors the
-// frontend _categoryTier in app.js. Used by CompareCFCategories.
+// frontend _categoryTier helper. Used by CompareCFCategories.
 //
 //	0 — regular TRaSH categories (alphabetical within tier)
 //	1 — SQP-prefix categories ([SQP], [SQP-1], [SQP-4 (MA Hybrid) Optional]...)

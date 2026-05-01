@@ -1,0 +1,25 @@
+{{define "modals/input-dialog"}}
+  <!-- Input modal (single text field) -->
+  <div class="modal-overlay" x-show="inputModal.show" @click.self="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()" x-cloak>
+    <div class="modal" style="max-width:420px">
+      <div class="modal-title" x-text="inputModal.title"></div>
+      <div x-show="inputModal.message" style="font-size:13px;color:#aaa;white-space:pre-line;line-height:1.6;margin-bottom:8px" x-text="inputModal.message"></div>
+      <input type="text" class="input" style="width:100%;font-size:13px;padding:6px 10px"
+             x-model="inputModal.value"
+             :placeholder="inputModal.placeholder || ''"
+             @keyup.enter="if (!inputModal.value || !inputModal.value.trim()) return; inputModal.show = false; if(inputModal.onConfirm) inputModal.onConfirm(inputModal.value)"
+             @keyup.escape="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()"
+             x-init="$watch('inputModal.show', v => { if (v) $nextTick(() => $el.focus()) })">
+      <div class="modal-actions">
+        <button class="btn" @click="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()">Cancel</button>
+        <button class="btn btn-primary"
+                :disabled="!inputModal.value || !inputModal.value.trim()"
+                :style="(!inputModal.value || !inputModal.value.trim()) ? 'opacity:0.4;cursor:not-allowed' : ''"
+                @click="if (!inputModal.value || !inputModal.value.trim()) return; inputModal.show = false; if(inputModal.onConfirm) inputModal.onConfirm(inputModal.value)">
+          <span x-text="inputModal.confirmLabel || 'OK'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}
