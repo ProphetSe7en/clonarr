@@ -432,6 +432,19 @@ function clonarr() {
       return this.instances.find(i => i.id === this.maintenanceInstanceId) || null;
     },
 
+    // True when the name typed in the CF Editor is byte-exact match
+    // against a TRaSH-published CF for the same app. Drives the small
+    // "guide" badge next to the Name field. Save is NEVER blocked —
+    // the user owns naming. The badge is informational only; the real
+    // cross-usage detection runs at sync-plan time.
+    get cfEditorTrashMatch() {
+      const name = (this.cfEditorForm?.name || '').trim();
+      if (!name) return false;
+      const appType = this.cfEditorForm?.appType;
+      const cfs = this.cfBrowseData?.[appType]?.cfs || [];
+      return cfs.some(c => c.name === name);
+    },
+
     async init() {
       // Apply saved UI scale
       if (this.uiScale !== '1') document.documentElement.style.zoom = this.uiScale;
@@ -3918,14 +3931,17 @@ function clonarr() {
         const trashCFs = await trashRes.json();
         const trashNames = new Set((trashCFs || []).map(c => c.name));
 
+        // Don't filter TRaSH-name matches out — the user owns their
+        // naming. Decorate them with a flag so the row can render an
+        // informational badge instead. Save still works.
         this.importCFList = arrCFs
-          .filter(cf => !trashNames.has(cf.name))  // skip TRaSH CFs
           .map(cf => ({
             name: cf.name,
             arrId: cf.id,
             specifications: cf.specifications,
             selected: false,
             exists: existingNames.has(cf.name),
+            trashMatch: trashNames.has(cf.name),
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
       } catch (e) {
@@ -3967,19 +3983,12 @@ function clonarr() {
             this.importCFResult = { error: true, message: result.error || 'Import failed' };
             return;
           }
-          // Surface trash-name collisions distinctly from custom-name dupes —
-          // the user needs to know if their Arr CF shares a name with a
-          // TRaSH-published CF, since that would flip-flop scores at sync time.
-          const trashSkipped = (result.skippedTrashCollisions || []).length;
+          // Only same-name-as-existing-custom collisions are skipped —
+          // TRaSH-name matches are allowed through (user owns naming).
           const customSkipped = (result.skippedCollisions || []).length;
-          let suffix = '';
-          if (trashSkipped > 0 && customSkipped > 0) {
-            suffix = ` (${trashSkipped} skipped — name collides with TRaSH; ${customSkipped} skipped as duplicates)`;
-          } else if (trashSkipped > 0) {
-            suffix = ` (${trashSkipped} skipped — name collides with TRaSH-published CF; rename in your Arr instance to import)`;
-          } else if (customSkipped > 0) {
-            suffix = ` (${customSkipped} skipped as duplicates)`;
-          }
+          const suffix = customSkipped > 0
+            ? ` (${customSkipped} skipped — same name as existing custom CF)`
+            : '';
           this.importCFResult = { error: false, message: `Imported ${result.added} CF(s)${suffix}` };
           // Mark imported CFs as existing
           for (const cf of this.importCFList) {

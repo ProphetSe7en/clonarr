@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.5.2
+
+### Changed
+- You can name your custom formats anything — including names
+  that match a TRaSH guide CF. A small "guide" badge shows up
+  in the editor and import list when names overlap, just so
+  you know.
+
+### Fixed
+- Quality profile language wasn't syncing back to the default
+  (e.g. "Original") if you'd previously overridden it. Re-sync
+  the profile and Arr will update.
+
 ## v2.5.1
 
 Reverse-proxy subpath hosting, login brute-force protection, and a

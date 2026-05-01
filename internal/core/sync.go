@@ -506,14 +506,25 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 		if targetProfile.UpgradeAllowed != desiredUpgradeAllowed {
 			plan.SettingsPreview = append(plan.SettingsPreview, fmt.Sprintf("Upgrades: %v → %v", targetProfile.UpgradeAllowed, desiredUpgradeAllowed))
 		}
-		// Language change
+		// Language change. Match the pattern used for the other settings:
+		// desired = TRaSH default by default, override replaces it. Earlier
+		// versions only previewed (and applied) language when an override
+		// was sent, so reverting from a previously-overridden value back to
+		// the TRaSH default silently no-op'd in Arr.
+		desiredLanguage := profile.Language
 		if req.Overrides != nil && req.Overrides.Language != nil {
-			prevLang := "Unknown"
+			desiredLanguage = *req.Overrides.Language
+		}
+		if desiredLanguage != "" {
+			prevLang := ""
 			if targetProfile.Language != nil {
 				prevLang = targetProfile.Language.Name
 			}
-			if !strings.EqualFold(prevLang, *req.Overrides.Language) {
-				plan.SettingsPreview = append(plan.SettingsPreview, fmt.Sprintf("Language: %s → %s", prevLang, *req.Overrides.Language))
+			if !strings.EqualFold(prevLang, desiredLanguage) {
+				if prevLang == "" {
+					prevLang = "Unknown"
+				}
+				plan.SettingsPreview = append(plan.SettingsPreview, fmt.Sprintf("Language: %s → %s", prevLang, desiredLanguage))
 			}
 		}
 		// Cutoff quality name change
@@ -959,7 +970,30 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		} else if targetProfile.MinUpgradeFormatScore < 1 {
 			targetProfile.MinUpgradeFormatScore = 1 // Arr requires minimum 1
 		}
-		// Apply user overrides (if any)
+		// Resolve desired language (override > TRaSH default) and apply
+		// unconditionally. Earlier versions only updated the language when
+		// an override was sent, which meant reverting a previously-set
+		// override back to the TRaSH default silently kept the old Arr
+		// value because the frontend skips sending overrides that match
+		// the default. Apply the same default-then-override pattern used
+		// for the score/upgrade settings above so Language behaves
+		// consistently — and only call ListLanguages once per sync.
+		desiredLanguageName := profile.Language
+		if req.Overrides != nil && req.Overrides.Language != nil {
+			desiredLanguageName = *req.Overrides.Language
+		}
+		if desiredLanguageName != "" {
+			if langs, err := client.ListLanguages(); err == nil {
+				for i := range langs {
+					if strings.EqualFold(langs[i].Name, desiredLanguageName) {
+						targetProfile.Language = &langs[i]
+						break
+					}
+				}
+			}
+		}
+		// Apply remaining user overrides (if any). Language is handled
+		// above so it is intentionally absent from this block.
 		if req.Overrides != nil {
 			log.Printf("Sync: applying overrides — %s", OverrideSummary(req.Overrides))
 			if req.Overrides.UpgradeAllowed != nil {
@@ -977,17 +1011,6 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 			if req.Overrides.CutoffFormatScore != nil {
 				targetProfile.CutoffFormatScore = *req.Overrides.CutoffFormatScore
-			}
-			if req.Overrides.Language != nil {
-				// Resolve language name → Arr language object
-				if langs, err := client.ListLanguages(); err == nil {
-					for i := range langs {
-						if strings.EqualFold(langs[i].Name, *req.Overrides.Language) {
-							targetProfile.Language = &langs[i]
-							break
-						}
-					}
-				}
 			}
 		}
 		// Detect profile-level setting changes
