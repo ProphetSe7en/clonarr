@@ -14,15 +14,15 @@
         </template>
         <template x-if="pb.editId">
           <div style="display:flex;gap:6px">
-            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save changes and sync to existing Arr profile'">Save & Sync</button>
-            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save and create as new Arr profile'">Create New</button>
+            <button class="btn" style="border-color:var(--accent-green-strong);color:var(--accent-green)" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save changes and sync to existing Arr profile'">Save & Sync</button>
+            <button class="btn" style="border-color:var(--accent-blue);color:var(--accent-blue)" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save and create as new Arr profile'">Create New</button>
           </div>
         </template>
       </div>
 
       <!-- Info banner when editing from Sync Rules -->
       <template x-if="_resyncReturnSubTab && pb.editId">
-        <div style="margin-top:8px;padding:8px 14px;background:#1a1500;border:1px solid #d29922;border-radius:6px;font-size:13px;color:#d29922;line-height:1.5">
+        <div style="margin-top:8px;padding:8px 14px;background:var(--accent-orange-bg);border:1px solid var(--accent-orange);border-radius:6px;font-size:13px;color:var(--accent-orange);line-height:1.5">
           <strong>Editing synced profile</strong> — Changes here modify the profile itself, which affects all sync rules using it. Use <strong>Save & Sync</strong> to apply changes to Arr, or <strong>Cancel</strong> to discard.
         </div>
       </template>
@@ -32,24 +32,24 @@
         <div class="profile-group-header" @click="pbSettingsOpen = !pbSettingsOpen">
           <span class="profile-group-chevron" :class="{ open: pbSettingsOpen }">&#9654;</span>
           <span>Profile Settings</span>
-          <span style="font-size:12px;color:#aaa;margin-left:auto" x-text="pbSelectedCount() + ' CFs selected'"></span>
+          <span style="font-size:12px;color:var(--text-muted);margin-left:auto" x-text="pbSelectedCount() + ' CFs selected'"></span>
         </div>
         <div x-show="pbSettingsOpen">
           <div style="padding:14px 20px;display:flex;flex-direction:column;gap:14px">
             <!-- Profile Name -->
             <div class="pb-header" style="margin-bottom:0">
-              <input type="text" x-model="pb.name" placeholder="Profile name..." :style="pb.name ? '' : 'border-bottom-color:#f85149'">
+              <input type="text" x-model="pb.name" placeholder="Profile name..." :style="pb.name ? '' : 'border-bottom-color:var(--accent-red)'">
             </div>
             <!-- Initialize from — pick a starting point for scores and settings. Tabs separate
                  the two import sources; user picks one, clicks Apply. Advanced users can also
                  skip this entirely (Builder opens blank). -->
-            <div class="pd-card" style="border-left:3px solid #f0883e">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #21262d">
-                <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Initialize from</span>
-                <span style="font-size:11px;color:#8b949e" x-text="pb.appType === 'radarr' ? 'Scores, cutoff, quality items and language get applied' : 'Scores, cutoff and quality items get applied'"></span>
+            <div class="pd-card" style="border-left:3px solid var(--accent-orange-bright)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted)">
+                <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Initialize from</span>
+                <span style="font-size:11px;color:var(--text-secondary)" x-text="pb.appType === 'radarr' ? 'Scores, cutoff, quality items and language get applied' : 'Scores, cutoff and quality items get applied'"></span>
               </div>
               <!-- Tab bar -->
-              <div style="display:inline-flex;background:#0d1117;border:1px solid #30363d;border-radius:6px;overflow:hidden;margin-bottom:12px">
+              <div style="display:inline-flex;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;overflow:hidden;margin-bottom:12px">
                 <button type="button" class="pb-init-tab" :class="pbInitTab === 'trash' ? 'active' : ''" @click="pbInitTab = 'trash'">TRaSH template</button>
                 <button type="button" class="pb-init-tab" :class="pbInitTab === 'instance' ? 'active' : ''" @click="pbInitTab = 'instance'">Instance profile</button>
               </div>
@@ -103,8 +103,8 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
               <!-- General card -->
               <div class="pd-card pd-card-general">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #21262d">
-                  <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">General</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted)">
+                  <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">General</span>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px">
                   <div class="pd-row" x-show="pb.appType === 'radarr'">
@@ -149,8 +149,8 @@
               <!-- Quality card. Spans full grid width when the items editor is open so
                    drag-drop has room (avoids column-count overflow in the narrow half-width). -->
               <div class="pd-card pd-card-quality" :style="pb.qualityEditorOpen ? 'grid-column:1/-1' : ''">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #21262d">
-                  <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted)">
+                  <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px">
                   <div class="pd-row">
@@ -180,28 +180,28 @@
                     </select>
                   </div>
                 </div>
-                <div style="margin-top:14px;padding-top:10px;border-top:1px solid #21262d;display:flex;align-items:center;justify-content:space-between;gap:10px">
+                <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--bg-muted);display:flex;align-items:center;justify-content:space-between;gap:10px">
                   <div style="display:flex;align-items:center;gap:8px;min-width:0">
-                    <span style="font-size:13px;color:#aaa">Quality Items</span>
+                    <span style="font-size:13px;color:var(--text-muted)">Quality Items</span>
                     <template x-if="(pb.qualityItems || []).length > 0">
-                      <span style="font-size:11px;color:#8b949e;background:#21262d;padding:1px 6px;border-radius:8px" x-text="pb.qualityItems.filter(q => q.allowed).length + '/' + pb.qualityItems.length + ' allowed'"></span>
+                      <span style="font-size:11px;color:var(--text-secondary);background:var(--bg-muted);padding:1px 6px;border-radius:8px" x-text="pb.qualityItems.filter(q => q.allowed).length + '/' + pb.qualityItems.length + ' allowed'"></span>
                     </template>
                   </div>
-                  <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#a371f7;color:#a371f7"
+                  <button class="btn" style="font-size:12px;padding:2px 10px;border-color:var(--accent-purple);color:var(--accent-purple)"
                           @click="pb.qualityEditorOpen = !pb.qualityEditorOpen; if(pb.qualityEditorOpen) { if(pb.qualityItems.length === 0) pbInitQualityEditor(); pbEnsureQualityIds(); } else { qsCloseSharedState(); }"
                           x-text="pb.qualityEditorOpen ? '✓ Done' : 'Edit Quality Items'"></button>
                 </div>
-                <div x-show="pb.qualityAllowedNames && !pb.qualityEditorOpen" style="margin-top:8px;font-size:12px;color:#aaa">
-                  <span style="color:#58a6ff" x-text="pb.cutoff"></span>
+                <div x-show="pb.qualityAllowedNames && !pb.qualityEditorOpen" style="margin-top:8px;font-size:12px;color:var(--text-muted)">
+                  <span style="color:var(--accent-blue)" x-text="pb.cutoff"></span>
                   <span style="margin:0 3px">—</span>
-                  <span style="color:#aaa" x-text="pb.qualityAllowedNames"></span>
+                  <span style="color:var(--text-muted)" x-text="pb.qualityAllowedNames"></span>
                 </div>
 
                 <!-- CF Group Variants sub-section — only shown when the current template/profile
                      exposes variant-configurable groups (Golden Rule, Miscellaneous). -->
                 <template x-if="pbHasGroupVariants()">
-                  <div style="margin-top:14px;padding-top:10px;border-top:1px solid #21262d">
-                    <div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">CF Group Variants</div>
+                  <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--bg-muted)">
+                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">CF Group Variants</div>
                     <div style="display:flex;flex-direction:column;gap:4px">
                       <div class="pd-row" x-show="pbGroupVariant('Golden Rule')">
                         <span class="pd-label">Golden Rule</span>
@@ -229,18 +229,18 @@
                      Uses qs-* helpers with target='builder' so all drag-drop/rename/group operations
                      mutate pb.qualityItems instead of qualityStructure. Edit Groups toggle + expanded +
                      rename + drag state are shared (only one editor open at a time). -->
-                <div x-show="pb.qualityEditorOpen" x-cloak style="margin-top:12px;border-top:1px solid #21262d;padding-top:12px"
+                <div x-show="pb.qualityEditorOpen" x-cloak style="margin-top:12px;border-top:1px solid var(--bg-muted);padding-top:12px"
                      :class="qualityStructureEditMode ? 'qs-edit-on' : ''">
                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-                    <div style="font-size:12px;color:#aaa" x-show="!qualityStructureEditMode">Toggle resolutions on/off. Qualities higher in the list are more preferred.</div>
-                    <div style="font-size:12px;color:#aaa" x-show="qualityStructureEditMode">Drag rows to reorder · drop on a row to merge · click group name to rename</div>
+                    <div style="font-size:12px;color:var(--text-muted)" x-show="!qualityStructureEditMode">Toggle resolutions on/off. Qualities higher in the list are more preferred.</div>
+                    <div style="font-size:12px;color:var(--text-muted)" x-show="qualityStructureEditMode">Drag rows to reorder · drop on a row to merge · click group name to rename</div>
                     <div style="flex:1"></div>
                     <button class="btn" style="font-size:12px;padding:2px 10px"
-                            :style="qualityStructureEditMode ? 'background:#238636;border-color:#238636;color:#fff' : ''"
+                            :style="qualityStructureEditMode ? 'background:var(--accent-green-strong);border-color:var(--accent-green-strong);color:var(--text-on-accent)' : ''"
                             @click="qualityStructureEditMode = !qualityStructureEditMode; if (!qualityStructureEditMode) { qualityStructureExpanded = {}; qualityStructureRenaming = null; }">
                       <span x-text="qualityStructureEditMode ? '✓ Done Editing Groups' : 'Edit Groups'"></span>
                     </button>
-                    <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#d29922;color:#d29922"
+                    <button class="btn" style="font-size:12px;padding:2px 10px;border-color:var(--accent-orange);color:var(--accent-orange)"
                             x-tt="'Clear quality items — re-apply a preset to repopulate'"
                             @click="qsResetAll('builder')">Reset</button>
                   </div>
@@ -292,7 +292,7 @@
                           <template x-if="qualityStructureRenaming !== item._id">
                             <span class="qs-name"
                                   :class="(qualityStructureEditMode && item.items) ? 'editable' : ''"
-                                  :style="item.allowed ? 'color:#e1e4e8' : 'color:#aaa'"
+                                  :style="item.allowed ? 'color:var(--text-primary)' : 'color:var(--text-muted)'"
                                   @click="if (qualityStructureEditMode && item.items) qsStartRename(item)"
                                   x-text="item.name"></span>
                           </template>
@@ -346,22 +346,22 @@
 
             <!-- TRaSH schema fields — collapsible, grey stripe. Gated by CLONARR_DEV_FEATURES env + trashSchemaFields toggle. -->
             <template x-if="config.devFeatures && config.trashSchemaFields">
-              <div class="pd-card" style="border-left:3px solid #6e7681;padding:10px 18px">
+              <div class="pd-card" style="border-left:3px solid var(--text-muted-secondary);padding:10px 18px">
                 <div @click="pbAdvancedOpen = !pbAdvancedOpen" style="cursor:pointer;display:flex;align-items:center;gap:8px">
-                  <span style="color:#8b949e" x-text="pbAdvancedOpen ? '▾' : '▸'"></span>
-                  <span style="font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;font-weight:700">Advanced Mode</span>
-                  <span style="font-size:11px;color:#8b949e">TRaSH ID, Group number, HTML description</span>
+                  <span style="color:var(--text-secondary)" x-text="pbAdvancedOpen ? '▾' : '▸'"></span>
+                  <span style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;font-weight:700">Advanced Mode</span>
+                  <span style="font-size:11px;color:var(--text-secondary)">TRaSH ID, Group number, HTML description</span>
                 </div>
                 <div x-show="pbAdvancedOpen" style="margin-top:12px">
                 <div class="pb-dev-fields">
-                  <div style="font-size:12px;color:#d29922;margin-bottom:6px">Advanced fields</div>
+                  <div style="font-size:12px;color:var(--accent-orange);margin-bottom:6px">Advanced fields</div>
                 <div class="pb-wide-row" style="margin-bottom:6px">
                   <span class="pb-lbl">Trash ID</span>
                   <input type="text" class="pb-input" x-model="pb.trashProfileId" placeholder="UUID" style="width:240px;font-family:monospace">
                   <button class="btn btn-sm" @click="pb.trashProfileId = genUUID(true)" style="padding:2px 8px;font-size:12px">Generate</button>
-                  <span style="font-size:13px;color:#aaa;margin-left:8px">Score Set</span>
+                  <span style="font-size:13px;color:var(--text-muted);margin-left:8px">Score Set</span>
                   <input type="text" class="pb-input" x-model="pb.trashScoreSet" @change="_pbSaveDefaults()" placeholder="e.g. sqp-3" style="width:100px">
-                  <span style="font-size:13px;color:#aaa;margin-left:8px">Group</span>
+                  <span style="font-size:13px;color:var(--text-muted);margin-left:8px">Group</span>
                   <input type="number" class="pb-input" x-model.number="pb.groupNum" style="width:50px">
                 </div>
                 <div class="pb-wide-row" style="align-items:flex-start">
@@ -396,19 +396,19 @@
               <span class="pb-cat-count" x-text="pbFormatItemCount() + ' in formatItems'"></span>
             </div>
             <div x-show="pbExpandedCats['__formatItems__'] ?? true">
-              <div style="padding:8px 16px;font-size:12px;color:#aaa;border-bottom:1px solid #161b22;line-height:1.5">
-                These CFs are added to the profile's <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#c9d1d9;font-size:13px">formatItems</code> — they are mandatory and always synced. End users cannot disable them.
+              <div style="padding:8px 16px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--bg-card);line-height:1.5">
+                These CFs are added to the profile's <code style="background:var(--bg-muted);padding:1px 4px;border-radius:2px;color:var(--text-body);font-size:13px">formatItems</code> — they are mandatory and always synced. End users cannot disable them.
               </div>
               <!-- Clear All button (above CFs) -->
               <div x-show="pbFormatItemCFList().length > 0" style="padding:6px 16px 0;display:flex;justify-content:flex-end">
-                <button class="btn" style="font-size:12px;padding:2px 10px;color:#f85149;border-color:#f85149"
+                <button class="btn" style="font-size:12px;padding:2px 10px;color:var(--accent-red);border-color:var(--accent-red)"
                         @click="const fis = Object.keys(pb.formatItemCFs || {}); fis.forEach(tid => { delete pb.formatItemCFs[tid]; delete pb.selectedCFs[tid]; }); pb.formatItemCFs = {...pb.formatItemCFs}; pb.selectedCFs = {...pb.selectedCFs}">
                   Clear All
                 </button>
               </div>
               <!-- Selected formatItem CFs (multi-column compact view) -->
               <div x-show="pbFormatItemCFList().length > 0"
-                   :style="'padding:10px 28px 14px;border-bottom:1px solid #161b22;column-count:' + (pbFormatItemCFList().length > 20 ? 3 : pbFormatItemCFList().length > 10 ? 2 : 1) + ';column-gap:32px'">
+                   :style="'padding:10px 28px 14px;border-bottom:1px solid var(--bg-card);column-count:' + (pbFormatItemCFList().length > 20 ? 3 : pbFormatItemCFList().length > 10 ? 2 : 1) + ';column-gap:32px'">
                 <template x-for="cf in pbFormatItemCFList()" :key="'fis-'+cf.trashId">
                   <div style="break-inside:avoid;display:flex;align-items:center;gap:6px;padding:3px 0">
                     <label class="toggle toggle-sm" style="flex-shrink:0">
@@ -429,8 +429,8 @@
                 </template>
               </div>
               <!-- Add more CFs (collapsed, with search) -->
-              <div style="padding:6px 16px;border-top:1px solid #161b22;display:flex;align-items:center;gap:12px">
-                <span style="font-size:13px;color:#58a6ff;cursor:pointer;flex-shrink:0"
+              <div style="padding:6px 16px;border-top:1px solid var(--bg-card);display:flex;align-items:center;gap:12px">
+                <span style="font-size:13px;color:var(--accent-blue);cursor:pointer;flex-shrink:0"
                       @click="pbAddMoreOpen = !pbAddMoreOpen; pbFormatItemSearch = ''"
                       x-text="pbAddMoreOpen ? '▾ Hide available CFs' : '▸ Add more CFs...'"></span>
                 <template x-if="pbAddMoreOpen">
@@ -454,7 +454,7 @@
                             @mouseleave="hideCFTooltip()">ⓘ</span>
                     </div>
                   </template>
-                  <div x-show="pbFilteredAvailableCFs().length === 0" style="font-size:12px;color:#aaa;padding:4px 0">
+                  <div x-show="pbFilteredAvailableCFs().length === 0" style="font-size:12px;color:var(--text-muted);padding:4px 0">
                     No matching CFs found
                   </div>
                 </div>
@@ -463,8 +463,8 @@
           </div>
 
           <!-- ===== SECTION 2: CF Groups ===== -->
-          <div style="font-size:13px;font-weight:500;color:#e1e4e8;margin:16px 0 8px">CF Groups</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:12px;line-height:1.5">
+          <div style="font-size:13px;font-weight:500;color:var(--text-primary);margin:16px 0 8px">CF Groups</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
             Each group is an independent set of CFs. Use the toggle to include a group for this profile.
             Use <span class="pb-state-pill active-req" style="cursor:default;font-size:11px">Req</span>
             <span class="pb-state-pill active-opt" style="cursor:default;font-size:11px">Opt</span>
@@ -501,11 +501,11 @@
               </div>
               <!-- Group description -->
               <div x-show="pbExpandedGroups[group.groupTrashId] && group.trashDescription"
-                   style="padding:8px 16px;font-size:12px;color:#aaa;border-bottom:1px solid #161b22;line-height:1.6"
+                   style="padding:8px 16px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--bg-card);line-height:1.6"
                    x-html="sanitizeHTML(group.trashDescription)"></div>
               <!-- Exclusive warning -->
               <div x-show="pbExpandedGroups[group.groupTrashId] && group.exclusive"
-                   style="padding:8px 16px;font-size:12px;color:#d29922;line-height:1.5">
+                   style="padding:8px 16px;font-size:12px;color:var(--accent-orange);line-height:1.5">
                 Please ensure you only score or enable one of them in your Quality Profile!
               </div>
               <!-- CFs in this group -->
@@ -530,7 +530,7 @@
                             @mouseenter="showCFTooltip($event, cf.description)"
                             @mouseleave="hideCFTooltip()">ⓘ</span>
                       <template x-if="config.devFeatures && config.trashSchemaFields">
-                        <span style="font-size:12px;color:#aaa;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
+                        <span style="font-size:12px;color:var(--text-muted);font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
                       </template>
                     </div>
                     <!-- Three-state pills: Req / Opt / Fmt -->
@@ -583,8 +583,8 @@
         </template>
         <template x-if="pb.editId">
           <div style="display:flex;gap:6px">
-            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save changes and sync to existing Arr profile'">Save & Sync</button>
-            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save and create as new Arr profile'">Create New</button>
+            <button class="btn" style="border-color:var(--accent-green-strong);color:var(--accent-green)" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save changes and sync to existing Arr profile'">Save & Sync</button>
+            <button class="btn" style="border-color:var(--accent-blue);color:var(--accent-blue)" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save and create as new Arr profile'">Create New</button>
           </div>
         </template>
       </div>

@@ -2,24 +2,24 @@
       <!-- ===== Custom Formats sub-tab ===== -->
       <div class="page" x-show="currentSection === 'custom-formats'">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Custom Formats</div>
-        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">All Custom Formats from TRaSH Guides, organized by category. Use Create to build a custom format from scratch, or Import to add existing formats from an Arr instance or JSON.</div>
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">All Custom Formats from TRaSH Guides, organized by category. Use Create to build a custom format from scratch, or Import to add existing formats from an Arr instance or JSON.</div>
 
         <template x-if="getCFBrowseGroups(activeAppType).length > 0">
           <div>
             <div style="padding:0 0 12px;display:flex;align-items:center;justify-content:space-between">
-              <div style="font-size:14px;color:#aaa">
-                Showing <strong style="color:#e1e4e8" x-text="(getCFBrowseGroups(activeAppType) || []).reduce((acc, c) => acc + (c.totalCFs || 0), 0)"></strong> Custom Formats.
+              <div style="font-size:14px;color:var(--text-muted)">
+                Showing <strong style="color:var(--text-primary)" x-text="(getCFBrowseGroups(activeAppType) || []).reduce((acc, c) => acc + (c.totalCFs || 0), 0)"></strong> Custom Formats.
               </div>
               <div style="display:flex;gap:8px;margin-left:12px;flex-shrink:0">
-                <button class="btn btn-sm" style="background:#1f6feb;color:#fff;white-space:nowrap" @click="openCFEditor('create', activeAppType)">Create</button>
-                <button class="btn btn-sm" style="background:#238636;color:#fff;white-space:nowrap" @click="openImportCFModal(activeAppType)">Import</button>
+                <button class="btn btn-sm" style="background:var(--accent-blue-strong);color:var(--text-on-accent);white-space:nowrap" @click="openCFEditor('create', activeAppType)">Create</button>
+                <button class="btn btn-sm" style="background:var(--accent-green-strong);color:var(--text-on-accent);white-space:nowrap" @click="openImportCFModal(activeAppType)">Import</button>
               </div>
             </div>
             <template x-for="cat in getCFBrowseGroups(activeAppType)" :key="cat.displayName">
               <div class="detail-section" :class="getCategoryClass(cat.category)" style="margin-bottom:8px">
                 <div class="detail-section-header" @click="toggleDetailSection('cfb_' + cat.displayName)" style="cursor:pointer"
-                     :style="cat.isCustom ? 'border-left:3px solid #d29922;background:#1a1500' : ''">
-                  <div class="detail-section-label" :style="cat.isCustom ? 'color:#d29922' : ''" x-text="cat.displayName"></div>
+                     :style="cat.isCustom ? 'border-left:3px solid var(--accent-orange);background:var(--accent-orange-bg)' : ''">
+                  <div class="detail-section-label" :style="cat.isCustom ? 'color:var(--accent-orange)' : ''" x-text="cat.displayName"></div>
                   <div class="detail-section-count" x-text="cat.totalCFs + ' CFs'"></div>
                   <span class="detail-section-chevron" :class="{ open: detailSections['cfb_' + cat.displayName] }">&#9654;</span>
                 </div>
@@ -34,10 +34,10 @@
                               <div class="cf-row">
                                 <div class="cf-name" style="flex:1">
                                   <span x-text="cf.name"></span>
-                                  <span x-show="cf.isCustom" style="font-size:12px;color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
+                                  <span x-show="cf.isCustom" style="font-size:12px;color:var(--accent-orange);border:1px solid var(--accent-orange);border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
                                   <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:#58a6ff;cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'">&#9998;</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:#f85149;cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'">&#10005;</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-blue);cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'">&#9998;</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-red);cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'">&#10005;</span>
                                 </div>
                                 <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
                                      x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
@@ -54,10 +54,10 @@
                               <div class="cf-row">
                                 <div class="cf-name" style="flex:1">
                                   <span x-text="cf.name"></span>
-                                  <span x-show="cf.isCustom" style="font-size:12px;color:#d29922;border:1px solid #d29922;border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
+                                  <span x-show="cf.isCustom" style="font-size:12px;color:var(--accent-orange);border:1px solid var(--accent-orange);border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
                                   <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:#58a6ff;cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'">&#9998;</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:#f85149;cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'">&#10005;</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-blue);cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'">&#9998;</span>
+                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-red);cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'">&#10005;</span>
                                 </div>
                                 <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
                                      x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
@@ -75,7 +75,7 @@
                               <span class="detail-section-chevron" style="font-size:12px"
                                     :class="{ open: groupExpanded['cfb_' + cat.displayName + '/' + group.shortName] }">&#9654;</span>
                               <span x-text="group.shortName"></span>
-                              <span style="font-size:13px;color:#aaa" x-text="group.cfs.length + ' CFs'"></span>
+                              <span style="font-size:13px;color:var(--text-muted)" x-text="group.cfs.length + ' CFs'"></span>
                             </div>
                           </div>
                           <div x-show="groupExpanded['cfb_' + cat.displayName + '/' + group.shortName]"

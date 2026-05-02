@@ -18,11 +18,11 @@
       <template x-if="trashStatus.cloned">
         <span @click="showChangelog = !showChangelog" style="cursor:pointer" x-tt="'Click for changelog'">
           <span class="sync-label">TRaSH synced</span> <span x-text="formatSyncTime(trashStatus.lastPull)"></span>
-          <span class="sync-commit" x-show="trashStatus.commitHash" style="color:#aaa;font-size:12px;margin-left:4px" x-text="trashStatus.commitHash"></span>
+          <span class="sync-commit" x-show="trashStatus.commitHash" style="color:var(--text-muted);font-size:12px;margin-left:4px" x-text="trashStatus.commitHash"></span>
           <span class="sync-next" x-show="config.pullInterval && config.pullInterval !== 'off' && trashStatus.lastPull"
-                style="color:#aaa;font-size:12px;margin-left:6px"
+                style="color:var(--text-muted);font-size:12px;margin-left:6px"
                 x-text="'· next ' + nextPullTime()"></span>
-          <span style="color:#aaa;font-size:12px;margin-left:2px;transition:transform 0.2s;display:inline-block"
+          <span style="color:var(--text-muted);font-size:12px;margin-left:2px;transition:transform 0.2s;display:inline-block"
                 :style="showChangelog ? 'transform:rotate(180deg)' : ''">&#9662;</span>
         </span>
       </template>
@@ -40,40 +40,40 @@
         <!-- Last pull diff -->
         <template x-if="trashStatus.lastDiff">
           <div>
-            <div style="padding:10px 16px 8px;font-size:13px;font-weight:600;color:#e1e4e8;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center">
-              <span>Latest Update <span style="font-size:12px;color:#aaa;font-weight:400" x-text="trashStatus.lastDiff.time ? formatSyncTime(trashStatus.lastDiff.time) : ''"></span></span>
-              <span style="font-size:12px;color:#aaa;font-weight:400" x-text="trashStatus.lastDiff.prevCommit + ' → ' + trashStatus.lastDiff.newCommit"></span>
+            <div style="padding:10px 16px 8px;font-size:13px;font-weight:600;color:var(--text-primary);border-bottom:1px solid var(--bg-muted);display:flex;justify-content:space-between;align-items:center">
+              <span>Latest Update <span style="font-size:12px;color:var(--text-muted);font-weight:400" x-text="trashStatus.lastDiff.time ? formatSyncTime(trashStatus.lastDiff.time) : ''"></span></span>
+              <span style="font-size:12px;color:var(--text-muted);font-weight:400" x-text="trashStatus.lastDiff.prevCommit + ' → ' + trashStatus.lastDiff.newCommit"></span>
             </div>
-            <div style="padding:10px 16px;border-bottom:1px solid #30363d;font-size:12px;color:#c9d1d9;white-space:pre-line;line-height:1.6"
+            <div style="padding:10px 16px;border-bottom:1px solid var(--border-subtle);font-size:12px;color:var(--text-body);white-space:pre-line;line-height:1.6"
                  x-text="trashStatus.lastDiff.summary.replace(/\*\*/g, '').replace(/^\n/, '')"></div>
           </div>
         </template>
 
         <!-- TRaSH Changelog (updates.txt) -->
-        <div style="padding:10px 16px 8px;font-size:13px;font-weight:600;color:#e1e4e8;border-bottom:1px solid #21262d;display:flex;justify-content:space-between;align-items:center">
+        <div style="padding:10px 16px 8px;font-size:13px;font-weight:600;color:var(--text-primary);border-bottom:1px solid var(--bg-muted);display:flex;justify-content:space-between;align-items:center">
           TRaSH Changelog
-          <span style="font-size:12px;color:#aaa;font-weight:400">from updates.txt</span>
+          <span style="font-size:12px;color:var(--text-muted);font-weight:400">from updates.txt</span>
         </div>
         <template x-if="!trashStatus.changelog || trashStatus.changelog.length === 0">
-          <div style="padding:16px;font-size:12px;color:#aaa;text-align:center">No changelog available</div>
+          <div style="padding:16px;font-size:12px;color:var(--text-muted);text-align:center">No changelog available</div>
         </template>
         <template x-for="section in (trashStatus.changelog || [])" :key="section.date">
-          <div style="padding:10px 16px;border-bottom:1px solid #21262d">
-            <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:6px;display:flex;justify-content:space-between">
+          <div style="padding:10px 16px;border-bottom:1px solid var(--bg-muted)">
+            <div style="font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:6px;display:flex;justify-content:space-between">
               <span x-text="formatChangelogDate(section.date)"></span>
-              <span style="color:#aaa;font-weight:400" x-text="section.entries.length + (section.entries.length === 1 ? ' change' : ' changes')"></span>
+              <span style="color:var(--text-muted);font-weight:400" x-text="section.entries.length + (section.entries.length === 1 ? ' change' : ' changes')"></span>
             </div>
             <template x-for="entry in section.entries" :key="entry.pr || entry.msg">
               <div style="display:flex;align-items:flex-start;gap:8px;padding:3px 0;font-size:12px;line-height:1.4">
                 <span style="font-size:12px;font-weight:600;padding:1px 6px;border-radius:3px;flex-shrink:0;margin-top:1px"
-                      :style="entry.type === 'feat' ? 'background:#1b3a2a;color:#3fb950' : entry.type === 'fix' ? 'background:#3d2e0a;color:#d29922' : 'background:#1c2333;color:#58a6ff'"
+                      :style="entry.type === 'feat' ? 'background:var(--badge-feat-bg);color:var(--accent-green)' : entry.type === 'fix' ? 'background:var(--accent-orange-bg);color:var(--accent-orange)' : 'background:var(--bg-panel);color:var(--accent-blue)'"
                       x-text="entry.type"></span>
                 <span>
-                  <span style="color:#aaa" x-text="entry.scope + ':'"></span>
-                  <span style="color:#c9d1d9" x-text="entry.msg"></span>
+                  <span style="color:var(--text-muted)" x-text="entry.scope + ':'"></span>
+                  <span style="color:var(--text-body)" x-text="entry.msg"></span>
                   <a x-show="entry.pr" :href="'https://github.com/TRaSH-Guides/Guides/pull/' + entry.pr"
-                     target="_blank" rel="noopener" style="color:#aaa;font-size:12px;text-decoration:none;margin-left:4px"
-                     @mouseenter="$el.style.color='#58a6ff'" @mouseleave="$el.style.color='#aaa'"
+                     target="_blank" rel="noopener" style="color:var(--text-muted);font-size:12px;text-decoration:none;margin-left:4px"
+                     @mouseenter="$el.style.color='var(--accent-blue)'" @mouseleave="$el.style.color='var(--text-muted)'"
                      x-text="'#' + entry.pr"></a>
                 </span>
               </div>
@@ -85,7 +85,7 @@
     <!-- User menu: username + logout when authenticated, "Local" badge when
          reaching via Trusted-Networks bypass, nothing when auth=none. -->
     <div x-show="authStatus.authenticated || authStatus.localBypass" x-cloak
-         style="margin-left:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:#8b949e">
+         style="margin-left:12px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)">
       <template x-if="authStatus.authenticated">
         <div style="display:flex;align-items:center;gap:8px">
           <span x-text="authStatus.username" x-tt="'Logged in as ' + authStatus.username"
@@ -97,7 +97,7 @@
         </div>
       </template>
       <template x-if="!authStatus.authenticated && authStatus.localBypass">
-        <span style="background:#1a2f45;color:#58a6ff;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:500;letter-spacing:0.3px;border:1px solid #1f3b5a"
+        <span style="background:var(--fill-blue-dark);color:var(--accent-blue);padding:3px 8px;border-radius:10px;font-size:10px;font-weight:500;letter-spacing:0.3px;border:1px solid var(--fill-blue-dark)"
               x-tt="'Local network — authentication bypassed for this network'">Local</span>
       </template>
     </div>
@@ -106,12 +106,12 @@
   <!-- No-auth warning banner — dismissible per-browser via localStorage.
        Server logs a warning every 60s regardless of dismissal. -->
   <div x-show="authStatus.authentication === 'none' && !noAuthBannerDismissed" x-cloak
-       style="background:#5a1f1f;border-bottom:2px solid #8b2d2d;color:#ffdada;padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:13px;font-weight:500">
+       style="background:var(--banner-warn-bg);border-bottom:2px solid var(--banner-warn-border);color:var(--banner-warn-text);padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:13px;font-weight:500">
     <span style="flex:1;text-align:center">
       ⚠️ Authentication is disabled — anyone who reaches this URL is admin. Set Authentication to Forms or Basic in <strong>Settings → Security</strong>, or make sure another auth layer (reverse proxy, firewall) is in front.
     </span>
     <button @click="dismissNoAuthBanner()" x-tt="'Hide on this device'"
-            style="background:rgba(255,255,255,0.12);color:#ffdada;border:1px solid rgba(255,218,218,0.3);padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">
+            style="background:rgba(255,255,255,0.12);color:var(--banner-warn-text);border:1px solid rgba(255,218,218,0.3);padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">
       Dismiss
     </button>
   </div>

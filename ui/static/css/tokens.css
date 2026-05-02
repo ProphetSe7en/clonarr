@@ -97,6 +97,19 @@
   --grp-german: #f0883e;
   --grp-imported: #8b949e;
   --grp-other: #8b949e;
+
+  /* Code syntax (used in <pre>/<code> blocks rendering naming patterns) */
+  --code-string: #9ecbaa;
+
+  /* Status badges (used in changelog dropdown) */
+  --badge-feat-bg: #1b3a2a;
+  --badge-fix-bg: #3d2e0a;
+  --badge-other-bg: #1c2333;
+
+  /* No-auth warning banner */
+  --banner-warn-bg: #5a1f1f;
+  --banner-warn-border: #8b2d2d;
+  --banner-warn-text: #ffdada;
 }
 
 :root[data-theme="light"] {
@@ -120,8 +133,8 @@
   --text-primary: #1f2328;
   --text-body: #24292f;
   --text-secondary: #57606a;
-  --text-muted: #6e7681;
-  --text-muted-secondary: #8b949e;
+  --text-muted: #57606a;
+  --text-muted-secondary: #6e7681;
   --text-soft: #57606a;
   --text-inverse: #ffffff;
   --text-on-accent: #ffffff;
@@ -175,4 +188,17 @@
   /* CF categories / profile groups inherit dark-mode values from :root —
      they are decorative chips that read on either background, and the
      backend manifest may override them at runtime. */
+
+  /* Code syntax (light-mode override for naming-pattern blocks) */
+  --code-string: #1a7f37;
+
+  /* Status badges (light-mode override) */
+  --badge-feat-bg: #dafbe1;
+  --badge-fix-bg: #fff8c5;
+  --badge-other-bg: #ddf4ff;
+
+  /* No-auth warning banner (light-mode override) */
+  --banner-warn-bg: #ffebe9;
+  --banner-warn-border: #ffcecb;
+  --banner-warn-text: #82071e;
 }

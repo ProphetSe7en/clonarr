@@ -2,13 +2,13 @@
       <!-- ===== Quality Definitions sub-tab ===== -->
       <div class="page" x-show="currentSection === 'quality-size'">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Quality Definitions</div>
-        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">TRaSH recommended file sizes (MB per minute of video) for each quality. These limits help Radarr/Sonarr choose the right quality when multiple releases are available. Select an instance to compare current values and sync.</div>
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">TRaSH recommended file sizes (MB per minute of video) for each quality. These limits help Radarr/Sonarr choose the right quality when multiple releases are available. Select an instance to compare current values and sync.</div>
         <template x-if="getQualitySizes(activeAppType).length > 0">
           <div>
             <!-- Instance selector + quality size type -->
             <div class="card" style="padding:0;overflow:visible">
-              <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #21262d">
-                <span style="font-size:13px;color:#aaa">Instance:</span>
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--bg-muted)">
+                <span style="font-size:13px;color:var(--text-muted)">Instance:</span>
                 <select class="input" style="width:200px;font-size:12px;padding:4px 8px"
                         @change="qsInstanceId = { ...qsInstanceId, [activeAppType]: $event.target.value }; if ($event.target.value) { const _inst = instances.find(i => i.id === $event.target.value); if (_inst) testInstance(_inst); loadInstanceQS(activeAppType, $event.target.value); }">
                   <option value="" :selected="!qsInstanceId[activeAppType]">TRaSH only</option>
@@ -17,20 +17,20 @@
                   </template>
                 </select>
                 <template x-if="qsInstanceId[activeAppType] && instanceStatus[qsInstanceId[activeAppType]] === 'connected'">
-                  <span style="font-size:13px;color:#3fb950">Connected</span>
+                  <span style="font-size:13px;color:var(--accent-green)">Connected</span>
                 </template>
                 <template x-if="qsInstanceId[activeAppType] && instanceStatus[qsInstanceId[activeAppType]] === 'failed'">
-                  <span style="font-size:13px;color:#f85149">Connection failed</span>
+                  <span style="font-size:13px;color:var(--accent-red)">Connection failed</span>
                 </template>
                 <template x-if="qsInstanceId[activeAppType] && !instanceStatus[qsInstanceId[activeAppType]]">
-                  <span style="font-size:13px;color:#d29922">Not tested</span>
+                  <span style="font-size:13px;color:var(--accent-orange)">Not tested</span>
                 </template>
                 <template x-if="!qsInstanceId[activeAppType]">
-                  <span style="font-size:13px;color:#aaa">Select an instance to compare and sync</span>
+                  <span style="font-size:13px;color:var(--text-muted)">Select an instance to compare and sync</span>
                 </template>
               </div>
               <div style="display:flex;gap:8px;align-items:center;padding:10px 16px">
-                <span style="font-size:13px;color:#aaa">Type:</span>
+                <span style="font-size:13px;color:var(--text-muted)">Type:</span>
                 <template x-for="(qsType, idx) in getQualitySizes(activeAppType)" :key="qsType.trash_id">
                   <button class="btn btn-sm"
                           :class="{ 'btn-primary': (selectedQSType[activeAppType] || 0) === idx }"
@@ -52,9 +52,9 @@
 
             <div class="card" style="padding:16px 20px">
               <!-- Auto-sync toggle bar (above header when instance selected) -->
-              <div style="display:flex;align-items:center;justify-content:flex-end;padding:8px 0 6px;border-bottom:1px solid #21262d;gap:8px"
+              <div style="display:flex;align-items:center;justify-content:flex-end;padding:8px 0 6px;border-bottom:1px solid var(--bg-muted);gap:8px"
                    x-show="qsInstanceId[activeAppType]">
-                <label style="font-size:13px;color:#aaa;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+                <label style="font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
                   <span>Auto-sync</span>
                   <label class="toggle">
                     <input type="checkbox"
@@ -64,41 +64,41 @@
                   </label>
                 </label>
                 <template x-if="qsAutoSync[activeAppType]?.enabled && qsAutoSync[activeAppType]?.type === (getQualitySizes(activeAppType)[selectedQSType[activeAppType] || 0]?.type || '')">
-                  <span style="font-size:12px;color:#aaa">Syncs Auto-mode qualities on every TRaSH pull</span>
+                  <span style="font-size:12px;color:var(--text-muted)">Syncs Auto-mode qualities on every TRaSH pull</span>
                 </template>
                 <template x-if="qsAutoSync[activeAppType]?.enabled && qsAutoSync[activeAppType]?.type !== (getQualitySizes(activeAppType)[selectedQSType[activeAppType] || 0]?.type || '')">
-                  <span style="font-size:12px;color:#d29922">Auto-sync is active for <strong x-text="qsAutoSync[activeAppType].type"></strong> — enable here to switch</span>
+                  <span style="font-size:12px;color:var(--accent-orange)">Auto-sync is active for <strong x-text="qsAutoSync[activeAppType].type"></strong> — enable here to switch</span>
                 </template>
                 <template x-if="!qsAutoSync[activeAppType]?.enabled">
-                  <span style="font-size:12px;color:#aaa">Set each quality to Auto or Custom, then enable</span>
+                  <span style="font-size:12px;color:var(--text-muted)">Set each quality to Auto or Custom, then enable</span>
                 </template>
               </div>
               <!-- Header row -->
-              <div class="qs-row" style="border-bottom:1px solid #30363d;padding-bottom:6px;margin-bottom:4px">
-                <div class="qs-name" style="font-size:13px;color:#aaa;font-weight:400">Quality</div>
-                <div class="qs-col" style="font-size:13px;color:#aaa;font-family:inherit">TRaSH Min</div>
-                <div class="qs-col" style="font-size:13px;color:#aaa;font-family:inherit">TRaSH Pref</div>
-                <div class="qs-col" style="font-size:13px;color:#aaa;font-family:inherit">TRaSH Max</div>
+              <div class="qs-row" style="border-bottom:1px solid var(--border-subtle);padding-bottom:6px;margin-bottom:4px">
+                <div class="qs-name" style="font-size:13px;color:var(--text-muted);font-weight:400">Quality</div>
+                <div class="qs-col" style="font-size:13px;color:var(--text-muted);font-family:inherit">TRaSH Min</div>
+                <div class="qs-col" style="font-size:13px;color:var(--text-muted);font-family:inherit">TRaSH Pref</div>
+                <div class="qs-col" style="font-size:13px;color:var(--text-muted);font-family:inherit">TRaSH Max</div>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div style="width:1px;background:#30363d;margin:0 4px;align-self:stretch"></div>
+                  <div style="width:1px;background:var(--border-subtle);margin:0 4px;align-self:stretch"></div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div class="qs-col" style="font-size:13px;color:#aaa;font-family:inherit">Instance Min</div>
+                  <div class="qs-col" style="font-size:13px;color:var(--text-muted);font-family:inherit">Instance Min</div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div class="qs-col" style="font-size:13px;color:#aaa;font-family:inherit">Instance Pref</div>
+                  <div class="qs-col" style="font-size:13px;color:var(--text-muted);font-family:inherit">Instance Pref</div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div class="qs-col" style="font-size:13px;color:#aaa;font-family:inherit">Instance Max</div>
+                  <div class="qs-col" style="font-size:13px;color:var(--text-muted);font-family:inherit">Instance Max</div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div style="width:1px;background:#30363d;margin:0 4px;align-self:stretch"></div>
+                  <div style="width:1px;background:var(--border-subtle);margin:0 4px;align-self:stretch"></div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div style="font-size:13px;color:#aaa;font-family:inherit;width:58px;flex-shrink:0;text-align:center" x-tt="'Auto: follows TRaSH values. Custom: use your own values.'">Sync Mode</div>
+                  <div style="font-size:13px;color:var(--text-muted);font-family:inherit;width:58px;flex-shrink:0;text-align:center" x-tt="'Auto: follows TRaSH values. Custom: use your own values.'">Sync Mode</div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div style="font-size:13px;color:#aaa;font-family:inherit;width:68px;flex-shrink:0;text-align:center">Action</div>
+                  <div style="font-size:13px;color:var(--text-muted);font-family:inherit;width:68px;flex-shrink:0;text-align:center">Action</div>
                 </template>
               </div>
 
@@ -106,12 +106,12 @@
               <template x-for="qs in getSelectedQS(activeAppType)" :key="qs.quality">
                 <div class="qs-row" :style="qsRowStyle(activeAppType, qs)">
                   <div class="qs-name" x-text="qs.quality"></div>
-                  <div class="qs-col" style="color:#e1e4e8" x-text="qs.min.toFixed(1)"></div>
-                  <div class="qs-col" style="color:#e1e4e8" x-text="qs.preferred.toFixed(1)"></div>
-                  <div class="qs-col" style="color:#aaa" x-text="qs.max.toFixed(1)"></div>
+                  <div class="qs-col" style="color:var(--text-primary)" x-text="qs.min.toFixed(1)"></div>
+                  <div class="qs-col" style="color:var(--text-primary)" x-text="qs.preferred.toFixed(1)"></div>
+                  <div class="qs-col" style="color:var(--text-muted)" x-text="qs.max.toFixed(1)"></div>
                   <!-- Instance comparison columns: read-only in Sync mode, editable in Custom mode -->
                   <template x-if="qsInstanceId[activeAppType]">
-                    <div style="width:1px;background:#21262d;margin:0 4px;align-self:stretch"></div>
+                    <div style="width:1px;background:var(--bg-muted);margin:0 4px;align-self:stretch"></div>
                   </template>
                   <template x-if="qsInstanceId[activeAppType] && !isQSCustom(activeAppType, qs.quality)">
                     <div class="qs-col" :style="qsCellStyle(activeAppType, qs, 'min')"
@@ -128,24 +128,24 @@
                   <!-- Custom mode: inline editable inputs replacing the read-only values -->
                   <template x-if="qsInstanceId[activeAppType] && isQSCustom(activeAppType, qs.quality)">
                     <input class="input" type="number" step="0.1" min="0"
-                           style="width:55px;padding:2px 4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;text-align:right;background:#1c2129;border-color:#d29922"
+                           style="width:55px;padding:2px 4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;text-align:right;background:var(--bg-elevated-hover);border-color:var(--accent-orange)"
                            :value="getQSOverrideVal(activeAppType, qs.quality, 'min', qs.min)"
                            @input="setQSOverrideVal(activeAppType, qs.quality, 'min', parseFloat($event.target.value))">
                   </template>
                   <template x-if="qsInstanceId[activeAppType] && isQSCustom(activeAppType, qs.quality)">
                     <input class="input" type="number" step="0.1" min="0"
-                           style="width:55px;padding:2px 4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;text-align:right;background:#1c2129;border-color:#d29922"
+                           style="width:55px;padding:2px 4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;text-align:right;background:var(--bg-elevated-hover);border-color:var(--accent-orange)"
                            :value="getQSOverrideVal(activeAppType, qs.quality, 'preferred', qs.preferred)"
                            @input="setQSOverrideVal(activeAppType, qs.quality, 'preferred', parseFloat($event.target.value))">
                   </template>
                   <template x-if="qsInstanceId[activeAppType] && isQSCustom(activeAppType, qs.quality)">
                     <input class="input" type="number" step="0.1" min="0"
-                           style="width:55px;padding:2px 4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;text-align:right;background:#1c2129;border-color:#d29922"
+                           style="width:55px;padding:2px 4px;font-size:13px;font-family:'SF Mono',Monaco,monospace;text-align:right;background:var(--bg-elevated-hover);border-color:var(--accent-orange)"
                            :value="getQSOverrideVal(activeAppType, qs.quality, 'max', qs.max)"
                            @input="setQSOverrideVal(activeAppType, qs.quality, 'max', parseFloat($event.target.value))">
                   </template>
                   <template x-if="qsInstanceId[activeAppType]">
-                    <div style="width:1px;background:#21262d;margin:0 4px;align-self:stretch"></div>
+                    <div style="width:1px;background:var(--bg-muted);margin:0 4px;align-self:stretch"></div>
                   </template>
                   <template x-if="qsInstanceId[activeAppType]">
                     <div style="width:58px;flex-shrink:0;text-align:center">
@@ -172,8 +172,8 @@
             <!-- Change summary -->
             <div style="padding:8px 20px 12px;font-size:13px"
                  x-show="qsInstanceId[activeAppType] && qsInstanceDefs[activeAppType]">
-              <span style="color:#3fb950" x-show="qsChangeCount(activeAppType) === 0">All Auto-mode qualities match TRaSH</span>
-              <span style="color:#d29922" x-show="qsChangeCount(activeAppType) > 0"
+              <span style="color:var(--accent-green)" x-show="qsChangeCount(activeAppType) === 0">All Auto-mode qualities match TRaSH</span>
+              <span style="color:var(--accent-orange)" x-show="qsChangeCount(activeAppType) > 0"
                     x-text="qsChangeCount(activeAppType) + ' qualities differ from TRaSH — click Sync Now per row or enable Auto-sync'"></span>
             </div>
           </div>

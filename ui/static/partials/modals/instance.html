@@ -21,12 +21,12 @@
       <div class="form-group">
         <label>API Key</label>
         <input class="input" x-model="instanceForm.apiKey" :placeholder="editingInstance ? 'Leave empty to keep current key' : 'Radarr/Sonarr API key'" :type="editingInstance && !instanceForm.apiKey ? 'text' : 'password'" autocomplete="one-time-code">
-        <div x-show="editingInstance && !instanceForm.apiKey" style="font-size:13px;color:#aaa;margin-top:4px">API key is saved — leave empty to keep it, or enter a new one to replace it.</div>
+        <div x-show="editingInstance && !instanceForm.apiKey" style="font-size:13px;color:var(--text-muted);margin-top:4px">API key is saved — leave empty to keep it, or enter a new one to replace it.</div>
       </div>
       <!-- Test result -->
       <div x-show="modalTestResult !== null">
         <template x-if="modalTestResult === 'testing'">
-          <div class="test-result" style="color:#d29922"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Testing...</div>
+          <div class="test-result" style="color:var(--accent-orange)"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Testing...</div>
         </template>
         <template x-if="modalTestResult && modalTestResult !== 'testing' && modalTestResult.connected">
           <div class="test-result ok" x-text="'Connected — ' + modalTestResult.appName + ' v' + modalTestResult.version"></div>

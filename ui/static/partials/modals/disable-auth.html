@@ -4,24 +4,24 @@
        style="position:fixed;top:0;right:0;bottom:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;box-sizing:border-box"
        @keydown.escape.window="disableAuthModalOpen = false; disableAuthError = ''">
     <div @click.outside="disableAuthModalOpen = false; disableAuthError = ''"
-         style="background:#1a1d24;border:2px solid #8b2d2d;border-radius:10px;padding:24px 28px;width:min(520px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
-      <h2 style="margin:0 0 10px;font-size:20px;color:#ff7a7a">⚠️ Disable authentication?</h2>
-      <p style="font-size:13px;line-height:1.5;color:#d4d4d4;margin:10px 0 8px">
+         style="background:var(--bg-card);border:2px solid var(--banner-warn-border);border-radius:10px;padding:24px 28px;width:min(520px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.6)">
+      <h2 style="margin:0 0 10px;font-size:20px;color:var(--accent-red-soft)">⚠️ Disable authentication?</h2>
+      <p style="font-size:13px;line-height:1.5;color:var(--text-body);margin:10px 0 8px">
         You are about to turn off login for <strong>Clonarr</strong>. After this change, anyone who reaches this UI will be admin — they can modify your Radarr/Sonarr/Prowlarr API keys, change Discord webhooks to their own server, and read every notification token.
       </p>
-      <p style="font-size:13px;line-height:1.5;color:#d4d4d4;margin:8px 0">
+      <p style="font-size:13px;line-height:1.5;color:var(--text-body);margin:8px 0">
         Pick this only if you have <em>another</em> authentication layer in front (Authelia, Cloudflare Access) or you are running on a machine that is not reachable from other devices.
       </p>
-      <div style="background:#281818;border:1px solid #5a2d2d;border-radius:6px;padding:10px 12px;margin:12px 0;font-size:12px;color:#ffcaca">
+      <div style="background:var(--accent-red-bg);border:1px solid var(--accent-red-bg);border-radius:6px;padding:10px 12px;margin:12px 0;font-size:12px;color:var(--accent-red-soft)">
         A persistent red warning banner will be shown at the top of every page while authentication is disabled, and the server logs a warning every 60 seconds.
       </div>
-      <label style="display:block;font-size:12px;color:#c3c7cc;margin:12px 0 6px">
+      <label style="display:block;font-size:12px;color:var(--text-body);margin:12px 0 6px">
         Enter your <strong>current admin password</strong> to confirm:
       </label>
       <input type="password" class="input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
              @keydown.enter="disableAuthPassword && (disableAuthModalOpen = false, saveSecurityConfig(true))"
              style="width:100%;margin-bottom:8px">
-      <div x-show="disableAuthError" x-text="disableAuthError" style="color:#ff9a9a;font-size:12px;margin:0 0 10px"></div>
+      <div x-show="disableAuthError" x-text="disableAuthError" style="color:var(--accent-red-soft);font-size:12px;margin:0 0 10px"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-secondary"
                 @click="disableAuthModalOpen = false; disableAuthError = ''; disableAuthPassword = ''; config.authentication = authStatus.authentication || 'forms'">Cancel</button>

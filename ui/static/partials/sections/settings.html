@@ -2,7 +2,7 @@
   <!-- ==================== SETTINGS PAGE ==================== -->
   <div class="page" x-show="currentSection === 'settings'" x-cloak>
     <div style="font-size:18px;font-weight:600;margin-bottom:4px">Settings</div>
-    <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">Configure Clonarr — instances, TRaSH repository, Prowlarr, notifications, and display.</div>
+    <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">Configure Clonarr — instances, TRaSH repository, Prowlarr, notifications, and display.</div>
 
     <div class="settings-layout">
       <!-- Sidebar nav -->
@@ -29,25 +29,25 @@
             <button class="btn btn-sm btn-primary" @click="openInstanceModal()">+ Add Instance</button>
           </div>
           <template x-if="instances.length === 0">
-            <div style="color:#aaa;font-size:13px;padding:8px 0">No instances configured. Add your first Radarr or Sonarr instance.</div>
+            <div style="color:var(--text-muted);font-size:13px;padding:8px 0">No instances configured. Add your first Radarr or Sonarr instance.</div>
           </template>
           <template x-for="inst in [...instances].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))" :key="inst.id">
             <div class="inst-row">
               <img class="inst-icon" :src="instanceIconUrl(inst)" :alt="inst.type">
               <div style="font-size:13px;font-weight:500;min-width:80px" x-text="inst.name"></div>
-              <div style="font-size:13px;color:#aaa;margin-left:4px" x-text="inst.url"></div>
+              <div style="font-size:13px;color:var(--text-muted);margin-left:4px" x-text="inst.url"></div>
               <div style="margin-left:auto;text-align:right;white-space:nowrap">
                 <template x-if="instanceStatus[inst.id] === 'testing'">
                   <span class="status-testing"><span class="spinner"></span></span>
                 </template>
                 <template x-if="instanceStatus[inst.id] === 'connected'">
-                  <span class="status-connected">Connected<span x-show="instanceVersion[inst.id]" style="color:#aaa;font-weight:400;font-size:13px" x-text="' · v' + instanceVersion[inst.id]"></span></span>
+                  <span class="status-connected">Connected<span x-show="instanceVersion[inst.id]" style="color:var(--text-muted);font-weight:400;font-size:13px" x-text="' · v' + instanceVersion[inst.id]"></span></span>
                 </template>
                 <template x-if="instanceStatus[inst.id] === 'failed'">
                   <span class="status-failed">Failed</span>
                 </template>
                 <template x-if="!instanceStatus[inst.id]">
-                  <span style="font-size:12px;color:#aaa">Not tested</span>
+                  <span style="font-size:12px;color:var(--text-muted)">Not tested</span>
                 </template>
               </div>
               <button class="btn btn-sm" style="margin-left:8px" @click="testInstance(inst)">Test</button>
@@ -81,7 +81,7 @@
                   <option :value="opt.value" x-text="opt.label"></option>
                 </template>
               </select>
-              <span style="font-size:12px;color:#aaa">Auto-pull TRaSH data at this interval</span>
+              <span style="font-size:12px;color:var(--text-muted)">Auto-pull TRaSH data at this interval</span>
             </div>
           </div>
           <div class="setting-row">
@@ -89,13 +89,13 @@
             <div class="setting-value" style="font-size:13px">
               <template x-if="trashStatus.cloned">
                 <span>
-                  Commit <code x-text="trashStatus.commitHash" style="background:#21262d;padding:2px 6px;border-radius:4px;font-size:12px"></code>
+                  Commit <code x-text="trashStatus.commitHash" style="background:var(--bg-muted);padding:2px 6px;border-radius:4px;font-size:12px"></code>
                   — Radarr: <span x-text="trashStatus.radarrCFs"></span> CFs, <span x-text="trashStatus.radarrProfiles"></span> profiles
                   — Sonarr: <span x-text="trashStatus.sonarrCFs"></span> CFs, <span x-text="trashStatus.sonarrProfiles"></span> profiles
                 </span>
               </template>
               <template x-if="!trashStatus.cloned">
-                <span style="color:#aaa">Not cloned yet. Click Pull in the nav bar.</span>
+                <span style="color:var(--text-muted)">Not cloned yet. Click Pull in the nav bar.</span>
               </template>
             </div>
           </div>
@@ -109,7 +109,7 @@
             <div class="setting-label">Connection</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="checkbox" x-model="config.prowlarr.enabled" @change="saveConfig(['prowlarr'])" style="accent-color:#58a6ff">
+                <input type="checkbox" x-model="config.prowlarr.enabled" @change="saveConfig(['prowlarr'])" style="accent-color:var(--accent-blue)">
               </label>
               <input class="input" style="width:250px" x-model="config.prowlarr.url" @change="saveConfig(['prowlarr'])" placeholder="http://prowlarr:9696" autocomplete="one-time-code">
               <input class="input" style="width:250px" x-model="config.prowlarr.apiKey" @change="saveConfig(['prowlarr'])" placeholder="API key" autocomplete="one-time-code">
@@ -118,8 +118,8 @@
                 <span x-show="!prowlarrTesting">Test</span>
               </button>
               <span x-show="prowlarrTestResult" style="font-size:12px">
-                <span :style="prowlarrTestResult?.ok ? 'color:#3fb950' : 'color:#f85149'" x-text="prowlarrTestResult?.message"></span>
-                <span x-show="prowlarrTestResult?.version" style="color:#aaa;font-size:13px" x-text="' · v' + prowlarrTestResult?.version"></span>
+                <span :style="prowlarrTestResult?.ok ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="prowlarrTestResult?.message"></span>
+                <span x-show="prowlarrTestResult?.version" style="color:var(--text-muted);font-size:13px" x-text="' · v' + prowlarrTestResult?.version"></span>
               </span>
             </div>
           </div>
@@ -130,7 +130,7 @@
                      :value="(config.prowlarr.radarrCategories || []).join(', ')"
                      @change="config.prowlarr.radarrCategories = parseCategoryList($event.target.value); saveConfig(['prowlarr'])"
                      placeholder="2000 (default)">
-              <span style="font-size:12px;color:#8b949e">Category IDs for movie searches</span>
+              <span style="font-size:12px;color:var(--text-secondary)">Category IDs for movie searches</span>
             </div>
           </div>
           <div class="setting-row">
@@ -140,11 +140,11 @@
                      :value="(config.prowlarr.sonarrCategories || []).join(', ')"
                      @change="config.prowlarr.sonarrCategories = parseCategoryList($event.target.value); saveConfig(['prowlarr'])"
                      placeholder="5000 (default)">
-              <span style="font-size:12px;color:#8b949e">Category IDs for TV searches</span>
+              <span style="font-size:12px;color:var(--text-secondary)">Category IDs for TV searches</span>
             </div>
           </div>
-          <div style="font-size:12px;color:#8b949e;margin-top:8px;padding-top:8px;border-top:1px solid #21262d;line-height:1.5">
-            Leave blank for defaults. Add sub-IDs (e.g. <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#c9d1d9">2000, 2040, 2045</code>) if your indexer only tags specific sub-categories and root-only searches return no results.
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:8px;padding-top:8px;border-top:1px solid var(--bg-muted);line-height:1.5">
+            Leave blank for defaults. Add sub-IDs (e.g. <code style="background:var(--bg-muted);padding:1px 4px;border-radius:2px;color:var(--text-body)">2000, 2040, 2045</code>) if your indexer only tags specific sub-categories and root-only searches return no results.
           </div>
         </div>
 
@@ -159,18 +159,18 @@
               @click="openAgentModal()">+ Add notification agent</button>
           </div>
           <template x-if="notificationAgents.length === 0">
-            <div style="color:#aaa;font-size:13px;padding:8px 0">No notification agents configured. Add Discord, Gotify, or Pushover to receive auto-sync alerts.</div>
+            <div style="color:var(--text-muted);font-size:13px;padding:8px 0">No notification agents configured. Add Discord, Gotify, or Pushover to receive auto-sync alerts.</div>
           </template>
           <template x-for="agent in notificationAgents" :key="agent.id">
             <div class="inst-row">
               <img class="inst-icon" :src="agentIconSrc(agent.type)" :alt="agent.type">
               <div style="font-size:13px;font-weight:500;min-width:120px" x-text="agent.name || agent.type"></div>
-              <div style="font-size:12px;color:#8b949e;text-transform:capitalize;margin-right:4px" x-text="agent.type"></div>
+              <div style="font-size:12px;color:var(--text-secondary);text-transform:capitalize;margin-right:4px" x-text="agent.type"></div>
               <!-- Enable toggle -->
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#8b949e;margin-left:4px" @click.stop>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-secondary);margin-left:4px" @click.stop>
                 <input type="checkbox" :checked="agent.enabled"
                   @change="toggleAgentEnabled(agent)"
-                  style="accent-color:#58a6ff">
+                  style="accent-color:var(--accent-blue)">
                 <span x-text="agent.enabled ? 'Enabled' : 'Disabled'"></span>
               </label>
               <!-- Test result -->
@@ -259,7 +259,7 @@
             <div class="setting-label">Trusted Networks</div>
             <div class="setting-value">
               <input type="text" class="input" placeholder="e.g. 192.168.86.0/24, 10.66.0.0/24" x-model="config.trustedNetworks" @input="configDirty = true" :disabled="authStatus.trustedNetworksLocked">
-              <div class="setting-help" x-show="authStatus.trustedNetworksLocked" x-cloak style="color:#d29922">
+              <div class="setting-help" x-show="authStatus.trustedNetworksLocked" x-cloak style="color:var(--accent-orange)">
                 <strong>Locked by <code>TRUSTED_NETWORKS</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container. Unsetting the env var unlocks this field.
               </div>
               <div class="setting-help" x-show="!authStatus.trustedNetworksLocked">
@@ -278,7 +278,7 @@
             <div class="setting-label">Trusted Proxies</div>
             <div class="setting-value">
               <input type="text" class="input" placeholder="e.g. 172.17.0.1" x-model="config.trustedProxies" @input="configDirty = true" :disabled="authStatus.trustedProxiesLocked">
-              <div class="setting-help" x-show="authStatus.trustedProxiesLocked" x-cloak style="color:#d29922">
+              <div class="setting-help" x-show="authStatus.trustedProxiesLocked" x-cloak style="color:var(--accent-orange)">
                 <strong>Locked by <code>TRUSTED_PROXIES</code> environment variable.</strong> To change the value, edit the Unraid template (or <code>docker-compose.yml</code>) and restart the container.
               </div>
               <div class="setting-help" x-show="!authStatus.trustedProxiesLocked">Only needed if Clonarr runs behind a reverse proxy (SWAG, Authelia, etc). List the proxy's IP so <code>X-Forwarded-For</code> is trusted. Leave empty for direct access. Lock via env var <code>TRUSTED_PROXIES</code> in the Unraid template for host-level control.</div>
@@ -302,11 +302,11 @@
                 <span x-show="!pwChangeSaving">Save security settings</span>
                 <span x-show="pwChangeSaving">Saving...</span>
               </button>
-              <span x-show="securitySaveMsg" x-text="securitySaveMsg" :style="securitySaveOk ? 'color:#3fb950;margin-left:10px;font-size:13px' : 'color:#f85149;margin-left:10px;font-size:13px'"></span>
+              <span x-show="securitySaveMsg" x-text="securitySaveMsg" :style="securitySaveOk ? 'color:var(--accent-green);margin-left:10px;font-size:13px' : 'color:var(--accent-red);margin-left:10px;font-size:13px'"></span>
             </div>
           </div>
 
-          <div style="border-top:1px solid #30363d;margin:20px 0"></div>
+          <div style="border-top:1px solid var(--border-subtle);margin:20px 0"></div>
 
           <!-- API Key -->
           <div class="setting-row">
@@ -332,7 +332,7 @@
             </div>
           </div>
 
-          <div style="border-top:1px solid #30363d;margin:20px 0"></div>
+          <div style="border-top:1px solid var(--border-subtle);margin:20px 0"></div>
 
           <!-- Password change -->
           <div class="settings-section-title" style="font-size:14px;margin-bottom:12px">Change password</div>
@@ -362,7 +362,7 @@
                 <span x-show="!pwChangeSaving">Change password</span>
                 <span x-show="pwChangeSaving">Saving...</span>
               </button>
-              <span x-show="pwChangeMsg" x-text="pwChangeMsg" :style="pwChangeOk ? 'color:#3fb950;margin-left:10px;font-size:13px' : 'color:#f85149;margin-left:10px;font-size:13px'"></span>
+              <span x-show="pwChangeMsg" x-text="pwChangeMsg" :style="pwChangeOk ? 'color:var(--accent-green);margin-left:10px;font-size:13px' : 'color:var(--accent-red);margin-left:10px;font-size:13px'"></span>
               <div class="setting-help">Changing your password signs out other sessions. You will remain logged in on this browser.</div>
             </div>
           </div>
@@ -377,40 +377,40 @@
             <div class="setting-value" style="display:flex;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
                 <input type="checkbox" :checked="config.devMode" @change="toggleAdvancedMode($event.target.checked)">
-                <span style="font-size:13px;color:#aaa">Adds the Advanced tab (Profile Builder, Scoring Sandbox, CF Group Builder) and the Prowlarr integration settings.</span>
+                <span style="font-size:13px;color:var(--text-muted)">Adds the Advanced tab (Profile Builder, Scoring Sandbox, CF Group Builder) and the Prowlarr integration settings.</span>
               </label>
-              <span x-show="config.devMode" style="font-size:12px;color:#d29922">Active</span>
+              <span x-show="config.devMode" style="font-size:12px;color:var(--accent-orange)">Active</span>
             </div>
           </div>
           <div class="setting-row" x-show="config.devFeatures">
-            <div class="setting-label" x-tt="'Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.'">Show TRaSH schema fields <span style="font-size:11px;color:#7d8590;font-weight:normal">(CLONARR_DEV_FEATURES)</span></div>
+            <div class="setting-label" x-tt="'Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.'">Show TRaSH schema fields <span style="font-size:11px;color:var(--text-muted-secondary);font-weight:normal">(CLONARR_DEV_FEATURES)</span></div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
                 <input type="checkbox" :checked="config.trashSchemaFields" @change="config.trashSchemaFields = $event.target.checked; saveConfig(['trashSchemaFields'])">
-                <span style="font-size:13px;color:#aaa">Surfaces trash_id, trash_scores, group number, and HTML description fields in CF editor, Profile Builder and CF Group Builder. For TRaSH-Guides contributors only.</span>
+                <span style="font-size:13px;color:var(--text-muted)">Surfaces trash_id, trash_scores, group number, and HTML description fields in CF editor, Profile Builder and CF Group Builder. For TRaSH-Guides contributors only.</span>
               </label>
-              <span x-show="config.trashSchemaFields" style="font-size:12px;color:#d29922">Active</span>
+              <span x-show="config.trashSchemaFields" style="font-size:12px;color:var(--accent-orange)">Active</span>
             </div>
           </div>
           <div class="setting-row" x-show="authStatus.urlBase">
             <div class="setting-label">URL Base</div>
             <div class="setting-value">
               <input type="text" :value="authStatus.urlBase" disabled style="width:220px;opacity:0.7">
-              <span style="font-size:12px;color:#aaa;margin-left:8px">Set via <code>URL_BASE</code> env var. Restart to change.</span>
+              <span style="font-size:12px;color:var(--text-muted);margin-left:8px">Set via <code>URL_BASE</code> env var. Restart to change.</span>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Debug Logging</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                <input type="checkbox" x-model="config.debugLogging" @change="saveConfig(['debugLogging'])" style="accent-color:#58a6ff">
-                <span style="font-size:12px;color:#aaa">Write to /config/debug.log (max 1MB, auto-rotates)</span>
+                <input type="checkbox" x-model="config.debugLogging" @change="saveConfig(['debugLogging'])" style="accent-color:var(--accent-blue)">
+                <span style="font-size:12px;color:var(--text-muted)">Write to /config/debug.log (max 1MB, auto-rotates)</span>
               </label>
               <template x-if="config.debugLogging">
                 <span style="display:flex;align-items:center;gap:8px;margin-left:8px">
-                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa"
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted)"
                          x-tt="'Bundle UI navigation events (activity.log) into the download. Off by default — most bug reports only need the operation trace.'">
-                    <input type="checkbox" x-model="includeActivityLog" style="accent-color:#58a6ff">
+                    <input type="checkbox" x-model="includeActivityLog" style="accent-color:var(--accent-blue)">
                     <span>Include activity log</span>
                   </label>
                   <a class="btn btn-sm"
