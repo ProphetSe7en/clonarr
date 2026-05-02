@@ -501,8 +501,8 @@
                                  'is-dragging': qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx,
                                  'dnd-merge-hover': qualityStructureDrag.dropMerge === idx
                                }"
-                               :draggable="true"
-                               @dragstart="qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx;"
+                               :draggable="qualityStructureEditMode"
+                               @dragstart="if (qualityStructureEditMode) { event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx; }"
                                @dragover.prevent="if (qualityStructureEditMode && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
                                @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
                                @drop.prevent="if (qualityStructureEditMode) qsHandleDropOnRow(idx)"
@@ -563,7 +563,7 @@
                                    :class="{ 'is-dragging': qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx && qualityStructureDrag.srcMember === mIdx }">
                                 <span class="qs-pill"
                                       draggable="true"
-                                      @dragstart.stop="qualityStructureDrag.kind = 'member'; qualityStructureDrag.srcGroup = idx; qualityStructureDrag.srcMember = mIdx"
+                                      @dragstart.stop="event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'member'; qualityStructureDrag.srcGroup = idx; qualityStructureDrag.srcMember = mIdx"
                                       @dragend="qsResetDrag()"
                                       x-text="m"></span>
                                 <div style="flex:1"></div>

@@ -352,7 +352,7 @@
                 <template x-for="(res, idx) in visibleSandboxResults(activeAppType)" :key="res._sid">
                   <tbody>
                     <tr :draggable="!sandbox[activeAppType].filterToSelected"
-                        @dragstart="if (!sandbox[activeAppType].filterToSelected) sandboxDragStart(activeAppType, res)"
+                        @dragstart="if (!sandbox[activeAppType].filterToSelected) { event.dataTransfer.setData('text/plain', ''); sandboxDragStart(activeAppType, res); }"
                         @dragover.prevent="if (!sandbox[activeAppType].filterToSelected) sandboxDragOver(activeAppType, res)"
                         @drop.prevent="if (!sandbox[activeAppType].filterToSelected) sandboxDrop(activeAppType, res)"
                         @dragend="sandbox[activeAppType].dragSrc = null; sandbox[activeAppType].dragOver = null"

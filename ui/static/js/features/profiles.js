@@ -205,7 +205,7 @@ export default {
     setUIScale(value) {
       this.uiScale = value;
       localStorage.setItem('clonarr-ui-scale', value);
-      document.documentElement.style.zoom = value;
+      if (CSS.supports('zoom', '1')) document.documentElement.style.zoom = value;
     },
 
     setTheme(value) {

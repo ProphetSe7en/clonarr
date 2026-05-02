@@ -102,8 +102,10 @@ export function clonarr() {
       this.tt.show = false;
     },
     async init() {
-      // Apply saved UI scale
-      if (this.uiScale !== '1') document.documentElement.style.zoom = this.uiScale;
+      // Apply saved UI scale. `zoom` is a Chromium-original property that
+      // Firefox only added in v126 (May 2024); the CSS.supports guard avoids
+      // a no-op assignment on older Firefox. Modern browsers all support it.
+      if (this.uiScale !== '1' && CSS.supports('zoom', '1')) document.documentElement.style.zoom = this.uiScale;
       // Apply theme. The inline pre-paint script in index.html already set
       // data-theme to avoid FOUC; this re-applies it once Alpine state exists
       // and registers a matchMedia listener so "system" tracks OS changes live.

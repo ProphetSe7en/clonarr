@@ -222,7 +222,7 @@
                  unchanged. -->
             <template x-for="(cf, idx) in cfgbOrderedSelectedCFs()" :key="cf.trashId">
               <div :draggable="cfgbCFSortMode === 'manual'"
-                   @dragstart="if (cfgbCFSortMode === 'manual') cfgbCFDragStart(cf.trashId)"
+                   @dragstart="if (cfgbCFSortMode === 'manual') { event.dataTransfer.setData('text/plain', ''); cfgbCFDragStart(cf.trashId); }"
                    @dragover.prevent="if (cfgbCFSortMode === 'manual') cfgbCFDragOver(cf.trashId)"
                    @drop.prevent="if (cfgbCFSortMode === 'manual') cfgbCFDrop(cf.trashId)"
                    @dragend="cfgbCFDragEnd()"
