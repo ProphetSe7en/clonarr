@@ -201,15 +201,27 @@
           <div class="settings-section-title">Display</div>
           <div class="settings-section-desc">UI appearance settings.</div>
           <div class="setting-row">
+            <div class="setting-label">Theme</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:12px">
+              <template x-for="opt in [{label:'System',value:'system'},{label:'Light',value:'light'},{label:'Dark',value:'dark'}]" :key="opt.value">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">
+                  <input type="radio" name="theme" :value="opt.value" :checked="theme === opt.value" @change="setTheme(opt.value)" style="accent-color:var(--accent-blue)">
+                  <span x-text="opt.label" :style="theme === opt.value ? 'color:var(--text-primary)' : 'color:var(--text-muted)'"></span>
+                </label>
+              </template>
+              <span style="font-size:13px;color:var(--text-secondary)" x-text="theme === 'system' ? '(matches OS)' : ''"></span>
+            </div>
+          </div>
+          <div class="setting-row">
             <div class="setting-label">UI Scale</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:12px">
               <template x-for="opt in [{label:'Compact',value:'1'},{label:'Default',value:'1.1'},{label:'Large',value:'1.2'}]" :key="opt.value">
                 <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">
-                  <input type="radio" name="uiScale" :value="opt.value" :checked="uiScale === opt.value" @change="setUIScale(opt.value)" style="accent-color:#58a6ff">
-                  <span x-text="opt.label" :style="uiScale === opt.value ? 'color:#e1e4e8' : 'color:#aaa'"></span>
+                  <input type="radio" name="uiScale" :value="opt.value" :checked="uiScale === opt.value" @change="setUIScale(opt.value)" style="accent-color:var(--accent-blue)">
+                  <span x-text="opt.label" :style="uiScale === opt.value ? 'color:var(--text-primary)' : 'color:var(--text-muted)'"></span>
                 </label>
               </template>
-              <span style="font-size:13px;color:#8b949e" x-text="uiScale === '1' ? '(current default)' : Math.round(parseFloat(uiScale) * 100) + '%'"></span>
+              <span style="font-size:13px;color:var(--text-secondary)" x-text="uiScale === '1' ? '(current default)' : Math.round(parseFloat(uiScale) * 100) + '%'"></span>
             </div>
           </div>
         </div>

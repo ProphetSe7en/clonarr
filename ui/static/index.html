@@ -18,6 +18,17 @@
      warnings about cross-origin storage access. To upgrade, replace
      ui/static/js/vendor/alpine.min.js with the new cdn.min.js bundle. -->
 <script defer src="js/vendor/alpine.min.js"></script>
+<!-- Resolve theme synchronously before CSS paints to avoid a flash of
+     wrong theme. Mirrors the logic in applyTheme() (features/profiles.js). -->
+<script>
+  (function() {
+    var stored = localStorage.getItem('clonarr-theme') || 'system';
+    var resolved = stored === 'system'
+      ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+      : stored;
+    document.documentElement.setAttribute('data-theme', resolved);
+  })();
+</script>
 <link rel="stylesheet" href="css/styles.css">
 <link rel="modulepreload" href="js/api.js">
 <link rel="modulepreload" href="js/state.js">

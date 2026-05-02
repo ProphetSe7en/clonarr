@@ -1,4 +1,7 @@
-:root {
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
   /* Surface */
   --bg-app: #0f1117;
   --bg-page: #0d1117;
@@ -94,4 +97,82 @@
   --grp-german: #f0883e;
   --grp-imported: #8b949e;
   --grp-other: #8b949e;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surface */
+  --bg-app: #ffffff;
+  --bg-page: #f6f8fa;
+  --bg-card: #ffffff;
+  --bg-elevated: #f6f8fa;
+  --bg-elevated-hover: #eef1f4;
+  --bg-muted: #eaeef2;
+  --bg-panel: #f0f3f6;
+
+  /* Border */
+  --border-subtle: #d0d7de;
+  --border-muted: #d8dee4;
+  --border-faint: #eaeef2;
+
+  /* Text */
+  --text-primary: #1f2328;
+  --text-body: #24292f;
+  --text-secondary: #57606a;
+  --text-muted: #6e7681;
+  --text-muted-secondary: #8b949e;
+  --text-soft: #57606a;
+  --text-inverse: #ffffff;
+  --text-on-accent: #ffffff;
+
+  /* Accent — keep hue, adjust lightness for contrast on light bg */
+  --accent-blue: #0969da;
+  --accent-blue-muted: #ddf4ff;
+  --accent-blue-strong: #0550ae;
+  --accent-blue-hover: #0860ca;
+  --accent-green: #1a7f37;
+  --accent-green-bg: #dafbe1;
+  --accent-green-strong: #116329;
+  --accent-green-hover: #1f883d;
+  --accent-red: #cf222e;
+  --accent-red-soft: #d1242f;
+  --accent-red-bg: #ffebe9;
+  --accent-red-strong: #a40e26;
+  --accent-orange: #9a6700;
+  --accent-orange-bg: #fff8c5;
+  --accent-orange-bright: #bc4c00;
+  --accent-orange-strong: #7d4e00;
+  --accent-purple: #8250df;
+  --accent-purple-soft: #c297ff;
+  --accent-sky: #218bff;
+  --accent-teal: #0a7c84;
+  --accent-mint: #1a7f37;
+  --accent-pink: #bf3989;
+
+  /* Semantic fills (light, low-saturation backgrounds) */
+  --fill-blue-soft: #ddf4ff;
+  --fill-blue-dark: #b6e3ff;
+  --fill-green-soft: #dafbe1;
+  --fill-orange-soft: #fff8c5;
+  --fill-radarr: #fff1c2;
+
+  /* Alpha overlays — invert to dark-on-light */
+  --alpha-overlay: rgba(0,0,0,0.4);
+  --alpha-shadow: rgba(0,0,0,0.08);
+  --alpha-hover: rgba(0,0,0,0.04);
+  --alpha-active: rgba(0,0,0,0.06);
+  --alpha-subtle: rgba(0,0,0,0.02);
+  --alpha-orange-soft: rgba(154,103,0,0.06);
+  --alpha-orange: rgba(154,103,0,0.15);
+  --alpha-blue-soft: rgba(9,105,218,0.06);
+  --alpha-blue: rgba(9,105,218,0.12);
+  --alpha-blue-border: rgba(9,105,218,0.25);
+  --alpha-blue-border-strong: rgba(9,105,218,0.4);
+  --alpha-green-soft: rgba(26,127,55,0.08);
+  --alpha-green: rgba(26,127,55,0.12);
+
+  /* CF categories / profile groups inherit dark-mode values from :root —
+     they are decorative chips that read on either background, and the
+     backend manifest may override them at runtime. */
 }

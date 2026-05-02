@@ -104,6 +104,13 @@ export function clonarr() {
     async init() {
       // Apply saved UI scale
       if (this.uiScale !== '1') document.documentElement.style.zoom = this.uiScale;
+      // Apply theme. The inline pre-paint script in index.html already set
+      // data-theme to avoid FOUC; this re-applies it once Alpine state exists
+      // and registers a matchMedia listener so "system" tracks OS changes live.
+      this.applyTheme();
+      matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
+        if (this.theme === 'system') this.applyTheme();
+      });
       // Load the UI manifest first — it carries enum option lists, agent
       // field specs, and category-color tokens that downstream renders need.
       // Awaited so getCategoryClass() / agent modal lookups don't race on

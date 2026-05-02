@@ -208,6 +208,19 @@ export default {
       document.documentElement.style.zoom = value;
     },
 
+    setTheme(value) {
+      this.theme = value;
+      localStorage.setItem('clonarr-theme', value);
+      this.applyTheme();
+    },
+
+    applyTheme() {
+      const resolved = this.theme === 'system'
+        ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        : this.theme;
+      document.documentElement.setAttribute('data-theme', resolved);
+    },
+
     showToast(message, type = 'info', duration = 8000) {
       const id = Date.now() + Math.random();
       this.toasts = [...this.toasts, { id, message, type, duration }];
