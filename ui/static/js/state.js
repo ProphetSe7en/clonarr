@@ -102,10 +102,24 @@ export default function baseState() {
     groupExpanded: {},
     cfDescExpanded: {},
     cfTooltip: {},
+    // Custom viewport-aware tooltip — replaces native title="" for elements
+    // where the browser tooltip would overflow the viewport (right-edge inputs,
+    // long messages, etc.). Driven by showTooltip / hideTooltip helpers in
+    // main.js. The global tooltip element lives in partials/modals/tooltip.html.
+    tt: { show: false, text: '', x: 0, y: 0, flip: false },
     selectedOptionalCFs: {},
-    // Profile detail overrides (per-section active flags — when true, stored values are applied at sync time)
-    pdGeneralActive: false,  // General card override (Language, Upgrades, Min/Cutoff scores)
-    pdQualityActive: false,  // Quality card override (Cutoff quality)
+    // Profile detail — single global toggle that gates all override editing affordances.
+    // OFF (default): user sees a clean "All values follow profile defaults" summary;
+    // override cards (General, Quality, Overridden Scores, Extra CFs) are hidden;
+    // CF score inputs in Required/Group sections render as read-only colored badges.
+    // ON: all 4 override cards appear; score inputs become editable; Quality Edit button shows.
+    // Auto-enabled by restoreFromSyncHistory when any saved override is detected, so the
+    // toggle always reflects the actual persisted state of the rule (no silent "default" lie).
+    pdOverridesEnabled: false,
+    pdGeneralCollapsed: false,  // Profile-detail General card chevron collapse state (default expanded)
+    pdQualityCollapsed: false,  // Profile-detail Quality card chevron collapse state (default expanded)
+    pdCFScoresCollapsed: true,  // Profile-detail Overridden Scores card chevron collapse state (default collapsed — list-style sections opened on demand)
+    pdExtraCFsCollapsed: true,  // Profile-detail Extra CFs card chevron collapse state (default collapsed — picker lazy-loaded only when user expands)
     // Compare-tab filter: 'all' shows everything, 'diff' hides rows that match (default),
     // 'wrong'/'missing'/'extra'/'match' restricts to one status class.
     compareFilter: 'diff',
@@ -116,11 +130,8 @@ export default function baseState() {
     // the same scoped sync without reopening the quick-sync modal.
     compareLastDryRunContext: null,
     cfScoreOverrides: {}, // per-CF score overrides { trashId: score }
-    cfScoreOverrideActive: false, // whether CF score editing is enabled
     qualityOverrides: {}, // legacy flat overrides { name: allowed(bool) } — kept for backwards compat
-    qualityOverrideActive: false, // whether quality editing is enabled
-    qualityOverrideCollapsed: false, // panel collapsed state (body hidden, header stays)
-    extraCFsCollapsed: false, // Extra CFs panel collapsed state
+    qualityOverrideActive: false, // Quality Items editor modal-open flag (NOT a persistence gate)
     // Quality structure override (full structure replacing TRaSH items).
     // Format: [{ _id, name, allowed, items?: [string] }]. Empty when not in use.
     // When non-empty, this is sent as `qualityStructure` to backend and trumps qualityOverrides.
@@ -132,7 +143,6 @@ export default function baseState() {
     _qsIdCounter: 0,
     _sbIdCounter: 0,
     extraCFs: {}, // { trashId: score } — extra CFs not in profile
-    extraCFsActive: false,
     extraCFSearch: '',
     extraCFAllCFs: [], // flat list of all TRaSH CFs (for filtering)
     extraCFGroups: [], // { name, cfs[] } — TRaSH groups + ungrouped "Other"

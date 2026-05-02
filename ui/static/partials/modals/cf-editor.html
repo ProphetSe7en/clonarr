@@ -12,7 +12,7 @@
           <div style="position:relative">
             <input class="input" x-model="cfEditorForm.name" placeholder="My Custom Format" style="padding-right:30px">
             <span x-show="cfEditorTrashMatch"
-                  title="Also in TRaSH guide — you can still save."
+                  x-tt="'Also in TRaSH guide — you can still save.'"
                   style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:#3a2d10;color:#e3b341;border:1px solid #d29922;border-radius:3px;padding:1px 6px;font-size:11px;font-weight:600;cursor:help;user-select:none">
               ⚠ guide
             </span>
@@ -96,7 +96,7 @@
                 </select>
               </div>
               <div style="display:flex;align-items:flex-end">
-                <button class="btn btn-sm" style="color:#f85149;padding:4px 8px" @click="cfEditorForm.specifications.splice(specIdx, 1)" title="Remove spec">&#10005;</button>
+                <button class="btn btn-sm" style="color:#f85149;padding:4px 8px" @click="cfEditorForm.specifications.splice(specIdx, 1)" x-tt="'Remove spec'">&#10005;</button>
               </div>
             </div>
 

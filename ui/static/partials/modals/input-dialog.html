@@ -1,6 +1,8 @@
 {{define "modals/input-dialog"}}
-  <!-- Input modal (single text field) -->
-  <div class="modal-overlay" x-show="inputModal.show" @click.self="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()" x-cloak>
+  <!-- Input modal (single text field). z-index above any custom modal (e.g. the
+       Quality Items editor at z-index:1000) so input prompts triggered from inside
+       another modal aren't hidden behind it. -->
+  <div class="modal-overlay" style="z-index:2000" x-show="inputModal.show" @click.self="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()" x-cloak>
     <div class="modal" style="max-width:420px">
       <div class="modal-title" x-text="inputModal.title"></div>
       <div x-show="inputModal.message" style="font-size:13px;color:#aaa;white-space:pre-line;line-height:1.6;margin-bottom:8px" x-text="inputModal.message"></div>

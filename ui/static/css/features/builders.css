@@ -11,6 +11,8 @@
   .pd-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 16px 18px; }
   .pd-card-general { border-left: 3px solid var(--accent-blue); }
   .pd-card-quality { border-left: 3px solid var(--accent-purple); }
+  .pd-card-cfscores { border-left: 3px solid var(--accent-orange); }
+  .pd-card-extracfs { border-left: 3px solid var(--accent-orange); }
   .pd-card.pd-active { border-color: var(--accent-orange); border-left-color: var(--accent-orange); background: var(--alpha-orange-soft); }
   /* Profile Builder Initialize-from tabs (segmented control) */
   .pb-init-tab { background: transparent; border: none; color: var(--text-secondary); padding: 6px 14px; cursor: pointer; font-size: 12px; border-right: 1px solid var(--border-subtle); font-family: inherit; transition: background 0.12s, color 0.12s; }

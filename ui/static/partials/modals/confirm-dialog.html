@@ -1,5 +1,7 @@
 {{define "modals/confirm-dialog"}}
-  <div class="modal-overlay" x-show="confirmModal.show" @click.self="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-cloak>
+  <!-- z-index:2000 so confirm prompts always sit above any custom modal
+       (e.g. Quality Items editor at z-index:1000). -->
+  <div class="modal-overlay" style="z-index:2000" x-show="confirmModal.show" @click.self="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-cloak>
     <div class="modal" style="max-width:420px">
       <div class="modal-title" x-text="confirmModal.title"></div>
       <div style="font-size:13px;color:#aaa;white-space:pre-line;line-height:1.6" x-show="!confirmModal.html" x-text="confirmModal.message"></div>

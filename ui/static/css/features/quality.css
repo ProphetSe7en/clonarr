@@ -22,9 +22,16 @@
   .qs-name.editable:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
   .qs-badge { font-size:11px; color: var(--text-muted); padding: 1px 5px; border-radius: 3px; background: var(--bg-muted); flex-shrink: 0; }
   .qs-rename-input { background: transparent; border: 1px solid var(--accent-blue); color: var(--text-primary); font-size:13px; padding: 1px 4px; border-radius: 3px; flex: 1; min-width: 0; }
-  .qs-drop-gap { height: 4px; margin: 0 -4px; border-radius: 2px; transition: background 0.1s; }
-  .qs-edit-on .qs-drop-gap.dnd-active { background: var(--alpha-blue); }
-  .qs-edit-on .qs-drop-gap.dnd-hover { background: var(--accent-blue); height: 6px; }
+  /* Drop gap: visually a thin 4px slit at all times — never changes height.
+     The hit area is invisibly extended ±7px above and below via a ::before
+     pseudo-element that only appears WHILE dragging, so the layout never
+     shifts. Idle: 4px transparent. Drag in progress: 4px faint blue line +
+     18px-tall invisible hit zone. Hover: brighter blue line, same 4px height.
+     Visual feedback is identical in both default mode and Edit Groups mode. */
+  .qs-drop-gap { position: relative; height: 4px; margin: 0 -4px; border-radius: 2px; transition: background 0.12s; }
+  .qs-drop-gap.dnd-active { background: var(--alpha-blue); }
+  .qs-drop-gap.dnd-hover  { background: var(--accent-blue); }
+  .qs-drop-gap.dnd-active::before { content: ''; position: absolute; left: 0; right: 0; top: -7px; bottom: -7px; }
   .qs-group-members { margin: 4px 0 6px 22px; padding: 4px 8px; border-left: 2px solid var(--alpha-blue-border-strong); display: flex; flex-direction: column; gap: 2px; border-radius: 0 4px 4px 0; }
   .qs-group-members.dnd-merge-hover { border-left-color: var(--accent-green); background: var(--alpha-green-soft); }
   .qs-member { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size:13px; color: var(--text-muted); }

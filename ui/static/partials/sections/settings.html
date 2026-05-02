@@ -371,7 +371,7 @@
             </div>
           </div>
           <div class="setting-row" x-show="config.devFeatures">
-            <div class="setting-label" title="Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.">Show TRaSH schema fields <span style="font-size:11px;color:#7d8590;font-weight:normal">(CLONARR_DEV_FEATURES)</span></div>
+            <div class="setting-label" x-tt="'Adds TRaSH schema fields (trash_id, trash_scores, group number, HTML description) to the Custom Format editor, Profile Builder, and CF Group Builder. Enable this only if you author content for the TRaSH-Guides repository or need to set TRaSH IDs manually. Consumers syncing TRaSH profiles to Arr do NOT need this.'">Show TRaSH schema fields <span style="font-size:11px;color:#7d8590;font-weight:normal">(CLONARR_DEV_FEATURES)</span></div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
                 <input type="checkbox" :checked="config.trashSchemaFields" @change="config.trashSchemaFields = $event.target.checked; saveConfig(['trashSchemaFields'])">
@@ -397,7 +397,7 @@
               <template x-if="config.debugLogging">
                 <span style="display:flex;align-items:center;gap:8px;margin-left:8px">
                   <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa"
-                         title="Bundle UI navigation events (activity.log) into the download. Off by default — most bug reports only need the operation trace.">
+                         x-tt="'Bundle UI navigation events (activity.log) into the download. Off by default — most bug reports only need the operation trace.'">
                     <input type="checkbox" x-model="includeActivityLog" style="accent-color:#58a6ff">
                     <span>Include activity log</span>
                   </label>

@@ -4,6 +4,7 @@
 package netsec
 
 import (
+	"bufio"
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -298,6 +300,20 @@ func ResolveTrustedProxies(csv string) ([]net.IP, []string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		for _, host := range hostnames {
+			// Fast-path: read /etc/hosts directly. docker-compose injects
+			// service names into the container's /etc/hosts, but Go's
+			// pure-Go resolver may fail to find them via DNS when Docker's
+			// embedded resolver (127.0.0.11) is unreachable from the
+			// container's network namespace, returns NXDOMAIN for the
+			// service name, or musl's nsswitch quirks bypass /etc/hosts.
+			// This matches what `ping <service>` does — works regardless
+			// of DNS state. (Issue #40 follow-up: hostname registered as
+			// service in compose but Go resolver returned empty.)
+			if hostsIPs := lookupHostsFile(host); len(hostsIPs) > 0 {
+				out = append(out, hostsIPs...)
+				continue
+			}
+			// DNS fallback for hostnames not in /etc/hosts.
 			addrs, lerr := net.DefaultResolver.LookupHost(ctx, host)
 			if lerr != nil {
 				// Common cause in compose: proxy container not up yet.
@@ -312,6 +328,43 @@ func ResolveTrustedProxies(csv string) ([]net.IP, []string, error) {
 		}
 	}
 	return out, hostnames, nil
+}
+
+// lookupHostsFile reads /etc/hosts and returns all IPs mapped to the given
+// hostname (case-insensitive match). Returns nil if the file can't be opened
+// or no entries match — caller should fall back to DNS in that case.
+// Designed to be cheap on every refresh: /etc/hosts is typically <1 KB and
+// lives in tmpfs in containers, so the read is microseconds.
+func lookupHostsFile(hostname string) []net.IP {
+	f, err := os.Open("/etc/hosts")
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var ips []net.IP
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Strip trailing comment
+		if i := strings.Index(line, "#"); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		ip := net.ParseIP(fields[0])
+		if ip == nil {
+			continue
+		}
+		for _, name := range fields[1:] {
+			if strings.EqualFold(name, hostname) {
+				ips = append(ips, ip)
+				break
+			}
+		}
+	}
+	return ips
 }
 
 // isValidHostname checks that s is a syntactically valid hostname per

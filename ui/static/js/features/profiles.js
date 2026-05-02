@@ -362,9 +362,9 @@ export default {
         this.profileDetail = { ...this.profileDetail, detail: detail };
         this.initDetailSections(detail);
         this.initSelectedCFs(detail);
-        // Reset profile-detail override state on every load. pdInitOverrides gets the TRaSH
-        // profile when available; imported profiles (no detail.profile) still need the reset
-        // so stale pdGeneralActive/pdQualityActive/etc. from a prior TRaSH profile don't leak.
+        // Reset profile-detail override state on every load so stale state from a prior
+        // profile doesn't leak. pdInitOverrides then seeds pdOverrides from the new profile's
+        // defaults; restoreFromSyncHistory (called later) re-enables overrides if persisted.
         this.pdResetDetailState();
         this.pdInitOverrides(detail.profile || null);
       } catch (e) { console.error('loadProfileDetail:', e); }
@@ -1275,12 +1275,13 @@ export default {
           }
         }
       }
-      // Include any CF that has an active score override. Without this, a user
-      // edit in the "Overridden Scores" panel is sent in the scoreOverrides
-      // map but the backend's BuildArrProfile only processes trashIDs present
-      // in FormatItems ∪ selectedCFs — so the override is silently dropped.
-      // This matched the Clonarr bug "Overridden Scores changes don't sync".
-      if (this.cfScoreOverrideActive && this.cfScoreOverrides) {
+      // Include any CF that has a score override. Without this, a user-overridden
+      // score is sent in the scoreOverrides map but the backend's BuildArrProfile
+      // only processes trashIDs present in FormatItems ∪ selectedCFs — so the
+      // override would be silently dropped. (restoreFromSyncHistory filters
+      // cfScoreOverrides down to in-profile CFs, so this loop is normally a
+      // no-op for restored rules; it's the safety net for live edits.)
+      if (this.cfScoreOverrides) {
         for (const trashId of Object.keys(this.cfScoreOverrides)) {
           idSet.add(trashId);
         }
@@ -1562,18 +1563,14 @@ export default {
       for (const [tid, score] of Object.entries(this.extraCFs || {})) {
         cfMap.set(tid, score);
       }
-      // 5. Score overrides — always applied to CFs already in the set
-      // (matches backend, which uses body.scoreOverrides regardless of
-      // the override-panel active flag). The active flag only controls
-      // whether overrides PULL IN new CFs not already in formatItems /
-      // groups / extras — that's the override-panel "add CF" affordance.
+      // 5. Score overrides — apply to every CF in the override map. CFs
+      // already in cfMap get their score replaced; CFs not yet present get
+      // pulled in (matching the backend, which uses body.scoreOverrides
+      // regardless of selectedCFs). Symmetric with buildSyncBody:1283 where
+      // the same override IDs are added to selectedCFs.
       if (this.cfScoreOverrides) {
         for (const [tid, score] of Object.entries(this.cfScoreOverrides)) {
-          if (cfMap.has(tid)) {
-            cfMap.set(tid, score);
-          } else if (this.cfScoreOverrideActive) {
-            cfMap.set(tid, score);
-          }
+          cfMap.set(tid, score);
         }
       }
       // Sum positives — matches backend's `if sa.NewScore > 0` filter
@@ -1643,13 +1640,12 @@ export default {
       if (this.syncMode === 'create') {
         body.profileName = this.syncForm.newProfileName;
       }
-      // Build overrides from pdOverrides values. The pdGeneralActive /
-      // pdQualityActive flags only control UI display (input form vs
-      // read-only) — they do NOT gate the payload. Values that match the
-      // TRaSH default are filtered out below; "Hide Overrides" therefore
-      // never silently discards user data. Reset buttons are the explicit
-      // way to clear overrides. Matches the always-send behaviour of
-      // cfScoreOverrides + extraCFs further down.
+      // Build overrides from pdOverrides values. Persistence is data-driven —
+      // values that match the profile default are filtered out below, so the
+      // saved sync rule only carries true overrides. The pdOverridesEnabled
+      // toggle gates the EDITOR UI (whether the override cards render at all),
+      // not the payload — when the user disables the toggle, pdDisableOverrides
+      // explicitly clears the maps so the next sync sends a clean body.
       const ov = this.pdOverrides;
       const p = this.profileDetail?.detail?.profile || {};
       const overrides = {};
@@ -1667,8 +1663,13 @@ export default {
       const allScoreOverrides = { ...this.cfScoreOverrides };
       for (const [tid, score] of Object.entries(this.extraCFs)) allScoreOverrides[tid] = score;
       if (Object.keys(allScoreOverrides).length > 0) body.scoreOverrides = allScoreOverrides;
-      // Quality overrides: structure (new) trumps flat map (legacy)
-      if (this.qualityStructure.length > 0) {
+      // Quality overrides: structure (new) trumps flat map (legacy). Skip
+      // sending qualityStructure when it exactly mirrors profile defaults —
+      // otherwise just OPENING the Quality Items editor (which auto-inits
+      // qualityStructure from defaults so drag-drop works) would persist a
+      // phantom override on Save & Sync. Filter is symmetric with the
+      // pdOverrides values check above: only send what actually differs.
+      if (this.qualityStructure.length > 0 && !this.qualityStructureMatchesDefaults()) {
         body.qualityStructure = this.qsForBackend();
       } else if (Object.keys(this.qualityOverrides).length > 0) {
         body.qualityOverrides = this.qualityOverrides;
@@ -2219,18 +2220,18 @@ export default {
         }
         this.selectedOptionalCFs = { ...this.selectedOptionalCFs };
       }
-      // Restore overrides from sync history. Any general field present → enable General override.
-      // Cutoff quality present → enable Quality override. Values are preserved regardless.
+      // Restore overrides from sync history. Values are written to pdOverrides;
+      // pdOverridesEnabled is flipped to true at the end if ANY override was
+      // found, so the global toggle reflects the saved state of the rule.
+      let anyOverride = false;
       if (sh.overrides) {
         const ov = sh.overrides;
-        let anyGeneral = false;
-        if (ov.language !== undefined) { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; anyGeneral = true; }
-        if (ov.minFormatScore !== undefined) { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; anyGeneral = true; }
-        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; anyGeneral = true; }
-        if (ov.cutoffFormatScore !== undefined) { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; anyGeneral = true; }
-        if (ov.upgradeAllowed !== undefined) { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; anyGeneral = true; }
-        if (anyGeneral) this.pdGeneralActive = true;
-        if (ov.cutoffQuality !== undefined) { this.pdOverrides.cutoffQuality = ov.cutoffQuality; this.pdQualityActive = true; }
+        if (ov.language !== undefined) { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; anyOverride = true; }
+        if (ov.minFormatScore !== undefined) { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; anyOverride = true; }
+        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; anyOverride = true; }
+        if (ov.cutoffFormatScore !== undefined) { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; anyOverride = true; }
+        if (ov.upgradeAllowed !== undefined) { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; anyOverride = true; }
+        if (ov.cutoffQuality !== undefined) { this.pdOverrides.cutoffQuality = ov.cutoffQuality; anyOverride = true; }
       }
       // Determine which trashIDs are part of the TRaSH base profile. Used by
       // both the Extra-CF split below AND the Overridden-Scores filter.
@@ -2270,20 +2271,20 @@ export default {
         }
       }
       this.cfScoreOverrides = baseOverrides;
-      this.cfScoreOverrideActive = Object.keys(baseOverrides).length > 0;
+      if (Object.keys(baseOverrides).length > 0) anyOverride = true;
 
       // Restore quality overrides — prefer structure override over legacy flat map.
-      // Presence of either means Quality override was active on the saved sync rule, so also
-      // flip pdQualityActive so the Quality card reflects the correct override state.
+      // qualityOverrideActive is the Quality Items editor modal-open flag and
+      // must NOT be set here, otherwise the editor would auto-open on every
+      // Profile Detail open for any rule with Quality overrides.
       if (sh.qualityStructure && sh.qualityStructure.length > 0) {
         this.qualityStructure = sh.qualityStructure.map(it => {
           const out = { _id: ++this._qsIdCounter, name: it.name, allowed: !!it.allowed };
           if (it.items && it.items.length > 0) out.items = [...it.items];
           return out;
         });
-        this.qualityOverrideActive = true;
-        this.pdQualityActive = true;
-        // If TRaSH default cutoff is not in the overridden structure, pick first allowed
+        anyOverride = true;
+        // If profile-default cutoff is not in the overridden structure, pick first allowed
         const defaultCutoff = this.profileDetail?.detail?.profile?.cutoff || '';
         if (!this.pdOverrides.cutoffQuality && defaultCutoff) {
           const inStructure = this.qualityStructure.some(it => it.name === defaultCutoff && it.allowed !== false);
@@ -2294,13 +2295,12 @@ export default {
         }
       } else if (sh.qualityOverrides && Object.keys(sh.qualityOverrides).length > 0) {
         this.qualityOverrides = { ...sh.qualityOverrides };
-        this.qualityOverrideActive = true;
-        this.pdQualityActive = true;
+        anyOverride = true;
       }
       // Apply the Extra CFs computed above.
       if (Object.keys(extras).length > 0) {
         this.extraCFs = extras;
-        this.extraCFsActive = true;
+        anyOverride = true;
         // Load all CFs for the browser
         const appType = this.profileDetail?.instance?.type;
         if (appType) this.loadExtraCFList();
@@ -2309,6 +2309,10 @@ export default {
       if (sh.behavior) {
         this.syncForm.behavior = { ...this.syncForm.behavior, ...sh.behavior };
       }
+      // Auto-enable the Profile Detail overrides toggle if ANY override was
+      // restored, so the UI reflects the saved state of the rule (no "All
+      // values follow profile defaults" lie when there are real overrides).
+      if (anyOverride) this.pdOverridesEnabled = true;
     },
 
     async removeSyncHistory(instanceId, arrProfileId) {
@@ -2533,13 +2537,14 @@ export default {
       return cq !== def ? 1 : 0;
     },
 
-    // Summary across all override sources, used by the banner above the settings card.
-    // Quality counts cutoff diff (when Quality override is active) + per-item diffs.
+    // Per-section override counts + total. Drives the "N changes · General: X /
+    // Quality: Y / Overridden Scores: Z / Extras: W" breakdown shown in the
+    // Profile Detail toggle header when pdOverridesEnabled is true. All counts
+    // are data-driven from pdOverrides / cfScoreOverrides / extraCFs values
+    // compared against profile defaults.
     pdOverrideSummary() {
-      const general = this.pdGeneralActive ? this.pdGeneralChangeCount() : 0;
-      const qualityCutoff = this.pdQualityActive ? this.pdQualityChangeCount() : 0;
-      const qualityItems = this.pdQualityItemsChangeCount();
-      const quality = qualityCutoff + qualityItems;
+      const general = this.pdGeneralChangeCount();
+      const quality = this.pdQualityChangeCount() + this.pdQualityItemsChangeCount();
       const cfScores = Object.keys(this.cfScoreOverrides).length;
       const extraCFs = Object.keys(this.extraCFs).length;
       return { general, quality, cfScores, extraCFs, total: general + quality + cfScores + extraCFs };
@@ -2586,19 +2591,6 @@ export default {
         for (const id of ids) sel[id] = !allChecked;
         this.instRemoveSelected = {...this.instRemoveSelected, [iid]: sel};
       }
-    },
-
-    // Toggle Extra Custom Formats collapse. When collapsing, reset all inner group expand states so
-    // the section opens cleanly (all groups collapsed) on next expand.
-    toggleExtraCFsCollapsed() {
-      if (!this.extraCFsCollapsed) {
-        // About to collapse → reset inner group states (object-spread so
-        // Alpine reactivity propagates to every dependent x-show/:class).
-        const updated = { ...this.detailSections };
-        for (const g of (this.extraCFGroups || [])) updated['extra_' + g.name] = false;
-        this.detailSections = updated;
-      }
-      this.extraCFsCollapsed = !this.extraCFsCollapsed;
     },
 
     // Reset all per-group expand states in the Extra CFs picker. Called
@@ -2694,13 +2686,6 @@ export default {
     },
 
 
-    pdSetGeneralActive(on) { this.pdGeneralActive = !!on; },
-    pdSetQualityActive(on) {
-      this.pdQualityActive = !!on;
-      // Turning Quality override off also closes the Quality Items editor (structure/overrides stay stored)
-      if (!on) this.qualityOverrideActive = false;
-    },
-
     // Effective diff: how many leaf resolutions end up with a different `allowed` state than the
     // TRaSH original after the user's edits. Grouping/rename/reorder alone don't count — only
     // changes that actually affect the sync outcome (which resolutions Arr will see as enabled).
@@ -2759,24 +2744,65 @@ export default {
     // Does NOT touch pdOverrides values — caller handles that via pdInitOverrides() if needed.
     // Used by: loadProfileDetail (fresh load), Back-link (leaving the view), pdResetAllOverrides.
     pdResetDetailState() {
-      this.pdGeneralActive = false;
-      this.pdQualityActive = false;
+      this.pdOverridesEnabled = false;
+      this.pdGeneralCollapsed = false;
+      this.pdQualityCollapsed = false;
+      this.pdCFScoresCollapsed = true;
+      this.pdExtraCFsCollapsed = true;
       this.cfScoreOverrides = {};
-      this.cfScoreOverrideActive = false;
       this.qualityOverrides = {};
       this.qualityOverrideActive = false;
-      this.qualityOverrideCollapsed = false;
       this.qualityStructure = [];
       this.qualityStructureEditMode = false;
       this.qualityStructureExpanded = {};
       this.qualityStructureRenaming = null;
       this.extraCFs = {};
-      this.extraCFsActive = false;
-      this.extraCFsCollapsed = false;
       this.extraCFSearch = '';
       this.extraCFAllCFs = [];
       this.extraCFGroups = [];
       this._extraInProfileSet = null;
+    },
+
+    // Toggle handler for "Reset to profile defaults" button. Shows a confirm
+    // modal listing what will be cleared (per-section breakdown), then either
+    // calls pdDisableOverrides() on confirm or no-ops on cancel. When there are
+    // no actual overrides yet (user just enabled the toggle), skips the modal
+    // and disables silently — nothing to lose.
+    pdConfirmDisable() {
+      const s = this.pdOverrideSummary();
+      if (s.total === 0) {
+        this.pdDisableOverrides();
+        return;
+      }
+      const breakdown = `General: ${s.general}, Quality: ${s.quality}, Overridden Scores: ${s.cfScores}, Extras: ${s.extraCFs}`;
+      const plural = s.total === 1 ? '' : 's';
+      this.confirmModal = {
+        show: true,
+        title: 'Reset profile to defaults?',
+        message: `Your ${s.total} override${plural} will be cleared (${breakdown}).\n\nOn the next Save & Sync, this profile will revert to profile defaults in your Arr instance.\n\n⚠ This action is permanent. The only way to recover these overrides is to roll back from this profile sync history.`,
+        confirmLabel: 'Reset to profile defaults',
+        onConfirm: () => this.pdDisableOverrides(),
+        onCancel: () => {},
+      };
+    },
+
+    // Disable the Profile Detail overrides toggle. Clears all override state
+    // (general, quality, scores, extras) so the next Save & Sync sends a clean
+    // body that reverts the rule to profile defaults. Caller (pdConfirmDisable)
+    // is responsible for showing the confirm modal first.
+    pdDisableOverrides() {
+      this.pdOverridesEnabled = false;
+      // Re-seed pdOverrides from profile defaults so input fields show clean
+      // values if the user immediately re-enables the toggle.
+      this.pdInitOverrides(this.profileDetail?.detail?.profile || null);
+      this.cfScoreOverrides = {};
+      this.qualityOverrides = {};
+      this.qualityOverrideActive = false;
+      this.qualityStructure = [];
+      this.qualityStructureEditMode = false;
+      this.qualityStructureExpanded = {};
+      this.qualityStructureRenaming = null;
+      this.extraCFs = {};
     },
 
     // Seed pdOverrides from a profile's TRaSH defaults (or global defaults if no profile).
@@ -3047,7 +3073,7 @@ export default {
         title: target === 'builder' ? 'Reset Quality Items' : 'Reset Quality Overrides',
         message: target === 'builder'
           ? 'Clear all quality items?\n\nThis removes the current qualities and groups. Re-apply a template or preset to repopulate.'
-          : 'Reset to TRaSH default?\n\nAll override structure changes (toggles, groups, ordering, renames) will be discarded. This cannot be undone.',
+          : 'Reset to profile defaults?\n\nAll override structure changes (toggles, groups, ordering, renames) will be discarded. This cannot be undone.',
         confirmLabel: 'Reset',
         onConfirm: () => {
           if (target === 'builder') {
@@ -3071,6 +3097,31 @@ export default {
         if (it.items && it.items.length > 0) out.items = [...it.items];
         return out;
       });
+    },
+
+    // Deep structural equality: does qualityStructure exactly match the
+    // profile's default items (same order, same names, same allowed flags,
+    // same group nesting)? Used by buildSyncBody to skip persisting a
+    // qualityStructure that's identical to defaults — prevents phantom
+    // overrides when the user just opened the editor without making changes.
+    // Considers ordering significant (reorder is a real override).
+    qualityStructureMatchesDefaults() {
+      const defaults = this.profileDetail?.detail?.profile?.items || [];
+      const current = this.qualityStructure;
+      if (current.length !== defaults.length) return false;
+      for (let i = 0; i < defaults.length; i++) {
+        const a = current[i];
+        const b = defaults[i];
+        if (a.name !== b.name) return false;
+        if (!!a.allowed !== !!b.allowed) return false;
+        const aItems = a.items || [];
+        const bItems = b.items || [];
+        if (aItems.length !== bItems.length) return false;
+        for (let j = 0; j < aItems.length; j++) {
+          if (aItems[j] !== bItems[j]) return false;
+        }
+      }
+      return true;
     },
 
     // Debug logging helper — fire-and-forget POST to backend
