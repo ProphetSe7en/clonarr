@@ -70,7 +70,8 @@
   --alpha-blue-border: rgba(88,166,255,0.25);
   --alpha-blue-border-strong: rgba(88,166,255,0.3);
   --alpha-green-soft: rgba(63,185,80,0.1);
-  --alpha-green: rgba(63,185,80,0.12);
+  --alpha-green: rgba(63,185,80,0.15);
+  --alpha-purple: rgba(163,113,247,0.15);
 
   /* CF categories. The backend manifest may override these at runtime. */
   --cat-golden-rule: #d2a8ff;
@@ -183,7 +184,8 @@
   --alpha-blue-border: rgba(9,105,218,0.25);
   --alpha-blue-border-strong: rgba(9,105,218,0.4);
   --alpha-green-soft: rgba(26,127,55,0.08);
-  --alpha-green: rgba(26,127,55,0.12);
+  --alpha-green: rgba(26,127,55,0.15);
+  --alpha-purple: rgba(130,80,223,0.18);
 
   /* CF categories / profile groups inherit dark-mode values from :root —
      they are decorative chips that read on either background, and the

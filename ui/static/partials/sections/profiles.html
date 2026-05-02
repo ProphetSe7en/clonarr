@@ -226,13 +226,13 @@
                       </div>
                       <div style="flex:1;display:flex;gap:4px;justify-content:flex-end;padding-right:4px">
                         <template x-if="sh.changes?.cfDetails?.length > 0">
-                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:var(--accent-green)" x-text="sh.changes.cfDetails.length + ' CF'"></span>
+                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-green);color:var(--accent-green)" x-text="sh.changes.cfDetails.length + ' CF'"></span>
                         </template>
                         <template x-if="sh.changes?.scoreDetails?.length > 0">
                           <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange)" x-text="sh.changes.scoreDetails.length + ' score'"></span>
                         </template>
                         <template x-if="sh.changes?.qualityDetails?.length > 0">
-                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(163,113,247,0.15);color:var(--accent-purple)" x-text="sh.changes.qualityDetails.length + ' quality'"></span>
+                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-purple);color:var(--accent-purple)" x-text="sh.changes.qualityDetails.length + ' quality'"></span>
                         </template>
                         <template x-if="sh.changes?.settingsDetails?.length > 0">
                           <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-blue-soft);color:var(--accent-blue)" x-text="sh.changes.settingsDetails.length + ' setting'"></span>
@@ -586,7 +586,7 @@
                                         <!-- Summary bar — single-row: profile identity + status + Sync All Fixes.
                                              Diff counts intentionally removed; the filter chip bar below is the single source of truth for counts.
                                              NOTE: :style uses object form so it MERGES with the base style attribute. A string form would replace it entirely. -->
-                                        <div style="background:var(--bg-card);border:1px solid var(--text-muted-secondary);border-radius:8px;padding:10px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 6px rgba(0,0,0,0.4)"
+                                        <div style="background:var(--bg-card);border:1px solid var(--text-muted-secondary);border-radius:8px;padding:10px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 6px var(--alpha-shadow)"
                                              :style="{ borderColor: ((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) > 0 ? 'var(--accent-orange)' : 'var(--accent-green)' }">
                                           <strong style="color:var(--text-primary);font-size:13px" x-text="ap.name"></strong>
                                           <span style="color:var(--text-muted);font-size:12px">vs</span>

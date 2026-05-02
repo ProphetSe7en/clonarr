@@ -111,7 +111,7 @@
       ⚠️ Authentication is disabled — anyone who reaches this URL is admin. Set Authentication to Forms or Basic in <strong>Settings → Security</strong>, or make sure another auth layer (reverse proxy, firewall) is in front.
     </span>
     <button @click="dismissNoAuthBanner()" x-tt="'Hide on this device'"
-            style="background:rgba(255,255,255,0.12);color:var(--banner-warn-text);border:1px solid rgba(255,218,218,0.3);padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">
+            style="background:color-mix(in srgb, var(--banner-warn-text) 12%, transparent);color:var(--banner-warn-text);border:1px solid color-mix(in srgb, var(--banner-warn-text) 30%, transparent);padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer">
       Dismiss
     </button>
   </div>

@@ -116,7 +116,7 @@
                                      @blur="setTimeout(() => { cleanupKeepFocused = false; cleanupKeepSuggestions = [] }, 150)"
                                      style="width:100%;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:4px;padding:6px 8px;color:var(--text-primary);font-size:12px">
                               <div x-show="cleanupKeepFocused && cleanupKeepSuggestions.length > 0" @mousedown.prevent
-                                   style="position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:0 0 6px 6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.4)">
+                                   style="position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:0 0 6px 6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px var(--alpha-shadow)">
                                 <template x-for="(suggestion, si) in cleanupKeepSuggestions" :key="si">
                                   <div @click="addCleanupKeepName(suggestion)"
                                        style="padding:6px 10px;font-size:12px;color:var(--text-body);cursor:pointer;border-bottom:1px solid var(--bg-muted)"
