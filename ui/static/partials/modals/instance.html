@@ -1,0 +1,49 @@
+{{define "modals/instance"}}
+  <!-- ==================== INSTANCE MODAL ==================== -->
+  <div class="modal-overlay" x-show="showInstanceModal" @click.self="showInstanceModal = false" x-cloak>
+    <div class="modal">
+      <div class="modal-title" x-text="editingInstance ? 'Edit Instance' : 'Add Instance'"></div>
+      <div class="form-group">
+        <label>Name</label>
+        <input class="input" x-model="instanceForm.name" placeholder="e.g. Radarr HD">
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select class="input" x-model="instanceForm.type">
+          <option value="radarr">Radarr</option>
+          <option value="sonarr">Sonarr</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>URL</label>
+        <input class="input" x-model="instanceForm.url" placeholder="http://192.168.86.22:7878" autocomplete="one-time-code">
+      </div>
+      <div class="form-group">
+        <label>API Key</label>
+        <input class="input" x-model="instanceForm.apiKey" :placeholder="editingInstance ? 'Leave empty to keep current key' : 'Radarr/Sonarr API key'" :type="editingInstance && !instanceForm.apiKey ? 'text' : 'password'" autocomplete="one-time-code">
+        <div x-show="editingInstance && !instanceForm.apiKey" style="font-size:13px;color:#aaa;margin-top:4px">API key is saved — leave empty to keep it, or enter a new one to replace it.</div>
+      </div>
+      <!-- Test result -->
+      <div x-show="modalTestResult !== null">
+        <template x-if="modalTestResult === 'testing'">
+          <div class="test-result" style="color:#d29922"><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Testing...</div>
+        </template>
+        <template x-if="modalTestResult && modalTestResult !== 'testing' && modalTestResult.connected">
+          <div class="test-result ok" x-text="'Connected — ' + modalTestResult.appName + ' v' + modalTestResult.version"></div>
+        </template>
+        <template x-if="modalTestResult && modalTestResult !== 'testing' && modalTestResult.connected === false">
+          <div class="test-result fail" x-text="'Failed: ' + (modalTestResult.error || 'Connection refused')"></div>
+        </template>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" @click="testConnectionInModal()" :disabled="!instanceForm.url || !instanceForm.apiKey || modalTestResult === 'testing'">Test</button>
+        <div style="flex:1"></div>
+        <button class="btn" @click="showInstanceModal = false">Cancel</button>
+        <button class="btn btn-primary" @click="saveInstance()">
+          <span x-text="editingInstance ? 'Update' : 'Add'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

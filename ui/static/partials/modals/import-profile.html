@@ -1,0 +1,91 @@
+{{define "modals/import-profile"}}
+  <div class="modal-overlay" x-show="showImportModal !== false" @click.self="showImportModal = false" x-cloak>
+    <div class="modal" style="max-width:600px">
+      <div class="modal-title">Import Profile</div>
+      <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+        Paste or upload a profile configuration. Supports Recyclarr YAML, TRaSH JSON, and Clonarr JSON. Multiple profiles and both Radarr and Sonarr are detected automatically.
+      </div>
+
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" :class="{ 'btn-primary': importMode === 'paste' }" @click="importMode = 'paste'">Paste</button>
+          <button class="btn btn-sm" :class="{ 'btn-primary': importMode === 'file' }" @click="importMode = 'file'">Upload File</button>
+        </div>
+      </div>
+
+      <div x-show="importMode === 'paste'" class="form-group">
+        <textarea class="input" style="width:100%;height:200px;font-family:monospace;font-size:13px;resize:vertical" x-model="importYaml" placeholder="Paste Recyclarr YAML, TRaSH profile JSON, or Clonarr export JSON here..."></textarea>
+      </div>
+
+      <div x-show="importMode === 'file'" class="form-group">
+        <div style="border:2px dashed #30363d;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.2s"
+             :style="importDragOver ? 'border-color:#58a6ff;background:#161b2280' : ''"
+             @click="$refs.importFileInput.click()"
+             @dragover.prevent="importDragOver = true"
+             @dragleave.prevent="importDragOver = false"
+             @drop.prevent="importDragOver = false; handleImportFiles($event.dataTransfer.files)">
+          <div style="color:#aaa;font-size:13px;margin-bottom:4px">Drop .yml or .json files here or click to browse</div>
+          <div style="color:#aaa;font-size:13px">Supports multiple files</div>
+        </div>
+        <input type="file" accept=".yml,.yaml,.json" multiple x-ref="importFileInput" @change="handleImportFiles($event.target.files)" style="display:none">
+        <template x-if="importFiles.length > 0">
+          <div style="margin-top:8px;font-size:12px;color:#58a6ff">
+            <template x-for="f in importFiles" :key="f.name">
+              <div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+                <span style="color:#3fb950">&#10003;</span>
+                <span x-text="f.name"></span>
+              </div>
+            </template>
+          </div>
+        </template>
+
+      </div>
+
+      <div class="form-group" x-show="importMode === 'paste'">
+        <label>Profile name (optional — overrides name from source)</label>
+        <input class="input" x-model="importNameOverride" placeholder="Leave empty to use name from source">
+      </div>
+
+      <!-- Include files (available for both paste and upload modes) -->
+      <label style="display:flex;align-items:center;gap:6px;margin-top:4px;cursor:pointer;font-size:13px;color:#aaa">
+        <input type="checkbox" x-model="importHasIncludes" style="accent-color:#58a6ff">
+        Config uses include files
+      </label>
+      <div x-show="importHasIncludes" style="margin-top:8px">
+        <div style="border:2px dashed #30363d;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:border-color 0.2s"
+             @click="$refs.importIncludeInput.click()"
+             @dragover.prevent="$el.style.borderColor='#d29922'"
+             @dragleave.prevent="$el.style.borderColor='#30363d'"
+             @drop.prevent="$el.style.borderColor='#30363d'; handleImportIncludeFiles($event.dataTransfer.files)">
+          <div style="color:#aaa;font-size:13px">Drop include files here or click to browse</div>
+        </div>
+        <input type="file" accept=".yml,.yaml" multiple x-ref="importIncludeInput" @change="handleImportIncludeFiles($event.target.files)" style="display:none">
+        <template x-if="importIncludeFiles.length > 0">
+          <div style="margin-top:6px;font-size:12px;color:#d29922">
+            <template x-for="f in importIncludeFiles" :key="f.name">
+              <div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+                <span style="color:#d29922">&#10003;</span>
+                <span x-text="f.name"></span>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+
+
+      <div x-show="importResult" style="font-size:12px;margin-bottom:8px;padding:8px;border-radius:4px"
+           :style="importError ? 'background:#3d1f1f;color:#f85149;border:1px solid #da3633' : 'background:#1a2e1a;color:#3fb950;border:1px solid #238636'"
+           x-text="importResult"></div>
+
+      <div class="modal-actions">
+        <button class="btn" @click="showImportModal = false; importResult = ''; importError = false; importYaml = ''; importFiles = []; importIncludeFiles = []; importHasIncludes = false; importNameOverride = ''">Cancel</button>
+        <button class="btn btn-primary" @click="submitImport()" :disabled="importingProfile || (importMode === 'paste' ? !importYaml.trim() : importFiles.length === 0)">
+          <span x-show="importingProfile" class="spinner"></span>
+          <span x-show="!importingProfile">Import</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

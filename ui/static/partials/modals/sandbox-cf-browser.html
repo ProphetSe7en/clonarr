@@ -1,0 +1,88 @@
+{{define "modals/sandbox-cf-browser"}}
+  <!-- ==================== SANDBOX CF BROWSER MODAL ==================== -->
+  <div class="modal-overlay" x-show="sandboxCFBrowser.open" @click.self="closeSandboxCFBrowser()" x-cloak>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;width:700px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column">
+      <!-- Header -->
+      <div style="padding:16px 20px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:12px">
+        <div style="font-size:15px;font-weight:600">Add Custom Formats</div>
+        <input type="text" class="pb-input" placeholder="Filter..." style="width:200px;font-size:13px;margin-left:auto"
+               x-model="sandboxCFBrowser.filter">
+        <button class="btn btn-sm" @click="closeSandboxCFBrowser()">Done</button>
+      </div>
+
+      <!-- Category list -->
+      <div style="flex:1;overflow-y:auto;padding:8px 0">
+        <template x-for="cat in sandboxCFBrowser.categories || []" :key="cat.category">
+          <div style="margin-bottom:4px">
+            <!-- Category header -->
+            <div :class="getCategoryClass(cat.category)" style="margin:0 8px">
+              <div class="pb-cat-header" @click="sandboxCFBrowser.expanded[cat.category] = !sandboxCFBrowser.expanded[cat.category]">
+                <span class="profile-group-chevron" :class="{ open: sandboxCFBrowser.expanded[cat.category] }">&#9654;</span>
+                <span style="font-size:13px;font-weight:500" x-text="cat.category"></span>
+                <span class="pb-cat-count" x-text="sandboxCFBrowserCatCount(cat)"></span>
+              </div>
+            </div>
+
+            <!-- CFs in category -->
+            <div x-show="sandboxCFBrowser.expanded[cat.category]" style="padding:0 8px">
+              <template x-for="group in cat.groups" :key="group.name">
+                <div>
+                  <template x-for="cf in group.cfs" :key="cf.trashId">
+                    <div x-show="!sandboxCFBrowser.filter || cf.name.toLowerCase().includes(sandboxCFBrowser.filter.toLowerCase())"
+                         style="display:flex;align-items:center;gap:8px;padding:2px 14px;font-size:13px"
+                         @mouseenter="$el.style.background='#1c2129'" @mouseleave="$el.style.background=''">
+                      <label class="toggle toggle-sm">
+                        <input type="checkbox"
+                               :checked="sandboxCFBrowser.selected[cf.trashId]"
+                               :disabled="sandboxCFBrowser.inProfile[cf.trashId]"
+                               @change="sandboxCFBrowser.selected[cf.trashId] = $event.target.checked; if($event.target.checked) { sandboxCFBrowser.scores[cf.trashId] = sandboxCFBrowser.scores[cf.trashId] ?? 0; }">
+                        <span class="slider"></span>
+                      </label>
+                      <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0"
+                            :style="sandboxCFBrowser.inProfile[cf.trashId] ? 'color:#aaa' : 'color:#c9d1d9'" x-text="cf.name"></span>
+                      <input x-show="sandboxCFBrowser.selected[cf.trashId]" type="number" class="pb-input"
+                             style="width:75px;flex-shrink:0;font-size:12px;text-align:right;font-family:monospace"
+                             :value="sandboxCFBrowser.scores[cf.trashId] ?? 0"
+                             @input="sandboxCFBrowser.scores[cf.trashId] = parseInt($event.target.value) || 0">
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Custom CFs section -->
+        <template x-if="(sandboxCFBrowser.customCFs || []).length > 0">
+          <div style="margin:4px 8px 0">
+            <div class="pb-cat-header" style="border-left:3px solid #d29922" @click="sandboxCFBrowser.expanded['Custom'] = !sandboxCFBrowser.expanded['Custom']">
+              <span class="profile-group-chevron" :class="{ open: sandboxCFBrowser.expanded['Custom'] }">&#9654;</span>
+              <span style="font-size:13px;font-weight:500;color:#d29922">Custom CFs</span>
+              <span class="pb-cat-count" x-text="(sandboxCFBrowser.customCFs || []).length"></span>
+            </div>
+            <div x-show="sandboxCFBrowser.expanded['Custom']">
+              <template x-for="cf in sandboxCFBrowser.customCFs || []" :key="cf.id">
+                <div x-show="!sandboxCFBrowser.filter || cf.name.toLowerCase().includes(sandboxCFBrowser.filter.toLowerCase())"
+                     style="display:flex;align-items:center;gap:8px;padding:2px 14px;font-size:13px"
+                     @mouseenter="$el.style.background='#1c2129'" @mouseleave="$el.style.background=''">
+                  <label class="toggle toggle-sm">
+                    <input type="checkbox"
+                           :checked="sandboxCFBrowser.selected[cf.id]"
+                           @change="sandboxCFBrowser.selected[cf.id] = $event.target.checked; if($event.target.checked) { sandboxCFBrowser.scores[cf.id] = sandboxCFBrowser.scores[cf.id] ?? 0; }">
+                    <span class="slider"></span>
+                  </label>
+                  <span style="flex:1;color:#d29922;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0" x-text="cf.name"></span>
+                  <input x-show="sandboxCFBrowser.selected[cf.id]" type="number" class="pb-input"
+                         style="width:75px;flex-shrink:0;font-size:12px;text-align:right;font-family:monospace;border-color:#d29922"
+                         :value="sandboxCFBrowser.scores[cf.id] ?? 0"
+                         @input="sandboxCFBrowser.scores[cf.id] = parseInt($event.target.value) || 0">
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+{{end}}

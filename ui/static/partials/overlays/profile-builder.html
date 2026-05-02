@@ -1,0 +1,594 @@
+{{define "overlays/profile-builder"}}
+  <!-- ==================== PROFILE BUILDER ==================== -->
+  <div x-show="profileBuilder && !['settings','about'].includes(currentSection)" x-cloak>
+    <div class="page">
+      <a class="back-link" @click="cancelProfileBuilder()">&larr; Back to Profiles</a>
+
+      <!-- Top action bar -->
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px">
+        <template x-if="!_resyncReturnSubTab">
+          <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
+            <span x-show="pbSaving" class="spinner"></span>
+            <span x-show="!pbSaving" x-text="pb.editId ? 'Save Changes' : 'Save Profile'"></span>
+          </button>
+        </template>
+        <template x-if="pb.editId">
+          <div style="display:flex;gap:6px">
+            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save changes and sync to existing Arr profile">Save & Sync</button>
+            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save and create as new Arr profile">Create New</button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Info banner when editing from Sync Rules -->
+      <template x-if="_resyncReturnSubTab && pb.editId">
+        <div style="margin-top:8px;padding:8px 14px;background:#1a1500;border:1px solid #d29922;border-radius:6px;font-size:13px;color:#d29922;line-height:1.5">
+          <strong>Editing synced profile</strong> — Changes here modify the profile itself, which affects all sync rules using it. Use <strong>Save & Sync</strong> to apply changes to Arr, or <strong>Cancel</strong> to discard.
+        </div>
+      </template>
+
+      <!-- Settings Card -->
+      <div class="card" style="overflow:visible;margin-top:16px">
+        <div class="profile-group-header" @click="pbSettingsOpen = !pbSettingsOpen">
+          <span class="profile-group-chevron" :class="{ open: pbSettingsOpen }">&#9654;</span>
+          <span>Profile Settings</span>
+          <span style="font-size:12px;color:#aaa;margin-left:auto" x-text="pbSelectedCount() + ' CFs selected'"></span>
+        </div>
+        <div x-show="pbSettingsOpen">
+          <div style="padding:14px 20px;display:flex;flex-direction:column;gap:14px">
+            <!-- Profile Name -->
+            <div class="pb-header" style="margin-bottom:0">
+              <input type="text" x-model="pb.name" placeholder="Profile name..." :style="pb.name ? '' : 'border-bottom-color:#f85149'">
+            </div>
+            <!-- Initialize from — pick a starting point for scores and settings. Tabs separate
+                 the two import sources; user picks one, clicks Apply. Advanced users can also
+                 skip this entirely (Builder opens blank). -->
+            <div class="pd-card" style="border-left:3px solid #f0883e">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #21262d">
+                <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Initialize from</span>
+                <span style="font-size:11px;color:#8b949e" x-text="pb.appType === 'radarr' ? 'Scores, cutoff, quality items and language get applied' : 'Scores, cutoff and quality items get applied'"></span>
+              </div>
+              <!-- Tab bar -->
+              <div style="display:inline-flex;background:#0d1117;border:1px solid #30363d;border-radius:6px;overflow:hidden;margin-bottom:12px">
+                <button type="button" class="pb-init-tab" :class="pbInitTab === 'trash' ? 'active' : ''" @click="pbInitTab = 'trash'">TRaSH template</button>
+                <button type="button" class="pb-init-tab" :class="pbInitTab === 'instance' ? 'active' : ''" @click="pbInitTab = 'instance'">Instance profile</button>
+              </div>
+              <!-- TRaSH template tab -->
+              <div x-show="pbInitTab === 'trash'" style="display:flex;gap:8px;align-items:center">
+                <select class="pb-input" x-model="pb.templateId" style="flex:1">
+                  <option value="">Template...</option>
+                  <template x-for="gn in getTrashProfileGroups(pb.appType)" :key="'tg:'+gn">
+                    <optgroup :label="'TRaSH — ' + gn">
+                      <template x-for="p in getTrashProfilesByGroup(pb.appType, gn)" :key="'t:'+p.trashId">
+                        <option :value="'trash:'+p.trashId" x-text="p.name"></option>
+                      </template>
+                    </optgroup>
+                  </template>
+                  <optgroup label="Imported / Custom" x-show="(importedProfiles[pb.appType] || []).length > 0">
+                    <template x-for="p in (importedProfiles[pb.appType] || [])" :key="'i:'+p.id">
+                      <option :value="'import:'+p.id" x-text="p.name"></option>
+                    </template>
+                  </optgroup>
+                </select>
+                <button class="btn btn-sm btn-blue" @click="pbApplyTemplate()" :disabled="!pb.templateId || pbTemplateLoading" style="white-space:nowrap;padding:4px 14px;font-size:13px">
+                  <span x-show="pbTemplateLoading" class="spinner" style="width:10px;height:10px"></span>
+                  <span x-show="!pbTemplateLoading">Apply template</span>
+                </button>
+              </div>
+              <!-- Instance profile tab -->
+              <div x-show="pbInitTab === 'instance'" style="display:flex;gap:8px;align-items:center">
+                <select class="pb-input" x-model="pbInstanceImportId" @change="pbInstanceChanged()" style="flex:1">
+                  <option value="">Instance...</option>
+                  <template x-for="inst in instancesOfType(pb.appType)" :key="inst.id">
+                    <option :value="inst.id" x-text="inst.name"></option>
+                  </template>
+                </select>
+                <select class="pb-input" x-model="pbInstanceImportProfileId"
+                        :disabled="!pbInstanceImportId || pbInstanceImportProfiles.length === 0" style="flex:1">
+                  <option value="">Profile...</option>
+                  <template x-for="p in pbInstanceImportProfiles" :key="p.id">
+                    <option :value="p.id" x-text="p.name"></option>
+                  </template>
+                </select>
+                <button class="btn btn-sm btn-blue" @click="pbApplyInstanceProfile()" :disabled="!pbInstanceImportProfileId || pbInstanceImportLoading" style="white-space:nowrap;padding:4px 14px;font-size:13px">
+                  <span x-show="pbInstanceImportLoading" class="spinner" style="width:10px;height:10px"></span>
+                  <span x-show="!pbInstanceImportLoading">Apply profile</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- General + Quality cards (same blue/purple stripe design as profile-detail Edit view).
+                 General: Language, Upgrades, Min/Min Upgrade/Cutoff scores, Score Set.
+                 Quality: Cutoff quality, Quality Preset, Edit Quality Items button. -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <!-- General card -->
+              <div class="pd-card pd-card-general">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #21262d">
+                  <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">General</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div class="pd-row" x-show="pb.appType === 'radarr'">
+                    <span class="pd-label">Language</span>
+                    <select class="pb-input pd-input" x-model="pb.language">
+                      <template x-for="lang in pbLanguages" :key="lang.name">
+                        <option :value="lang.name" x-text="lang.name"></option>
+                      </template>
+                    </select>
+                  </div>
+                  <div class="pd-row">
+                    <span class="pd-label">Upgrades Allowed</span>
+                    <label class="toggle toggle-sm" @click.stop style="flex-shrink:0">
+                      <input type="checkbox" x-model="pb.upgradeAllowed">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                  <div class="pd-row">
+                    <span class="pd-label">Min Score</span>
+                    <input type="number" class="pb-input pd-input" x-model.number="pb.minFormatScore">
+                  </div>
+                  <div class="pd-row">
+                    <span class="pd-label">Min Upgrade Score</span>
+                    <input type="number" class="pb-input pd-input" x-model.number="pb.minUpgradeFormatScore">
+                  </div>
+                  <div class="pd-row">
+                    <span class="pd-label">Cutoff Score</span>
+                    <input type="number" class="pb-input pd-input" x-model.number="pb.cutoffScore">
+                  </div>
+                  <div class="pd-row">
+                    <span class="pd-label">Score Set</span>
+                    <select class="pb-input pd-input" x-model="pb.scoreSet" @change="pbScoreSetChanged(); _pbSaveDefaults()">
+                      <option value="default">Default</option>
+                      <template x-for="ss in sortedScoreSets()" :key="ss">
+                        <option :value="ss" x-text="ss"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quality card. Spans full grid width when the items editor is open so
+                   drag-drop has room (avoids column-count overflow in the narrow half-width). -->
+              <div class="pd-card pd-card-quality" :style="pb.qualityEditorOpen ? 'grid-column:1/-1' : ''">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #21262d">
+                  <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <div class="pd-row">
+                    <span class="pd-label">Cutoff</span>
+                    <!-- Alpine's <template x-for> inside <select> does NOT re-render options
+                         when the source array's nested fields change (e.g. item.allowed
+                         toggled inside Edit Quality Items). Same bug class that hit the CF
+                         editor dropdowns. Switch to programmatic population + x-effect so
+                         toggles refresh the cutoff list immediately, without requiring
+                         Edit Groups → Done Editing Groups as a workaround. -->
+                    <select class="pb-input pd-input"
+                            x-effect="populatePBCutoffSelect($el, pb.qualityItems, pb.cutoff)"
+                            @change="pb.cutoff = $el.value">
+                    </select>
+                  </div>
+                  <div class="pd-row">
+                    <span class="pd-label">Quality Preset</span>
+                    <select class="pb-input pd-input" x-model="pb.qualityPresetId" @change="pbApplyQualityPreset(); _pbSaveDefaults()">
+                      <option value="">None</option>
+                      <template x-for="gn in pbQualityPresetGroups()" :key="'qpg:'+gn">
+                        <optgroup :label="gn">
+                          <template x-for="qp in pbQualityPresetsByGroup(gn)" :key="qp.id">
+                            <option :value="qp.id" x-text="qp.name + ' → ' + qp.cutoff"></option>
+                          </template>
+                        </optgroup>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                <div style="margin-top:14px;padding-top:10px;border-top:1px solid #21262d;display:flex;align-items:center;justify-content:space-between;gap:10px">
+                  <div style="display:flex;align-items:center;gap:8px;min-width:0">
+                    <span style="font-size:13px;color:#aaa">Quality Items</span>
+                    <template x-if="(pb.qualityItems || []).length > 0">
+                      <span style="font-size:11px;color:#8b949e;background:#21262d;padding:1px 6px;border-radius:8px" x-text="pb.qualityItems.filter(q => q.allowed).length + '/' + pb.qualityItems.length + ' allowed'"></span>
+                    </template>
+                  </div>
+                  <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#a371f7;color:#a371f7"
+                          @click="pb.qualityEditorOpen = !pb.qualityEditorOpen; if(pb.qualityEditorOpen) { if(pb.qualityItems.length === 0) pbInitQualityEditor(); pbEnsureQualityIds(); } else { qsCloseSharedState(); }"
+                          x-text="pb.qualityEditorOpen ? '✓ Done' : 'Edit Quality Items'"></button>
+                </div>
+                <div x-show="pb.qualityAllowedNames && !pb.qualityEditorOpen" style="margin-top:8px;font-size:12px;color:#aaa">
+                  <span style="color:#58a6ff" x-text="pb.cutoff"></span>
+                  <span style="margin:0 3px">—</span>
+                  <span style="color:#aaa" x-text="pb.qualityAllowedNames"></span>
+                </div>
+
+                <!-- CF Group Variants sub-section — only shown when the current template/profile
+                     exposes variant-configurable groups (Golden Rule, Miscellaneous). -->
+                <template x-if="pbHasGroupVariants()">
+                  <div style="margin-top:14px;padding-top:10px;border-top:1px solid #21262d">
+                    <div style="font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">CF Group Variants</div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <div class="pd-row" x-show="pbGroupVariant('Golden Rule')">
+                        <span class="pd-label">Golden Rule</span>
+                        <select class="pb-input pd-input" x-model="pb.variantGoldenRule" @change="pbApplyGoldenRule(); _pbSaveDefaults()">
+                          <option value="" disabled>Select variant...</option>
+                          <option value="HD">HD</option>
+                          <option value="UHD">UHD</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                      <div class="pd-row" x-show="pbGroupVariant('Miscellaneous')">
+                        <span class="pd-label">Miscellaneous</span>
+                        <select class="pb-input pd-input" x-model="pb.variantMisc" @change="pbApplyMisc(); _pbSaveDefaults()">
+                          <option value="" disabled>Select variant...</option>
+                          <option value="Standard">Standard</option>
+                          <option value="SQP">SQP</option>
+                          <option value="none">None</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Quality Items editor — shared markup with Edit view (profile-detail's Quality Overrides).
+                     Uses qs-* helpers with target='builder' so all drag-drop/rename/group operations
+                     mutate pb.qualityItems instead of qualityStructure. Edit Groups toggle + expanded +
+                     rename + drag state are shared (only one editor open at a time). -->
+                <div x-show="pb.qualityEditorOpen" x-cloak style="margin-top:12px;border-top:1px solid #21262d;padding-top:12px"
+                     :class="qualityStructureEditMode ? 'qs-edit-on' : ''">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+                    <div style="font-size:12px;color:#aaa" x-show="!qualityStructureEditMode">Toggle resolutions on/off. Qualities higher in the list are more preferred.</div>
+                    <div style="font-size:12px;color:#aaa" x-show="qualityStructureEditMode">Drag rows to reorder · drop on a row to merge · click group name to rename</div>
+                    <div style="flex:1"></div>
+                    <button class="btn" style="font-size:12px;padding:2px 10px"
+                            :style="qualityStructureEditMode ? 'background:#238636;border-color:#238636;color:#fff' : ''"
+                            @click="qualityStructureEditMode = !qualityStructureEditMode; if (!qualityStructureEditMode) { qualityStructureExpanded = {}; qualityStructureRenaming = null; }">
+                      <span x-text="qualityStructureEditMode ? '✓ Done Editing Groups' : 'Edit Groups'"></span>
+                    </button>
+                    <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#d29922;color:#d29922"
+                            title="Clear quality items — re-apply a preset to repopulate"
+                            @click="qsResetAll('builder')">Reset</button>
+                  </div>
+                  <div :style="'column-count:' + (pb.qualityItems.length > 12 ? 3 : pb.qualityItems.length > 6 ? 2 : 1) + ';column-gap:16px'">
+                    <template x-for="(item, idx) in pb.qualityItems" :key="item._id || ('pbqi-'+idx)">
+                      <div style="break-inside:avoid">
+                        <template x-if="idx === 0 && qualityStructureEditMode">
+                          <div class="qs-drop-gap"
+                               :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === 0 }"
+                               @dragover.prevent="qualityStructureDrag.dropGap = 0"
+                               @dragleave="qualityStructureDrag.dropGap = null"
+                               @drop.prevent="qsHandleDropOnGap(0, 'builder')"></div>
+                        </template>
+                        <div class="qs-row"
+                             :class="{
+                               'is-group': item.items && qualityStructureEditMode,
+                               'is-dragging': qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx,
+                               'dnd-merge-hover': qualityStructureDrag.dropMerge === idx
+                             }"
+                             :draggable="qualityStructureEditMode"
+                             @dragstart="if (qualityStructureEditMode) { qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx; }"
+                             @dragover.prevent="if (qualityStructureEditMode && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                             @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
+                             @drop.prevent="qsHandleDropOnRow(idx, 'builder')"
+                             @dragend="qsResetDrag()">
+                          <span class="qs-handle" x-show="qualityStructureEditMode" title="Drag to reorder · drop on another row to merge">⋮⋮</span>
+                          <template x-if="qualityStructureEditMode">
+                            <template x-if="item.items">
+                              <span class="qs-chevron"
+                                    :class="{ open: qualityStructureExpanded[item._id] }"
+                                    @click="qualityStructureExpanded[item._id] = !qualityStructureExpanded[item._id]">&#9654;</span>
+                            </template>
+                          </template>
+                          <template x-if="qualityStructureEditMode && !item.items">
+                            <span style="width:10px;display:inline-block"></span>
+                          </template>
+                          <label class="toggle toggle-sm" style="flex-shrink:0">
+                            <!-- Same pattern as qualityStructure toggle (line 3615): reassign
+                                 pb.qualityItems by spread so x-effect on the cutoff select
+                                 (populatePBCutoffSelect) re-runs. Plain x-model mutates in
+                                 place; Alpine's reactivity through function-argument arrays
+                                 doesn't always propagate to the cutoff select without a
+                                 top-level reference change. -->
+                            <input type="checkbox"
+                                   :checked="item.allowed"
+                                   @change="item.allowed = $event.target.checked; pb.qualityItems = pb.qualityItems.slice()">
+                            <span class="slider"></span>
+                          </label>
+                          <template x-if="qualityStructureRenaming !== item._id">
+                            <span class="qs-name"
+                                  :class="(qualityStructureEditMode && item.items) ? 'editable' : ''"
+                                  :style="item.allowed ? 'color:#e1e4e8' : 'color:#aaa'"
+                                  @click="if (qualityStructureEditMode && item.items) qsStartRename(item)"
+                                  x-text="item.name"></span>
+                          </template>
+                          <template x-if="qualityStructureRenaming === item._id">
+                            <input class="qs-rename-input"
+                                   x-model="item.name"
+                                   @blur="qualityStructureRenaming = null"
+                                   @keyup.enter="qualityStructureRenaming = null"
+                                   @keyup.escape="qualityStructureRenaming = null"
+                                   x-init="$nextTick(() => $el.focus())">
+                          </template>
+                          <span x-show="item.items" class="qs-badge" x-text="item.items?.length"></span>
+                          <button x-show="qualityStructureEditMode && item.items" class="qs-tiny-x"
+                                  style="font-size:11px;padding:0 6px"
+                                  @click="qsDeleteGroup(idx, 'builder')" title="Delete group (members become individual singles)">× delete</button>
+                        </div>
+                        <div class="qs-group-members"
+                             x-show="item.items && qualityStructureEditMode && qualityStructureExpanded[item._id]"
+                             x-cloak
+                             :class="{ 'dnd-merge-hover': qualityStructureDrag.dropMerge === idx && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) }"
+                             @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                             @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
+                             @drop.prevent.stop="qsHandleDropOnRow(idx, 'builder')">
+                          <template x-for="(m, mIdx) in item.items" :key="'pbqsm-'+item._id+'-'+m+'-'+mIdx">
+                            <div class="qs-member"
+                                 :class="{ 'is-dragging': qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx && qualityStructureDrag.srcMember === mIdx }">
+                              <span class="qs-pill"
+                                    draggable="true"
+                                    @dragstart.stop="qualityStructureDrag.kind = 'member'; qualityStructureDrag.srcGroup = idx; qualityStructureDrag.srcMember = mIdx"
+                                    @dragend="qsResetDrag()"
+                                    x-text="m"></span>
+                              <div style="flex:1"></div>
+                              <button class="qs-tiny-x" @click="qsUngroupMember(idx, mIdx, 'builder')" title="Remove from group (back to single)">×</button>
+                            </div>
+                          </template>
+                          <div class="qs-empty-group" x-show="item.items?.length === 0">empty group — drag a member here or click × delete</div>
+                        </div>
+                        <template x-if="qualityStructureEditMode">
+                          <div class="qs-drop-gap"
+                               :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === idx + 1 }"
+                               @dragover.prevent="qualityStructureDrag.dropGap = idx + 1"
+                               @dragleave="qualityStructureDrag.dropGap = null"
+                               @drop.prevent="qsHandleDropOnGap(idx + 1, 'builder')"></div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TRaSH schema fields — collapsible, grey stripe. Gated by CLONARR_DEV_FEATURES env + trashSchemaFields toggle. -->
+            <template x-if="config.devFeatures && config.trashSchemaFields">
+              <div class="pd-card" style="border-left:3px solid #6e7681;padding:10px 18px">
+                <div @click="pbAdvancedOpen = !pbAdvancedOpen" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+                  <span style="color:#8b949e" x-text="pbAdvancedOpen ? '▾' : '▸'"></span>
+                  <span style="font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;font-weight:700">Advanced Mode</span>
+                  <span style="font-size:11px;color:#8b949e">TRaSH ID, Group number, HTML description</span>
+                </div>
+                <div x-show="pbAdvancedOpen" style="margin-top:12px">
+                <div class="pb-dev-fields">
+                  <div style="font-size:12px;color:#d29922;margin-bottom:6px">Advanced fields</div>
+                <div class="pb-wide-row" style="margin-bottom:6px">
+                  <span class="pb-lbl">Trash ID</span>
+                  <input type="text" class="pb-input" x-model="pb.trashProfileId" placeholder="UUID" style="width:240px;font-family:monospace">
+                  <button class="btn btn-sm" @click="pb.trashProfileId = genUUID(true)" style="padding:2px 8px;font-size:12px">Generate</button>
+                  <span style="font-size:13px;color:#aaa;margin-left:8px">Score Set</span>
+                  <input type="text" class="pb-input" x-model="pb.trashScoreSet" @change="_pbSaveDefaults()" placeholder="e.g. sqp-3" style="width:100px">
+                  <span style="font-size:13px;color:#aaa;margin-left:8px">Group</span>
+                  <input type="number" class="pb-input" x-model.number="pb.groupNum" style="width:50px">
+                </div>
+                <div class="pb-wide-row" style="align-items:flex-start">
+                  <span class="pb-lbl" style="padding-top:4px">Description</span>
+                  <div style="flex:1">
+                    <div x-show="pb.trashDescription && !pbEditDescription"
+                         @click="pbEditDescription = true"
+                         class="pb-input" style="width:100%;line-height:1.5;cursor:pointer;min-height:36px;max-height:80px;overflow-y:auto"
+                         x-html="sanitizeHTML(pb.trashDescription)"></div>
+                    <textarea x-show="!pb.trashDescription || pbEditDescription"
+                              class="pb-input" x-model="pb.trashDescription" rows="3"
+                              @blur="pbEditDescription = false"
+                              style="width:100%;resize:vertical;min-height:50px;font-family:monospace"
+                              placeholder="HTML description"></textarea>
+                  </div>
+                </div>
+                </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== SECTION 1: Required CFs (formatItems) ===== -->
+      <template x-if="!pbLoading && pbCategories.length > 0">
+        <div>
+          <div class="card" style="margin-bottom:12px">
+            <div class="pb-cat-header" @click="pbExpandedCats['__formatItems__'] = !(pbExpandedCats['__formatItems__'] ?? true)">
+              <span class="profile-group-chevron" :class="{ open: pbExpandedCats['__formatItems__'] ?? true }">&#9654;</span>
+              <span style="font-size:13px;font-weight:500">Required CFs</span>
+              <span class="pb-cat-count" x-text="pbFormatItemCount() + ' in formatItems'"></span>
+            </div>
+            <div x-show="pbExpandedCats['__formatItems__'] ?? true">
+              <div style="padding:8px 16px;font-size:12px;color:#aaa;border-bottom:1px solid #161b22;line-height:1.5">
+                These CFs are added to the profile's <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#c9d1d9;font-size:13px">formatItems</code> — they are mandatory and always synced. End users cannot disable them.
+              </div>
+              <!-- Clear All button (above CFs) -->
+              <div x-show="pbFormatItemCFList().length > 0" style="padding:6px 16px 0;display:flex;justify-content:flex-end">
+                <button class="btn" style="font-size:12px;padding:2px 10px;color:#f85149;border-color:#f85149"
+                        @click="const fis = Object.keys(pb.formatItemCFs || {}); fis.forEach(tid => { delete pb.formatItemCFs[tid]; delete pb.selectedCFs[tid]; }); pb.formatItemCFs = {...pb.formatItemCFs}; pb.selectedCFs = {...pb.selectedCFs}">
+                  Clear All
+                </button>
+              </div>
+              <!-- Selected formatItem CFs (multi-column compact view) -->
+              <div x-show="pbFormatItemCFList().length > 0"
+                   :style="'padding:10px 28px 14px;border-bottom:1px solid #161b22;column-count:' + (pbFormatItemCFList().length > 20 ? 3 : pbFormatItemCFList().length > 10 ? 2 : 1) + ';column-gap:32px'">
+                <template x-for="cf in pbFormatItemCFList()" :key="'fis-'+cf.trashId">
+                  <div style="break-inside:avoid;display:flex;align-items:center;gap:6px;padding:3px 0">
+                    <label class="toggle toggle-sm" style="flex-shrink:0">
+                      <input type="checkbox" checked
+                             @change="pbToggleFormatItem(cf.trashId); const s = {...pb.selectedCFs}; delete s[cf.trashId]; pb.selectedCFs = s">
+                      <span class="slider"></span>
+                    </label>
+                    <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.name"></span>
+                    <span class="cf-info" x-show="cf.description" style="flex-shrink:0"
+                          @mouseenter="showCFTooltip($event, cf.description)"
+                          @mouseleave="hideCFTooltip()">ⓘ</span>
+                    <input type="number" class="pb-score-input" style="flex-shrink:0"
+                           :class="{ overridden: pbIsScoreOverridden(cf) }"
+                           :value="pbGetScore(cf)"
+                           @input="pbSetScore(cf.trashId, $event.target.value)"
+                           @blur="pbCleanScore(cf.trashId)">
+                  </div>
+                </template>
+              </div>
+              <!-- Add more CFs (collapsed, with search) -->
+              <div style="padding:6px 16px;border-top:1px solid #161b22;display:flex;align-items:center;gap:12px">
+                <span style="font-size:13px;color:#58a6ff;cursor:pointer;flex-shrink:0"
+                      @click="pbAddMoreOpen = !pbAddMoreOpen; pbFormatItemSearch = ''"
+                      x-text="pbAddMoreOpen ? '▾ Hide available CFs' : '▸ Add more CFs...'"></span>
+                <template x-if="pbAddMoreOpen">
+                  <input type="text" class="pb-input" x-model="pbFormatItemSearch"
+                         placeholder="Search CFs..."
+                         style="flex:1;font-size:12px;padding:4px 8px;max-width:300px">
+                </template>
+              </div>
+              <template x-if="pbAddMoreOpen">
+                <div :style="'padding:14px 28px;column-count:' + (pbFilteredAvailableCFs().length > 20 ? 3 : pbFilteredAvailableCFs().length > 10 ? 2 : 1) + ';column-gap:32px'">
+                  <template x-for="cf in pbFilteredAvailableCFs()" :key="'fia-'+cf.trashId">
+                    <div style="break-inside:avoid;display:flex;align-items:center;gap:6px;padding:3px 0;opacity:0.6">
+                      <label class="toggle toggle-sm" style="flex-shrink:0">
+                        <input type="checkbox"
+                               @change="pbToggleFormatItem(cf.trashId); pb.selectedCFs = {...pb.selectedCFs, [cf.trashId]: true}">
+                        <span class="slider"></span>
+                      </label>
+                      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.name"></span>
+                      <span class="cf-info" x-show="cf.description" style="flex-shrink:0"
+                            @mouseenter="showCFTooltip($event, cf.description)"
+                            @mouseleave="hideCFTooltip()">ⓘ</span>
+                    </div>
+                  </template>
+                  <div x-show="pbFilteredAvailableCFs().length === 0" style="font-size:12px;color:#aaa;padding:4px 0">
+                    No matching CFs found
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- ===== SECTION 2: CF Groups ===== -->
+          <div style="font-size:13px;font-weight:500;color:#e1e4e8;margin:16px 0 8px">CF Groups</div>
+          <div style="font-size:12px;color:#aaa;margin-bottom:12px;line-height:1.5">
+            Each group is an independent set of CFs. Use the toggle to include a group for this profile.
+            Use <span class="pb-state-pill active-req" style="cursor:default;font-size:11px">Req</span>
+            <span class="pb-state-pill active-opt" style="cursor:default;font-size:11px">Opt</span>
+            <span class="pb-state-pill active-fmt" style="cursor:default;font-size:11px">Fmt</span>
+            to set each CF as Required, Optional, or move it to formatItems.
+          </div>
+
+          <template x-for="group in pbSortedGroups()" :key="'grp-'+group.groupTrashId">
+            <div class="card" :class="getCategoryClass(group._category || '')" style="margin-bottom:8px">
+              <div class="pb-cat-header" @click="pbExpandedGroups[group.groupTrashId] = !(pbExpandedGroups[group.groupTrashId] ?? false)">
+                <span class="profile-group-chevron" :class="{ open: pbExpandedGroups[group.groupTrashId] }">&#9654;</span>
+                <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                <span x-show="group.exclusive" class="group-badge badge-exclusive">pick one</span>
+                <span x-show="group.defaultEnabled" class="group-badge badge-default">default</span>
+                <span class="pb-cat-count" x-text="group.cfs.length + ' CFs'"></span>
+                <!-- Group-level state pills -->
+                <div style="display:flex;gap:4px;margin-left:auto" @click.stop>
+                  <span class="pb-state-pill" :class="{ 'active-req': true }" x-show="false"></span>
+                  <span class="pb-state-pill"
+                        :class="{ 'active-req': !pbGroupHasAnyState(group, 'optional') && !pbGroupHasAnyState(group, 'formatItems') }"
+                        @click="pbSetGroupState(group, 'required')" title="Set all CFs to Required">Req</span>
+                  <span class="pb-state-pill"
+                        :class="{ 'active-opt': pbGroupHasAllState(group, 'optional') }"
+                        @click="pbSetGroupState(group, 'optional')" title="Set all CFs to Optional">Opt</span>
+                  <span class="pb-state-pill"
+                        :class="{ 'active-fmt': pbGroupHasAllState(group, 'formatItems') }"
+                        @click="pbSetGroupState(group, 'formatItems')" title="Move all CFs to formatItems">Fmt</span>
+                </div>
+                <label class="toggle toggle-sm" @click.stop>
+                  <input type="checkbox" :checked="pbIsGroupEnabled(group)"
+                         @change="pbToggleGroupInclude(group)">
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <!-- Group description -->
+              <div x-show="pbExpandedGroups[group.groupTrashId] && group.trashDescription"
+                   style="padding:8px 16px;font-size:12px;color:#aaa;border-bottom:1px solid #161b22;line-height:1.6"
+                   x-html="sanitizeHTML(group.trashDescription)"></div>
+              <!-- Exclusive warning -->
+              <div x-show="pbExpandedGroups[group.groupTrashId] && group.exclusive"
+                   style="padding:8px 16px;font-size:12px;color:#d29922;line-height:1.5">
+                Please ensure you only score or enable one of them in your Quality Profile!
+              </div>
+              <!-- CFs in this group -->
+              <div x-show="pbExpandedGroups[group.groupTrashId]">
+                <template x-for="cf in group.cfs" :key="'gcf-'+cf.trashId">
+                  <!-- Three-tier opacity:
+                       - 1.0 (default): CF is in the profile (in selectedCFs or formatItems)
+                       - 0.5: CF is in an enabled group but not in the profile yet —
+                              respects the per-CF default flag from the TRaSH group def
+                              (cfDefault) so non-default optional CFs render dimmed,
+                              clickable to include via Req/Opt/Fmt
+                       - 0.35: CF's group is disabled and CF isn't in formatItems —
+                              CF is fully out of the profile, lowest emphasis -->
+                  <div class="pb-cf-row" :style="
+                    (!pbIsGroupEnabled(group) && !pb.formatItemCFs[cf.trashId]) ? 'opacity:0.35'
+                    : (pbIsGroupEnabled(group) && !cf.required && !pb.selectedCFs[cf.trashId] && !pb.formatItemCFs[cf.trashId]) ? 'opacity:0.5'
+                    : ''">
+                    <div style="width:36px;flex-shrink:0"></div>
+                    <div class="pb-cf-name">
+                      <span x-text="cf.name"></span>
+                      <span class="cf-info" x-show="cf.description"
+                            @mouseenter="showCFTooltip($event, cf.description)"
+                            @mouseleave="hideCFTooltip()">ⓘ</span>
+                      <template x-if="config.devFeatures && config.trashSchemaFields">
+                        <span style="font-size:12px;color:#aaa;font-family:monospace" x-text="cf.trashId.substring(0,8)"></span>
+                      </template>
+                    </div>
+                    <!-- Three-state pills: Req / Opt / Fmt -->
+                    <div style="display:flex;gap:4px;flex-shrink:0">
+                      <span class="pb-state-pill" :class="{ 'active-req': pbGetCFState(cf) === 'required' }"
+                            @click="pbSetCFState(cf.trashId, 'required')"
+                            title="Required — mandatory when group is active">Req</span>
+                      <span class="pb-state-pill" :class="{ 'active-opt': pbGetCFState(cf) === 'optional' }"
+                            @click="pbSetCFState(cf.trashId, 'optional')"
+                            title="Optional — user chooses within group">Opt</span>
+                      <span class="pb-state-pill" :class="{ 'active-fmt': pbGetCFState(cf) === 'formatItems' }"
+                            @click="pbSetCFState(cf.trashId, 'formatItems')"
+                            title="formatItems — always mandatory in profile">Fmt</span>
+                    </div>
+                    <input type="number" class="pb-score-input"
+                           x-show="pbIsGroupEnabled(group) || pb.formatItemCFs[cf.trashId]"
+                           :class="{ overridden: pbIsScoreOverridden(cf) }"
+                           :value="pbGetScore(cf)"
+                           @input="pbSetScore(cf.trashId, $event.target.value)"
+                           @blur="pbCleanScore(cf.trashId)">
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+      <template x-if="pbLoading">
+        <div class="empty-state"><span class="spinner"></span> Loading Custom Formats...</div>
+      </template>
+      <template x-if="!pbLoading && pbCategories.length === 0">
+        <div class="empty-state">
+          <div class="desc">Pull TRaSH data first to load Custom Formats</div>
+        </div>
+      </template>
+
+      <!-- Save Bar -->
+      <div class="pb-save-bar">
+        <div class="pb-stats">
+          <span x-text="pbFormatItemCount() + ' formatItems'"></span> &middot;
+          <span x-text="pbEnabledGroupCount() + ' groups'"></span> &middot;
+          <span x-text="pbSelectedCount() + ' total CFs'"></span>
+        </div>
+        <button class="btn" @click="cancelProfileBuilder()">Cancel</button>
+        <template x-if="!_resyncReturnSubTab">
+          <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
+            <span x-show="pbSaving" class="spinner"></span>
+            <span x-show="!pbSaving" x-text="pb.editId ? 'Save Changes' : 'Save Profile'"></span>
+          </button>
+        </template>
+        <template x-if="pb.editId">
+          <div style="display:flex;gap:6px">
+            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save changes and sync to existing Arr profile">Save & Sync</button>
+            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save and create as new Arr profile">Create New</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+{{end}}

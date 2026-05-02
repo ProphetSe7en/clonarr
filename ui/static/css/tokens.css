@@ -1,0 +1,97 @@
+:root {
+  /* Surface */
+  --bg-app: #0f1117;
+  --bg-page: #0d1117;
+  --bg-card: #161b22;
+  --bg-elevated: #1c2128;
+  --bg-elevated-hover: #1c2129;
+  --bg-muted: #21262d;
+  --bg-panel: #1c2333;
+
+  /* Border */
+  --border-subtle: #30363d;
+  --border-muted: #21262d;
+  --border-faint: #161b22;
+
+  /* Text */
+  --text-primary: #e1e4e8;
+  --text-body: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-muted: #aaa;
+  --text-muted-secondary: #6e7681;
+  --text-soft: #bbb;
+  --text-inverse: #0d1117;
+  --text-on-accent: #fff;
+
+  /* Accent */
+  --accent-blue: #58a6ff;
+  --accent-blue-muted: #1f3a5f;
+  --accent-blue-strong: #1f6feb;
+  --accent-blue-hover: #388bfd;
+  --accent-green: #3fb950;
+  --accent-green-bg: #1a3a1a;
+  --accent-green-strong: #238636;
+  --accent-green-hover: #2ea043;
+  --accent-red: #f85149;
+  --accent-red-soft: #f47067;
+  --accent-red-bg: #3d1f1f;
+  --accent-red-strong: #da3633;
+  --accent-orange: #d29922;
+  --accent-orange-bg: #3d2e0a;
+  --accent-orange-bright: #f0883e;
+  --accent-orange-strong: #9e6a03;
+  --accent-purple: #a371f7;
+  --accent-purple-soft: #d2a8ff;
+  --accent-sky: #79c0ff;
+  --accent-teal: #39d2e0;
+  --accent-mint: #39d353;
+  --accent-pink: #f778ba;
+
+  /* Semantic fills */
+  --fill-blue-soft: #0d2847;
+  --fill-blue-dark: #0d2240;
+  --fill-green-soft: #0d2f1a;
+  --fill-orange-soft: #3d2800;
+  --fill-radarr: #2d1f00;
+
+  /* Alpha fills */
+  --alpha-overlay: rgba(0,0,0,0.6);
+  --alpha-shadow: rgba(0,0,0,0.4);
+  --alpha-hover: rgba(255,255,255,0.03);
+  --alpha-active: rgba(255,255,255,0.04);
+  --alpha-subtle: rgba(255,255,255,0.02);
+  --alpha-orange-soft: rgba(240,136,62,0.06);
+  --alpha-orange: rgba(240,136,62,0.15);
+  --alpha-blue-soft: rgba(88,166,255,0.05);
+  --alpha-blue: rgba(88,166,255,0.15);
+  --alpha-blue-border: rgba(88,166,255,0.25);
+  --alpha-blue-border-strong: rgba(88,166,255,0.3);
+  --alpha-green-soft: rgba(63,185,80,0.1);
+  --alpha-green: rgba(63,185,80,0.12);
+
+  /* CF categories. The backend manifest may override these at runtime. */
+  --cat-golden-rule: #d2a8ff;
+  --cat-audio: #d29922;
+  --cat-hdr: #a371f7;
+  --cat-streaming: #39d353;
+  --cat-optional: #58a6ff;
+  --cat-unwanted: #f85149;
+  --cat-hq-release-groups: #e3b341;
+  --cat-resolution: #79c0ff;
+  --cat-anime: #f778ba;
+  --cat-french: #39d2e0;
+  --cat-language: #3fb950;
+  --cat-german: #f0883e;
+  --cat-miscellaneous: #8b949e;
+  --cat-other: #8b949e;
+  --cat-required-core: #8b949e;
+
+  /* Profile groups. The backend manifest may override these at runtime. */
+  --grp-sqp: #58a6ff;
+  --grp-standard: #3fb950;
+  --grp-anime: #d2a8ff;
+  --grp-french: #d29922;
+  --grp-german: #f0883e;
+  --grp-imported: #8b949e;
+  --grp-other: #8b949e;
+}

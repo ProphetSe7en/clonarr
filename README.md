@@ -100,7 +100,7 @@ Free, open source, and self-hosted.
 - **Notifications** — Discord, Gotify, Pushover, NTFY, Apprise (auto-sync results, TRaSH update summaries, configurable priority per severity)
 - **Reverse-proxy subpath hosting** — host at `https://your-domain.com/clonarr` via `URL_BASE` env var
 - **Login brute-force protection** — 5 failed attempts/IP/minute → temporary 429 lockout
-- **Developer mode** — TRaSH JSON export, trash_id generation, score set editing
+- **Advanced Mode** — Profile Builder, Scoring Sandbox, CF Group Builder, and contributor-only TRaSH schema fields when enabled
 - **Multi-instance** — manage multiple Radarr and Sonarr instances
 - **Dynamic language support** — all languages from your Arr instance available in dropdowns
 
@@ -141,6 +141,8 @@ The TRaSH repository is cloned to `/config/data/trash-guides/` and updated autom
 | `PUID` | No | `99` | User ID for file ownership |
 | `PGID` | No | `100` | Group ID for file ownership |
 | `PORT` | No | `6060` | Web UI port (inside container) |
+| `CONFIG_DIR` | No | `/config` | Persistent config root. If changed, mount the same path as a volume. |
+| `DATA_DIR` | No | `${CONFIG_DIR}/data` | TRaSH Guides cache/data directory. Usually leave this under `CONFIG_DIR`. |
 | `URL_BASE` | No | *(empty)* | URL path prefix for reverse proxy subpath hosting, such as `/clonarr`. Leave empty for standard root-path access. |
 | `TRUSTED_NETWORKS` | No | *(empty — uses Radarr-parity defaults)* | Lock **Trusted Networks** at host level. Comma-separated IPs/CIDRs (`192.168.86.0/24, 10.66.0.0/24`). When set, the UI field is disabled and cannot be changed via the web interface — only by editing the template and restarting. Useful for defense-in-depth: prevents a UI-takeover attacker from expanding the trust boundary. |
 | `TRUSTED_PROXIES` | No | *(empty)* | Lock **Trusted Proxies** at host level. Comma-separated IPs. Same UI-disabled behavior as `TRUSTED_NETWORKS`. Only needed when Clonarr sits behind a reverse proxy that terminates TLS (SWAG, Authelia, Traefik). |
@@ -207,11 +209,11 @@ Clonarr clones the [TRaSH Guides](https://github.com/TRaSH-Guides/Guides) reposi
 TRaSH Guides repo (git clone)
   → Go backend parses CF/profile/group JSON
     → REST API (40+ endpoints)
-      → Alpine.js SPA
+      → Alpine.js SPA assembled from embedded partials
         → Sync: dry-run plan → apply (CF create/update + profile create/update)
 ```
 
-Config is stored in `/config/clonarr.json`. Profiles are stored as individual JSON files in `/config/profiles/`.
+By default, config is stored in `/config/clonarr.json`. Profiles are stored as individual JSON files in `/config/profiles/`.
 
 ## Acknowledgments
 
@@ -241,7 +243,7 @@ As of `v2.0.6`, Clonarr requires a login before you can reach the web UI. The mo
 2. Create an admin username and password (min 10 characters, 2+ of upper/lower/digit/symbol)
 3. You're logged in automatically and land in the main UI
 
-Credentials are bcrypt-hashed (cost 12) and stored in `/config/auth.json`. Sessions persist across container restarts via `/config/sessions.json`.
+Credentials are bcrypt-hashed (cost 12) and stored in `${CONFIG_DIR}/auth.json` (default `/config/auth.json`). Sessions persist across container restarts via `${CONFIG_DIR}/sessions.json`.
 
 ### Trusted Networks
 
@@ -305,10 +307,10 @@ Leading slash required, no trailing slash. Leave `URL_BASE` empty for root-path 
 
 ### Lost password recovery
 
-No email reset flow — by design, `/config/auth.json` is authoritative. To recover:
+No email reset flow — by design, `${CONFIG_DIR}/auth.json` is authoritative. To recover:
 
 1. Stop the container
-2. Delete `/config/auth.json` (credentials only — profiles, sync history, TRaSH data all live elsewhere)
+2. Delete `${CONFIG_DIR}/auth.json` (default `/config/auth.json`; credentials only — profiles, sync history, TRaSH data all live elsewhere)
 3. Start the container
 4. Open the web UI — you'll be redirected to `/setup` again to create new credentials
 
@@ -316,11 +318,11 @@ This is safe on a machine where you have `/config` access. If someone ELSE can d
 
 ## Security Notes
 
-- **Login is required by default.** Admin password is bcrypt-hashed in `/config/auth.json` — never plaintext.
+- **Login is required by default.** Admin password is bcrypt-hashed in `${CONFIG_DIR}/auth.json` — never plaintext.
 - **Brute-force protection.** 5 failed logins from the same IP within a minute → blocked until a minute has passed since the oldest of those 5 attempts (HTTP 429 + `Retry-After`). Same on the setup and change-password endpoints. Failed attempts are logged with the source IP so fail2ban can pick them up if you want firewall-level bans.
 - **Long passwords are welcome.** Minimum 10 characters; 16+ skips the upper/lower/digit/symbol class rule, so passphrases like `correct horse battery staple` pass.
 - **Custom format names can't collide with TRaSH CFs.** Saving a custom CF with a name that matches a TRaSH guides CF (or another custom for the same app) is refused — sharing a name caused syncs to flip-flop the score back and forth. Names are case-sensitive (`PCOK` and `Pcok` are distinct), matching Radarr/Sonarr's own rule.
-- **Secrets stay on disk.** Arr API keys, Discord/Gotify/Pushover/NTFY/Apprise tokens are stored in plaintext in `/config/clonarr.json` (mode 0600). Protect that file the same way you protect Radarr/Sonarr's `config.xml`.
+- **Secrets stay on disk.** Arr API keys, Discord/Gotify/Pushover/NTFY/Apprise tokens are stored in plaintext in `${CONFIG_DIR}/clonarr.json` (mode 0600). Protect that file the same way you protect Radarr/Sonarr's `config.xml`.
 - **CSRF protection** on every state-changing request. Scripts authenticating with `X-Api-Key` bypass CSRF — that's intentional, key-holders are trusted.
 - **Outbound webhooks check destinations.** Discord and Pushover (the two where users paste a URL from a third party) go through an HTTP client that refuses internal IPs and re-checks on every request — defeats DNS-rebinding attacks where a malicious webhook hostname secretly resolves to a LAN address. Self-hosted Gotify / ntfy / Apprise use a standard client (you control the destination).
 - **Security headers** set on every response: `X-Frame-Options: DENY` (no embedding in iframes), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
@@ -343,6 +345,8 @@ For questions, help, or bug reports:
 ## Development
 
 Clonarr is developed with active AI assistance (Claude, Anthropic) under human direction. Architectural decisions, code review, testing against real Radarr/Sonarr instances, and releases are done by ProphetSe7en. Issues and PRs go through a human review.
+
+For maintainers working on the modular UI, manifest-driven settings, or Docker-first local testing flow, see [Development Notes](docs/DEVELOPMENT.md).
 
 ## License
 

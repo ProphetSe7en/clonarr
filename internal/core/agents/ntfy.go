@@ -35,6 +35,51 @@ func init() {
 	registerProvider(ntfyProvider{})
 }
 
+// DisplayName returns the human-readable label shown in the agent-type dropdown.
+func (ntfyProvider) DisplayName() string {
+	return "ntfy"
+}
+
+// FieldSpec describes the form layout for the ntfy agent modal.
+func (ntfyProvider) FieldSpec() FieldSpec {
+	return FieldSpec{
+		Groups: []FieldGroup{
+			{Kind: "field", Field: &Field{
+				Name:        "ntfyUrl",
+				Kind:        "url",
+				Label:       "Server URL",
+				Placeholder: "https://ntfy.sh or https://ntfy.example.com",
+				HelpHTML:    "Public ntfy.sh works without a token. Self-hosted servers may require auth.",
+				Required:    true,
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "ntfyTopic",
+				Kind:        "text",
+				Label:       "Topic",
+				Placeholder: "my-clonarr-alerts",
+				Required:    true,
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "ntfyToken",
+				Kind:        "password",
+				Label:       "Bearer Token",
+				LabelHint:   "(optional)",
+				Placeholder: "Required only for protected topics",
+			}},
+			{Kind: "priority", Priority: &PriorityGroup{
+				Label: "Priority levels",
+				Min:   1,
+				Max:   5,
+				Levels: []PriorityLevel{
+					{Label: "Critical", EnabledKey: "ntfyPriorityCritical", ValueKey: "ntfyCriticalValue", Note: "sync failures (1-5, default 5)"},
+					{Label: "Warning", EnabledKey: "ntfyPriorityWarning", ValueKey: "ntfyWarningValue", Note: "stale cleanup (default 4)"},
+					{Label: "Info", EnabledKey: "ntfyPriorityInfo", ValueKey: "ntfyInfoValue", Note: "success, updates, changelog (default 3)"},
+				},
+			}},
+		},
+	}
+}
+
 // Type returns the provider registration key used in Agent.Type.
 func (ntfyProvider) Type() string {
 	return "ntfy"

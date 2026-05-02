@@ -31,6 +31,35 @@ func (discordProvider) Type() string {
 	return "discord"
 }
 
+// DisplayName returns the human-readable label shown in the agent-type dropdown.
+func (discordProvider) DisplayName() string {
+	return "Discord"
+}
+
+// FieldSpec describes the form layout for the Discord agent modal.
+func (discordProvider) FieldSpec() FieldSpec {
+	return FieldSpec{
+		Groups: []FieldGroup{
+			{Kind: "field", Field: &Field{
+				Name:        "discordWebhook",
+				Kind:        "url",
+				Label:       "Sync webhook",
+				Placeholder: "https://discord.com/api/webhooks/...",
+				HelpHTML:    "Sync success, failure, and cleanup",
+				Required:    true,
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "discordWebhookUpdates",
+				Kind:        "url",
+				Label:       "Updates webhook",
+				LabelHint:   "(optional)",
+				Placeholder: "Falls back to sync webhook if empty",
+				HelpHTML:    "TRaSH repo updates and weekly changelog",
+			}},
+		},
+	}
+}
+
 // Async returns true because Discord webhook sends are dispatched in background
 // workers. This prevents the sync goroutine from blocking when Discord rate-limits
 // (429 + Retry-After) or experiences high latency.

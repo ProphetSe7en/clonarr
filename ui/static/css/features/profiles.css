@@ -1,0 +1,47 @@
+  /* Profile group headers (collapsible) */
+  .profile-group-header { display: flex; align-items: center; padding: 10px 16px; font-size: 13px; color: var(--text-primary); font-weight: 500; border-bottom: 1px solid var(--bg-muted); cursor: pointer; user-select: none; gap: 8px; }
+  .profile-group-header:hover { background: var(--bg-elevated-hover); }
+  .profile-group-chevron { font-size:12px; transition: transform 0.2s; color: var(--text-secondary); }
+  .profile-group-chevron.open { transform: rotate(90deg); }
+  .profile-group-count { font-size:13px; color: var(--text-muted); background: var(--bg-muted); padding: 1px 8px; border-radius: 3px; }
+  .grp-sqp > .profile-group-header { border-left: 3px solid var(--grp-sqp); }
+  .grp-standard > .profile-group-header { border-left: 3px solid var(--grp-standard); }
+  .grp-anime > .profile-group-header { border-left: 3px solid var(--grp-anime); }
+  .grp-french > .profile-group-header { border-left: 3px solid var(--grp-french); }
+  .grp-german > .profile-group-header { border-left: 3px solid var(--grp-german); }
+  .grp-imported > .profile-group-header { border-left: 3px solid var(--grp-imported); }
+  .grp-other > .profile-group-header { border-left: 3px solid var(--grp-other); }
+
+  /* Profile rows */
+  .profile-row { display: flex; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--bg-card); }
+  .profile-row:last-child { border-bottom: none; }
+  .profile-row:hover { background: var(--bg-elevated-hover); }
+  .profile-name { flex: 1; font-size: 14px; font-weight: 500; }
+  .profile-name-link { color: var(--accent-blue); cursor: pointer; text-decoration: none; }
+  .profile-name-link:hover { text-decoration: underline; }
+  .sqp-badge { background: var(--accent-blue-muted); color: var(--accent-blue); font-size:13px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+  .profile-cfs { font-size:12px; color: var(--text-muted); }
+  .profile-actions { display: flex; gap: 8px; margin-left: 16px; }
+
+  /* Profile detail */
+  .back-link { color: var(--accent-blue); font-size: 13px; cursor: pointer; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  /* Sub-tabs (under Radarr/Sonarr) */
+  .subtabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-subtle); padding: 0 24px; background: var(--bg-card); }
+  .subtab { padding: 10px 16px; font-size: 14px; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; }
+  .subtab:hover { color: var(--text-primary); }
+  .subtab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+  .profile-tabs { display: flex; gap: 0; padding: 0 24px; background: var(--bg-page); border-bottom: 1px solid var(--bg-muted); }
+  .profile-tab { padding: 10px 16px; font-size: 15px; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; font-weight: 500; }
+  .profile-tab:hover { color: var(--text-muted); }
+  .profile-tab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+
+  /* App type toggle pills */
+  .app-pill { padding: 5px 16px; font-size: 12px; font-weight: 500; border: 1px solid var(--border-subtle); border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); transition: all 0.15s; }
+  .app-pill:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+  .app-pill.active-radarr { background: var(--fill-radarr); color: var(--accent-orange-bright); border-color: var(--accent-orange-bright); }
+  .app-pill.active-sonarr { background: var(--fill-blue-dark); color: var(--accent-blue); border-color: var(--accent-blue); }
+
+  /* Section description */
+  .section-desc { font-size: 12px; color: var(--text-muted); padding: 4px 20px 8px; line-height: 1.4; }
