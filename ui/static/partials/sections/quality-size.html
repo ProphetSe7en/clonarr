@@ -95,7 +95,7 @@
                   <div style="width:1px;background:#30363d;margin:0 4px;align-self:stretch"></div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
-                  <div style="font-size:13px;color:#aaa;font-family:inherit;width:58px;flex-shrink:0;text-align:center" title="Auto: follows TRaSH values. Custom: use your own values.">Sync Mode</div>
+                  <div style="font-size:13px;color:#aaa;font-family:inherit;width:58px;flex-shrink:0;text-align:center" x-tt="'Auto: follows TRaSH values. Custom: use your own values.'">Sync Mode</div>
                 </template>
                 <template x-if="qsInstanceId[activeAppType]">
                   <div style="font-size:13px;color:#aaa;font-family:inherit;width:68px;flex-shrink:0;text-align:center">Action</div>
@@ -152,7 +152,7 @@
                       <button class="btn btn-sm" style="padding:2px 8px;font-size:12px;width:58px"
                               :class="isQSCustom(activeAppType, qs.quality) ? 'btn-danger' : 'btn-primary'"
                               @click="toggleQSMode(activeAppType, qs.quality)"
-                              :title="isQSCustom(activeAppType, qs.quality) ? 'Using custom values — click to revert to TRaSH' : 'Following TRaSH values — click to set custom values'"
+                              x-tt="isQSCustom(activeAppType, qs.quality) ? 'Using custom values — click to revert to TRaSH' : 'Following TRaSH values — click to set custom values'"
                               x-text="isQSCustom(activeAppType, qs.quality) ? 'Custom' : 'Auto'">
                       </button>
                     </div>
@@ -162,7 +162,7 @@
                       <button class="btn btn-sm btn-blue" style="padding:2px 8px;font-size:12px;width:68px"
                               @click="syncSingleQS(activeAppType, qs.quality)"
                               x-show="qsHasRowChange(activeAppType, qs)"
-                              title="Instance values differ from TRaSH — click to update">Sync Now</button>
+                              x-tt="'Instance values differ from TRaSH — click to update'">Sync Now</button>
                     </div>
                   </template>
                 </div>

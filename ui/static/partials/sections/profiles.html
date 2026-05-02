@@ -31,7 +31,7 @@
                       x-text="(() => { let count = 0; for (const inst of instancesOfType(activeAppType)) count += sortedSyncRules(inst.id).length; return count > 0 ? count + ' synced profile' + (count !== 1 ? 's' : '') : 'No syncs yet'; })()"></span>
                 <button class="btn btn-sm"
                         @click.stop="setAutoSyncPaused(!autoSyncSettings.paused)"
-                        :title="autoSyncSettings.paused ? 'Resume auto-sync' : 'Pause auto-sync (scheduled + after-pull). Manual syncs unaffected.'"
+                        x-tt="autoSyncSettings.paused ? 'Resume auto-sync' : 'Pause auto-sync (scheduled + after-pull). Manual syncs unaffected.'"
                         :style="autoSyncSettings.paused
                                 ? 'font-size:12px;padding:2px 8px;border-color:#d29922;color:#e3b341;margin-left:8px'
                                 : 'font-size:12px;padding:2px 8px;border-color:#30363d;color:#8b949e;margin-left:8px'"
@@ -43,7 +43,7 @@
                     <div>
                       <div style="padding:8px 16px;font-size:13px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#0d1117;border-bottom:1px solid #21262d;display:flex;align-items:center">
                         <span x-text="inst.name"></span>
-                        <button class="btn btn-sm" style="margin-left:auto;font-size:12px;padding:2px 8px;border-color:#238636;color:#3fb950" @click.stop="syncAllForInstance(inst)" title="Re-sync all profiles with auto-sync enabled on this instance">Sync All</button>
+                        <button class="btn btn-sm" style="margin-left:auto;font-size:12px;padding:2px 8px;border-color:#238636;color:#3fb950" @click.stop="syncAllForInstance(inst)" x-tt="'Re-sync all profiles with auto-sync enabled on this instance'">Sync All</button>
                       </div>
                       <div style="display:flex;align-items:center;padding:4px 16px;gap:8px;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #161b22;user-select:none">
                         <span style="width:200px;flex-shrink:0;cursor:pointer;white-space:nowrap" @click="toggleSyncRulesSort('trash')">
@@ -66,12 +66,12 @@
                             <template x-if="sh.orphanedAt">
                               <span>
                                 <span style="color:#aaa;text-decoration:line-through" x-text="sh.arrProfileName"></span>
-                                <span style="background:#3d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;margin-left:6px" :title="'Profile deleted in Arr — ' + (sh.orphanedAt || '')">orphaned</span>
+                                <span style="background:#3d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;margin-left:6px" x-tt="'Profile deleted in Arr — ' + (sh.orphanedAt || '')">orphaned</span>
                               </span>
                             </template>
                             <template x-if="!sh.orphanedAt && !editing">
                               <span>
-                                <span style="color:#e1e4e8;cursor:pointer;border-bottom:1px dashed #30363d" @click.stop="newName = sh.arrProfileName; editing = true" title="Click to rename in Arr" x-text="sh.arrProfileName"></span>
+                                <span style="color:#e1e4e8;cursor:pointer;border-bottom:1px dashed #30363d" @click.stop="newName = sh.arrProfileName; editing = true" x-tt="'Click to rename in Arr'" x-text="sh.arrProfileName"></span>
                                 <span style="color:#aaa;font-size:12px" x-text="'ID ' + sh.arrProfileId"></span>
                               </span>
                             </template>
@@ -85,7 +85,7 @@
                             </template>
                           </span>
                           <div style="display:flex;align-items:center;gap:4px;width:100px;flex-shrink:0">
-                              <label class="toggle toggle-sm" @click.stop :title="sh.orphanedAt ? 'Restore the profile to re-enable auto-sync' : 'Toggle auto-sync for this profile'">
+                              <label class="toggle toggle-sm" @click.stop x-tt="sh.orphanedAt ? 'Restore the profile to re-enable auto-sync' : 'Toggle auto-sync for this profile'">
                                 <input type="checkbox"
                                        :disabled="!!sh.orphanedAt"
                                        :checked="!sh.orphanedAt && autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled"
@@ -99,18 +99,18 @@
                           <span style="flex:1;display:flex;gap:8px;align-items:center;justify-content:flex-end">
                             <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">
                               <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d1f1f;color:#f85149;flex-shrink:0"
-                                    :title="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>
+                                    x-tt="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>
                             </template>
                             <span style="display:flex;gap:4px;align-items:center;flex-shrink:0"
                                   x-data="{ get _rule() { return autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId) || {}; }, get _so() { return Object.keys(this._rule.scoreOverrides || {}).filter(k => !k.startsWith('custom:')).length; }, get _extra() { return Object.keys(this._rule.scoreOverrides || {}).filter(k => k.startsWith('custom:')).length; }, get _qo() { return Object.keys(this._rule.qualityOverrides || {}).length; }, get _oo() { return this._rule.overrides ? Object.keys(this._rule.overrides).filter(k => this._rule.overrides[k] !== undefined).length : 0; } }">
                               <template x-if="_extra > 0">
                                 <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff;flex-shrink:0"
-                                      title="Custom formats created by you and added to this profile"
+                                      x-tt="'Custom formats created by you and added to this profile'"
                                       x-text="_extra + ' custom CF' + (_extra !== 1 ? 's' : '')"></span>
                               </template>
                               <template x-if="_so + _qo + _oo > 0">
                                 <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922;flex-shrink:0"
-                                      :title="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
+                                      x-tt="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
                                       x-text="(_so + _qo + _oo) + ' override' + ((_so + _qo + _oo) !== 1 ? 's' : '')"></span>
                               </template>
                             </span>
@@ -119,18 +119,18 @@
                           </span>
                           <span style="display:flex;gap:6px;flex-shrink:0;align-items:center">
                             <template x-if="sh.orphanedAt">
-                              <button class="btn" style="padding:3px 10px;font-size:11px;background:#0d2818;border:1px solid #1f6f3d;color:#7ee787" @click.stop="restoreOrphanedRule(inst, sh)" title="Recreate this profile in Arr from the last synced state">&#8634; Restore</button>
+                              <button class="btn" style="padding:3px 10px;font-size:11px;background:#0d2818;border:1px solid #1f6f3d;color:#7ee787" @click.stop="restoreOrphanedRule(inst, sh)" x-tt="'Recreate this profile in Arr from the last synced state'">&#8634; Restore</button>
                             </template>
                             <template x-if="!sh.orphanedAt">
-                              <button class="btn-icon" @click.stop="resyncProfile(inst, sh)" title="Edit sync settings">&#9998;</button>
+                              <button class="btn-icon" @click.stop="resyncProfile(inst, sh)" x-tt="'Edit sync settings'">&#9998;</button>
                             </template>
                             <template x-if="!sh.orphanedAt">
-                              <button class="btn-icon" style="color:#3fb950" @click.stop="quickSync(inst, sh)" title="Re-sync with saved settings">&#8635;</button>
+                              <button class="btn-icon" style="color:#3fb950" @click.stop="quickSync(inst, sh)" x-tt="'Re-sync with saved settings'">&#8635;</button>
                             </template>
                             <template x-if="!sh.orphanedAt">
-                              <button class="btn-icon" style="color:#58a6ff" @click.stop="cloneProfile(inst, sh)" title="Clone to new profile">&#10697;</button>
+                              <button class="btn-icon" style="color:#58a6ff" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>
                             </template>
-                            <button class="btn-icon" style="color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" :title="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
+                            <button class="btn-icon" style="color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" x-tt="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
                           </span>
                         </div>
                       </template>
@@ -305,7 +305,7 @@
                                         :style="entry.orphanedAt ? 'opacity:0.4;cursor:not-allowed;border-color:#30363d;color:#666' : 'border-color:#d29922;color:#d29922'"
                                         :disabled="!!entry.orphanedAt"
                                         @click.stop="if (!entry.orphanedAt) rollbackSync(inst, entry, ei)"
-                                        :title="entry.orphanedAt ? 'Cannot rollback — the target profile is orphaned (deleted in Arr). Use Restore on the sync row first.' : 'Re-sync this profile to the state from this point in time. Auto-sync will be disabled.'">Rollback</button>
+                                        x-tt="entry.orphanedAt ? 'Cannot rollback — the target profile is orphaned (deleted in Arr). Use Restore on the sync row first.' : 'Re-sync this profile to the state from this point in time. Auto-sync will be disabled.'">Rollback</button>
                               </div>
                               <!-- Expanded detail -->
                               <div x-show="historyDetailIdx === ei" style="margin:4px 0 8px 16px;padding:10px 14px;background:#161b22;border-left:2px solid #58a6ff;border-radius:0 6px 6px 0;font-size:12px;line-height:1.7">
@@ -380,13 +380,13 @@
                 </template>
               </select>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instanceStatus[getCompareInstance(activeAppType)?.id] === 'connected'">
-                <span style="width:8px;height:8px;border-radius:50%;background:#3fb950;display:inline-block" title="Connected"></span>
+                <span style="width:8px;height:8px;border-radius:50%;background:#3fb950;display:inline-block" x-tt="'Connected'"></span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instanceStatus[getCompareInstance(activeAppType)?.id] === 'failed'">
-                <span style="width:8px;height:8px;border-radius:50%;background:#f85149;display:inline-block" title="Connection failed"></span>
+                <span style="width:8px;height:8px;border-radius:50%;background:#f85149;display:inline-block" x-tt="'Connection failed'"></span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && !instanceStatus[getCompareInstance(activeAppType)?.id]">
-                <span style="width:8px;height:8px;border-radius:50%;background:#d29922;display:inline-block" title="Not tested"></span>
+                <span style="width:8px;height:8px;border-radius:50%;background:#d29922;display:inline-block" x-tt="'Not tested'"></span>
               </template>
 
               <!-- Arr profile + TRaSH profile dropdowns (only show when instance selected) -->
@@ -432,7 +432,7 @@
               </template>
               <template x-if="getCompareInstance(activeAppType) && instProfiles[getCompareInstance(activeAppType)?.id]">
                 <button class="btn btn-sm" style="font-size:11px;padding:3px 8px"
-                        @click="loadInstanceProfiles(getCompareInstance(activeAppType))" title="Refresh Arr profile list">⟳</button>
+                        @click="loadInstanceProfiles(getCompareInstance(activeAppType))" x-tt="'Refresh Arr profile list'">⟳</button>
               </template>
             </div>
           </div>
@@ -600,7 +600,7 @@
                                             <!-- Reset to default — re-applies the initial "match TRaSH" selection state. -->
                                             <button class="btn btn-sm" style="font-size:12px;padding:3px 10px;color:#8b949e;border-color:#30363d"
                                                     x-show="compareAdjustedCounts(cr).diffs > 0"
-                                                    title="Undo any manual changes — restore the match-TRaSH default selection"
+                                                    x-tt="'Undo any manual changes — restore the match-TRaSH default selection'"
                                                     @click="resetCompareToDefault(inst, cr)">&#8634; Reset to default</button>
                                             <!-- Sync selected — applies whatever is currently checked. If any exclusive required group has no pick, the Golden Rule picker opens first. -->
                                             <button class="btn btn-sm btn-primary" style="font-size:12px;padding:3px 10px"
@@ -617,7 +617,7 @@
                                           <span class="compare-chip" :class="compareFilter === 'all' ? 'active' : ''" @click="compareFilter = 'all'" x-text="'All (' + compareAdjustedCounts(cr).all + ')'"></span>
                                           <span class="compare-chip" :class="compareFilter === 'diff' ? 'active' : ''" @click="compareFilter = 'diff'" x-text="'Only diffs (' + compareAdjustedCounts(cr).diffs + ')'"></span>
                                           <span class="compare-chip compare-chip-wrong" :class="compareFilter === 'wrong' ? 'active' : ''" @click="compareFilter = 'wrong'" x-text="'⚠ Wrong score (' + compareAdjustedCounts(cr).wrong + ')'"></span>
-                                          <span class="compare-chip compare-chip-missing" :class="compareFilter === 'missing' ? 'active' : ''" @click="compareFilter = 'missing'" :title="'Golden Rule groups count as 1 item — pick 1 of the available variants'" x-text="'✗ Missing (' + compareAdjustedCounts(cr).missing + ')'"></span>
+                                          <span class="compare-chip compare-chip-missing" :class="compareFilter === 'missing' ? 'active' : ''" @click="compareFilter = 'missing'" x-tt="'Golden Rule groups count as 1 item — pick 1 of the available variants'" x-text="'✗ Missing (' + compareAdjustedCounts(cr).missing + ')'"></span>
                                           <span class="compare-chip compare-chip-extra" :class="compareFilter === 'extra' ? 'active' : ''" @click="compareFilter = 'extra'" x-text="'+ Extra (' + compareAdjustedCounts(cr).extra + ')'"></span>
                                           <span class="compare-chip compare-chip-match" :class="compareFilter === 'match' ? 'active' : ''" @click="compareFilter = 'match'" x-text="'✓ Matching (' + compareAdjustedCounts(cr).matching + ')'"></span>
                                         </div>
@@ -771,7 +771,7 @@
                                                     <td class="current">
                                                       <span class="cmp-override-badge"
                                                             :class="fi.scoreOverride != null ? 'on' : ''"
-                                                            :title="fi.scoreOverride != null ? ('Override: this score is set intentionally via a Clonarr sync rule (saved as ' + ((fi.scoreOverride > 0 ? '+' : '') + fi.scoreOverride) + ')') : ''"
+                                                            x-tt="fi.scoreOverride != null ? ('Override: this score is set intentionally via a Clonarr sync rule (saved as ' + ((fi.scoreOverride > 0 ? '+' : '') + fi.scoreOverride) + ')') : ''"
                                                             x-text="fi.scoreOverride != null ? 'OR' : ''"></span>
                                                       <span :style="fi.scoreOverride != null ? 'color:#58a6ff;font-weight:600' : ''"
                                                             x-text="fi.exists ? ((fi.currentScore > 0 ? '+' : '') + fi.currentScore) : '—'"></span>
@@ -827,7 +827,7 @@
                                                     <template x-if="row.type === 'sub'">
                                                       <td colspan="5">
                                                         <template x-if="row.isGolden">
-                                                          <span :title="stripHtml(row.group.trashDescription) || 'Exclusive required group — pick one variant'"
+                                                          <span x-tt="stripHtml(row.group.trashDescription) || 'Exclusive required group — pick one variant'"
                                                                 style="color:#f85149;font-size:14px;margin-right:6px;cursor:help">&#9888;</span>
                                                         </template>
                                                         <template x-if="!row.isGolden">
@@ -869,7 +869,7 @@
                                                               @mouseenter="showCFTooltip($event, row.cf.description)"
                                                               @mouseleave="hideCFTooltip()">ⓘ</span>
                                                         <template x-if="row.cf.required">
-                                                          <span style="font-size:10px;margin-left:4px" title="Required by TRaSH">&#128274;</span>
+                                                          <span style="font-size:10px;margin-left:4px" x-tt="'Required by TRaSH'">&#128274;</span>
                                                         </template>
                                                         <template x-if="row.cf.default">
                                                           <span style="font-size:10px;color:#3fb950;background:#0d2f1a;padding:1px 5px;border-radius:6px;margin-left:4px">rec</span>
@@ -880,7 +880,7 @@
                                                       <td class="current">
                                                         <span class="cmp-override-badge"
                                                               :class="row.cf.scoreOverride != null ? 'on' : ''"
-                                                              :title="row.cf.scoreOverride != null ? ('Override: this score is set intentionally via a Clonarr sync rule (saved as ' + ((row.cf.scoreOverride > 0 ? '+' : '') + row.cf.scoreOverride) + ')') : ''"
+                                                              x-tt="row.cf.scoreOverride != null ? ('Override: this score is set intentionally via a Clonarr sync rule (saved as ' + ((row.cf.scoreOverride > 0 ? '+' : '') + row.cf.scoreOverride) + ')') : ''"
                                                               x-text="row.cf.scoreOverride != null ? 'OR' : ''"></span>
                                                         <span :style="row.cf.scoreOverride != null ? 'color:#58a6ff;font-weight:600' : ''"
                                                               x-text="row.cf.exists ? ((row.cf.currentScore > 0 ? '+' : '') + row.cf.currentScore) : '—'"></span>

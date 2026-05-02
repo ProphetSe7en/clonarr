@@ -9,8 +9,8 @@
       </div>
 
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <button x-show="config.devFeatures" class="btn btn-sm" :class="{ 'btn-primary': exportTab === 'yaml' }" title="YAML format for use with Recyclarr sync tool" @click="exportTab = 'yaml'; generateExport()">Recyclarr YAML</button>
-        <button class="btn btn-sm" :class="{ 'btn-primary': exportTab === 'trash' }" title="JSON format — share, back up, or contribute to TRaSH-Guides" @click="exportTab = 'trash'; generateExport()">TRaSH JSON</button>
+        <button x-show="config.devFeatures" class="btn btn-sm" :class="{ 'btn-primary': exportTab === 'yaml' }" x-tt="'YAML format for use with Recyclarr sync tool'" @click="exportTab = 'yaml'; generateExport()">Recyclarr YAML</button>
+        <button class="btn btn-sm" :class="{ 'btn-primary': exportTab === 'trash' }" x-tt="'JSON format — share, back up, or contribute to TRaSH-Guides'" @click="exportTab = 'trash'; generateExport()">TRaSH JSON</button>
       </div>
 
       <div style="position:relative">

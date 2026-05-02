@@ -7,15 +7,15 @@
       <!-- Top action bar -->
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px">
         <template x-if="!_resyncReturnSubTab">
-          <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
+          <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save profile changes without syncing'">
             <span x-show="pbSaving" class="spinner"></span>
             <span x-show="!pbSaving" x-text="pb.editId ? 'Save Changes' : 'Save Profile'"></span>
           </button>
         </template>
         <template x-if="pb.editId">
           <div style="display:flex;gap:6px">
-            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save changes and sync to existing Arr profile">Save & Sync</button>
-            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save and create as new Arr profile">Create New</button>
+            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save changes and sync to existing Arr profile'">Save & Sync</button>
+            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save and create as new Arr profile'">Create New</button>
           </div>
         </template>
       </div>
@@ -241,7 +241,7 @@
                       <span x-text="qualityStructureEditMode ? '✓ Done Editing Groups' : 'Edit Groups'"></span>
                     </button>
                     <button class="btn" style="font-size:12px;padding:2px 10px;border-color:#d29922;color:#d29922"
-                            title="Clear quality items — re-apply a preset to repopulate"
+                            x-tt="'Clear quality items — re-apply a preset to repopulate'"
                             @click="qsResetAll('builder')">Reset</button>
                   </div>
                   <div :style="'column-count:' + (pb.qualityItems.length > 12 ? 3 : pb.qualityItems.length > 6 ? 2 : 1) + ';column-gap:16px'">
@@ -266,7 +266,7 @@
                              @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
                              @drop.prevent="qsHandleDropOnRow(idx, 'builder')"
                              @dragend="qsResetDrag()">
-                          <span class="qs-handle" x-show="qualityStructureEditMode" title="Drag to reorder · drop on another row to merge">⋮⋮</span>
+                          <span class="qs-handle" x-show="qualityStructureEditMode" x-tt="'Drag to reorder · drop on another row to merge'">⋮⋮</span>
                           <template x-if="qualityStructureEditMode">
                             <template x-if="item.items">
                               <span class="qs-chevron"
@@ -307,7 +307,7 @@
                           <span x-show="item.items" class="qs-badge" x-text="item.items?.length"></span>
                           <button x-show="qualityStructureEditMode && item.items" class="qs-tiny-x"
                                   style="font-size:11px;padding:0 6px"
-                                  @click="qsDeleteGroup(idx, 'builder')" title="Delete group (members become individual singles)">× delete</button>
+                                  @click="qsDeleteGroup(idx, 'builder')" x-tt="'Delete group (members become individual singles)'">× delete</button>
                         </div>
                         <div class="qs-group-members"
                              x-show="item.items && qualityStructureEditMode && qualityStructureExpanded[item._id]"
@@ -325,7 +325,7 @@
                                     @dragend="qsResetDrag()"
                                     x-text="m"></span>
                               <div style="flex:1"></div>
-                              <button class="qs-tiny-x" @click="qsUngroupMember(idx, mIdx, 'builder')" title="Remove from group (back to single)">×</button>
+                              <button class="qs-tiny-x" @click="qsUngroupMember(idx, mIdx, 'builder')" x-tt="'Remove from group (back to single)'">×</button>
                             </div>
                           </template>
                           <div class="qs-empty-group" x-show="item.items?.length === 0">empty group — drag a member here or click × delete</div>
@@ -485,13 +485,13 @@
                   <span class="pb-state-pill" :class="{ 'active-req': true }" x-show="false"></span>
                   <span class="pb-state-pill"
                         :class="{ 'active-req': !pbGroupHasAnyState(group, 'optional') && !pbGroupHasAnyState(group, 'formatItems') }"
-                        @click="pbSetGroupState(group, 'required')" title="Set all CFs to Required">Req</span>
+                        @click="pbSetGroupState(group, 'required')" x-tt="'Set all CFs to Required'">Req</span>
                   <span class="pb-state-pill"
                         :class="{ 'active-opt': pbGroupHasAllState(group, 'optional') }"
-                        @click="pbSetGroupState(group, 'optional')" title="Set all CFs to Optional">Opt</span>
+                        @click="pbSetGroupState(group, 'optional')" x-tt="'Set all CFs to Optional'">Opt</span>
                   <span class="pb-state-pill"
                         :class="{ 'active-fmt': pbGroupHasAllState(group, 'formatItems') }"
-                        @click="pbSetGroupState(group, 'formatItems')" title="Move all CFs to formatItems">Fmt</span>
+                        @click="pbSetGroupState(group, 'formatItems')" x-tt="'Move all CFs to formatItems'">Fmt</span>
                 </div>
                 <label class="toggle toggle-sm" @click.stop>
                   <input type="checkbox" :checked="pbIsGroupEnabled(group)"
@@ -537,13 +537,13 @@
                     <div style="display:flex;gap:4px;flex-shrink:0">
                       <span class="pb-state-pill" :class="{ 'active-req': pbGetCFState(cf) === 'required' }"
                             @click="pbSetCFState(cf.trashId, 'required')"
-                            title="Required — mandatory when group is active">Req</span>
+                            x-tt="'Required — mandatory when group is active'">Req</span>
                       <span class="pb-state-pill" :class="{ 'active-opt': pbGetCFState(cf) === 'optional' }"
                             @click="pbSetCFState(cf.trashId, 'optional')"
-                            title="Optional — user chooses within group">Opt</span>
+                            x-tt="'Optional — user chooses within group'">Opt</span>
                       <span class="pb-state-pill" :class="{ 'active-fmt': pbGetCFState(cf) === 'formatItems' }"
                             @click="pbSetCFState(cf.trashId, 'formatItems')"
-                            title="formatItems — always mandatory in profile">Fmt</span>
+                            x-tt="'formatItems — always mandatory in profile'">Fmt</span>
                     </div>
                     <input type="number" class="pb-score-input"
                            x-show="pbIsGroupEnabled(group) || pb.formatItemCFs[cf.trashId]"
@@ -576,15 +576,15 @@
         </div>
         <button class="btn" @click="cancelProfileBuilder()">Cancel</button>
         <template x-if="!_resyncReturnSubTab">
-          <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save profile changes without syncing">
+          <button class="btn btn-primary" @click="saveCustomProfile()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save profile changes without syncing'">
             <span x-show="pbSaving" class="spinner"></span>
             <span x-show="!pbSaving" x-text="pb.editId ? 'Save Changes' : 'Save Profile'"></span>
           </button>
         </template>
         <template x-if="pb.editId">
           <div style="display:flex;gap:6px">
-            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save changes and sync to existing Arr profile">Save & Sync</button>
-            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" title="Save and create as new Arr profile">Create New</button>
+            <button class="btn" style="border-color:#238636;color:#3fb950" @click="saveAndSyncBuilder()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save changes and sync to existing Arr profile'">Save & Sync</button>
+            <button class="btn" style="border-color:#58a6ff;color:#58a6ff" @click="saveAndSyncBuilderAsNew()" :disabled="!pb.name.trim() || pbSelectedCount() === 0 || pbSaving" x-tt="'Save and create as new Arr profile'">Create New</button>
           </div>
         </template>
       </div>

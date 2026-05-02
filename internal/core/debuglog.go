@@ -337,6 +337,9 @@ func OverrideSummary(o *SyncOverrides) string {
 	if o.CutoffQuality != nil && *o.CutoffQuality != "" {
 		parts = append(parts, "cutoff="+*o.CutoffQuality)
 	}
+	if o.UpgradeAllowed != nil {
+		parts = append(parts, fmt.Sprintf("upgradeAllowed=%t", *o.UpgradeAllowed))
+	}
 	if o.MinFormatScore != nil {
 		parts = append(parts, fmt.Sprintf("minScore=%d", *o.MinFormatScore))
 	}

@@ -41,8 +41,10 @@
     .topnav .logo img { width: 24px !important; height: 24px !important; }
   }
 
-  /* Page layout */
-  .page { padding: 24px; max-width: 1100px; margin: 0 auto; }
+  /* Page layout — global default. Scoring Sandbox overrides this inline with
+     style="max-width:none" because it has wide tabular results that benefit
+     from the full viewport. */
+  .page { padding: 24px; max-width: 1250px; margin: 0 auto; }
 
   /* Section header */
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }

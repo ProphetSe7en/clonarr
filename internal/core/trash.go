@@ -3,6 +3,7 @@ package core
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -539,6 +540,203 @@ func parseChangelog(path string, maxSections int) []ChangelogSection {
 	}
 
 	return sections
+}
+
+// PullChange describes one file change observed during a TRaSH pull.
+// Status is one of "added", "removed", "modified", "renamed".
+type PullChange struct {
+	App      string // "radarr" or "sonarr"
+	Category string // "CF" / "CF group" / "Profile" / "Naming" / etc.
+	Name     string // basename without .json extension; empty for category-level files (conflicts)
+	Status   string
+}
+
+// PullChangeSet aggregates structured changes between two TRaSH commits,
+// used to build a human-readable summary of what a pull actually changed.
+// Empty slice = no JSON changes (the commit may have moved for non-JSON
+// updates like includes/cf-descriptions/, which we don't surface per-file).
+// Distinct from the existing PullDiff type, which is the GUI/persistence
+// summary for the changelog banner.
+type PullChangeSet struct {
+	Changes []PullChange
+}
+
+// trashCategoryNames maps the on-disk subdirectory name to a friendly label
+// used in pull-summary log lines. Files that don't fall under one of these
+// keys are skipped (we only summarise the data Clonarr actually parses).
+var trashCategoryNames = map[string]string{
+	"cf":                     "CF",
+	"cf-groups":              "CF group",
+	"quality-profiles":       "Profile",
+	"quality-profile-groups": "Profile group",
+	"quality-size":           "Quality size",
+	"naming":                 "Naming",
+	"conflicts":              "Conflicts",
+}
+
+// classifyTrashPath maps a path inside docs/json/<app>/... to (app, category, name).
+// Returns nil for paths we don't track. Handles both directory-style
+// (docs/json/radarr/cf/foo.json) and file-style (docs/json/radarr/conflicts.json).
+func classifyTrashPath(p string) *PullChange {
+	parts := strings.Split(p, "/")
+	if len(parts) < 4 || parts[0] != "docs" || parts[1] != "json" {
+		return nil
+	}
+	app := parts[2]
+	if app != "radarr" && app != "sonarr" {
+		return nil
+	}
+	var subdir, name string
+	if len(parts) == 4 {
+		// docs/json/<app>/<file>.json — single-file category like conflicts.json
+		subdir = strings.TrimSuffix(parts[3], ".json")
+	} else {
+		// docs/json/<app>/<subdir>/<file>.json
+		subdir = parts[3]
+		name = strings.TrimSuffix(parts[len(parts)-1], ".json")
+	}
+	cat, ok := trashCategoryNames[subdir]
+	if !ok {
+		return nil
+	}
+	return &PullChange{App: app, Category: cat, Name: name}
+}
+
+// DiffPull runs `git diff --name-status <prev>..<new> -- docs/json/` and
+// classifies each changed file. Returns an empty PullChangeSet if either commit
+// hash is missing or unchanged (no diff to report). Errors are surfaced so
+// the caller can fall back to a generic "commit changed" log line if the
+// diff command fails for any reason.
+func (ts *TrashStore) DiffPull(prevCommit, newCommit string) (*PullChangeSet, error) {
+	if prevCommit == "" || newCommit == "" || prevCommit == newCommit {
+		return &PullChangeSet{}, nil
+	}
+	// 10s timeout — `git diff --name-status` on the sparse-checkout repo is
+	// normally a milliseconds operation, but a wedged filesystem (NFS drop,
+	// disk failure) could otherwise hang the goroutine forever. Failing the
+	// diff just means the user gets the basic "commit X → Y" log line without
+	// the per-file breakdown; the pull itself is unaffected.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "diff", "--name-status",
+		prevCommit+".."+newCommit, "--", "docs/json/")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff: %w", err)
+	}
+	diff := &PullChangeSet{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		// Format: "<status>\t<path>" or "<status>\t<old>\t<new>" for renames.
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+		statusCode := fields[0]
+		path := fields[len(fields)-1]
+		change := classifyTrashPath(path)
+		if change == nil {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(statusCode, "A"):
+			change.Status = "added"
+		case strings.HasPrefix(statusCode, "D"):
+			change.Status = "removed"
+		case strings.HasPrefix(statusCode, "R"):
+			change.Status = "renamed"
+		default:
+			// M, C, T (mode change), and any other status → treat as modified
+			change.Status = "modified"
+		}
+		diff.Changes = append(diff.Changes, *change)
+	}
+	return diff, nil
+}
+
+// SummaryByApp returns a compact one-line breakdown of changes for one app.
+// Format: "CFs: +2/-1/~3 · CF groups: +1 · Profiles: ~1". Counts of zero are
+// omitted within each category. Returns "" when the app has no changes.
+func (d *PullChangeSet) SummaryByApp(app string) string {
+	if d == nil || len(d.Changes) == 0 {
+		return ""
+	}
+	type counts struct{ added, removed, modified int }
+	bucket := map[string]*counts{}
+	for _, c := range d.Changes {
+		if c.App != app {
+			continue
+		}
+		b := bucket[c.Category]
+		if b == nil {
+			b = &counts{}
+			bucket[c.Category] = b
+		}
+		switch c.Status {
+		case "added":
+			b.added++
+		case "removed":
+			b.removed++
+		default: // modified, renamed
+			b.modified++
+		}
+	}
+	if len(bucket) == 0 {
+		return ""
+	}
+	cats := make([]string, 0, len(bucket))
+	for k := range bucket {
+		cats = append(cats, k)
+	}
+	sort.Strings(cats)
+	parts := make([]string, 0, len(cats))
+	for _, cat := range cats {
+		c := bucket[cat]
+		seg := []string{}
+		if c.added > 0 {
+			seg = append(seg, fmt.Sprintf("+%d", c.added))
+		}
+		if c.removed > 0 {
+			seg = append(seg, fmt.Sprintf("-%d", c.removed))
+		}
+		if c.modified > 0 {
+			seg = append(seg, fmt.Sprintf("~%d", c.modified))
+		}
+		parts = append(parts, fmt.Sprintf("%ss: %s", cat, strings.Join(seg, "/")))
+	}
+	return strings.Join(parts, " · ")
+}
+
+// DetailLines returns up to maxLines per-change descriptions, with a final
+// "...and N more" line when truncated. Each line is formatted as
+// "+ Radarr CF: HDR10+ Boost". Used to surface the actual file-level changes
+// after the SummaryByApp aggregate counts.
+func (d *PullChangeSet) DetailLines(maxLines int) []string {
+	if d == nil || len(d.Changes) == 0 {
+		return nil
+	}
+	symbol := map[string]string{"added": "+", "removed": "-", "modified": "~", "renamed": "→"}
+	out := make([]string, 0, maxLines+1)
+	for i, c := range d.Changes {
+		if i >= maxLines {
+			out = append(out, fmt.Sprintf("...and %d more", len(d.Changes)-i))
+			break
+		}
+		sym := symbol[c.Status]
+		// Capitalize first letter of app name for log readability ("Radarr" / "Sonarr").
+		appLabel := c.App
+		if len(appLabel) > 0 {
+			appLabel = strings.ToUpper(appLabel[:1]) + appLabel[1:]
+		}
+		if c.Name == "" {
+			out = append(out, fmt.Sprintf("%s %s %s", sym, appLabel, c.Category))
+		} else {
+			out = append(out, fmt.Sprintf("%s %s %s: %s", sym, appLabel, c.Category, c.Name))
+		}
+	}
+	return out
 }
 
 // CloneOrPull clones or pulls the TRaSH repo, then re-parses all data.

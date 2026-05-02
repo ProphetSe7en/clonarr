@@ -137,14 +137,14 @@
                         <div style="flex:1;min-width:0" x-show="cleanupKeepList.length > 0">
                           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
                             <span style="font-size:11px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px" x-text="cleanupKeepList.length + ' kept'"></span>
-                            <button class="btn" style="font-size:11px;padding:1px 8px;border-color:#f85149;color:#f85149" @click="cleanupKeepList = []; saveCleanupKeep()" title="Remove all from Keep List">Remove all</button>
+                            <button class="btn" style="font-size:11px;padding:1px 8px;border-color:#f85149;color:#f85149" @click="cleanupKeepList = []; saveCleanupKeep()" x-tt="'Remove all from Keep List'">Remove all</button>
                           </div>
                           <div style="max-height:160px;overflow-y:auto;overflow-x:hidden">
                             <div style="column-count:3;column-gap:8px">
                               <template x-for="(name, idx) in [...cleanupKeepList].sort((a,b) => a.localeCompare(b))" :key="'kl-'+idx">
                                 <div style="break-inside:avoid;display:flex;align-items:center;padding:1px 0;font-size:12px">
                                   <span style="color:#58a6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="name"></span>
-                                  <span style="color:#8b949e;cursor:pointer;font-size:13px;flex-shrink:0;margin-left:4px" @click="removeCleanupKeep(cleanupKeepList.indexOf(name))" title="Remove">&times;</span>
+                                  <span style="color:#8b949e;cursor:pointer;font-size:13px;flex-shrink:0;margin-left:4px" @click="removeCleanupKeep(cleanupKeepList.indexOf(name))" x-tt="'Remove'">&times;</span>
                                 </div>
                               </template>
                             </div>

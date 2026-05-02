@@ -49,9 +49,9 @@
                        :style="cf.exists ? 'opacity:0.4' : ''">
                   <input type="checkbox" x-model="cf.selected" :disabled="cf.exists" style="flex-shrink:0">
                   <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0" x-text="cf.name"
-                        :title="cf.exists ? cf.name + ' (already imported)' : cf.name"></span>
+                        x-tt="cf.exists ? cf.name + ' (already imported)' : cf.name"></span>
                   <span x-show="cf.trashMatch && !cf.exists"
-                        title="Also in TRaSH guide — you can still import."
+                        x-tt="'Also in TRaSH guide — you can still import.'"
                         style="background:#3a2d10;color:#e3b341;border:1px solid #d29922;border-radius:3px;padding:0 5px;font-size:10px;font-weight:600;flex-shrink:0;cursor:help">
                     ⚠ guide
                   </span>

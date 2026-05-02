@@ -15,6 +15,28 @@ import (
 
 // --- Sync ---
 
+// qualityOverrideSummary describes whether the request carries a Quality
+// override and which form. Returned values:
+//   "none"             — no Quality override sent
+//   "structure(N)"     — full qualityStructure override (N items, post-frontend
+//                        identity-filter so reaching here means user actually
+//                        diverged from profile defaults)
+//   "flat(N)"          — legacy qualityOverrides map (N entries)
+//
+// Used in dry-run / apply log lines to make the per-Quality-channel state
+// explicit, so testers can verify e.g. that opening the Edit modal without
+// changes produces "quality: none" (qualityStructureMatchesDefaults filter
+// on the frontend prevented a phantom override).
+func qualityOverrideSummary(req core.SyncRequest) string {
+	if len(req.QualityStructure) > 0 {
+		return fmt.Sprintf("structure(%d)", len(req.QualityStructure))
+	}
+	if len(req.QualityOverrides) > 0 {
+		return fmt.Sprintf("flat(%d)", len(req.QualityOverrides))
+	}
+	return "none"
+}
+
 func (s *Server) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
 	var req core.SyncRequest
@@ -49,9 +71,12 @@ func (s *Server) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	behavior := core.ResolveSyncBehavior(req.Behavior)
-	s.Core.DebugLog.Logf(core.LogSync, "Dry-run: %q → %s | %d selected CFs | overrides: %s | behavior: %s/%s/%s",
+	s.Core.DebugLog.Logf(core.LogSync, "Dry-run: %q → %s | %d selected CFs | overrides: %s | quality: %s | scoreOverrides: %d | behavior: %s/%s/%s",
 		plan.ProfileName, inst.Name, len(req.SelectedCFs),
-		core.OverrideSummary(req.Overrides), behavior.AddMode, behavior.RemoveMode, behavior.ResetMode)
+		core.OverrideSummary(req.Overrides),
+		qualityOverrideSummary(req),
+		len(req.ScoreOverrides),
+		behavior.AddMode, behavior.RemoveMode, behavior.ResetMode)
 	s.Core.DebugLog.Logf(core.LogSync, "Dry-run result: %d create, %d update, %d unchanged | %d scores to set, %d to zero",
 		plan.Summary.CFsToCreate, plan.Summary.CFsToUpdate, plan.Summary.CFsUnchanged,
 		plan.Summary.ScoresToSet, plan.Summary.ScoresToZero)
@@ -152,13 +177,16 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	if arrName != "" {
 		applyTarget = fmt.Sprintf("%q (#%d)", arrName, req.ArrProfileID)
 	}
-	s.Core.DebugLog.Logf(core.LogSync, "Apply: %q → %s | %s | mode=%s | %d created, %d updated, %d scores | %d errors",
+	s.Core.DebugLog.Logf(core.LogSync, "Apply: %q → %s | %s | mode=%s | overrides: %s | quality: %s | scoreOverrides: %d | %d created, %d updated, %d scores | %d errors",
 		plan.ProfileName, inst.Name, applyTarget, func() string {
 			if req.ArrProfileID == 0 {
 				return "create"
 			}
 			return "update"
 		}(),
+		core.OverrideSummary(req.Overrides),
+		qualityOverrideSummary(req),
+		len(req.ScoreOverrides),
 		result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, len(result.Errors))
 	endResult = fmt.Sprintf("ok | %d created, %d updated, %d scores, %d errors", result.CFsCreated, result.CFsUpdated, result.ScoresUpdated, len(result.Errors))
 	if len(result.Errors) > 0 {

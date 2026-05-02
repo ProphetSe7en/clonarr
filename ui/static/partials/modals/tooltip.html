@@ -1,0 +1,13 @@
+{{define "modals/tooltip"}}
+  <!-- Global custom tooltip — replaces native HTML title attributes for elements
+       where the browser tooltip would overflow the viewport. Position is calculated
+       on mouseenter (showTooltip helper in main.js); the tooltip is anchored ABOVE
+       the trigger element by default, auto-flips below if too close to viewport top,
+       and clamps the horizontal position so it can never overflow off-screen. Use the
+       x-tt directive (registered in main.js) on any element:
+         x-tt="'static text'"      static label
+         x-tt="someExpr"           dynamic expression -->
+  <div x-show="tt.show" x-cloak
+       :style="`position:fixed;left:${tt.x}px;top:${tt.y + (tt.flip ? 8 : -8)}px;transform:translate(-50%, ${tt.flip ? '0' : '-100%'});pointer-events:none;background:#0d1117;border:1px solid #30363d;border-radius:5px;padding:6px 10px;font-size:12px;color:#e1e4e8;line-height:1.4;max-width:320px;width:max-content;white-space:normal;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.6);z-index:10000;`"
+       x-text="tt.text"></div>
+{{end}}

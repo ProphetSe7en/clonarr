@@ -111,7 +111,7 @@
                                 </td>
                                 <td style="padding:6px 8px">
                                   <template x-if="item.renamingFlag">
-                                    <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500" title="includeCustomFormatWhenRenaming=true on this CF">rename tag</span>
+                                    <span style="background:#2d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:11px;font-weight:500" x-tt="'includeCustomFormatWhenRenaming=true on this CF'">rename tag</span>
                                   </template>
                                 </td>
                               </tr>
@@ -182,11 +182,11 @@
           <button class="btn" @click="cleanupResult = null">Cancel</button>
           <template x-if="cleanupResult.action === 'unused-by-clonarr' && cleanupResult.items.some(i => i.renamingFlag)">
             <div style="display:flex;gap:6px">
-              <button class="btn btn-danger" style="padding:5px 10px;font-size:12px" @click="cleanupApply({ skipRenameFlagged: true })" :disabled="cleanupApplying" title="Keep CFs tagged for filename rendering">
+              <button class="btn btn-danger" style="padding:5px 10px;font-size:12px" @click="cleanupApply({ skipRenameFlagged: true })" :disabled="cleanupApplying" x-tt="'Keep CFs tagged for filename rendering'">
                 <span x-show="cleanupApplying" class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
                 <span x-show="!cleanupApplying" x-text="'Delete safe (' + cleanupResult.items.filter(i => !i.renamingFlag).length + ')'"></span>
               </button>
-              <button class="btn" style="padding:5px 10px;font-size:12px;background:transparent;border:1px solid #f85149;color:#f85149" @click="cleanupApply({ skipRenameFlagged: false })" :disabled="cleanupApplying" title="Also delete CFs tagged for filename rendering">
+              <button class="btn" style="padding:5px 10px;font-size:12px;background:transparent;border:1px solid #f85149;color:#f85149" @click="cleanupApply({ skipRenameFlagged: false })" :disabled="cleanupApplying" x-tt="'Also delete CFs tagged for filename rendering'">
                 <span x-show="cleanupApplying" class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
                 <span x-show="!cleanupApplying" x-text="'Delete all (' + cleanupResult.affectCount + ')'"></span>
               </button>

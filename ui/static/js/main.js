@@ -72,6 +72,35 @@ export function clonarr() {
     get maintenanceInstance() {
       return this.instances.find(i => i.id === this.maintenanceInstanceId) || null;
     },
+
+    // Custom tooltip helpers — show/hide a viewport-aware tooltip anchored to
+    // an element. Use instead of native title="" when the trigger element sits
+    // near the right edge of the viewport (where the OS-level native tooltip
+    // would render off-screen). Auto-flips below if too close to the top edge,
+    // and clamps horizontal position so the tooltip can never escape the
+    // viewport regardless of trigger location.
+    showTooltip(el, text) {
+      if (!text || !el) return;
+      const r = el.getBoundingClientRect();
+      const margin = 8;
+      // Tooltip max-width is 320px (from CSS); clamp x so transform:translate(-50%)
+      // can never push the tooltip off-screen.
+      const halfMax = 160;
+      let x = r.left + r.width / 2;
+      let y = r.top;
+      let flip = false;
+      // Flip below if too close to top of viewport
+      if (r.top < 60) {
+        y = r.bottom;
+        flip = true;
+      }
+      // Clamp x so left/right edge never overflows viewport
+      x = Math.max(halfMax + margin, Math.min(x, window.innerWidth - halfMax - margin));
+      this.tt = { show: true, text: text, x: x, y: y, flip: flip };
+    },
+    hideTooltip() {
+      this.tt.show = false;
+    },
     async init() {
       // Apply saved UI scale
       if (this.uiScale !== '1') document.documentElement.style.zoom = this.uiScale;
@@ -313,6 +342,40 @@ Object.assign(window, {
 //     already loaded — we just register directly.
 function registerClonarr() {
   window.Alpine.data('clonarr', clonarr);
+  // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
+  // Replaces native title="" for elements where the OS tooltip would overflow
+  // the viewport (right-edge buttons, long messages). Wires mouseenter/leave
+  // listeners that call showTooltip / hideTooltip on the root clonarr scope.
+  // Static text:   x-tt="'Reset all overrides'"
+  // Dynamic text:  x-tt="someDynamicExpr"
+  window.Alpine.directive('tt', (el, { expression }, { evaluateLater, cleanup }) => {
+    const getTipText = evaluateLater(expression);
+    // currentEl tracks the element the user is hovering RIGHT NOW. evaluateLater
+    // resolves via microtask, so for dynamic expressions the user could already
+    // have moved away by the time the callback fires. We compare against the
+    // currentEl snapshot to avoid showing a stale tooltip after mouseleave.
+    let currentEl = null;
+    const onEnter = (e) => {
+      currentEl = e.currentTarget;
+      const target = e.currentTarget;
+      getTipText((text) => {
+        if (text && currentEl === target) {
+          window.Alpine.$data(el).showTooltip(target, text);
+        }
+      });
+    };
+    const onLeave = () => {
+      currentEl = null;
+      const data = window.Alpine.$data(el);
+      if (data && data.hideTooltip) data.hideTooltip();
+    };
+    el.addEventListener('mouseenter', onEnter);
+    el.addEventListener('mouseleave', onLeave);
+    cleanup(() => {
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+    });
+  });
 }
 if (window.Alpine) {
   registerClonarr();
