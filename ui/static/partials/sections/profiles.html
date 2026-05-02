@@ -285,19 +285,19 @@
                                   <span x-text="new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:#3fb950" x-text="entry.changes.cfDetails.length"></span>
+                                  <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:#3fb950" x-text="entry.changes.cfDetails?.length"></span>
                                   <span x-show="!entry.changes.cfDetails?.length" style="color:#30363d">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.scoreDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922" x-text="entry.changes.scoreDetails.length"></span>
+                                  <span x-show="entry.changes.scoreDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922" x-text="entry.changes.scoreDetails?.length"></span>
                                   <span x-show="!entry.changes.scoreDetails?.length" style="color:#30363d">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.qualityDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(163,113,247,0.15);color:#a371f7" x-text="entry.changes.qualityDetails.length"></span>
+                                  <span x-show="entry.changes.qualityDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(163,113,247,0.15);color:#a371f7" x-text="entry.changes.qualityDetails?.length"></span>
                                   <span x-show="!entry.changes.qualityDetails?.length" style="color:#30363d">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.settingsDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff" x-text="entry.changes.settingsDetails.length"></span>
+                                  <span x-show="entry.changes.settingsDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff" x-text="entry.changes.settingsDetails?.length"></span>
                                   <span x-show="!entry.changes.settingsDetails?.length" style="color:#30363d">—</span>
                                 </span>
                                 <span style="flex:1"></span>

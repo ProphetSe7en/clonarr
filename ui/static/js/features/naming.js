@@ -6,6 +6,7 @@ export default {
     namingApplyResult: {},
     namingMediaServer: {},
     namingPlexSingleEntry: {},
+    namingFAQExpanded: false,
   },
 
   methods: {
@@ -30,26 +31,49 @@ export default {
 
       // Descriptions sourced verbatim from TRaSH-Guides where available.
       // Schemes without TRaSH-authored descriptions have no desc field.
+      // The "recommended" flag is set per-app below (perAppRecommended) — TRaSH
+      // recommends TMDb for Radarr (movies) and TVDb for Sonarr (TV) because
+      // those guarantee a metadata match. IMDb is only matched indirectly via
+      // the TMDb/TVDb entry's IMDb-ID association. See
+      // includes/{radarr,sonarr}/{tmdb,tvdb}-imdb-info.md in the TRaSH repo.
       const schemeDesc = {
-        'standard': { label: 'Standard', recommended: true },
+        // 'standard' (file) — TRaSH lists this as the first tab in "Standard Movie/Series Format"
+        // section but does NOT explicitly call this specific variant "recommended". The whole
+        // section title implies recommendation, but per-variant text is silent. No badge.
+        'standard': { label: 'Standard' },
+        // 'default' (folder) — TRaSH MD says verbatim "The minimum needed and recommended format"
+        // for the "Standard Folder" tab (which maps to this key). Explicit endorsement → badge.
         'default': { label: 'Default', recommended: true },
         'original': { label: 'Original Title', desc: 'Another option is to use {Original Title} instead of the recommended naming scheme above. {Original Title} uses the title of the release, which includes all the information from the release itself. The benefit of this naming scheme is that it prevents download loops that can happen during import when there\'s a mismatch between the release title and the file contents (for example, if the release title says DTS-ES but the contents are actually DTS). The downside is that you have less control over how the files are named.' },
         'p2p-scene': { label: 'P2P / Scene', desc: 'Use P2P/Scene naming if you don\'t like spaces and brackets in the filename. It\'s the closest to the P2P/scene naming scheme, except it uses the exact audio and HDR formats from the media file, where the original release or filename might be unclear.' },
-        'plex-imdb': { label: 'Plex (IMDb)', recommended: true },
+        'plex-imdb': { label: 'Plex (IMDb)' },
         'plex-tmdb': { label: 'Plex (TMDb)' },
         'plex-tvdb': { label: 'Plex (TVDb)' },
         'plex-anime-imdb': { label: 'Plex Anime (IMDb)' },
         'plex-anime-tmdb': { label: 'Plex Anime (TMDb)' },
-        'emby-imdb': { label: 'Emby (IMDb)', recommended: true },
+        'emby-imdb': { label: 'Emby (IMDb)' },
         'emby-tmdb': { label: 'Emby (TMDb)' },
         'emby-tvdb': { label: 'Emby (TVDb)' },
         'emby-anime-imdb': { label: 'Emby Anime (IMDb)' },
         'emby-anime-tmdb': { label: 'Emby Anime (TMDb)' },
-        'jellyfin-imdb': { label: 'Jellyfin (IMDb)', recommended: true },
+        'jellyfin-imdb': { label: 'Jellyfin (IMDb)' },
         'jellyfin-tmdb': { label: 'Jellyfin (TMDb)' },
         'jellyfin-tvdb': { label: 'Jellyfin (TVDb)' },
         'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)' },
         'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)' },
+      };
+
+      // Per-app "Recommended" badge. TRaSH's tmdb-imdb-info.md (Radarr) and
+      // tvdb-imdb-info.md (Sonarr) state that TMDb/TVDb are usually better
+      // because they guarantee a metadata match, whereas IMDb only matches
+      // indirectly via the TMDb/TVDb entry's IMDb-ID association.
+      // Anime variants are NOT in this set: TRaSH endorses TMDb/TVDb over IMDb
+      // generally, but does not explicitly call out the anime variants as
+      // "recommended" — the prose targets the regular media-server schemes.
+      // Sonarr's naming JSON also has no anime variants in series naming.
+      const perAppRecommended = {
+        radarr: new Set(['plex-tmdb', 'emby-tmdb', 'jellyfin-tmdb']),
+        sonarr: new Set(['plex-tvdb', 'emby-tvdb', 'jellyfin-tvdb']),
       };
 
       // Media server key filters
@@ -136,7 +160,7 @@ export default {
           return {
             key,
             label: meta.label || key,
-            recommended: meta.recommended || false,
+            recommended: meta.recommended || perAppRecommended[appType]?.has(key) || false,
             description: meta.desc || '',
             pattern: ed.pattern,
             example: ed.example,

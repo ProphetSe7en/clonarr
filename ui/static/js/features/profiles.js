@@ -149,8 +149,13 @@ export default {
         if (ungrouped.length > 0) groups.push({ name: 'Other', cfs: ungrouped });
         if (customCFs.length > 0) groups.push({ name: 'Custom', cfs: customCFs });
         this.extraCFGroups = groups;
-        // Ensure all groups start collapsed (Alpine's reactive proxy can make missing keys truthy otherwise)
-        for (const g of groups) this.detailSections['extra_' + g.name] = false;
+        // Ensure all groups start collapsed. Alpine's reactive proxy treats
+        // missing keys as truthy in some cases AND direct keyed mutation
+        // doesn't reliably re-trigger every dependent expression — use the
+        // object-spread pattern so x-show/:class re-evaluate uniformly.
+        const updatedSections = { ...this.detailSections };
+        for (const g of groups) updatedSections['extra_' + g.name] = false;
+        this.detailSections = updatedSections;
         // Flat list for filtering
         const all = [];
         for (const g of groups) for (const cf of g.cfs) all.push(cf);
@@ -2587,10 +2592,27 @@ export default {
     // the section opens cleanly (all groups collapsed) on next expand.
     toggleExtraCFsCollapsed() {
       if (!this.extraCFsCollapsed) {
-        // About to collapse → reset inner group states
-        for (const g of (this.extraCFGroups || [])) this.detailSections['extra_' + g.name] = false;
+        // About to collapse → reset inner group states (object-spread so
+        // Alpine reactivity propagates to every dependent x-show/:class).
+        const updated = { ...this.detailSections };
+        for (const g of (this.extraCFGroups || [])) updated['extra_' + g.name] = false;
+        this.detailSections = updated;
       }
       this.extraCFsCollapsed = !this.extraCFsCollapsed;
+    },
+
+    // Reset all per-group expand states in the Extra CFs picker. Called
+    // eagerly on the activate-toggle so re-activation always renders with
+    // all groups collapsed; otherwise stale detailSections keys from a
+    // prior activation paint as expanded with chevrons that don't match
+    // (chevron/content desync). Iterates the full detailSections key set
+    // so the reset works even when extraCFGroups isn't populated yet.
+    resetExtraCFGroupCollapse() {
+      const updated = { ...this.detailSections };
+      for (const k of Object.keys(updated)) {
+        if (k.startsWith('extra_')) updated[k] = false;
+      }
+      this.detailSections = updated;
     },
 
     // Compare filter visibility predicates. Called from x-show on CF rows in every diff section.

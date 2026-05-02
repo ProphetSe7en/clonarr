@@ -498,7 +498,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <label class="toggle toggle-sm" title="Add extra CFs not in the TRaSH profile" style="flex-shrink:0">
-                <input type="checkbox" x-model="extraCFsActive" @change="if ($event.target.checked) loadExtraCFList()">
+                <input type="checkbox" x-model="extraCFsActive" @change="resetExtraCFGroupCollapse(); if ($event.target.checked) loadExtraCFList()">
                 <span class="slider"></span>
               </label>
               <span style="font-size:13px;color:#e1e4e8" x-text="extraCFsActive ? 'Hide Extra CFs' : 'Add Extra CFs'"></span>
@@ -578,7 +578,7 @@
                   <span style="font-size:12px;color:#aaa" x-text="group.cfs.filter(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] === undefined && (!extraCFSearch || cf.name.toLowerCase().includes(extraCFSearch.toLowerCase()))).length"></span>
                 </div>
                 <div x-show="detailSections['extra_'+group.name]"
-                     :style="'column-count:' + (group.cfs.length > 30 ? 3 : group.cfs.length > 12 ? 2 : 1) + ';column-gap:24px;padding-left:8px'">
+                     :style="{ columnCount: (group.cfs.length > 30 ? 3 : group.cfs.length > 12 ? 2 : 1), columnGap: '24px', paddingLeft: '8px' }">
                   <template x-for="cf in group.cfs" :key="'xa-'+cf.trashId">
                     <div x-show="!_extraInProfile(cf.trashId) && extraCFs[cf.trashId] === undefined && (!extraCFSearch || cf.name.toLowerCase().includes(extraCFSearch.toLowerCase()))" style="break-inside:avoid;padding:3px 0;opacity:0.6;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                       <label class="toggle toggle-sm" style="vertical-align:middle;margin-right:6px">
