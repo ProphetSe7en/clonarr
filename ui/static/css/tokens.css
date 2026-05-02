@@ -115,27 +115,27 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* Surface */
-  --bg-app: #ffffff;
-  --bg-page: #f6f8fa;
+  /* Surface — muted warm-grey page; white cards pop on top */
+  --bg-app: #ebeef2;
+  --bg-page: #ebeef2;
   --bg-card: #ffffff;
   --bg-elevated: #f6f8fa;
   --bg-elevated-hover: #eef1f4;
-  --bg-muted: #eaeef2;
-  --bg-panel: #f0f3f6;
+  --bg-muted: #dee3e8;
+  --bg-panel: #e8ecf0;
 
   /* Border */
-  --border-subtle: #d0d7de;
-  --border-muted: #d8dee4;
-  --border-faint: #eaeef2;
+  --border-subtle: #c8cfd6;
+  --border-muted: #d0d7de;
+  --border-faint: #dde2e7;
 
-  /* Text */
+  /* Text — bumped contrast for legibility on muted bg */
   --text-primary: #1f2328;
   --text-body: #24292f;
-  --text-secondary: #57606a;
-  --text-muted: #57606a;
-  --text-muted-secondary: #6e7681;
-  --text-soft: #57606a;
+  --text-secondary: #4d535b;
+  --text-muted: #4d535b;
+  --text-muted-secondary: #57606a;
+  --text-soft: #4d535b;
   --text-inverse: #ffffff;
   --text-on-accent: #ffffff;
 
