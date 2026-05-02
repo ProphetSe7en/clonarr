@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -75,27 +76,19 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(bodyBytes, &confirm)
 
 	// ==== Auth-field validation (before touching disk) =====================
-	if req.Authentication != nil {
-		switch *req.Authentication {
-		case "forms", "basic", "none":
-			// ok
-		default:
-			writeError(w, 400, "authentication must be one of: forms, basic, none")
-			return
-		}
+	// Validators read from core.AuthModes / core.AuthRequiredModes / core.SessionTTLBounds
+	// so the manifest endpoint and these checks share one source of truth.
+	if req.Authentication != nil && !core.IsValidEnumValue(core.AuthModes, *req.Authentication) {
+		writeError(w, 400, "authentication must be one of: "+strings.Join(core.EnumValues(core.AuthModes), ", "))
+		return
 	}
-	if req.AuthenticationRequired != nil {
-		switch *req.AuthenticationRequired {
-		case "enabled", "disabled_for_local_addresses":
-			// ok
-		default:
-			writeError(w, 400, "authenticationRequired must be one of: enabled, disabled_for_local_addresses")
-			return
-		}
+	if req.AuthenticationRequired != nil && !core.IsValidEnumValue(core.AuthRequiredModes, *req.AuthenticationRequired) {
+		writeError(w, 400, "authenticationRequired must be one of: "+strings.Join(core.EnumValues(core.AuthRequiredModes), ", "))
+		return
 	}
 	if req.SessionTTLDays != nil {
-		if *req.SessionTTLDays <= 0 || *req.SessionTTLDays > 365 {
-			writeError(w, 400, "sessionTtlDays must be an integer 1..365")
+		if *req.SessionTTLDays < core.SessionTTLBounds.Min || *req.SessionTTLDays > core.SessionTTLBounds.Max {
+			writeError(w, 400, fmt.Sprintf("sessionTtlDays must be an integer %d..%d", core.SessionTTLBounds.Min, core.SessionTTLBounds.Max))
 			return
 		}
 	}

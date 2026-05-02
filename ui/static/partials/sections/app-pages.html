@@ -1,0 +1,40 @@
+{{define "sections/app-pages"}}
+  <!-- ==================== APP PAGES (Radarr/Sonarr) ==================== -->
+  <template x-if="true">
+    <div x-show="!['settings','about'].includes(currentSection) && !profileDetail && !profileBuilder">
+      <!-- App type + section sub-tabs (universal bar, matches page width) -->
+      <div class="profile-tabs" style="max-width:1100px;margin:0 auto;padding:0 24px;background:transparent;border-bottom:1px solid #21262d">
+        <template x-for="appType in availableAppTypes" :key="'global-'+appType">
+          <div class="profile-tab" :class="{ active: activeAppType === appType }"
+               @click="switchAppType(appType)">
+            <span x-text="appType.charAt(0).toUpperCase() + appType.slice(1)"></span>
+            <span x-show="instancesOfType(appType).length > 0" style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;margin-left:4px;font-size:11px" x-text="instancesOfType(appType).length"></span>
+          </div>
+        </template>
+        <!-- Profiles sub-tabs -->
+        <template x-if="currentSection === 'profiles'">
+          <div style="display:flex;gap:0;margin-left:16px;border-left:1px solid #30363d;padding-left:8px">
+            <div class="profile-tab" :class="{ active: getProfileTab(activeAppType) === 'trash-sync' }" @click="setProfileTab(activeAppType, 'trash-sync'); pushNav()">TRaSH Sync</div>
+            <div class="profile-tab" :class="{ active: getProfileTab(activeAppType) === 'history' }" @click="setProfileTab(activeAppType, 'history'); pushNav(); instancesOfType(activeAppType).forEach(i => loadSyncHistory(i.id))">History</div>
+            <div class="profile-tab" :class="{ active: getProfileTab(activeAppType) === 'compare' }" @click="setProfileTab(activeAppType, 'compare'); pushNav()">Compare</div>
+          </div>
+        </template>
+        <!-- Advanced sub-tabs -->
+        <template x-if="currentSection === 'advanced'">
+          <div style="display:flex;gap:0;margin-left:16px;border-left:1px solid #30363d;padding-left:8px">
+            <div class="profile-tab" :class="{ active: advancedTab === 'builder' }" @click="advancedTab = 'builder'; pushNav()">Profile Builder</div>
+            <div class="profile-tab" :class="{ active: advancedTab === 'scoring' }" @click="advancedTab = 'scoring'; loadSandbox(activeAppType); pushNav()">Scoring Sandbox</div>
+            <div class="profile-tab" :class="{ active: advancedTab === 'group-builder' }" @click="advancedTab = 'group-builder'; cfgbLoad(activeAppType); pushNav()">CF Group Builder</div>
+          </div>
+        </template>
+      </div>
+      <!-- Sub-tabs (hidden, replaced by top nav) -->
+      {{template "sections/profiles" .}}
+      {{template "sections/custom-formats" .}}
+      {{template "sections/quality-size" .}}
+      {{template "sections/naming" .}}
+      {{template "sections/maintenance" .}}
+      {{template "sections/scoring" .}}
+    </div>
+  </template>
+{{end}}

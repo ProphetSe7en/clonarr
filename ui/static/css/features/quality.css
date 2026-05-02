@@ -1,0 +1,36 @@
+  /* Quality sizes */
+  .qs-row { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bg-muted); gap: 12px; }
+  .qs-row:last-child { border-bottom: none; }
+  .qs-name { width: 140px; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+  .qs-bar-container { flex: 1; position: relative; height: 6px; border-radius: 3px; background: var(--bg-muted); }
+  .qs-bar-range { position: absolute; top: 0; height: 100%; background: var(--accent-green-strong); border-radius: 3px; }
+  .qs-col { width: 55px; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; text-align: right; flex-shrink: 0; }
+  .qs-col-min { color: var(--text-primary); }
+  .qs-col-pref { color: var(--accent-green); }
+  .qs-col-max { color: var(--text-muted); }
+  /* Quality Structure Override editor (Edit Groups mode) */
+  .qs-row { display: flex; align-items: center; gap: 6px; padding: 4px 4px; border-radius: 4px; border: 1px solid transparent; min-height: 22px; }
+  .qs-row.is-group { background: var(--alpha-blue-soft); border-color: var(--alpha-blue-border); }
+  .qs-row.is-dragging { opacity: 0.35; }
+  .qs-row.dnd-merge-hover { border-color: var(--accent-green); background: var(--alpha-green); }
+  .qs-handle { color: var(--text-muted); cursor: grab; font-size:12px; padding: 0 2px; user-select: none; }
+  .qs-handle:active { cursor: grabbing; }
+  .qs-chevron { font-size:11px; color: var(--text-muted); cursor: pointer; user-select: none; width: 10px; transition: transform 0.15s; display: inline-block; }
+  .qs-chevron.open { transform: rotate(90deg); }
+  .qs-name { font-size:13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qs-name.editable { cursor: text; }
+  .qs-name.editable:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
+  .qs-badge { font-size:11px; color: var(--text-muted); padding: 1px 5px; border-radius: 3px; background: var(--bg-muted); flex-shrink: 0; }
+  .qs-rename-input { background: transparent; border: 1px solid var(--accent-blue); color: var(--text-primary); font-size:13px; padding: 1px 4px; border-radius: 3px; flex: 1; min-width: 0; }
+  .qs-drop-gap { height: 4px; margin: 0 -4px; border-radius: 2px; transition: background 0.1s; }
+  .qs-edit-on .qs-drop-gap.dnd-active { background: var(--alpha-blue); }
+  .qs-edit-on .qs-drop-gap.dnd-hover { background: var(--accent-blue); height: 6px; }
+  .qs-group-members { margin: 4px 0 6px 22px; padding: 4px 8px; border-left: 2px solid var(--alpha-blue-border-strong); display: flex; flex-direction: column; gap: 2px; border-radius: 0 4px 4px 0; }
+  .qs-group-members.dnd-merge-hover { border-left-color: var(--accent-green); background: var(--alpha-green-soft); }
+  .qs-member { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size:13px; color: var(--text-muted); }
+  .qs-member.is-dragging { opacity: 0.35; }
+  .qs-pill { background: var(--bg-muted); color: var(--text-primary); padding: 2px 7px; border-radius: 3px; font-size:12px; cursor: grab; user-select: none; }
+  .qs-pill:active { cursor: grabbing; }
+  .qs-tiny-x { background: transparent; border: 1px solid var(--accent-red); color: var(--accent-red); padding: 0 5px; font-size:11px; border-radius: 3px; cursor: pointer; line-height: 14px; }
+  .qs-tiny-x:hover { background: var(--accent-red); color: var(--bg-page); }
+  .qs-empty-group { font-style: italic; color: var(--text-muted); font-size:12px; }

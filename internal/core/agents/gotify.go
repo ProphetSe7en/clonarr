@@ -33,6 +33,43 @@ func (gotifyProvider) Type() string {
 	return "gotify"
 }
 
+// DisplayName returns the human-readable label shown in the agent-type dropdown.
+func (gotifyProvider) DisplayName() string {
+	return "Gotify"
+}
+
+// FieldSpec describes the form layout for the Gotify agent modal.
+func (gotifyProvider) FieldSpec() FieldSpec {
+	return FieldSpec{
+		Groups: []FieldGroup{
+			{Kind: "field", Field: &Field{
+				Name:        "gotifyUrl",
+				Kind:        "url",
+				Label:       "URL",
+				Placeholder: "https://gotify.example.com",
+				Required:    true,
+			}},
+			{Kind: "field", Field: &Field{
+				Name:        "gotifyToken",
+				Kind:        "password",
+				Label:       "App Token",
+				Placeholder: "App token from Gotify",
+				Required:    true,
+			}},
+			{Kind: "priority", Priority: &PriorityGroup{
+				Label: "Priority levels",
+				Min:   0,
+				Max:   10,
+				Levels: []PriorityLevel{
+					{Label: "Critical", EnabledKey: "gotifyPriorityCritical", ValueKey: "gotifyCriticalValue", Note: "sync failures"},
+					{Label: "Warning", EnabledKey: "gotifyPriorityWarning", ValueKey: "gotifyWarningValue", Note: "stale cleanup"},
+					{Label: "Info", EnabledKey: "gotifyPriorityInfo", ValueKey: "gotifyInfoValue", Note: "success, updates, changelog"},
+				},
+			}},
+		},
+	}
+}
+
 // Async returns true because Gotify sends are dispatched in background workers.
 func (gotifyProvider) Async() bool {
 	return true

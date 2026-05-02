@@ -1,0 +1,19 @@
+{{define "modals/confirm-dialog"}}
+  <div class="modal-overlay" x-show="confirmModal.show" @click.self="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-cloak>
+    <div class="modal" style="max-width:420px">
+      <div class="modal-title" x-text="confirmModal.title"></div>
+      <div style="font-size:13px;color:#aaa;white-space:pre-line;line-height:1.6" x-show="!confirmModal.html" x-text="confirmModal.message"></div>
+      <div style="font-size:13px;color:#aaa;line-height:1.6" x-show="confirmModal.html" x-html="confirmModal.message"></div>
+      <div class="modal-actions">
+        <button class="btn" @click="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-text="confirmModal.cancelLabel || 'Cancel'"></button>
+        <button x-show="confirmModal.secondaryLabel" x-cloak class="btn"
+                @click="confirmModal.show = false; if(confirmModal.onSecondary) confirmModal.onSecondary()"
+                x-text="confirmModal.secondaryLabel"></button>
+        <button class="btn btn-primary" @click="confirmModal.show = false; if(confirmModal.onConfirm) confirmModal.onConfirm()">
+          <span x-text="confirmModal.confirmLabel || 'Confirm'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

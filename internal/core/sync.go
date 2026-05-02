@@ -2194,7 +2194,7 @@ func buildCustomCFMap(customCFs []CustomCF) map[string]*CustomCF {
 }
 
 // resolveScoreCustom returns the desired score for a custom CF.
-// Checks cfScoreOverrides first, then the CF's own TrashScores (dev mode).
+// Checks cfScoreOverrides first, then the CF's own TRaSH schema scores.
 func resolveScoreCustom(cfID string, cf *CustomCF, scoreCtx string, cfScoreOverrides map[string]int) int {
 	if cfScoreOverrides != nil {
 		if s, ok := cfScoreOverrides[cfID]; ok {

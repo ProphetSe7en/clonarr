@@ -1,0 +1,416 @@
+{{define "sections/advanced"}}
+  <!-- ==================== ADVANCED SECTION ==================== -->
+  <div x-show="currentSection === 'advanced' && !profileBuilder && !profileDetail" x-cloak>
+    <!-- Builder sub-tab content -->
+    <div x-show="advancedTab === 'builder'">
+      <div class="page">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">Profile Builder</div>
+        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          <strong style="color:#d29922">Experimental.</strong> Build custom profiles with fixed scores, or import from Recyclarr YAML. Profiles here do <strong>not</strong> auto-sync with TRaSH Guide updates.
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn btn-sm" style="background:#1f6feb;color:#fff" @click="openProfileBuilder(activeAppType)">New Profile</button>
+          <button class="btn btn-sm" style="background:#238636;color:#fff" @click="showImportModal = 'auto'">Import</button>
+        </div>
+
+        <!-- Imported profiles list -->
+        <div class="card">
+          <div style="padding:10px 16px;font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;border-bottom:1px solid #21262d">
+            Your Profiles
+            <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;margin-left:6px;text-transform:none;letter-spacing:0" x-text="(importedProfiles[activeAppType]?.length || 0)"></span>
+          </div>
+          <template x-if="!importedProfiles[activeAppType] || importedProfiles[activeAppType].length === 0">
+            <div style="padding:24px;text-align:center;color:#aaa;font-size:13px">
+              No profiles yet. Create a new profile or import from Recyclarr YAML / TRaSH JSON.
+            </div>
+          </template>
+          <template x-for="p in (importedProfiles[activeAppType] || [])" :key="p.id">
+            <div class="profile-row">
+              <div style="flex:1;min-width:0">
+                <a class="profile-name-link" @click.stop="(p.source === 'custom' || p.source === 'import' || !p.source) ? editCustomProfile(activeAppType, p) : openImportedProfileDetail(activeAppType, p)" x-text="p.name"></a>
+                <div style="font-size:12px;color:#aaa;margin-top:2px">
+                  <span x-text="Object.keys(p.formatItems || {}).length"></span> CFs
+                  <span x-show="p.scoreSet"> · <span x-text="p.scoreSet"></span></span>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <button class="btn btn-sm" @click.stop="openExportModalFromList(activeAppType, p)" title="Export profile">Export</button>
+                <button x-show="p.source === 'custom' || p.source === 'import' || !p.source" class="btn btn-sm" @click.stop="editCustomProfile(activeAppType, p)" title="Edit profile in builder">Edit</button>
+                <button class="btn btn-sm btn-danger" style="padding:2px 8px"
+                        @click.stop="confirmModal = { show: true, title: 'Delete Profile', message: 'Delete this imported profile?', confirmLabel: 'Delete', onConfirm: async () => { await fetch('/api/import/profiles/' + p.id, { method: 'DELETE' }); loadImportedProfiles(activeAppType); } }">Delete</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scoring sub-tab: just show the existing scoring sandbox -->
+    <!-- Scoring sandbox content is rendered from the main section (currentSection === 'scoring' || advancedTab === 'scoring') -->
+
+    <!-- CF Group Builder sub-tab content -->
+    <div x-show="advancedTab === 'group-builder'">
+      <div class="page">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">CF Group Builder</div>
+        <div x-show="!config.devFeatures" style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          Group your custom formats so they're easy to reuse across profiles. Pick the custom formats that belong together, mark which are required, and link them to quality profiles. Save the group locally to keep iterating on it, or export it as JSON for backup.
+        </div>
+        <div x-show="config.devFeatures" style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          Build a <code>cf-groups/*.json</code> file — for TRaSH-Guides contribution, or for your own personal use. Pick custom formats, mark which are required, link to quality profiles. Save locally to iterate on later, or export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
+        </div>
+
+        <!-- Load-error banner — visible when /api/trash/* calls fail -->
+        <div x-show="cfgbLoadError" x-cloak style="background:#3a1a1a;border:1px solid #5a2a2a;color:#ff9a9a;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px" x-text="cfgbLoadError"></div>
+
+        <!-- Saved cf-groups list — persistent storage, scoped to current appType. -->
+        <div x-show="cfgbSavedGroups.length > 0" style="margin-bottom:20px" x-cloak>
+          <div style="font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px" x-text="'Saved ' + activeAppType + ' cf-groups (' + cfgbSavedGroups.length + ')'"></div>
+          <div class="card" style="padding:0">
+            <template x-for="(g, idx) in cfgbSavedGroups" :key="g.id">
+              <!-- Alpine object :style merges with the static style attribute;
+                   the earlier string form ('border-bottom:none') replaced
+                   everything including display:flex, which pushed the
+                   action buttons below the row content. -->
+              <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:12px"
+                   :style="{ borderBottom: idx === cfgbSavedGroups.length - 1 ? 'none' : '' }">
+                <div style="flex:1;min-width:0;overflow:hidden">
+                  <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="g.name"></div>
+                  <div style="font-size:11px;color:#6a6e76;margin-top:2px">
+                    <span x-text="(g.custom_formats || []).length + ' CFs · ' + Object.keys(g.quality_profiles && g.quality_profiles.include || {}).length + ' profiles'"></span>
+                    <span x-show="g.default === 'true'" style="background:#30363d;color:#3fb950;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">default</span>
+                    <span x-show="g.updatedAt" style="margin-left:8px" x-text="'updated ' + g.updatedAt.slice(0,10)"></span>
+                    <span x-show="cfgbEditingId === g.id" style="background:#1f6feb;color:#fff;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">editing</span>
+                  </div>
+                </div>
+                <button class="btn" @click="cfgbLoadForEdit(g)" style="font-size:12px;padding:4px 10px;flex-shrink:0" title="Load into form for editing">Edit</button>
+                <button class="btn" @click="cfgbDelete(g)" style="font-size:12px;padding:4px 10px;color:#f85149;border-color:#f85149;flex-shrink:0" title="Delete saved cf-group">Delete</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- TRaSH upstream cf-groups — collapsed by default. Each row has an
+             Edit button that loads the group into the builder form; saving
+             creates a NEW local cf-group in /config/custom/json/{app}/cf-groups/
+             (the TRaSH repo clone is never modified). Useful for basing a
+             tweak on an existing upstream group without rebuilding it from
+             scratch. -->
+        <div x-show="cfgbTrashCFGroups.length > 0" style="margin-bottom:20px" x-cloak>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600" x-text="'TRaSH ' + activeAppType + ' cf-groups (' + cfgbTrashCFGroups.length + ')'"></div>
+            <button type="button" @click="cfgbTrashListOpen = !cfgbTrashListOpen"
+                    style="background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline"
+                    x-text="cfgbTrashListOpen ? 'Hide' : 'Show'"></button>
+          </div>
+          <div x-show="cfgbTrashListOpen" x-cloak class="card" style="padding:0;max-height:280px;overflow-y:auto">
+            <template x-for="g in cfgbTrashCFGroups" :key="g.trash_id">
+              <div style="padding:8px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div style="flex:1;min-width:200px">
+                  <div style="font-size:13px;font-weight:600" x-text="g.name"></div>
+                  <div style="font-size:11px;color:#6a6e76;margin-top:2px">
+                    <span x-text="(g.custom_formats || []).length + ' CFs · ' + Object.keys(g.quality_profiles && g.quality_profiles.include || {}).length + ' profiles'"></span>
+                    <span x-show="g.default === 'true'" style="background:#30363d;color:#3fb950;padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">default</span>
+                  </div>
+                </div>
+                <button class="btn" @click="cfgbLoadFromTrash(g)" style="font-size:12px;padding:4px 10px" title="Load this TRaSH group into the builder for editing. Save writes a new local copy under /config/custom/json/{app}/cf-groups/ — the TRaSH repo clone is never modified.">Edit</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Anchor so cfgbLoadForEdit can scroll the form back into view. -->
+        <div id="cfgb-form-top"></div>
+
+        <!-- Mode banner — shows whether the form is editing an existing local
+             group, copying from a TRaSH upstream group, or creating a fresh
+             new one. A TRaSH copy still saves to the local store (POST); the
+             banner makes that visible so the user isn't worried about
+             overwriting the repo clone.
+             When an original trash_id is loaded, a lock toggle appears —
+             locked means the hash stays frozen even when the name changes
+             (default for edits, so typo fixes don't invalidate downstream
+             references). Unlocked means the hash tracks the name. -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">
+          <span x-show="!cfgbEditingId && !cfgbFromTrashName">New cf-group</span>
+          <span x-show="!cfgbEditingId && cfgbFromTrashName" x-cloak>
+            Copying from TRaSH: <span x-text="cfgbFromTrashName"></span> — will save as new local cf-group
+          </span>
+          <span x-show="cfgbEditingId" x-cloak>
+            Editing <span x-text="cfgbName || '(unnamed)'"></span>
+          </span>
+          <!-- Hash lock — visible whenever an original trash_id is loaded -->
+          <button type="button"
+                  x-show="cfgbOriginalTrashID"
+                  x-cloak
+                  @click="cfgbToggleHashLock()"
+                  :title="cfgbHashLocked
+                    ? 'ID locked: the group ID stays the same when you rename it. Click to unlock — renaming will then generate a fresh ID.'
+                    : 'ID tracks name: renaming will generate a fresh ID, which can break links from existing profiles to this group. Click to lock the current ID.'"
+                  :style="cfgbHashLocked
+                    ? 'background:#0f1a23;border:1px solid #1f6feb;color:#58a6ff'
+                    : 'background:#2a1a0a;border:1px solid #d29922;color:#e3b341'"
+                  style="padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;text-transform:none;letter-spacing:0;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+            <span x-show="cfgbHashLocked">🔒 ID locked</span>
+            <span x-show="!cfgbHashLocked" x-cloak>🔓 ID tracks name</span>
+          </button>
+          <button class="btn" x-show="cfgbEditingId || cfgbFromTrashName" x-cloak @click="cfgbUIReset()" style="font-size:11px;padding:2px 8px;margin-left:auto;text-transform:none;letter-spacing:0">Start new instead</button>
+        </div>
+
+        <!-- Top metadata — name + hash are short inputs so they don't need
+             full width; description keeps full width for multi-line text. -->
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:16px">
+          <div style="flex:0 1 400px;min-width:240px">
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group name</label>
+            <input type="text" class="input" style="width:100%" x-model="cfgbName" @input="cfgbUpdateHash()" placeholder="e.g. [Audio] Audio Channels">
+          </div>
+          <div x-show="config.devFeatures && config.trashSchemaFields" style="flex:0 1 360px;min-width:240px">
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">trash_id (auto-generated from name, MD5)</label>
+            <input type="text" class="input" style="width:100%;font-family:monospace;font-size:13px;color:#8b949e" readonly :value="cfgbTrashID || '(type a name above)'">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Default</label>
+            <label class="toggle" style="margin-top:6px">
+              <input type="checkbox" x-model="cfgbDefault">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div style="flex:0 1 130px;min-width:120px"
+               title="Sort order in the cf-group list. Lower number sorts higher up; ties break alphabetically. Leave empty for default placement (groups without a number land in the 'Other' tier between numbered groups and Custom). Common ranges per TRaSH's profile-JSON convention: 1-9 (English public), 11-19 (German), 21-29 (French), 81-89 (Anime), 91-99 (Restricted/SQP). Future ranges (e.g. 31-39 for Spanish) work too — any positive integer is accepted. NOTE: TRaSH-Guides hasn't adopted this field on cf-groups yet — when he does, our sort picks it up automatically. Until then, only your local groups use this field. Contributors PRing to TRaSH-Guides should leave this empty until TRaSH-Guides adds the field to their schema.">
+            <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Group <span style="color:#7d8590">(sort order)</span></label>
+            <input type="number" class="input" style="width:100%" x-model.number="cfgbGroup" placeholder="e.g. 1, 11, 81" min="0">
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px">
+          <label style="display:block;font-size:12px;color:#aaa;margin-bottom:4px">Description</label>
+          <textarea class="input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
+        </div>
+
+        <!-- Selected CFs — live preview of the group being built.
+             Full-width card above the Custom Formats / Profiles two-col,
+             showing every currently-selected CF in the chosen sort order.
+             Owns: sort mode (Alpha / Manual), manual reorder arrows,
+             required/default flags, and remove. Card A below is pure
+             browse+add (v2.2.0 phase 2). -->
+        <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:340px;margin-bottom:16px">
+          <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Selected CFs</span>
+            <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount()"></span>
+            <!-- Sort-mode toggle. Alpha is the TRaSH-spec default; Manual is
+                 user-driven order for cases where sequence matters (audio
+                 tiers, release-group tiers). Applies to Copy JSON /
+                 Download / Save. -->
+            <div style="display:inline-flex;border:1px solid #30363d;border-radius:4px;overflow:hidden" title="Sort order for exported JSON. Alpha is the TRaSH spec default; Manual lets you hand-order selected CFs.">
+              <button type="button" @click="cfgbSetCFSortMode('alpha')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;' + (cfgbCFSortMode === 'alpha' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Alpha</button>
+              <button type="button" @click="cfgbSetCFSortMode('manual')" :style="'padding:2px 8px;font-size:11px;cursor:pointer;border:none;border-left:1px solid #30363d;' + (cfgbCFSortMode === 'manual' ? 'background:#1f6feb;color:#fff' : 'background:transparent;color:#aaa')">Manual</button>
+            </div>
+            <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbToggleAllRequired(!cfgbAllSelectedRequired())"
+                    :title="cfgbAllSelectedRequired() ? 'Clear required on every selected CF' : 'Mark every selected CF as required'"
+                    style="margin-left:auto;background:none;border:none;color:#58a6ff;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline"
+                    x-text="cfgbAllSelectedRequired() ? 'Clear required' : 'Mark all required'"></button>
+            <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbClearCFs()"
+                    title="Deselect every CF — profile selection and group metadata stay"
+                    style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Remove all</button>
+          </div>
+          <div style="overflow-y:auto;flex:1">
+            <!-- Fixed grid columns keep each field aligned across rows:
+                 drag-handle | # | name (flex) | required | default | ×
+                 Handle only renders in manual mode; alpha mode keeps the
+                 same column width for vertical alignment. Drag-and-drop
+                 replaces the earlier up/down arrows — same state it
+                 wrote (cfgbCFManualOrder) so import/export/save logic is
+                 unchanged. -->
+            <template x-for="(cf, idx) in cfgbOrderedSelectedCFs()" :key="cf.trashId">
+              <div :draggable="cfgbCFSortMode === 'manual'"
+                   @dragstart="if (cfgbCFSortMode === 'manual') cfgbCFDragStart(cf.trashId)"
+                   @dragover.prevent="if (cfgbCFSortMode === 'manual') cfgbCFDragOver(cf.trashId)"
+                   @drop.prevent="if (cfgbCFSortMode === 'manual') cfgbCFDrop(cf.trashId)"
+                   @dragend="cfgbCFDragEnd()"
+                   style="display:grid;grid-template-columns:28px 36px 1fr auto 24px;align-items:center;gap:10px;padding:6px 16px;border-bottom:1px solid #21262d"
+                   :style="{
+                     opacity: cfgbDragSrcTid === cf.trashId ? 0.4 : 1,
+                     boxShadow: (cfgbDragOverTid === cf.trashId && cfgbDragSrcTid && cfgbDragSrcTid !== cf.trashId) ? 'inset 0 2px 0 #58a6ff' : ''
+                   }">
+                <span x-show="cfgbCFSortMode === 'manual'" x-cloak
+                      style="color:#6a6e76;cursor:grab;user-select:none;text-align:center;font-size:14px;line-height:1"
+                      title="Drag to reorder">⋮⋮</span>
+                <span x-show="cfgbCFSortMode !== 'manual'" x-cloak></span>
+                <span style="text-align:right;color:#6a6e76;font-size:11px;font-family:monospace" x-text="(idx + 1) + '.'"></span>
+                <span style="font-size:13px;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.name"></span>
+                  <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0" title="Custom format">custom</span>
+                </span>
+                <div style="display:flex;gap:10px;align-items:center;white-space:nowrap">
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Mark as required — exists in group whether user opts in or not">
+                    <input type="checkbox" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
+                    required
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" title="Per-CF default override — rare; TRaSH only uses this on Golden Rule files">
+                    <input type="checkbox" x-model="cfgbDefaultCFs[cf.trashId]" @change="cfgbDefaultCFs = {...cfgbDefaultCFs}">
+                    default
+                  </label>
+                </div>
+                <button type="button"
+                        @click="cfgbSelectedCFs = (() => { const { [cf.trashId]: _a, ...rest } = cfgbSelectedCFs; return rest; })(); cfgbRequiredCFs = (() => { const { [cf.trashId]: _b, ...rest } = cfgbRequiredCFs; return rest; })(); cfgbDefaultCFs = (() => { const { [cf.trashId]: _c, ...rest } = cfgbDefaultCFs; return rest; })()"
+                        title="Remove from group"
+                        style="background:none;border:none;color:#f85149;cursor:pointer;font-size:16px;line-height:1;padding:0">&times;</button>
+              </div>
+            </template>
+            <template x-if="cfgbSelectedCFCount() === 0">
+              <div style="padding:32px 16px;text-align:center;color:#8b949e;font-size:13px">
+                No CFs in this group yet. Use the <strong>Custom Formats</strong> list below to add some, or start from an upstream TRaSH group with the <em>Edit</em> button above.
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Two-column layout: CFs + Profiles -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+          <!-- CFs panel -->
+          <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbGroupFilter === 'all' ? '' : ' in ' + cfgbGroupFilterLabel())"></span>
+              <!-- v2.2.0 phase 2: Card A is now a pure "browse + add" view —
+                   sort-mode toggle, manual-order arrows, and selection bulk
+                   actions (Mark-all-required / Remove all) migrated to the
+                   Selected CFs card above, where the group's state actually
+                   lives. Card A only needs the narrow-and-pick controls. -->
+              <select x-model="cfgbGroupFilter" style="padding:4px 6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px;max-width:240px" title="Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs">
+                <option value="all">All CFs (no filter)</option>
+                <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
+                <option value="other-trash" x-show="cfgbUngroupedTrashCount > 0" x-text="'— Ungrouped per TRaSH (' + cfgbUngroupedTrashCount + ')'"></option>
+                <!-- Only useful when the user has built any local groups;
+                     equal to Ungrouped-per-TRaSH otherwise, so hide it then. -->
+                <option value="other-remaining" x-show="cfgbSavedGroups.length > 0 && cfgbUngroupedRemainingCount !== cfgbUngroupedTrashCount" x-text="'— Ungrouped after local work (' + cfgbUngroupedRemainingCount + ')'"></option>
+                <template x-for="gr in cfgbGroups" :key="gr.groupTrashId">
+                  <option :value="gr.groupTrashId" x-text="(gr.isLocal ? '[local] ' : '') + gr.name + ' (' + gr.count + ')'"></option>
+                </template>
+              </select>
+              <input type="text" placeholder="Filter (multiple terms: mono stereo surround)" x-model="cfgbCFFilter" style="flex:1;min-width:100px;padding:4px 8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:12px" title="Matches any of the space-separated terms, e.g. &quot;mono stereo surround&quot; shows all three">
+              <!-- Select-all toggle: only visible when filters have narrowed
+                   the list. For "All cf-groups" with no text filter this
+                   would mean selecting every CF in TRaSH, which is almost
+                   never what the user wants — so it's hidden in that state. -->
+              <button type="button"
+                      x-show="cfgbGroupFilter !== 'all' || (cfgbCFFilter || '').trim().length > 0"
+                      x-cloak
+                      @click="cfgbToggleFilteredAll(!cfgbFilteredAllSelected())"
+                      :title="cfgbFilteredAllSelected() ? 'Deselect every visible CF' : 'Select every CF in the current filter'"
+                      style="padding:4px 8px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#e6e6e6;font-size:11px;cursor:pointer;white-space:nowrap"
+                      x-text="cfgbFilteredAllSelected() ? 'Deselect all' : 'Select all (' + cfgbFilteredCount() + ')'"></button>
+            </div>
+            <div style="overflow-y:auto;flex:1">
+              <!-- Alpha-sorted browse list. Checkbox flips CF in/out of the
+                   group; selected CFs still render here (with the tick
+                   marked) so the user can see context. Reorder,
+                   required/default, and remove happen in the Selected CFs
+                   card above.
+                   auto-fill grid collapses to a single column on narrow
+                   viewports and packs into 2+ columns when there's room —
+                   reduces dead space for short CF names (AMZN, ATV, 10bit)
+                   without sacrificing readability on wide names. -->
+              <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:0">
+                <template x-for="cf in cfgbFilteredCFs()" :key="cf.trashId">
+                  <!-- :style uses Alpine's object form so individual
+                       properties merge with the static style attribute
+                       instead of replacing it. Passing a string here
+                       collapses the whole row layout (checkbox wraps
+                       above the name). -->
+                  <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px;min-width:0"
+                       :style="{ background: cfgbSelectedCFs[cf.trashId] ? '#0f1a23' : '' }">
+                    <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
+                    <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden">
+                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.name"></span>
+                      <span x-show="cf.isCustom" style="background:#30363d;color:#58a6ff;padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0" title="Custom format from your Custom Formats tab — won't resolve in the public TRaSH-Guides repo">custom</span>
+                      <span x-show="cfgbSelectedCFs[cf.trashId]" style="color:#3fb950;font-size:10px;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0" title="In group — manage required/default/order in the Selected CFs card above">in group</span>
+                    </label>
+                    <span x-show="cfgbGroupFilter === 'all' && cf.groupNames && cf.groupNames.length > 0" style="font-size:10px;color:#6a6e76;flex-shrink:0;max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.groupNames.join(' · ')" :title="cf.groupNames.join('\n')"></span>
+                  </div>
+                </template>
+              </div>
+              <template x-if="cfgbFilteredCFs().length === 0">
+                <div style="padding:24px;text-align:center;color:#aaa;font-size:13px" x-text="cfgbCFs.length === 0 ? 'Loading CFs...' : 'No matches.'"></div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Profiles panel — card layout matching the Profiles tab, with
+               per-card select-all + a top-level select-all. -->
+          <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
+            <div style="padding:10px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality Profiles</span>
+              <span style="background:#21262d;color:#aaa;padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedProfileCount() + ' / ' + cfgbProfiles.length"></span>
+              <button type="button" x-show="cfgbSelectedProfileCount() > 0" x-cloak @click="cfgbClearProfiles()" title="Deselect every profile — CF selection stays" style="background:none;border:none;color:#f85149;cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear profiles</button>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa;margin-left:auto" title="Select every profile across all groups">
+                <input type="checkbox" :checked="cfgbAllProfilesSelected()" @change="cfgbToggleAllProfiles($event.target.checked)">
+                select all
+              </label>
+            </div>
+            <!-- Reuses the .card / .grp-* / .profile-group-header classes from
+                 the Profiles tab so colours + chevron + hover + left-border
+                 accent match. Wrapped nodes sit inside the builder panel's
+                 scrollable body; a small background tint separates them from
+                 the panel's card background. -->
+            <div style="overflow-y:auto;flex:1;padding:8px;background:#0d1117">
+              <template x-for="grp in cfgbGroupedProfiles()" :key="grp.name">
+                <div class="card" :class="'grp-' + grp.name.toLowerCase().replace(/[^a-z]/g, '')" style="margin-bottom:6px">
+                  <div class="profile-group-header" @click="cfgbToggleProfileGroupCard(grp.name)">
+                    <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }">&#9654;</span>
+                    <span style="flex:1" x-text="grp.name"></span>
+                    <span class="profile-group-count" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
+                    <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#aaa" @click.stop :title="'Select all ' + grp.name + ' profiles'">
+                      <input type="checkbox" :checked="cfgbGroupAllSelected(grp)" @change="cfgbToggleGroupAll(grp, $event.target.checked)">
+                      all
+                    </label>
+                  </div>
+                  <div x-show="cfgbIsProfileGroupExpanded(grp.name)">
+                    <template x-for="p in grp.profiles" :key="p.trashId">
+                      <div style="padding:6px 16px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                        <input type="checkbox" :id="'cfgb-p-' + p.trashId" x-model="cfgbSelectedProfiles[p.trashId]" @change="cfgbSelectedProfiles = {...cfgbSelectedProfiles}">
+                        <label :for="'cfgb-p-' + p.trashId" style="flex:1;cursor:pointer;font-size:13px" x-text="p.name"></label>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              <template x-if="cfgbProfiles.length === 0">
+                <div style="padding:24px;text-align:center;color:#aaa;font-size:13px">Loading profiles...</div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-primary" @click="cfgbSave()" :disabled="!cfgbCanExport()" :title="cfgbEditingId ? 'Update the saved cf-group' : 'Save this cf-group locally so you can edit it later'">
+            <span x-text="cfgbEditingId ? 'Update saved' : 'Save locally'"></span>
+          </button>
+          <button class="btn" @click="cfgbCopyJSON()" :disabled="!cfgbCanExport()" title="Copy the JSON to clipboard"><span x-text="cfgbCopyLabel"></span></button>
+          <button class="btn" @click="cfgbDownloadJSON()" :disabled="!cfgbCanExport()" title="Download the JSON as a file">Download .json</button>
+          <button class="btn" @click="cfgbUIReset()" style="margin-left:auto;color:#f85149;border-color:#f85149" x-text="cfgbEditingId ? 'Discard changes' : 'Reset'"></button>
+        </div>
+
+        <!-- Save/delete feedback -->
+        <div x-show="cfgbSavingMsg" x-cloak :style="'background:' + (cfgbSavingOk ? '#1a3a1a' : '#3a1a1a') + ';border:1px solid ' + (cfgbSavingOk ? '#2a5a2a' : '#5a2a2a') + ';color:' + (cfgbSavingOk ? '#9aff9a' : '#ff9a9a') + ';padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px'" x-text="cfgbSavingMsg"></div>
+
+        <!-- Custom-CF warning — surfaces when the selected set includes custom CFs
+             which won't resolve in the public TRaSH-Guides repo. -->
+        <div x-show="cfgbSelectedCustomCFCount() > 0" x-cloak style="background:#2a2418;border:1px solid #4a3a18;color:#ffc88a;padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px">
+          <span x-text="cfgbSelectedCustomCFCount()"></span>
+          custom CF<span x-show="cfgbSelectedCustomCFCount() !== 1">s</span>
+          selected. These have IDs starting <code>custom:</code> and won't resolve in TRaSH-Guides. Save locally for personal use, but don't include them in a Download meant for contribution.
+        </div>
+
+        <!-- JSON preview (collapsible — Alpine pattern, matches other Clonarr collapsibles) -->
+        <div style="margin-top:8px">
+          <div @click="cfgbPreviewOpen = !cfgbPreviewOpen" style="cursor:pointer;font-size:13px;color:#aaa;padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
+            <span class="detail-section-chevron" :class="{ open: cfgbPreviewOpen }">▶</span>
+            <span>JSON preview</span>
+          </div>
+          <pre x-show="cfgbPreviewOpen" x-cloak style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:#c9d1d9;max-height:300px;overflow-y:auto" x-text="cfgbGenerateJSON()"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+{{end}}

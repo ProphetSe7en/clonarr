@@ -1,4 +1,12 @@
+@import url('./tokens.css');
 @import url('./base.css');
 @import url('./layout.css');
 @import url('./components.css');
-@import url('./features.css');
+@import url('./features/profiles.css');
+@import url('./features/cf-detail.css');
+@import url('./features/quality.css');
+@import url('./features/sync-compare.css');
+@import url('./features/builders.css');
+@import url('./features/naming.css');
+@import url('./features/scoring.css');
+@import url('./features/maintenance.css');

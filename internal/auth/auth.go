@@ -5,7 +5,7 @@
 //   Authentication Required  = enabled | disabled_for_local_addresses
 //
 // Credentials (username, bcrypt password hash, API key) live in
-// /config/auth.json, separate from the main bash .conf file.
+// /config/auth.json, separate from the main application config.
 //
 // Auth is enforced via HTTP middleware that runs before any handler.
 // Every request is classified as AuthPublic (no auth ever) or AuthRequired

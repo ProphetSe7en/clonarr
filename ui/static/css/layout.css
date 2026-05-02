@@ -1,20 +1,20 @@
   /* Top nav */
-  .topnav { display: flex; align-items: center; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 24px; height: 56px; }
-  .topnav .logo { font-size: 18px; font-weight: 700; color: #58a6ff; margin-right: 32px; letter-spacing: -0.5px; }
+  .topnav { display: flex; align-items: center; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); padding: 0 24px; height: 56px; }
+  .topnav .logo { font-size: 18px; font-weight: 700; color: var(--accent-blue); margin-right: 32px; letter-spacing: -0.5px; }
   .topnav .tabs { display: flex; gap: 0; height: 100%; }
-  .topnav .tab { padding: 0 20px; height: 100%; display: flex; align-items: center; color: #bbb; cursor: pointer; border-bottom: 2px solid transparent; font-size: 15px; font-weight: 500; transition: all 0.15s; user-select: none; }
-  .topnav .tab:hover { color: #e1e4e8; }
-  .topnav .tab.active { color: #e1e4e8; border-bottom-color: #58a6ff; }
-  .topnav .badge { background: #30363d; color: #aaa; font-size:13px; padding: 1px 6px; border-radius: 10px; margin-left: 6px; }
-  .topnav .tab.active .badge { background: #1f3a5f; color: #58a6ff; }
+  .topnav .tab { padding: 0 20px; height: 100%; display: flex; align-items: center; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; font-size: 15px; font-weight: 500; transition: all 0.15s; user-select: none; }
+  .topnav .tab:hover { color: var(--text-primary); }
+  .topnav .tab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+  .topnav .badge { background: var(--border-subtle); color: var(--text-muted); font-size:13px; padding: 1px 6px; border-radius: 10px; margin-left: 6px; }
+  .topnav .tab.active .badge { background: var(--accent-blue-muted); color: var(--accent-blue); }
   .topnav .spacer { flex: 1; }
-  .topnav .sync-status { font-size: 12px; color: #aaa; display: flex; align-items: center; gap: 6px; }
-  .topnav .sync-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; flex-shrink: 0; }
-  .topnav .sync-status .dot.stale { background: #d29922; }
-  .topnav .sync-status .dot.none { background: #8b949e; }
+  .topnav .sync-status { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+  .topnav .sync-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); flex-shrink: 0; }
+  .topnav .sync-status .dot.stale { background: var(--accent-orange); }
+  .topnav .sync-status .dot.none { background: var(--text-secondary); }
 
   /* Changelog dropdown */
-  .changelog-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 500px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200; max-height: 420px; overflow-y: auto; }
+  .changelog-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 500px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; box-shadow: 0 8px 24px var(--alpha-shadow); z-index: 200; max-height: 420px; overflow-y: auto; }
 
   /* Responsive topnav */
   @media (max-width: 1200px) {
@@ -29,7 +29,7 @@
   }
   @media (max-width: 850px) {
     .topnav { height: auto; flex-wrap: wrap; padding: 10px 16px; }
-    .topnav .tabs { order: 3; width: 100%; height: 44px; margin-top: 8px; border-top: 1px solid #30363d; overflow-x: auto; justify-content: flex-start; }
+    .topnav .tabs { order: 3; width: 100%; height: 44px; margin-top: 8px; border-top: 1px solid var(--border-subtle); overflow-x: auto; justify-content: flex-start; }
     .topnav .tab { flex-shrink: 0; }
     .topnav .spacer { display: none; }
     .topnav .sync-status { order: 2; margin-left: auto; }
@@ -47,5 +47,5 @@
   /* Section header */
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .section-title { font-size: 18px; font-weight: 600; }
-  .section-subtitle { font-size: 13px; color: #aaa; margin-top: 4px; }
+  .section-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 

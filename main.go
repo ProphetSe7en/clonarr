@@ -223,7 +223,7 @@ func main() {
 	})
 
 	// ==== Authentication =====================================================
-	authStore := api.InitAuth(ctx, cfgStore, Version, basePath, mux)
+	authStore := api.InitAuth(ctx, cfgStore, Version, basePath, configDir, mux)
 	server.AuthStore = authStore
 
 	// Static files
@@ -233,16 +233,22 @@ func main() {
 	}
 	// Render index.html as a template so BasePath can be injected at serve
 	// time. "GET /{$}" is an exact-match in Go 1.22+ ServeMux and takes
-	// priority over the catch-all "/" for GET / requests.
-	indexBytes, err := fs.ReadFile(staticFS, "index.html")
+	// priority over the catch-all "/" for GET / requests. The root template
+	// composes the larger UI from partials so feature markup can live in
+	// smaller files without changing the rendered page.
+	indexTmpl, err := template.New("index.html").ParseFS(
+		staticFS,
+		"index.html",
+		"partials/layout/*.html",
+		"partials/sections/*.html",
+		"partials/overlays/*.html",
+		"partials/modals/*.html",
+	)
 	if err != nil {
-		log.Fatalf("Failed to read index.html: %v", err)
-	}
-	indexTmpl, err := template.New("index").Parse(string(indexBytes))
-	if err != nil {
-		log.Fatalf("Failed to parse index.html as template: %v", err)
+		log.Fatalf("Failed to parse index template: %v", err)
 	}
 	mux.Handle("GET /{$}", &api.IndexHandler{Tmpl: indexTmpl, BasePath: basePath})
+	mux.HandleFunc("/partials/", http.NotFound)
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
 	// Background: reap expired sessions every 5 min

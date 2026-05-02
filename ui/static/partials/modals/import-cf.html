@@ -1,0 +1,118 @@
+{{define "modals/import-cf"}}
+  <!-- Import Custom CFs Modal -->
+  <div class="modal-overlay" x-show="showImportCFModal" @click.self="showImportCFModal = false" x-cloak>
+    <div class="modal" style="max-width:600px">
+      <div class="modal-title">Import Custom Formats</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:16px">
+        Import custom formats from an Arr instance or JSON. Imported CFs appear in the CF browser and are available in the profile builder.
+      </div>
+
+      <!-- Source tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="btn btn-sm" :class="{ 'btn-primary': importCFSource === 'instance' }" @click="importCFSource = 'instance'">From Instance</button>
+        <button class="btn btn-sm" :class="{ 'btn-primary': importCFSource === 'json' }" @click="importCFSource = 'json'">From JSON</button>
+      </div>
+
+      <!-- From Instance -->
+      <template x-if="importCFSource === 'instance'">
+        <div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#aaa;display:block;margin-bottom:4px">Instance</label>
+            <select class="input" style="width:100%" x-model="importCFInstanceId" @change="fetchInstanceCFsForImport()">
+              <option value="">Select instance...</option>
+              <template x-for="inst in instances.filter(i => i.type === importCFAppType)" :key="inst.id">
+                <option :value="inst.id" x-text="inst.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <!-- Loading -->
+          <div x-show="importCFLoading" style="text-align:center;padding:20px">
+            <span class="spinner"></span> Loading custom formats...
+          </div>
+
+          <!-- CF list with checkboxes -->
+          <div x-show="importCFList.length > 0 && !importCFLoading">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:12px;color:#aaa">
+                <span x-text="importCFList.length"></span> CFs found
+                (<span x-text="importCFList.filter(c => c.selected).length"></span> selected)
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-sm" @click="importCFList.forEach(c => { if (!c.exists) c.selected = true })">Select All</button>
+                <button class="btn btn-sm" @click="importCFList.forEach(c => c.selected = false)">Deselect All</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;max-height:300px;overflow-y:auto;border:1px solid #30363d;border-radius:6px;padding:8px 12px">
+              <template x-for="cf in importCFList" :key="cf.name">
+                <label style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer;font-size:13px;min-width:0"
+                       :style="cf.exists ? 'opacity:0.4' : ''">
+                  <input type="checkbox" x-model="cf.selected" :disabled="cf.exists" style="flex-shrink:0">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0" x-text="cf.name"
+                        :title="cf.exists ? cf.name + ' (already imported)' : cf.name"></span>
+                  <span x-show="cf.trashMatch && !cf.exists"
+                        title="Also in TRaSH guide — you can still import."
+                        style="background:#3a2d10;color:#e3b341;border:1px solid #d29922;border-radius:3px;padding:0 5px;font-size:10px;font-weight:600;flex-shrink:0;cursor:help">
+                    ⚠ guide
+                  </span>
+                </label>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- From JSON -->
+      <template x-if="importCFSource === 'json'">
+        <div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;color:#aaa;display:block;margin-bottom:4px">Paste JSON (Arr CF format)</label>
+            <textarea class="input" style="width:100%;height:150px;font-family:monospace;font-size:12px" x-model="importCFJsonText"
+                      placeholder='[{"name":"My CF","specifications":[...]}]'></textarea>
+            <div style="font-size:11px;color:#aaa;margin-top:6px;line-height:1.5">
+              Imports <code style="font-size:11px">name</code>, <code style="font-size:11px">specifications</code>, and <code style="font-size:11px">includeCustomFormatWhenRenaming</code>. TRaSH-specific fields (<code style="font-size:11px">trash_id</code>, <code style="font-size:11px">trash_scores</code>) are intentionally not imported — the new CF lives as your own custom format, separate from the TRaSH guide data path.
+            </div>
+          </div>
+          <div x-show="importCFJsonError" style="font-size:12px;color:#f85149;margin-bottom:8px" x-text="importCFJsonError"></div>
+        </div>
+      </template>
+
+      <!-- Category picker -->
+      <div style="margin-top:12px">
+        <label style="font-size:12px;color:#aaa;display:block;margin-bottom:4px">Category</label>
+        <div style="display:flex;gap:8px">
+          <select class="input" style="flex:1" x-model="importCFCategory">
+            <option value="Custom">Custom</option>
+            <option value="Audio">Audio</option>
+            <option value="HDR Formats">HDR Formats</option>
+            <option value="HQ Release Groups">HQ Release Groups</option>
+            <option value="Resolution">Resolution</option>
+            <option value="Streaming Services">Streaming Services</option>
+            <option value="Miscellaneous">Miscellaneous</option>
+            <option value="Optional">Optional</option>
+            <option value="Unwanted">Unwanted</option>
+            <option value="Movie Versions">Movie Versions</option>
+            <option value="Anime">Anime</option>
+            <option value="Language Profiles">Language Profiles</option>
+            <option value="">-- New category --</option>
+          </select>
+          <input x-show="importCFCategory === ''" class="input" style="flex:1" x-model="importCFNewCategory" placeholder="New category name">
+        </div>
+      </div>
+
+      <!-- Result message -->
+      <div x-show="importCFResult" style="margin-top:12px;font-size:12px;padding:8px 12px;border-radius:6px"
+           :style="importCFResult?.error ? 'background:#3d1f1f;color:#f85149' : 'background:#1f3d1f;color:#3fb950'"
+           x-text="importCFResult?.message"></div>
+
+      <div class="modal-actions">
+        <button class="btn" @click="showImportCFModal = false">Close</button>
+        <button class="btn btn-primary" @click="doImportCFs()" :disabled="importCFImporting">
+          <span x-show="!importCFImporting">Import</span>
+          <span x-show="importCFImporting"><span class="spinner" style="width:14px;height:14px"></span> Importing...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

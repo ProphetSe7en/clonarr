@@ -1,0 +1,24 @@
+{{define "sections/about"}}
+  <!-- ==================== ABOUT ==================== -->
+  <div class="page" x-show="currentSection === 'about'" x-cloak>
+    <div style="font-size:18px;font-weight:600;margin-bottom:4px">About</div>
+    <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">Information about Clonarr, TRaSH Guides data, and credits.</div>
+
+    <div class="card" style="padding:20px;margin-bottom:16px">
+      <div style="font-weight:600;font-size:15px;color:#e1e4e8;margin-bottom:8px">TRaSH Guides</div>
+      <div style="font-size:13px;color:#aaa;line-height:1.6">
+        All quality profiles, custom format definitions, naming schemes, and quality size data used in this application
+        come from the TRaSH Guides project. Their comprehensive, community-maintained documentation for Radarr, Sonarr,
+        and related tools is what makes projects like this possible. A huge thank you to TRaSH and all contributors
+        for the incredible work they put into maintaining these guides.
+      </div>
+      <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+        <a href="https://trash-guides.info" target="_blank" rel="noopener" style="font-size:12px;color:#58a6ff;text-decoration:none">Website — trash-guides.info</a>
+        <a href="https://github.com/TRaSH-Guides/Guides" target="_blank" rel="noopener" style="font-size:12px;color:#58a6ff;text-decoration:none">GitHub — TRaSH-Guides/Guides</a>
+        <a href="https://trash-guides.info/discord" target="_blank" rel="noopener" style="font-size:12px;color:#58a6ff;text-decoration:none">Discord</a>
+      </div>
+    </div>
+
+  </div>
+
+{{end}}

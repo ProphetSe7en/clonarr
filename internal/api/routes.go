@@ -3,6 +3,11 @@ package api
 import "net/http"
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
+	// UI manifest — static metadata (enum lists, agent field specs, category
+	// colors) consumed once by the frontend on init. Single source of truth
+	// shared with backend validators in core/enums.go and core/categories.go.
+	mux.HandleFunc("GET /api/ui/manifest", s.handleGetUIManifest)
+
 	// core.Config
 	mux.HandleFunc("GET /api/config", s.handleGetConfig)
 	mux.HandleFunc("PUT /api/config", s.handleUpdateConfig)

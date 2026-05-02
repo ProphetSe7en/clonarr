@@ -1,16 +1,24 @@
-# Developer Mode
+# Advanced Mode And TRaSH Schema Fields
 
-Developer Mode exposes TRaSH Guides internal fields across Clonarr's UI. These fields are primarily useful for TRaSH guide contributors who need to author or export Custom Formats and profiles in the official TRaSH JSON format.
+Clonarr has two separate switches for power-user and contributor tooling:
 
-**Enable:** Settings → Developer → check "Developer Mode"
+- **Advanced Mode** is available in Settings → Advanced. It enables the Advanced tab, including Profile Builder, Scoring Sandbox, CF Group Builder, and Prowlarr settings.
+- **Show TRaSH schema fields** appears only when the container is started with `CLONARR_DEV_FEATURES=true`. It exposes TRaSH Guides internal fields used by guide contributors who author or export Custom Formats, CF groups, and profiles in official TRaSH JSON formats.
 
-For regular users building custom CFs for personal use, Developer Mode is **not required**. Scores can be set directly in the profile builder without needing trash IDs or trash scores.
+For regular users building custom CFs for personal use, TRaSH schema fields are **not required**. Scores can be set directly in the Profile Builder without needing trash IDs or trash scores.
+
+**Enable contributor fields:**
+
+1. Add `CLONARR_DEV_FEATURES=true` to the container environment.
+2. Restart Clonarr.
+3. Open Settings → Advanced.
+4. Enable **Show TRaSH schema fields**.
 
 ---
 
 ## Custom Format Editor
 
-When Developer Mode is enabled, the CF Create/Edit modal shows an extra section with three fields:
+When TRaSH schema fields are enabled, the CF Create/Edit modal shows an extra section with three fields:
 
 ### Trash ID
 
@@ -48,7 +56,7 @@ A markdown-formatted description of the CF. Used by TRaSH Guides to display info
 
 ## Custom Format Editor — Export TRaSH JSON
 
-When Developer Mode is enabled, an **Export TRaSH JSON** button appears in the CF editor footer. Clicking it copies the CF to your clipboard in the official TRaSH JSON format:
+When TRaSH schema fields are enabled, an **Export TRaSH JSON** button appears in the CF editor footer. Clicking it copies the CF to your clipboard in the official TRaSH JSON format:
 
 ```json
 {
@@ -87,7 +95,7 @@ In the profile builder's CF selection list, each CF shows the first 8 characters
 
 ## Profile Builder
 
-When Developer Mode is enabled, the profile Create/Edit modal shows four extra fields:
+When TRaSH schema fields are enabled, the profile Create/Edit modal shows four extra fields:
 
 ### Trash ID
 

@@ -1,0 +1,57 @@
+{{define "modals/export-profile"}}
+  <!-- ==================== IMPORT MODAL ==================== -->
+  <!-- ==================== EXPORT MODAL ==================== -->
+  <div class="modal-overlay" x-show="showExportModal" @click.self="closeExportModal()" x-cloak>
+    <div class="modal" style="max-width:700px">
+      <div class="modal-title">Export Profile</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:16px">
+        Copy this profile configuration to use in other tools or share with others.
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button x-show="config.devFeatures" class="btn btn-sm" :class="{ 'btn-primary': exportTab === 'yaml' }" title="YAML format for use with Recyclarr sync tool" @click="exportTab = 'yaml'; generateExport()">Recyclarr YAML</button>
+        <button class="btn btn-sm" :class="{ 'btn-primary': exportTab === 'trash' }" title="JSON format — share, back up, or contribute to TRaSH-Guides" @click="exportTab = 'trash'; generateExport()">TRaSH JSON</button>
+      </div>
+
+      <div style="position:relative">
+        <pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;font-size:13px;font-family:monospace;color:#c9d1d9;max-height:400px;overflow:auto;white-space:pre;margin:0;line-height:1.5"><code x-text="exportContent"></code></pre>
+        <button class="btn btn-sm" style="position:absolute;top:8px;right:8px;font-size:13px"
+                @click="copyToClipboard(exportContent); exportCopied = true; setTimeout(() => exportCopied = false, 2000)">
+          <span x-show="!exportCopied">Copy</span>
+          <span x-show="exportCopied" style="color:#3fb950">Copied!</span>
+        </button>
+      </div>
+
+      <!-- Group Includes (only for TRaSH JSON when groups are enabled) -->
+      <template x-if="exportTab === 'trash' && exportGroupIncludes?.length > 0">
+        <div style="margin-top:16px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;margin-bottom:8px">
+            <input type="checkbox" x-model="showExportGroupIncludes" style="accent-color:#58a6ff">
+            <span style="font-size:12px;color:#aaa">Show group includes</span>
+            <span style="font-size:12px;color:#aaa" x-text="'(' + exportGroupIncludes.length + ' groups)'"></span>
+          </label>
+          <div x-show="showExportGroupIncludes" x-cloak>
+            <div style="font-size:13px;color:#aaa;margin-bottom:8px;line-height:1.5">
+              Add these entries to each group's <code style="background:#21262d;padding:1px 4px;border-radius:2px;color:#aaa;font-size:12px">quality_profiles.include</code> section to link this profile.
+            </div>
+            <template x-for="gi in exportGroupIncludes" :key="gi.groupTrashId">
+              <div style="margin-bottom:8px">
+                <div style="font-size:13px;font-weight:500;color:#aaa;margin-bottom:4px" x-text="gi.groupName"></div>
+                <div style="position:relative">
+                  <pre style="background:#0d1117;border:1px solid #21262d;border-radius:4px;padding:6px 10px;font-size:13px;font-family:monospace;color:#9ecbaa;margin:0"><code x-text="gi.snippet"></code></pre>
+                  <button class="btn btn-sm" style="position:absolute;top:4px;right:4px;font-size:12px;padding:1px 6px"
+                          @click="copyToClipboard(gi.snippet)">Copy</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn" @click="closeExportModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

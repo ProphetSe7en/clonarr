@@ -1,0 +1,23 @@
+{{define "modals/cf-export"}}
+  <!-- Export TRaSH JSON Modal -->
+  <div class="modal-overlay" x-show="cfExportContent" @click.self="cfExportContent = ''" x-cloak>
+    <div class="modal" style="max-width:700px">
+      <div class="modal-title">Export TRaSH JSON</div>
+      <div style="font-size:12px;color:#aaa;margin-bottom:16px">
+        TRaSH Guides format — use this to share custom formats or contribute to the guides.
+      </div>
+      <div style="position:relative">
+        <pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px 16px;font-size:13px;font-family:monospace;color:#c9d1d9;max-height:400px;overflow:auto;white-space:pre;margin:0;line-height:1.5"><code x-text="cfExportContent"></code></pre>
+        <button class="btn btn-sm" style="position:absolute;top:8px;right:8px;font-size:13px"
+                @click="copyToClipboard(cfExportContent); cfExportCopied = true; setTimeout(() => cfExportCopied = false, 2000)">
+          <span x-show="!cfExportCopied">Copy</span>
+          <span x-show="cfExportCopied" style="color:#3fb950">Copied!</span>
+        </button>
+      </div>
+      <div class="modal-actions" style="margin-top:16px">
+        <button class="btn" @click="cfExportContent = ''">Close</button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

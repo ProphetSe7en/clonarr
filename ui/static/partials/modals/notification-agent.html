@@ -1,0 +1,175 @@
+{{define "modals/notification-agent"}}
+  <!-- ==================== NOTIFICATION AGENT MODAL ==================== -->
+  <!--
+    Form fields are rendered dynamically from the backend UI manifest's
+    notificationAgents[type].fieldSpec. Adding a new provider in Go
+    automatically renders the modal — no HTML edits needed.
+
+    The fieldSpec is a list of "groups" where each group is either:
+      - kind="field"     → one input row (Field) bound to agentModal.config[name]
+      - kind="priority"  → 3 priority levels with checkbox + number input
+  -->
+  <div class="modal-overlay" x-show="agentModal.show" @click.self="agentModal.show = false" x-cloak>
+    <div class="modal" style="min-width:480px;max-width:560px">
+      <div class="modal-title" x-text="agentModal.editId ? 'Edit Notification Agent' : 'Add Notification Agent'"></div>
+
+      <!-- Name -->
+      <div class="form-group">
+        <label>Name</label>
+        <input class="input" x-model="agentModal.name" placeholder="e.g. Discord #alerts" autocomplete="off">
+      </div>
+
+      <!-- Type (add only) — options come from manifest.notificationAgents -->
+      <div class="form-group" x-show="!agentModal.editId">
+        <label>Type</label>
+        <select class="input" x-model="agentModal.type">
+          <template x-for="a in (manifest.notificationAgents || [])" :key="a.type">
+            <option :value="a.type" x-text="a.label"></option>
+          </template>
+        </select>
+      </div>
+      <!-- Type display (edit) -->
+      <div class="form-group" x-show="agentModal.editId">
+        <label>Type</label>
+        <div style="font-size:13px;color:var(--text-primary);display:flex;align-items:center;gap:8px;padding:6px 0">
+          <img :src="agentIconSrc(agentModal.type)" style="width:20px;height:20px;object-fit:contain">
+          <span x-text="(manifestAgent(agentModal.type)?.label) || agentModal.type"></span>
+        </div>
+      </div>
+
+      <!-- Provider-specific fields rendered from FieldSpec.groups -->
+      <template x-for="(g, gi) in (manifestAgent(agentModal.type)?.fieldSpec?.groups || [])" :key="gi">
+        <div>
+          <!-- Single field row (text / password / url / stringList) -->
+          <template x-if="g.kind === 'field' && g.field">
+            <div class="form-group">
+              <label>
+                <span x-text="g.field.label"></span>
+                <span x-show="g.field.labelHint" style="font-weight:400;color:var(--text-secondary)" x-text="' ' + g.field.labelHint"></span>
+              </label>
+
+              <!-- text / url -->
+              <input
+                x-show="g.field.kind === 'text' || g.field.kind === 'url'"
+                class="input"
+                type="text"
+                :placeholder="g.field.placeholder"
+                autocomplete="one-time-code"
+                @input="agentModal.testPassed = false"
+                :value="agentModal.config[g.field.name] || ''"
+                @input.stop="agentModal.config[g.field.name] = $event.target.value">
+
+              <!-- password -->
+              <input
+                x-show="g.field.kind === 'password'"
+                class="input"
+                type="password"
+                :placeholder="g.field.placeholder"
+                autocomplete="one-time-code"
+                @input="agentModal.testPassed = false"
+                :value="agentModal.config[g.field.name] || ''"
+                @input.stop="agentModal.config[g.field.name] = $event.target.value">
+
+              <!-- stringList: textarea where each line is one entry; bound to a string[] -->
+              <textarea
+                x-show="g.field.kind === 'stringList'"
+                class="input"
+                rows="4"
+                :placeholder="g.field.placeholder"
+                autocomplete="one-time-code"
+                style="font-family:monospace;font-size:12px"
+                :value="(agentModal.config[g.field.name] || []).join('\n')"
+                @input="agentModal.config[g.field.name] = $event.target.value.split('\n'); agentModal.testPassed = false"></textarea>
+
+              <div x-show="g.field.helpHtml"
+                style="font-size:12px;color:var(--text-secondary);margin-top:4px"
+                x-html="g.field.helpHtml"></div>
+            </div>
+          </template>
+
+          <!-- Priority-levels group (gotify, ntfy) — checkbox + number input per severity -->
+          <template x-if="g.kind === 'priority' && g.priority">
+            <div class="form-group">
+              <label x-text="g.priority.label"></label>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <template x-for="lvl in g.priority.levels" :key="lvl.label">
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+                    <input type="checkbox"
+                      style="accent-color:var(--accent-blue)"
+                      :checked="!!agentModal.config[lvl.enabledKey]"
+                      @change="agentModal.config[lvl.enabledKey] = $event.target.checked">
+                    <span x-text="lvl.label"></span>
+                    <input type="number" class="input"
+                      style="width:56px;text-align:center;margin-left:4px"
+                      :min="g.priority.min" :max="g.priority.max"
+                      :value="agentModal.config[lvl.valueKey]"
+                      @input="agentModal.config[lvl.valueKey] = $event.target.value === '' ? null : Number($event.target.value)">
+                    <span x-show="lvl.note" style="font-size:12px;color:var(--text-secondary)" x-text="'— ' + lvl.note"></span>
+                  </label>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- ── Events ── -->
+      <div class="form-group">
+        <label>Events</label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" x-model="agentModal.events.onSyncSuccess" style="accent-color:var(--accent-blue)">
+            Sync success
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when an auto-sync rule completes without errors')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" x-model="agentModal.events.onSyncFailure" style="accent-color:var(--accent-blue)">
+            Sync failure
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when an auto-sync rule encounters an error')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" x-model="agentModal.events.onCleanup" style="accent-color:var(--accent-blue)">
+            Cleanup
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when stale custom formats are removed from your instance')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" x-model="agentModal.events.onRepoUpdate" style="accent-color:var(--accent-blue)">
+            TRaSH update
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when the TRaSH Guides repository receives a new commit')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" x-model="agentModal.events.onChangelog" style="accent-color:var(--accent-blue)">
+            Weekly changelog
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when Clonarr downloads a new weekly TRaSH changelog')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Test results -->
+      <div x-show="agentModal.testResults.length > 0" style="margin-bottom:12px">
+        <template x-for="r in agentModal.testResults" :key="r.label">
+          <div class="test-result" :class="r.status === 'ok' ? 'ok' : 'fail'"
+            x-text="(agentModal.testResults.length > 1 ? r.label + ': ' : '') + (r.status === 'ok' ? 'Sent!' : (r.error || 'Failed'))">
+          </div>
+        </template>
+      </div>
+      <div x-show="agentModal.testing" style="margin-bottom:12px">
+        <div class="test-result" style="color:var(--accent-orange)">
+          <span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Testing...
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn"
+          :disabled="agentModal.testing || !agentModalCanTest()"
+          @click="testAgentInModal()">Test</button>
+        <div style="flex:1"></div>
+        <button class="btn" @click="agentModal.show = false">Cancel</button>
+        <button class="btn btn-primary" :disabled="agentModal.saving || !agentModal.testPassed || !agentModal.name.trim()" @click="saveNotificationAgent()">
+          <span x-text="agentModal.editId ? 'Update' : 'Add'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

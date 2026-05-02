@@ -125,19 +125,22 @@ func DefaultSyncBehavior() SyncBehavior {
 	}
 }
 
-// ResolveSyncBehavior returns a fully populated SyncBehavior, filling in defaults for empty fields.
+// ResolveSyncBehavior returns a fully populated SyncBehavior, filling in
+// defaults for empty fields. Unrecognized values fall back to the default for
+// that field rather than being passed through as-is — this keeps the sync
+// engine on a known code path even if a stale client posts a removed mode.
 func ResolveSyncBehavior(b *SyncBehavior) SyncBehavior {
 	if b == nil {
 		return DefaultSyncBehavior()
 	}
 	r := *b
-	if r.AddMode == "" {
+	if !IsValidEnumValue(SyncBehaviorAddModes, r.AddMode) {
 		r.AddMode = "add_missing"
 	}
-	if r.RemoveMode == "" {
+	if !IsValidEnumValue(SyncBehaviorRemoveModes, r.RemoveMode) {
 		r.RemoveMode = "remove_custom"
 	}
-	if r.ResetMode == "" {
+	if !IsValidEnumValue(SyncBehaviorResetModes, r.ResetMode) {
 		r.ResetMode = "reset_to_zero"
 	}
 	return r

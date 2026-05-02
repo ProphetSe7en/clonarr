@@ -25,7 +25,7 @@ type CustomCF struct {
 	ArrID           int                    `json:"arrId,omitempty"`
 	Specifications  []arr.ArrSpecification `json:"specifications,omitempty"`
 
-	// Developer mode: TRaSH guide fields (only populated when devMode is used)
+	// TRaSH schema fields (visible only when contributor fields are enabled).
 	TrashID     string         `json:"trashId,omitempty"`
 	TrashScores map[string]int `json:"trashScores,omitempty"`
 	Description string         `json:"description,omitempty"`
