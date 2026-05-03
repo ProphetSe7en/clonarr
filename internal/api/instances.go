@@ -154,33 +154,50 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isBlockedHost returns true if the hostname resolves to a non-routable or metadata address.
-func isBlockedHost(rawURL string) bool {
+// isBlockedHost reports whether rawURL should be rejected at validation time.
+// A host is blocked when it parses, resolves to at least one address, and
+// EVERY resolved address is non-routable. If at least one address is routable
+// the host is allowed — the dialer will pick a usable one. DNS failures pass
+// through so the connection-error path surfaces the real problem.
+func isBlockedHost(rawURL string) (bool, string) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return true
+		return true, "Invalid URL"
 	}
 	host := u.Hostname()
 	if host == "" {
-		return true
+		return true, "URL has no host"
 	}
-	// Resolve hostname to IPs
 	ips, err := net.LookupHost(host)
-	if err != nil {
-		return false // allow — DNS failure will surface as connection error
+	if err != nil || len(ips) == 0 {
+		return false, "" // allow — DNS failure surfaces as connection error
 	}
+	sawAny := false
 	for _, ipStr := range ips {
 		ip := net.ParseIP(ipStr)
 		if ip == nil {
 			continue
 		}
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-			return true
+		if v4 := ip.To4(); v4 != nil { // normalize ::ffff:1.2.3.4
+			ip = v4
 		}
-		// Block cloud metadata (169.254.169.254)
-		if ip.Equal(net.ParseIP("169.254.169.254")) {
-			return true
+		sawAny = true
+		if !isNonRoutable(ip) {
+			return false, "" // at least one routable address — allow
 		}
+	}
+	if !sawAny {
+		return false, "" // unparseable IPs only — let dialer fail
+	}
+	return true, "All resolved addresses are non-routable (loopback, link-local, or cloud-metadata)"
+}
+
+func isNonRoutable(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	if ip.Equal(net.ParseIP("169.254.169.254")) {
+		return true
 	}
 	return false
 }
@@ -203,8 +220,8 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
 		req.URL = "http://" + req.URL
 	}
-	if isBlockedHost(req.URL) {
-		writeError(w, 400, "URL resolves to a blocked address")
+	if blocked, reason := isBlockedHost(req.URL); blocked {
+		writeError(w, 400, reason)
 		return
 	}
 
