@@ -207,9 +207,9 @@
                 <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px">
                   <input type="radio" name="theme" :value="opt.value" :checked="theme === opt.value" @change="setTheme(opt.value)" style="accent-color:var(--accent-blue)">
                   <span x-text="opt.label" :style="theme === opt.value ? 'color:var(--text-primary)' : 'color:var(--text-muted)'"></span>
+                  <span x-show="opt.value === 'system' && theme === 'system'" style="font-size:13px;color:var(--text-secondary);margin-left:2px">(matches OS)</span>
                 </label>
               </template>
-              <span style="font-size:13px;color:var(--text-secondary)" x-text="theme === 'system' ? '(matches OS)' : ''"></span>
             </div>
           </div>
           <div class="setting-row">
