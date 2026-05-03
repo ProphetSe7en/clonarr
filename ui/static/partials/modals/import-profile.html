@@ -61,10 +61,10 @@
         </div>
         <input type="file" accept=".yml,.yaml" multiple x-ref="importIncludeInput" @change="handleImportIncludeFiles($event.target.files)" style="display:none">
         <template x-if="importIncludeFiles.length > 0">
-          <div style="margin-top:6px;font-size:12px;color:var(--accent-orange)">
+          <div style="margin-top:6px;font-size:12px;color:var(--text-muted)">
             <template x-for="f in importIncludeFiles" :key="f.name">
               <div style="display:flex;align-items:center;gap:6px;padding:2px 0">
-                <span style="color:var(--accent-orange)">&#10003;</span>
+                <span style="color:var(--accent-green)">&#10003;</span>
                 <span x-text="f.name"></span>
               </div>
             </template>

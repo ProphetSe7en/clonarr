@@ -39,7 +39,7 @@
                   <!-- Summary for delete-all operations -->
                   <template x-if="['delete-cfs-and-scores','delete-cfs-keep-scores'].includes(cleanupResult.action)">
                     <div style="text-align:center;padding:20px 16px">
-                      <div style="font-size:36px;margin-bottom:8px;color:var(--accent-orange)">&#9888;</div>
+                      <div style="font-size:36px;margin-bottom:8px;color:var(--accent-red)">&#9888;</div>
                       <div style="font-size:15px;color:var(--text-primary);margin-bottom:4px">
                         <strong x-text="cleanupResult.affectCount"></strong> <span x-text="cleanupResult.affectCount === 1 ? 'custom format' : 'custom formats'"></span> will be deleted
                       </div>

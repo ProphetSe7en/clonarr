@@ -199,6 +199,7 @@ export default {
           sections.push({
             key: 'file',
             label: 'Standard Movie Format',
+            exampleLabel: 'Movie',
             description: radarrFileDesc[ms] || '',
             schemes: fileSchemes,
             showEditionToggle: ms === 'plex',
@@ -209,6 +210,7 @@ export default {
           sections.push({
             key: 'folder',
             label: 'Movie Folder Format',
+            exampleLabel: 'Folder',
             description: radarrFolderDesc[ms] || '',
             schemes: folderSchemes,
           });
@@ -222,6 +224,7 @@ export default {
             sections.push({
               key: 'episodes-' + epType,
               label: 'Episode Format — ' + epLabel,
+              exampleLabel: 'Episode',
               description: '',
               schemes: epSchemes,
             });
@@ -231,6 +234,7 @@ export default {
         if (seriesSchemes.length > 0) sections.push({
           key: 'series',
           label: 'Series Folder Format',
+          exampleLabel: 'Series',
           description: sonarrSeriesDesc[ms] || '',
           schemes: seriesSchemes,
         });
@@ -238,6 +242,7 @@ export default {
           sections.push({
             key: 'season',
             label: 'Season Folder Format',
+            exampleLabel: 'Season',
             description: 'For this, there\'s only one real option to use in our opinion.',
             schemes: makeSchemes(n.season, 'season', { 'default': 'Season 01' }),
           });

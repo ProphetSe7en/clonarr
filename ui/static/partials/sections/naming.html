@@ -14,7 +14,7 @@
             <span style="font-weight:600;color:var(--text-primary);font-size:15px">Why use a naming scheme?</span>
             <span style="font-size:12px;color:var(--text-secondary);margin-left:auto" x-show="!namingFAQExpanded">click to expand</span>
           </div>
-          <div x-show="namingFAQExpanded" x-collapse style="padding:0 16px 14px;border-top:1px solid var(--bg-muted)">
+          <div x-show="namingFAQExpanded" x-cloak style="padding:0 16px 14px;border-top:1px solid var(--bg-muted)">
             <!-- Intro: verbatim from includes/starr/renaming-description-faq.md -->
             <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:10px">
               While naming is a personal choice, adding non-recoverable information to your filenames is strongly recommended for several good reasons.
@@ -213,7 +213,7 @@
                       <div x-show="scheme.description" style="font-size:13px;color:var(--text-muted);margin-bottom:6px;line-height:1.4" x-text="scheme.description"></div>
                       <div style="font-family:monospace;font-size:13px;color:var(--code-string);background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:4px;padding:6px 8px;word-break:break-all" x-text="scheme.pattern"></div>
                       <div x-show="scheme.example" style="font-family:monospace;font-size:12px;color:var(--text-muted);margin-top:4px;word-break:break-all">
-                        <strong style="color:var(--text-muted);font-weight:600">Movie:</strong> <span x-text="scheme.example"></span>
+                        <strong style="color:var(--text-muted);font-weight:600" x-text="(section.exampleLabel || 'Example') + ':'"></strong> <span x-text="scheme.example"></span>
                       </div>
                       <!-- Extra advice for "Original Title" scheme (verbatim from TRaSH:
                            docs/{Radarr,Sonarr}/-recommended-naming-scheme.md § Original Title) -->

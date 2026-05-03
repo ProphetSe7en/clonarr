@@ -78,6 +78,11 @@
                             <template x-if="editing">
                               <input type="text" class="input" style="width:180px;font-size:13px;padding:2px 6px"
                                      x-model="newName"
+                                     autocomplete="off"
+                                     data-lpignore="true"
+                                     data-1p-ignore="true"
+                                     data-form-type="other"
+                                     name="arr-profile-rename"
                                      @keyup.enter="if(newName.trim() && newName.trim() !== sh.arrProfileName) { renameArrProfile(inst, sh, newName.trim()); } editing = false"
                                      @keyup.escape="editing = false"
                                      @click.outside="editing = false"
@@ -836,7 +841,7 @@
                                                                 style="margin-right:6px"></span>
                                                         </template>
                                                         <span :style="row.isGolden ? 'color:var(--accent-red)' : ''" x-text="row.group.name"></span>
-                                                        <span x-show="row.group.exclusive" :style="row.isGolden ? 'font-size:10px;color:var(--text-on-accent);background:var(--accent-red);padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0;font-weight:600' : 'font-size:10px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0'">pick one</span>
+                                                        <span x-show="row.group.exclusive" :style="row.isGolden ? 'font-size:10px;color:var(--text-on-accent);background:var(--accent-red);padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0;font-weight:600' : 'font-size:10px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0'">pick one</span>
                                                         <span x-show="row.group.defaultEnabled && !row.isGolden" style="font-size:10px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 6px;border-radius:8px;margin-left:4px;text-transform:none;letter-spacing:0">default</span>
                                                         <span style="float:right;font-size:10px;display:inline-flex;gap:4px">
                                                           <template x-if="row.group.present > 0">

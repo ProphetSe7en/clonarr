@@ -19,7 +19,7 @@
   .pb-init-tab:last-child { border-right: none; }
   .pb-init-tab:hover { color: var(--text-body); }
   .pb-init-tab.active { background: var(--alpha-orange); color: var(--accent-orange-bright); font-weight: 600; }
-  .pd-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; min-height: 26px; border-bottom: 1px dotted var(--alpha-active); }
+  .pd-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; padding: 5px 0; min-height: 26px; border-bottom: 1px dotted var(--alpha-active); }
   .pd-row:last-child { border-bottom: none; }
   .pd-label { color: var(--text-muted); font-size: 13px; }
   .pd-value { font-size: 13px; font-weight: 500; color: var(--text-primary); }
@@ -44,7 +44,7 @@
   .pb-group-header .group-name { font-size: 12px; color: var(--text-body); font-weight: 500; }
   .pb-group-header .group-count { font-size:12px; color: var(--text-secondary); margin-left: auto; }
   .pb-group-header .group-badge { font-size:11px; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
-  .pb-group-header .badge-exclusive { color: var(--accent-orange); background: var(--accent-orange-bg); border: 1px solid var(--accent-orange); }
+  .pb-group-header .badge-exclusive { color: var(--accent-blue); background: var(--fill-blue-soft); border: 1px solid var(--accent-blue); }
   .pb-group-header .badge-default { color: var(--accent-green); background: var(--accent-green-bg); border: 1px solid var(--accent-green); }
   .pb-cat-header:hover { background: var(--bg-elevated-hover); }
   .pb-cat-count { font-size:13px; color: var(--text-muted); margin-right: auto; }

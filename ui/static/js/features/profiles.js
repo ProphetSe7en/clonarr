@@ -133,12 +133,14 @@ export default {
         // assigned. Pull them all into a dedicated "Custom" group so the
         // picker matches Custom Formats tab behaviour (one Custom bucket,
         // not scattered across the user's chosen categories).
-        const groups = []; // { name, cfs[] }
+        const groups = []; // { name, category, cfs[] }
         const ungrouped = [];
         const customCFs = [];
         for (const c of (d.categories || [])) for (const g of c.groups) {
           if (g.groupTrashId) {
-            groups.push({ name: g.name, cfs: g.cfs });
+            // category passed through so getCategoryClass() can paint the
+            // left-border color the same way the main Groups section does.
+            groups.push({ name: g.name, category: c.category, cfs: g.cfs });
           } else {
             for (const cf of g.cfs) {
               if (cf.isCustom) customCFs.push(cf);
@@ -146,8 +148,8 @@ export default {
             }
           }
         }
-        if (ungrouped.length > 0) groups.push({ name: 'Other', cfs: ungrouped });
-        if (customCFs.length > 0) groups.push({ name: 'Custom', cfs: customCFs });
+        if (ungrouped.length > 0) groups.push({ name: 'Other', category: 'Other', cfs: ungrouped });
+        if (customCFs.length > 0) groups.push({ name: 'Custom', category: 'Other', cfs: customCFs });
         this.extraCFGroups = groups;
         // Ensure all groups start collapsed. Alpine's reactive proxy treats
         // missing keys as truthy in some cases AND direct keyed mutation
@@ -182,6 +184,26 @@ export default {
       return this.extraCFAllCFs.filter(cf =>
         !inProfile.has(cf.trashId) && !this.extraCFs[cf.trashId] && (!q || cf.name.toLowerCase().includes(q))
       );
+    },
+
+    // Group-level toggle for the Additional CFs picker. Mirrors the per-group
+    // toggle in the main Groups section: when checked, every selectable CF in
+    // the group is added to extraCFs at its current-score-set default; when
+    // unchecked, every CF in the group is removed from extraCFs. CFs already
+    // in the underlying Arr profile are skipped both ways since they aren't
+    // addable as extras to begin with.
+    pdToggleAdditionalGroup(group, on) {
+      const scoreSet = this.profileDetail?.detail?.profile?.trashScoreSet || 'default';
+      const next = { ...this.extraCFs };
+      for (const cf of (group.cfs || [])) {
+        if (this._extraInProfile(cf.trashId)) continue;
+        if (on) {
+          next[cf.trashId] = cf.trashScores?.[scoreSet] ?? cf.trashScores?.default ?? 0;
+        } else {
+          delete next[cf.trashId];
+        }
+      }
+      this.extraCFs = next;
     },
 
     async toggleAdvancedMode(enable) {

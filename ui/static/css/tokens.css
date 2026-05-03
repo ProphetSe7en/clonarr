@@ -16,13 +16,13 @@
   --border-muted: #21262d;
   --border-faint: #161b22;
 
-  /* Text */
-  --text-primary: #e1e4e8;
-  --text-body: #c9d1d9;
-  --text-secondary: #8b949e;
-  --text-muted: #aaa;
-  --text-muted-secondary: #6e7681;
-  --text-soft: #bbb;
+  /* Text — bumped for higher dark-mode legibility (all values WCAG AAA on --bg-page) */
+  --text-primary: #f0f6fc;
+  --text-body: #e6edf3;
+  --text-secondary: #b8c0c8;
+  --text-muted: #c0c7d0;
+  --text-muted-secondary: #a8b1bb;
+  --text-soft: #cfd6dd;
   --text-inverse: #0d1117;
   --text-on-accent: #fff;
 

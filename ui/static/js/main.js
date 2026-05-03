@@ -83,19 +83,29 @@ export function clonarr() {
       if (!text || !el) return;
       const r = el.getBoundingClientRect();
       const margin = 8;
-      // Tooltip max-width is 320px (from CSS); clamp x so transform:translate(-50%)
-      // can never push the tooltip off-screen.
+      // CSS max-width 320 / 2.
       const halfMax = 160;
-      let x = r.left + r.width / 2;
-      let y = r.top;
+      // Coordinate-system bridge: getBoundingClientRect() and innerWidth
+      // return ACTUAL screen pixels (post-zoom). style.left/top we set are
+      // interpreted as CSS pixels and then zoom-scaled by the browser at
+      // render time. With UI Scale != 1 (zoom on <html>), assigning the raw
+      // actual-pixel value as style.left makes the tooltip render at
+      // (value * zoom) actual pixels — offset from the trigger by the zoom
+      // factor. Divide every actual-pixel measurement by zoom so the values
+      // round-trip back to the same physical position. Defaults to 1 when
+      // no zoom is applied.
+      const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      const triggerCenterX = (r.left + r.width / 2) / zoom;
+      const triggerTop = r.top / zoom;
+      const triggerBottom = r.bottom / zoom;
+      const viewportW = window.innerWidth / zoom;
+      let y = triggerTop;
       let flip = false;
-      // Flip below if too close to top of viewport
-      if (r.top < 60) {
-        y = r.bottom;
+      if (triggerTop < 60) {
+        y = triggerBottom;
         flip = true;
       }
-      // Clamp x so left/right edge never overflows viewport
-      x = Math.max(halfMax + margin, Math.min(x, window.innerWidth - halfMax - margin));
+      const x = Math.max(halfMax + margin, Math.min(triggerCenterX, viewportW - halfMax - margin));
       this.tt = { show: true, text: text, x: x, y: y, flip: flip };
     },
     hideTooltip() {
