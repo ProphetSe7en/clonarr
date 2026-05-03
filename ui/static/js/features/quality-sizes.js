@@ -84,12 +84,12 @@ export default {
 
     qsCellStyle(appType, trashQS, field) {
       const def = this._findInstanceDef(appType, trashQS.quality);
-      if (!def) return 'color:#aaa';
+      if (!def) return 'color:var(--text-muted)';
       const map = { min: 'minSize', preferred: 'preferredSize', max: 'maxSize' };
       const current = def[map[field]] ?? 0;
       const target = this._qsTargetVal(appType, trashQS, field);
-      if (Math.abs(current - target) < 0.05) return 'color:#3fb950'; // match
-      return 'color:#d29922'; // diff
+      if (Math.abs(current - target) < 0.05) return 'color:var(--accent-green)'; // match
+      return 'color:var(--accent-orange)'; // diff
     },
 
     _qsTargetVal(appType, trashQS, field) {
@@ -111,7 +111,7 @@ export default {
       const allMatch = ['min', 'preferred', 'max'].every(f =>
         Math.abs(this._defFieldVal(def, f) - this._qsTargetVal(appType, qs, f)) < 0.05
       );
-      return allMatch ? '' : 'background:#1c1f26';
+      return allMatch ? '' : 'background:var(--bg-elevated)';
     },
 
     isQSCustom(appType, qualityName) {

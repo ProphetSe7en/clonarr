@@ -5,7 +5,7 @@
   <div class="modal-overlay" style="z-index:2000" x-show="inputModal.show" @click.self="inputModal.show = false; if(inputModal.onCancel) inputModal.onCancel()" x-cloak>
     <div class="modal" style="max-width:420px">
       <div class="modal-title" x-text="inputModal.title"></div>
-      <div x-show="inputModal.message" style="font-size:13px;color:#aaa;white-space:pre-line;line-height:1.6;margin-bottom:8px" x-text="inputModal.message"></div>
+      <div x-show="inputModal.message" style="font-size:13px;color:var(--text-muted);white-space:pre-line;line-height:1.6;margin-bottom:8px" x-text="inputModal.message"></div>
       <input type="text" class="input" style="width:100%;font-size:13px;padding:6px 10px"
              x-model="inputModal.value"
              :placeholder="inputModal.placeholder || ''"

@@ -3,13 +3,13 @@
   <div class="modal-overlay" x-show="showRestoreModal" @click.self="showRestoreModal = false" x-cloak>
     <div class="modal" style="max-width:600px">
       <div class="modal-title">Restore to Instance</div>
-      <div style="font-size:12px;color:#aaa;margin-bottom:12px" x-text="restoreInstance?.name || ''"></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px" x-text="restoreInstance?.name || ''"></div>
 
       <!-- Step 1: Upload file -->
       <template x-if="!restoreData">
         <div>
-          <div style="font-size:13px;color:#c9d1d9;margin-bottom:8px">Upload a Clonarr backup JSON file.</div>
-          <input type="file" accept=".json" @change="loadRestoreFile($event)" style="font-size:13px;color:#c9d1d9">
+          <div style="font-size:13px;color:var(--text-body);margin-bottom:8px">Upload a Clonarr backup JSON file.</div>
+          <input type="file" accept=".json" @change="loadRestoreFile($event)" style="font-size:13px;color:var(--text-body)">
           <div class="modal-actions">
             <button class="btn" @click="showRestoreModal = false">Cancel</button>
           </div>
@@ -19,7 +19,7 @@
       <!-- Step 2: Select what to restore -->
       <template x-if="restoreData && !restorePreview && !restoreResult">
         <div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:12px">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
             From: <strong x-text="restoreData.instanceName"></strong> (<span x-text="restoreData.exportedAt?.split('T')[0]"></span>)
           </div>
 
@@ -27,16 +27,16 @@
           <template x-if="(restoreData.profiles || []).length > 0">
             <div style="margin-bottom:16px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <div style="font-size:13px;font-weight:600;color:#e1e4e8" x-text="'Profiles (' + (restoreData.profiles || []).length + ')'"></div>
+                <div style="font-size:13px;font-weight:600;color:var(--text-primary)" x-text="'Profiles (' + (restoreData.profiles || []).length + ')'"></div>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 6px" @click="(restoreData.profiles || []).forEach((_, i) => restoreSelectedProfiles[i] = true)">Select All</button>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 6px" @click="restoreSelectedProfiles = {}">Deselect All</button>
               </div>
-              <div style="max-height:200px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+              <div style="max-height:200px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
                 <template x-for="(p, i) in restoreData.profiles" :key="i">
-                  <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #21262d;cursor:pointer;font-size:12px;color:#c9d1d9">
+                  <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bg-muted);cursor:pointer;font-size:12px;color:var(--text-body)">
                     <input type="checkbox" :checked="restoreSelectedProfiles[i]" @change="restoreSelectedProfiles[i] = $el.checked">
                     <span x-text="p.name"></span>
-                    <span style="margin-left:auto;font-size:13px;color:#aaa" x-text="(p.formatItems || []).filter(fi => fi.score !== 0).length + ' scored CFs'"></span>
+                    <span style="margin-left:auto;font-size:13px;color:var(--text-muted)" x-text="(p.formatItems || []).filter(fi => fi.score !== 0).length + ' scored CFs'"></span>
                   </label>
                 </template>
               </div>
@@ -47,13 +47,13 @@
           <template x-if="(restoreData.customFormats || []).length > 0">
             <div>
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                <div style="font-size:13px;font-weight:600;color:#e1e4e8" x-text="'Custom Formats (' + (restoreData.customFormats || []).length + ')'"></div>
+                <div style="font-size:13px;font-weight:600;color:var(--text-primary)" x-text="'Custom Formats (' + (restoreData.customFormats || []).length + ')'"></div>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 6px" @click="(restoreData.customFormats || []).forEach((_, i) => restoreSelectedCFs[i] = true)">Select All</button>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 6px" @click="restoreSelectedCFs = {}">Deselect All</button>
               </div>
-              <div style="max-height:250px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+              <div style="max-height:250px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
                 <template x-for="(cf, i) in restoreData.customFormats" :key="i">
-                  <label style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:1px solid #21262d;cursor:pointer;font-size:12px;color:#c9d1d9">
+                  <label style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:1px solid var(--bg-muted);cursor:pointer;font-size:12px;color:var(--text-body)">
                     <input type="checkbox" :checked="restoreSelectedCFs[i]" @change="restoreSelectedCFs[i] = $el.checked">
                     <span x-text="cf.name"></span>
                   </label>
@@ -76,19 +76,19 @@
       <!-- Step 3: Preview -->
       <template x-if="restorePreview && !restoreResult">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Preview</div>
-          <div style="max-height:300px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">Preview</div>
+          <div style="max-height:300px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
             <template x-for="(a, i) in restorePreview.actions" :key="i">
-              <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #21262d;font-size:12px">
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bg-muted);font-size:12px">
                 <span style="padding:1px 6px;border-radius:3px;font-size:12px;font-weight:600"
-                  :style="a.action === 'create' ? 'background:#238636;color:#fff' : 'background:#1f6feb;color:#fff'"
+                  :style="a.action === 'create' ? 'background:var(--accent-green-strong);color:var(--text-on-accent)' : 'background:var(--accent-blue-strong);color:var(--text-on-accent)'"
                   x-text="a.action"></span>
-                <span style="padding:1px 6px;border-radius:3px;font-size:12px;background:#30363d;color:#aaa" x-text="a.type === 'cf' ? 'CF' : 'Profile'"></span>
-                <span style="color:#c9d1d9" x-text="a.name"></span>
+                <span style="padding:1px 6px;border-radius:3px;font-size:12px;background:var(--border-subtle);color:var(--text-muted)" x-text="a.type === 'cf' ? 'CF' : 'Profile'"></span>
+                <span style="color:var(--text-body)" x-text="a.name"></span>
               </div>
             </template>
           </div>
-          <div style="font-size:13px;color:#aaa;margin-top:8px">
+          <div style="font-size:13px;color:var(--text-muted);margin-top:8px">
             <span x-text="restorePreview.actions.filter(a => a.action === 'create').length + ' to create'"></span>,
             <span x-text="restorePreview.actions.filter(a => a.action === 'update').length + ' to update'"></span>
           </div>
@@ -106,23 +106,23 @@
       <!-- Step 4: Result -->
       <template x-if="restoreResult">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#3fb950;margin-bottom:8px">Restore Complete</div>
-          <div style="max-height:300px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+          <div style="font-size:13px;font-weight:600;color:var(--accent-green);margin-bottom:8px">Restore Complete</div>
+          <div style="max-height:300px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
             <template x-for="(a, i) in restoreResult.actions" :key="i">
-              <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #21262d;font-size:12px">
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bg-muted);font-size:12px">
                 <span style="padding:1px 6px;border-radius:3px;font-size:12px;font-weight:600"
-                  :style="a.error ? 'background:#da3633;color:#fff' : (a.action === 'create' ? 'background:#238636;color:#fff' : 'background:#1f6feb;color:#fff')"
+                  :style="a.error ? 'background:var(--accent-red-strong);color:var(--text-on-accent)' : (a.action === 'create' ? 'background:var(--accent-green-strong);color:var(--text-on-accent)' : 'background:var(--accent-blue-strong);color:var(--text-on-accent)')"
                   x-text="a.error ? 'error' : a.action"></span>
-                <span style="padding:1px 6px;border-radius:3px;font-size:12px;background:#30363d;color:#aaa" x-text="a.type === 'cf' ? 'CF' : 'Profile'"></span>
-                <span style="color:#c9d1d9" x-text="a.name"></span>
-                <span x-show="a.error" style="color:#f85149;font-size:13px;margin-left:auto" x-text="a.error"></span>
+                <span style="padding:1px 6px;border-radius:3px;font-size:12px;background:var(--border-subtle);color:var(--text-muted)" x-text="a.type === 'cf' ? 'CF' : 'Profile'"></span>
+                <span style="color:var(--text-body)" x-text="a.name"></span>
+                <span x-show="a.error" style="color:var(--accent-red);font-size:13px;margin-left:auto" x-text="a.error"></span>
               </div>
             </template>
           </div>
-          <div style="font-size:13px;color:#aaa;margin-top:8px">
-            <span style="color:#3fb950" x-text="restoreResult.actions.filter(a => !a.error).length + ' successful'"></span>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:8px">
+            <span style="color:var(--accent-green)" x-text="restoreResult.actions.filter(a => !a.error).length + ' successful'"></span>
             <template x-if="restoreResult.actions.filter(a => a.error).length > 0">
-              <span style="color:#f85149" x-text="', ' + restoreResult.actions.filter(a => a.error).length + ' failed'"></span>
+              <span style="color:var(--accent-red)" x-text="', ' + restoreResult.actions.filter(a => a.error).length + ' failed'"></span>
             </template>
           </div>
           <div class="modal-actions">

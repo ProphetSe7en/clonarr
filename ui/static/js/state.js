@@ -365,6 +365,7 @@ export default function baseState() {
     settingsOpen: 'instances',  // legacy accordion (unused after sidebar redesign)
     settingsSection: 'instances',
     uiScale: localStorage.getItem('clonarr-ui-scale') || '1',
+    theme: localStorage.getItem('clonarr-theme') || 'system',
 
     // Scoring Sandbox (per app-type state)
     sandbox: {

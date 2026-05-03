@@ -7,45 +7,45 @@
         <!-- ===== TRaSH Sync tab ===== -->
         <div class="page" x-show="getProfileTab(activeAppType) === 'trash-sync'">
           <div style="font-size:18px;font-weight:600;margin-bottom:4px">Quality Profiles</div>
-          <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
             TRaSH Guides quality profiles — click a profile to view its contents, customize groups, and sync to your <span x-text="activeAppLabel"></span> instance. Manage sync rules, auto-sync, and overrides from the Sync Rules section below.
           </div>
           <!-- Auto-sync paused banner -->
           <template x-if="autoSyncSettings.paused">
-            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:#3b2a05;border:1px solid #d29922;border-radius:6px;color:#e3b341;font-size:13px">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:12px;background:var(--accent-orange-bg);border:1px solid var(--accent-orange);border-radius:6px;color:var(--cat-hq-release-groups);font-size:13px">
               <span style="font-size:16px">⏸</span>
               <div style="flex:1">
                 <div style="font-weight:600">Auto-sync paused</div>
-                <div style="font-size:12px;color:#c9a44a;margin-top:2px">Scheduled and after-pull syncs are skipped. Manual actions ("Sync All", per-rule "Sync now", Save &amp; Sync from a profile) still work.</div>
+                <div style="font-size:12px;color:var(--accent-orange);margin-top:2px">Scheduled and after-pull syncs are skipped. Manual actions ("Sync All", per-rule "Sync now", Save &amp; Sync from a profile) still work.</div>
               </div>
-              <button class="btn btn-sm" style="border-color:#d29922;color:#e3b341;font-size:12px" @click="setAutoSyncPaused(false)">▶ Resume</button>
+              <button class="btn btn-sm" style="border-color:var(--accent-orange);color:var(--cat-hq-release-groups);font-size:12px" @click="setAutoSyncPaused(false)">▶ Resume</button>
             </div>
           </template>
 
           <!-- Collapsible Sync Rules (always visible) -->
             <div class="card" style="margin-bottom:20px">
-              <div style="display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:8px;border-left:3px solid #e1e4e8" @click="syncRulesExpanded = { ...syncRulesExpanded, [activeAppType]: !syncRulesExpanded[activeAppType] }">
+              <div style="display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:8px;border-left:3px solid var(--text-primary)" @click="syncRulesExpanded = { ...syncRulesExpanded, [activeAppType]: !syncRulesExpanded[activeAppType] }">
                 <span class="profile-group-chevron" :class="{ open: syncRulesExpanded[activeAppType] }">&#9654;</span>
                 <span style="font-size:13px;font-weight:500">Sync Rules</span>
-                <span style="font-size:13px;color:#aaa;margin-left:auto"
+                <span style="font-size:13px;color:var(--text-muted);margin-left:auto"
                       x-text="(() => { let count = 0; for (const inst of instancesOfType(activeAppType)) count += sortedSyncRules(inst.id).length; return count > 0 ? count + ' synced profile' + (count !== 1 ? 's' : '') : 'No syncs yet'; })()"></span>
                 <button class="btn btn-sm"
                         @click.stop="setAutoSyncPaused(!autoSyncSettings.paused)"
                         x-tt="autoSyncSettings.paused ? 'Resume auto-sync' : 'Pause auto-sync (scheduled + after-pull). Manual syncs unaffected.'"
                         :style="autoSyncSettings.paused
-                                ? 'font-size:12px;padding:2px 8px;border-color:#d29922;color:#e3b341;margin-left:8px'
-                                : 'font-size:12px;padding:2px 8px;border-color:#30363d;color:#8b949e;margin-left:8px'"
+                                ? 'font-size:12px;padding:2px 8px;border-color:var(--accent-orange);color:var(--cat-hq-release-groups);margin-left:8px'
+                                : 'font-size:12px;padding:2px 8px;border-color:var(--border-subtle);color:var(--text-secondary);margin-left:8px'"
                         x-text="autoSyncSettings.paused ? '▶ Resume Auto-Sync' : '⏸ Pause Auto-Sync'"></button>
               </div>
-              <div x-show="syncRulesExpanded[activeAppType]" style="border-top:1px solid #21262d">
+              <div x-show="syncRulesExpanded[activeAppType]" style="border-top:1px solid var(--bg-muted)">
                 <template x-for="inst in instancesOfType(activeAppType)" :key="'sr-'+inst.id">
                   <template x-if="sortedSyncRules(inst.id).length > 0">
                     <div>
-                      <div style="padding:8px 16px;font-size:13px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#0d1117;border-bottom:1px solid #21262d;display:flex;align-items:center">
+                      <div style="padding:8px 16px;font-size:13px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:var(--bg-page);border-bottom:1px solid var(--bg-muted);display:flex;align-items:center">
                         <span x-text="inst.name"></span>
-                        <button class="btn btn-sm" style="margin-left:auto;font-size:12px;padding:2px 8px;border-color:#238636;color:#3fb950" @click.stop="syncAllForInstance(inst)" x-tt="'Re-sync all profiles with auto-sync enabled on this instance'">Sync All</button>
+                        <button class="btn btn-sm" style="margin-left:auto;font-size:12px;padding:2px 8px;border-color:var(--accent-green-strong);color:var(--accent-green)" @click.stop="syncAllForInstance(inst)" x-tt="'Re-sync all profiles with auto-sync enabled on this instance'">Sync All</button>
                       </div>
-                      <div style="display:flex;align-items:center;padding:4px 16px;gap:8px;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #161b22;user-select:none">
+                      <div style="display:flex;align-items:center;padding:4px 16px;gap:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--bg-card);user-select:none">
                         <span style="width:200px;flex-shrink:0;cursor:pointer;white-space:nowrap" @click="toggleSyncRulesSort('trash')">
                           TRaSH Profile <span x-show="syncRulesSort.col==='trash'" x-text="syncRulesSort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span>
                         </span>
@@ -58,21 +58,21 @@
                         <span style="width:180px;flex-shrink:0;text-align:center">Actions</span>
                       </div>
                       <template x-for="sh in sortedSyncRules(inst.id)" :key="sh.arrProfileId">
-                        <div :style="'display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;gap:8px;font-size:12px;' + (sh.orphanedAt ? 'background:#1f1305' : '')">
-                          <span :style="'color:' + (sh.orphanedAt ? '#aaa' : '#58a6ff') + ';font-weight:500;width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'" x-text="sh.profileName"></span>
-                          <span style="color:#aaa;flex-shrink:0;font-size:15px;width:20px;text-align:center">&rarr;</span>
+                        <div :style="'display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bg-card);gap:8px;font-size:12px;' + (sh.orphanedAt ? 'background:var(--accent-orange-bg)' : '')">
+                          <span :style="'color:' + (sh.orphanedAt ? 'var(--text-muted)' : 'var(--accent-blue)') + ';font-weight:500;width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'" x-text="sh.profileName"></span>
+                          <span style="color:var(--text-muted);flex-shrink:0;font-size:15px;width:20px;text-align:center">&rarr;</span>
                           <span style="width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
                                 x-data="{ editing: false, newName: '' }">
                             <template x-if="sh.orphanedAt">
                               <span>
-                                <span style="color:#aaa;text-decoration:line-through" x-text="sh.arrProfileName"></span>
-                                <span style="background:#3d2410;border:1px solid #d29922;color:#e3b341;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;margin-left:6px" x-tt="'Profile deleted in Arr — ' + (sh.orphanedAt || '')">orphaned</span>
+                                <span style="color:var(--text-muted);text-decoration:line-through" x-text="sh.arrProfileName"></span>
+                                <span style="background:var(--accent-orange-bg);border:1px solid var(--accent-orange);color:var(--cat-hq-release-groups);padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;margin-left:6px" x-tt="'Profile deleted in Arr — ' + (sh.orphanedAt || '')">orphaned</span>
                               </span>
                             </template>
                             <template x-if="!sh.orphanedAt && !editing">
                               <span>
-                                <span style="color:#e1e4e8;cursor:pointer;border-bottom:1px dashed #30363d" @click.stop="newName = sh.arrProfileName; editing = true" x-tt="'Click to rename in Arr'" x-text="sh.arrProfileName"></span>
-                                <span style="color:#aaa;font-size:12px" x-text="'ID ' + sh.arrProfileId"></span>
+                                <span style="color:var(--text-primary);cursor:pointer;border-bottom:1px dashed var(--border-subtle)" @click.stop="newName = sh.arrProfileName; editing = true" x-tt="'Click to rename in Arr'" x-text="sh.arrProfileName"></span>
+                                <span style="color:var(--text-muted);font-size:12px" x-text="'ID ' + sh.arrProfileId"></span>
                               </span>
                             </template>
                             <template x-if="editing">
@@ -93,44 +93,44 @@
                                 <span class="slider"></span>
                               </label>
                               <span style="font-size:11px"
-                                    :style="sh.orphanedAt ? 'color:#666' : (autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'color:#3fb950' : 'color:#f8514980')"
+                                    :style="sh.orphanedAt ? 'color:var(--text-muted-secondary)' : (autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'color:var(--accent-green)' : 'color:color-mix(in srgb, var(--accent-red) 50%, transparent)')"
                                     x-text="sh.orphanedAt ? 'orphaned' : (autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'auto-sync' : 'auto-sync off')"></span>
                           </div>
                           <span style="flex:1;display:flex;gap:8px;align-items:center;justify-content:flex-end">
                             <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">
-                              <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d1f1f;color:#f85149;flex-shrink:0"
+                              <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-red-bg);color:var(--accent-red);flex-shrink:0"
                                     x-tt="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>
                             </template>
                             <span style="display:flex;gap:4px;align-items:center;flex-shrink:0"
                                   x-data="{ get _rule() { return autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId) || {}; }, get _so() { return Object.keys(this._rule.scoreOverrides || {}).filter(k => !k.startsWith('custom:')).length; }, get _extra() { return Object.keys(this._rule.scoreOverrides || {}).filter(k => k.startsWith('custom:')).length; }, get _qo() { return Object.keys(this._rule.qualityOverrides || {}).length; }, get _oo() { return this._rule.overrides ? Object.keys(this._rule.overrides).filter(k => this._rule.overrides[k] !== undefined).length : 0; } }">
                               <template x-if="_extra > 0">
-                                <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff;flex-shrink:0"
+                                <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-blue-soft);color:var(--accent-blue);flex-shrink:0"
                                       x-tt="'Custom formats created by you and added to this profile'"
                                       x-text="_extra + ' custom CF' + (_extra !== 1 ? 's' : '')"></span>
                               </template>
                               <template x-if="_so + _qo + _oo > 0">
-                                <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922;flex-shrink:0"
+                                <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange);flex-shrink:0"
                                       x-tt="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
                                       x-text="(_so + _qo + _oo) + ' override' + ((_so + _qo + _oo) !== 1 ? 's' : '')"></span>
                               </template>
                             </span>
-                            <span style="color:#aaa;flex-shrink:0" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
-                            <span style="color:#aaa;flex-shrink:0" x-text="timeAgo(sh.lastSync)"></span>
+                            <span style="color:var(--text-muted);flex-shrink:0" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
+                            <span style="color:var(--text-muted);flex-shrink:0" x-text="timeAgo(sh.lastSync)"></span>
                           </span>
                           <span style="display:flex;gap:6px;flex-shrink:0;align-items:center">
                             <template x-if="sh.orphanedAt">
-                              <button class="btn" style="padding:3px 10px;font-size:11px;background:#0d2818;border:1px solid #1f6f3d;color:#7ee787" @click.stop="restoreOrphanedRule(inst, sh)" x-tt="'Recreate this profile in Arr from the last synced state'">&#8634; Restore</button>
+                              <button class="btn" style="padding:3px 10px;font-size:11px;background:var(--fill-blue-soft);border:1px solid var(--accent-green-bg);color:var(--accent-green)" @click.stop="restoreOrphanedRule(inst, sh)" x-tt="'Recreate this profile in Arr from the last synced state'">&#8634; Restore</button>
                             </template>
                             <template x-if="!sh.orphanedAt">
                               <button class="btn-icon" @click.stop="resyncProfile(inst, sh)" x-tt="'Edit sync settings'">&#9998;</button>
                             </template>
                             <template x-if="!sh.orphanedAt">
-                              <button class="btn-icon" style="color:#3fb950" @click.stop="quickSync(inst, sh)" x-tt="'Re-sync with saved settings'">&#8635;</button>
+                              <button class="btn-icon" style="color:var(--accent-green)" @click.stop="quickSync(inst, sh)" x-tt="'Re-sync with saved settings'">&#8635;</button>
                             </template>
                             <template x-if="!sh.orphanedAt">
-                              <button class="btn-icon" style="color:#58a6ff" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>
+                              <button class="btn-icon" style="color:var(--accent-blue)" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>
                             </template>
-                            <button class="btn-icon" style="color:#f85149" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" x-tt="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
+                            <button class="btn-icon" style="color:var(--accent-red)" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" x-tt="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
                           </span>
                         </div>
                       </template>
@@ -138,7 +138,7 @@
                   </template>
                 </template>
                 <template x-if="!instancesOfType(activeAppType).some(inst => sortedSyncRules(inst.id).length > 0)">
-                  <div style="padding:16px;text-align:center;color:#aaa;font-size:12px">No sync history yet. Sync a profile from the list below to get started.</div>
+                  <div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px">No sync history yet. Sync a profile from the list below to get started.</div>
                 </template>
               </div>
             </div>
@@ -164,7 +164,7 @@
                               @mouseleave="hideCFTooltip()">&#9432;</span>
                       </div>
                       <div style="display:flex;align-items:center;gap:8px">
-                        <span style="font-size:12px;background:#21262d;color:#aaa;padding:2px 8px;border-radius:3px" x-text="p.cfCount + ' CFs'"></span>
+                        <span style="font-size:12px;background:var(--bg-muted);color:var(--text-muted);padding:2px 8px;border-radius:3px" x-text="p.cfCount + ' CFs'"></span>
                       </div>
                     </div>
                   </template>
@@ -185,7 +185,7 @@
         <!-- ===== History tab ===== -->
         <div class="page" x-show="getProfileTab(activeAppType) === 'history'">
           <div style="font-size:18px;font-weight:600;margin-bottom:4px">Sync History</div>
-          <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
             Track changes made to your synced profiles. Each sync that modifies scores, CFs, quality items, or settings is recorded here. Roll back to a previous state if needed.
           </div>
 
@@ -193,12 +193,12 @@
             <template x-if="sortedSyncRules(inst.id).length > 0">
               <div class="card" style="margin-bottom:16px">
                 <!-- Instance header — matches Trash Sync -->
-                <div style="padding:8px 16px;font-size:13px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#0d1117;border-bottom:1px solid #21262d;display:flex;align-items:center">
+                <div style="padding:8px 16px;font-size:13px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:var(--bg-page);border-bottom:1px solid var(--bg-muted);display:flex;align-items:center">
                   <span x-text="inst.name"></span>
                 </div>
                 <!-- Table layout for proper column alignment -->
                 <!-- Column headers -->
-                <div style="display:flex;align-items:center;padding:4px 16px;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #161b22;user-select:none">
+                <div style="display:flex;align-items:center;padding:4px 16px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--bg-card);user-select:none">
                   <div style="flex:none;width:240px;cursor:pointer" @click="toggleHistorySort('trash')">TRaSH Profile <span x-show="historySort.col==='trash'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></div>
                   <div style="flex:none;width:20px"></div>
                   <div style="flex:none;width:240px;cursor:pointer" @click="toggleHistorySort('arr')">Arr Profile <span x-show="historySort.col==='arr'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></div>
@@ -209,40 +209,40 @@
                 <!-- Data rows -->
                 <template x-for="sh in sortedHistoryProfiles(inst.id)" :key="'hp-'+sh.arrProfileId">
                   <div>
-                    <div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #161b22;font-size:12px;cursor:pointer"
+                    <div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bg-card);font-size:12px;cursor:pointer"
                          @click="historyExpanded === inst.id + ':' + sh.arrProfileId ? historyExpanded = '' : (historyExpanded = inst.id + ':' + sh.arrProfileId, loadProfileHistory(inst.id, sh.arrProfileId))"
-                         @mouseenter="$el.style.background='#1c2128'" @mouseleave="if (historyExpanded !== inst.id + ':' + sh.arrProfileId) $el.style.background=''">
-                      <div style="flex:none;width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#58a6ff;font-weight:500" x-text="sh.profileName"></div>
-                      <div style="flex:none;width:20px;color:#aaa;text-align:center;font-size:15px">&rarr;</div>
-                      <div style="flex:none;width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e1e4e8" x-text="sh.arrProfileName"></div>
+                         @mouseenter="$el.style.background='var(--bg-elevated)'" @mouseleave="if (historyExpanded !== inst.id + ':' + sh.arrProfileId) $el.style.background=''">
+                      <div style="flex:none;width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent-blue);font-weight:500" x-text="sh.profileName"></div>
+                      <div style="flex:none;width:20px;color:var(--text-muted);text-align:center;font-size:15px">&rarr;</div>
+                      <div style="flex:none;width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)" x-text="sh.arrProfileName"></div>
                       <div style="flex:none;width:100px;white-space:nowrap">
-                        <span :style="sh.changes ? 'color:#d29922' : 'color:#aaa'" x-text="sh.changes ? timeAgo(sh.appliedAt || sh.lastSync) : '—'"></span>
+                        <span :style="sh.changes ? 'color:var(--accent-orange)' : 'color:var(--text-muted)'" x-text="sh.changes ? timeAgo(sh.appliedAt || sh.lastSync) : '—'"></span>
                       </div>
                       <div style="flex:none;width:55px;text-align:center;white-space:nowrap">
                         <span x-show="historyEventCount(inst.id, sh.arrProfileId) > 0"
-                              style="font-size:11px;padding:1px 6px;border-radius:3px;background:#21262d;color:#e1e4e8"
+                              style="font-size:11px;padding:1px 6px;border-radius:3px;background:var(--bg-muted);color:var(--text-primary)"
                               x-text="historyEventCount(inst.id, sh.arrProfileId)"></span>
-                        <span x-show="historyEventCount(inst.id, sh.arrProfileId) === 0" style="color:#30363d">—</span>
+                        <span x-show="historyEventCount(inst.id, sh.arrProfileId) === 0" style="color:var(--border-subtle)">—</span>
                       </div>
                       <div style="flex:1;display:flex;gap:4px;justify-content:flex-end;padding-right:4px">
                         <template x-if="sh.changes?.cfDetails?.length > 0">
-                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:#3fb950" x-text="sh.changes.cfDetails.length + ' CF'"></span>
+                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-green);color:var(--accent-green)" x-text="sh.changes.cfDetails.length + ' CF'"></span>
                         </template>
                         <template x-if="sh.changes?.scoreDetails?.length > 0">
-                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922" x-text="sh.changes.scoreDetails.length + ' score'"></span>
+                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange)" x-text="sh.changes.scoreDetails.length + ' score'"></span>
                         </template>
                         <template x-if="sh.changes?.qualityDetails?.length > 0">
-                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(163,113,247,0.15);color:#a371f7" x-text="sh.changes.qualityDetails.length + ' quality'"></span>
+                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-purple);color:var(--accent-purple)" x-text="sh.changes.qualityDetails.length + ' quality'"></span>
                         </template>
                         <template x-if="sh.changes?.settingsDetails?.length > 0">
-                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff" x-text="sh.changes.settingsDetails.length + ' setting'"></span>
+                          <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-blue-soft);color:var(--accent-blue)" x-text="sh.changes.settingsDetails.length + ' setting'"></span>
                         </template>
-                        <span x-show="!sh.changes" style="color:#aaa">No changes recorded</span>
+                        <span x-show="!sh.changes" style="color:var(--text-muted)">No changes recorded</span>
                       </div>
                     </div>
 
                     <!-- Expanded: change history for this profile -->
-                    <div x-show="historyExpanded === inst.id + ':' + sh.arrProfileId" style="background:#0d1117;border-bottom:1px solid #21262d">
+                    <div x-show="historyExpanded === inst.id + ':' + sh.arrProfileId" style="background:var(--bg-page);border-bottom:1px solid var(--bg-muted)">
                       <template x-if="historyLoading">
                         <div style="padding:16px;text-align:center"><span class="spinner"></span></div>
                       </template>
@@ -252,7 +252,7 @@
                              only). Previously the latter fell through every
                              x-if branch, rendering an empty expanded panel
                              that looked like a click that did nothing. -->
-                        <div style="font-size:12px;color:#aaa;padding:12px 16px 12px 32px">No changes recorded yet. Changes are tracked from the next sync onwards.</div>
+                        <div style="font-size:12px;color:var(--text-muted);padding:12px 16px 12px 32px">No changes recorded yet. Changes are tracked from the next sync onwards.</div>
                       </template>
                       <template x-if="!historyLoading && historyEntries.filter(e => e.changes).length > 0">
                         <div style="padding:6px 16px 6px 32px">
@@ -260,12 +260,12 @@
                                history is marked orphaned. All entries for one ArrProfileID
                                share the same orphaned state, so we just check the first. -->
                           <template x-if="historyEntries.some(e => e.orphanedAt)">
-                            <div style="margin:4px 0 8px 0;padding:8px 12px;background:#3d2410;border:1px solid #d29922;border-radius:6px;font-size:12px;color:#e3b341;line-height:1.55">
+                            <div style="margin:4px 0 8px 0;padding:8px 12px;background:var(--accent-orange-bg);border:1px solid var(--accent-orange);border-radius:6px;font-size:12px;color:var(--cat-hq-release-groups);line-height:1.55">
                               <strong>This profile is orphaned</strong> — its target was deleted in Arr. These entries describe the pre-deletion state and Rollback is disabled. Click Restore on the sync row above to recreate the profile from this saved state. After a successful restore, these entries are cleared automatically.
                             </div>
                           </template>
                           <!-- Sub-table column headers -->
-                          <div style="display:flex;align-items:center;padding:4px 0;gap:8px;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #21262d;margin-bottom:2px">
+                          <div style="display:flex;align-items:center;padding:4px 0;gap:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--bg-muted);margin-bottom:2px">
                             <span style="width:150px;flex-shrink:0">Date</span>
                             <span style="width:70px;flex-shrink:0;text-align:center">CFs</span>
                             <span style="width:70px;flex-shrink:0;text-align:center">Scores</span>
@@ -276,68 +276,68 @@
                           <template x-for="(entry, ei) in historyEntries.filter(e => e.changes)" :key="'he-'+ei">
                             <div>
                               <!-- Entry row -->
-                              <div style="display:flex;align-items:center;padding:6px 0;gap:8px;cursor:pointer;font-size:12px;border-bottom:1px solid #161b22"
+                              <div style="display:flex;align-items:center;padding:6px 0;gap:8px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bg-card)"
                                    @click="historyDetailIdx = historyDetailIdx === ei ? -1 : ei"
-                                   @mouseenter="$el.style.background='#161b22'" @mouseleave="$el.style.background=''">
-                                <span style="color:#e1e4e8;font-weight:500;width:150px;flex-shrink:0;display:flex;align-items:center;gap:6px">
-                                  <span style="color:#aaa;font-size:11px;display:inline-block;width:10px;transition:transform 0.15s"
+                                   @mouseenter="$el.style.background='var(--bg-card)'" @mouseleave="$el.style.background=''">
+                                <span style="color:var(--text-primary);font-weight:500;width:150px;flex-shrink:0;display:flex;align-items:center;gap:6px">
+                                  <span style="color:var(--text-muted);font-size:11px;display:inline-block;width:10px;transition:transform 0.15s"
                                         :style="historyDetailIdx === ei ? 'transform:rotate(90deg)' : ''">&#9654;</span>
                                   <span x-text="new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(63,185,80,0.15);color:#3fb950" x-text="entry.changes.cfDetails?.length"></span>
-                                  <span x-show="!entry.changes.cfDetails?.length" style="color:#30363d">—</span>
+                                  <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-green);color:var(--accent-green)" x-text="entry.changes.cfDetails.length"></span>
+                                  <span x-show="!entry.changes.cfDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.scoreDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:#3d2e0a;color:#d29922" x-text="entry.changes.scoreDetails?.length"></span>
-                                  <span x-show="!entry.changes.scoreDetails?.length" style="color:#30363d">—</span>
+                                  <span x-show="entry.changes.scoreDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange)" x-text="entry.changes.scoreDetails.length"></span>
+                                  <span x-show="!entry.changes.scoreDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.qualityDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:rgba(163,113,247,0.15);color:#a371f7" x-text="entry.changes.qualityDetails?.length"></span>
-                                  <span x-show="!entry.changes.qualityDetails?.length" style="color:#30363d">—</span>
+                                  <span x-show="entry.changes.qualityDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-purple);color:var(--accent-purple)" x-text="entry.changes.qualityDetails.length"></span>
+                                  <span x-show="!entry.changes.qualityDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.settingsDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:#0d2847;color:#58a6ff" x-text="entry.changes.settingsDetails?.length"></span>
-                                  <span x-show="!entry.changes.settingsDetails?.length" style="color:#30363d">—</span>
+                                  <span x-show="entry.changes.settingsDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-blue-soft);color:var(--accent-blue)" x-text="entry.changes.settingsDetails.length"></span>
+                                  <span x-show="!entry.changes.settingsDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="flex:1"></span>
                                 <button class="btn" style="font-size:11px;padding:2px 8px;flex-shrink:0"
-                                        :style="entry.orphanedAt ? 'opacity:0.4;cursor:not-allowed;border-color:#30363d;color:#666' : 'border-color:#d29922;color:#d29922'"
+                                        :style="entry.orphanedAt ? 'opacity:0.4;cursor:not-allowed;border-color:var(--border-subtle);color:var(--text-muted-secondary)' : 'border-color:var(--accent-orange);color:var(--accent-orange)'"
                                         :disabled="!!entry.orphanedAt"
                                         @click.stop="if (!entry.orphanedAt) rollbackSync(inst, entry, ei)"
                                         x-tt="entry.orphanedAt ? 'Cannot rollback — the target profile is orphaned (deleted in Arr). Use Restore on the sync row first.' : 'Re-sync this profile to the state from this point in time. Auto-sync will be disabled.'">Rollback</button>
                               </div>
                               <!-- Expanded detail -->
-                              <div x-show="historyDetailIdx === ei" style="margin:4px 0 8px 16px;padding:10px 14px;background:#161b22;border-left:2px solid #58a6ff;border-radius:0 6px 6px 0;font-size:12px;line-height:1.7">
+                              <div x-show="historyDetailIdx === ei" style="margin:4px 0 8px 16px;padding:10px 14px;background:var(--bg-card);border-left:2px solid var(--accent-blue);border-radius:0 6px 6px 0;font-size:12px;line-height:1.7">
                                 <template x-if="entry.changes.cfDetails?.length > 0">
                                   <div>
-                                    <div style="color:#aaa;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Custom Formats</div>
+                                    <div style="color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Custom Formats</div>
                                     <template x-for="d in entry.changes.cfDetails" :key="d">
-                                      <div :style="d.startsWith('Created') || d.startsWith('Added') ? 'color:#3fb950' : d.startsWith('Removed') || d.startsWith('Deleted') ? 'color:#f85149' : 'color:#d29922'" x-text="d"></div>
+                                      <div :style="d.startsWith('Created') || d.startsWith('Added') ? 'color:var(--accent-green)' : d.startsWith('Removed') || d.startsWith('Deleted') ? 'color:var(--accent-red)' : 'color:var(--accent-orange)'" x-text="d"></div>
                                     </template>
                                   </div>
                                 </template>
                                 <template x-if="entry.changes.scoreDetails?.length > 0">
                                   <div :style="entry.changes.cfDetails?.length > 0 ? 'margin-top:8px' : ''">
-                                    <div style="color:#aaa;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Scores</div>
+                                    <div style="color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Scores</div>
                                     <template x-for="d in entry.changes.scoreDetails" :key="d">
-                                      <div style="color:#d29922" x-text="d"></div>
+                                      <div style="color:var(--accent-orange)" x-text="d"></div>
                                     </template>
                                   </div>
                                 </template>
                                 <template x-if="entry.changes.qualityDetails?.length > 0">
                                   <div :style="(entry.changes.cfDetails?.length > 0 || entry.changes.scoreDetails?.length > 0) ? 'margin-top:8px' : ''">
-                                    <div style="color:#aaa;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Quality Items</div>
+                                    <div style="color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Quality Items</div>
                                     <template x-for="d in entry.changes.qualityDetails" :key="d">
-                                      <div style="color:#a371f7" x-text="d"></div>
+                                      <div style="color:var(--accent-purple)" x-text="d"></div>
                                     </template>
                                   </div>
                                 </template>
                                 <template x-if="entry.changes.settingsDetails?.length > 0">
                                   <div :style="(entry.changes.cfDetails?.length > 0 || entry.changes.scoreDetails?.length > 0 || entry.changes.qualityDetails?.length > 0) ? 'margin-top:8px' : ''">
-                                    <div style="color:#aaa;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Settings</div>
+                                    <div style="color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:0.3px;margin-bottom:2px">Settings</div>
                                     <template x-for="d in entry.changes.settingsDetails" :key="d">
-                                      <div style="color:#58a6ff" x-text="d"></div>
+                                      <div style="color:var(--accent-blue)" x-text="d"></div>
                                     </template>
                                   </div>
                                 </template>
@@ -354,7 +354,7 @@
           </template>
 
           <template x-if="!instancesOfType(activeAppType).some(inst => sortedSyncRules(inst.id).length > 0)">
-            <div style="text-align:center;padding:40px;color:#aaa;font-size:13px">No synced profiles yet. Sync a profile from the TRaSH Sync tab to see history here.</div>
+            <div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">No synced profiles yet. Sync a profile from the TRaSH Sync tab to see history here.</div>
           </template>
         </div>
         <!-- end History tab -->
@@ -362,15 +362,15 @@
         <!-- ===== Compare tab ===== -->
         <div class="page" x-show="getProfileTab(activeAppType) === 'compare'">
           <div style="font-size:18px;font-weight:600;margin-bottom:4px">Compare Profiles</div>
-          <div style="font-size:14px;color:#aaa;margin-bottom:12px;line-height:1.5">Compare your <span x-text="activeAppLabel"></span> profiles against TRaSH Guides profiles. See what's matching, what has wrong scores, and what's missing — then sync individual fixes or all at once.</div>
-          <div style="font-size:12px;color:#e1e4e8;margin-bottom:16px;line-height:1.6;padding:10px 14px;background:#1a1500;border:1px solid #9e6a03;border-radius:6px;border-left:3px solid #d29922">
-            <strong style="color:#d29922">Note:</strong> Compare works best with profiles synced via Clonarr. For profiles created with other tools, custom formats with a score of 0 cannot be reliably distinguished from unused formats — these may not appear as "in use" in the comparison.
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Compare your <span x-text="activeAppLabel"></span> profiles against TRaSH Guides profiles. See what's matching, what has wrong scores, and what's missing — then sync individual fixes or all at once.</div>
+          <div style="font-size:12px;color:var(--text-primary);margin-bottom:16px;line-height:1.6;padding:10px 14px;background:var(--accent-orange-bg);border:1px solid var(--accent-orange-strong);border-radius:6px;border-left:3px solid var(--accent-orange)">
+            <strong style="color:var(--accent-orange)">Note:</strong> Compare works best with profiles synced via Clonarr. For profiles created with other tools, custom formats with a score of 0 cannot be reliably distinguished from unused formats — these may not appear as "in use" in the comparison.
           </div>
 
           <!-- Compact selector bar: instance + Arr profile + TRaSH profile on one row -->
           <div class="card">
             <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap">
-              <span style="font-size:12px;color:#aaa">Instance:</span>
+              <span style="font-size:12px;color:var(--text-muted)">Instance:</span>
               <select class="input" style="width:140px;font-size:12px;padding:4px 8px"
                       :value="getCompareInstanceId(activeAppType)"
                       @change="setCompareInstanceId(activeAppType, $event.target.value); $nextTick(() => { const ci = getCompareInstance(activeAppType); if (ci) { testInstance(ci); loadInstanceProfiles(ci); loadSyncHistory(ci.id); } })">
@@ -380,21 +380,21 @@
                 </template>
               </select>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instanceStatus[getCompareInstance(activeAppType)?.id] === 'connected'">
-                <span style="width:8px;height:8px;border-radius:50%;background:#3fb950;display:inline-block" x-tt="'Connected'"></span>
+                <span style="width:8px;height:8px;border-radius:50%;background:var(--accent-green);display:inline-block" x-tt="'Connected'"></span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instanceStatus[getCompareInstance(activeAppType)?.id] === 'failed'">
-                <span style="width:8px;height:8px;border-radius:50%;background:#f85149;display:inline-block" x-tt="'Connection failed'"></span>
+                <span style="width:8px;height:8px;border-radius:50%;background:var(--accent-red);display:inline-block" x-tt="'Connection failed'"></span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && !instanceStatus[getCompareInstance(activeAppType)?.id]">
-                <span style="width:8px;height:8px;border-radius:50%;background:#d29922;display:inline-block" x-tt="'Not tested'"></span>
+                <span style="width:8px;height:8px;border-radius:50%;background:var(--accent-orange);display:inline-block" x-tt="'Not tested'"></span>
               </template>
 
               <!-- Arr profile + TRaSH profile dropdowns (only show when instance selected) -->
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType">
-                <span style="width:1px;height:20px;background:#30363d"></span>
+                <span style="width:1px;height:20px;background:var(--border-subtle)"></span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType">
-                <span style="font-size:12px;color:#aaa">Arr:</span>
+                <span style="font-size:12px;color:var(--text-muted)">Arr:</span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType">
                 <select class="input" style="width:200px;font-size:12px;padding:4px 8px"
@@ -407,10 +407,10 @@
                 </select>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType">
-                <span style="font-size:11px;color:#d29922;font-weight:600">VS</span>
+                <span style="font-size:11px;color:var(--accent-orange);font-weight:600">VS</span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType">
-                <span style="font-size:12px;color:#aaa">TRaSH:</span>
+                <span style="font-size:12px;color:var(--text-muted)">TRaSH:</span>
               </template>
               <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType">
                 <select class="input" style="width:240px;font-size:12px;padding:4px 8px"
@@ -440,12 +440,12 @@
           <!-- Empty states -->
           <template x-if="!getCompareInstance(activeAppType) || getCompareInstance(activeAppType)?.type !== activeAppType">
             <div class="card">
-              <div style="padding:32px;text-align:center;color:#aaa;font-size:13px">Select an instance above to compare profiles.</div>
+              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Select an instance above to compare profiles.</div>
             </div>
           </template>
           <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && !instProfiles[getCompareInstance(activeAppType)?.id]">
             <div class="card">
-              <div style="padding:32px;text-align:center;color:#aaa;font-size:13px">
+              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
                 <div style="margin-bottom:12px">Loading profiles from <span x-text="getCompareInstance(activeAppType)?.name"></span>...</div>
                 <button class="btn btn-sm" @click="loadInstanceProfiles(getCompareInstance(activeAppType))" :disabled="instProfilesLoading[getCompareInstance(activeAppType)?.id]">Load Profiles</button>
               </div>
@@ -453,12 +453,12 @@
           </template>
           <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instProfiles[getCompareInstance(activeAppType)?.id] && !instCompareProfile[getCompareInstance(activeAppType)?.id]">
             <div class="card">
-              <div style="padding:32px;text-align:center;color:#aaa;font-size:13px">Select an Arr profile and a TRaSH profile above to compare.</div>
+              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Select an Arr profile and a TRaSH profile above to compare.</div>
             </div>
           </template>
           <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instCompareProfile[getCompareInstance(activeAppType)?.id] && !instCompareTrashId[getCompareInstance(activeAppType)?.id]">
             <div class="card">
-              <div style="padding:32px;text-align:center;color:#aaa;font-size:13px">Select a TRaSH profile to compare against.</div>
+              <div style="padding:32px;text-align:center;color:var(--text-muted);font-size:13px">Select a TRaSH profile to compare against.</div>
             </div>
           </template>
           <template x-if="getCompareInstance(activeAppType) && getCompareInstance(activeAppType)?.type === activeAppType && instCompareTrashId[getCompareInstance(activeAppType)?.id]">
@@ -474,7 +474,7 @@
                             <template x-if="instCompareProfile[getCompareInstance(activeAppType)?.id] === ap.id">
                               <div>
                                 <div style="display:none">
-                                  <label style="font-size:12px;color:#aaa;white-space:nowrap">Compare against TRaSH profile:</label>
+                                  <label style="font-size:12px;color:var(--text-muted);white-space:nowrap">Compare against TRaSH profile:</label>
                                   <select class="input" style="width:280px;font-size:12px"
                                           :value="instCompareTrashId[getCompareInstance(activeAppType)?.id] || ''"
                                           @change="runProfileCompare(getCompareInstance(activeAppType), ap.id, $event.target.value)">
@@ -495,7 +495,7 @@
                                 <template x-if="instCompareResult[getCompareInstance(activeAppType)?.id]">
                                   <div>
                                     <template x-if="instCompareResult[getCompareInstance(activeAppType)?.id].error">
-                                      <div style="color:#f85149;font-size:12px" x-text="instCompareResult[getCompareInstance(activeAppType)?.id].error"></div>
+                                      <div style="color:var(--accent-red);font-size:12px" x-text="instCompareResult[getCompareInstance(activeAppType)?.id].error"></div>
                                     </template>
                                     <template x-if="!instCompareResult[getCompareInstance(activeAppType)?.id].error">
                                       <div x-data="{ get cr() { return instCompareResult[getCompareInstance(activeAppType)?.id] }, get iid() { return getCompareInstance(activeAppType)?.id }, get inst() { return getCompareInstance(activeAppType) } }">
@@ -519,9 +519,9 @@
                                             </div>
                                             <template x-if="[...(syncResult.cfDetails || []), ...(syncResult.scoreDetails || []), ...(syncResult.qualityDetails || []), ...(syncResult.settingsDetails || [])].length > 0">
                                               <div style="margin-top:6px">
-                                                <a style="font-size:12px;color:#58a6ff;cursor:pointer;user-select:none" @click="syncResultDetailsOpen = !syncResultDetailsOpen"
+                                                <a style="font-size:12px;color:var(--accent-blue);cursor:pointer;user-select:none" @click="syncResultDetailsOpen = !syncResultDetailsOpen"
                                                    x-text="syncResultDetailsOpen ? '▾ Hide details' : '▸ Show details (' + [...(syncResult.cfDetails || []), ...(syncResult.scoreDetails || []), ...(syncResult.qualityDetails || []), ...(syncResult.settingsDetails || [])].length + ' changes)'"></a>
-                                                <div x-show="syncResultDetailsOpen" style="margin-top:4px;font-size:13px;color:#aaa">
+                                                <div x-show="syncResultDetailsOpen" style="margin-top:4px;font-size:13px;color:var(--text-muted)">
                                                   <template x-for="(d, i) in [...(syncResult.cfDetails || []), ...(syncResult.scoreDetails || []), ...(syncResult.qualityDetails || []), ...(syncResult.settingsDetails || [])]" :key="i">
                                                     <div style="padding:1px 0" x-text="d"></div>
                                                   </template>
@@ -531,7 +531,7 @@
                                             <template x-if="syncResult.errors?.length">
                                               <div style="margin-top:8px;font-size:13px">
                                                 <template x-for="(err, i) in syncResult.errors" :key="i">
-                                                  <div style="color:#f0883e;padding:2px 0" x-text="err"></div>
+                                                  <div style="color:var(--accent-orange-bright);padding:2px 0" x-text="err"></div>
                                                 </template>
                                               </div>
                                             </template>
@@ -550,27 +550,27 @@
                                                 <span> — <span x-text="syncPlan.summary.scoresToSet"></span> scores to set</span>
                                               </template>
                                               <template x-if="syncPlan.summary.scoresToZero > 0">
-                                                <span style="color:#d29922"> — <span x-text="syncPlan.summary.scoresToZero"></span> extra scores zeroed</span>
+                                                <span style="color:var(--accent-orange)"> — <span x-text="syncPlan.summary.scoresToZero"></span> extra scores zeroed</span>
                                               </template>
                                               <template x-if="(syncPlan.settingsPreview || []).length > 0 || (syncPlan.qualityPreview || []).length > 0 || (syncPlan.cfActions || []).some(a => a.action !== 'unchanged') || (syncPlan.scoreActions || []).some(a => a.action !== 'unchanged')">
                                                 <div style="margin-top:6px">
-                                                  <a style="font-size:12px;color:#58a6ff;cursor:pointer;user-select:none" @click="dryrunDetailsOpen = !dryrunDetailsOpen"
+                                                  <a style="font-size:12px;color:var(--accent-blue);cursor:pointer;user-select:none" @click="dryrunDetailsOpen = !dryrunDetailsOpen"
                                                      x-text="dryrunDetailsOpen ? '▾ Hide details' : '▸ Show details'"></a>
-                                                  <div x-show="dryrunDetailsOpen" style="margin-top:4px;font-size:12px;color:#c9d1d9;line-height:1.6">
+                                                  <div x-show="dryrunDetailsOpen" style="margin-top:4px;font-size:12px;color:var(--text-body);line-height:1.6">
                                                     <template x-for="s in (syncPlan.settingsPreview || [])" :key="s">
-                                                      <div><span style="color:#58a6ff">Settings:</span> <span x-text="s"></span></div>
+                                                      <div><span style="color:var(--accent-blue)">Settings:</span> <span x-text="s"></span></div>
                                                     </template>
                                                     <template x-for="q in (syncPlan.qualityPreview || [])" :key="q">
-                                                      <div><span style="color:#d29922">Quality:</span> <span x-text="q"></span></div>
+                                                      <div><span style="color:var(--accent-orange)">Quality:</span> <span x-text="q"></span></div>
                                                     </template>
                                                     <template x-for="a in (syncPlan.cfActions || []).filter(a => a.action === 'create')" :key="'cf-'+a.name">
-                                                      <div><span style="color:#3fb950">Create CF:</span> <span x-text="a.name"></span></div>
+                                                      <div><span style="color:var(--accent-green)">Create CF:</span> <span x-text="a.name"></span></div>
                                                     </template>
                                                     <template x-for="a in (syncPlan.cfActions || []).filter(a => a.action === 'update')" :key="'cfu-'+a.name">
-                                                      <div><span style="color:#58a6ff">Update CF:</span> <span x-text="a.name"></span></div>
+                                                      <div><span style="color:var(--accent-blue)">Update CF:</span> <span x-text="a.name"></span></div>
                                                     </template>
                                                     <template x-for="a in (syncPlan.scoreActions || []).filter(a => a.action !== 'unchanged')" :key="'sc-'+a.cfName">
-                                                      <div><span style="color:#d29922">Score:</span> <span x-text="a.cfName + ': ' + a.oldScore + ' → ' + a.newScore"></span></div>
+                                                      <div><span style="color:var(--accent-orange)">Score:</span> <span x-text="a.cfName + ': ' + a.oldScore + ' → ' + a.newScore"></span></div>
                                                     </template>
                                                   </div>
                                                 </div>
@@ -586,19 +586,19 @@
                                         <!-- Summary bar — single-row: profile identity + status + Sync All Fixes.
                                              Diff counts intentionally removed; the filter chip bar below is the single source of truth for counts.
                                              NOTE: :style uses object form so it MERGES with the base style attribute. A string form would replace it entirely. -->
-                                        <div style="background:#161b22;border:1px solid #444c56;border-radius:8px;padding:10px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 6px rgba(0,0,0,0.4)"
-                                             :style="{ borderColor: ((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) > 0 ? '#d29922' : '#3fb950' }">
-                                          <strong style="color:#e1e4e8;font-size:13px" x-text="ap.name"></strong>
-                                          <span style="color:#aaa;font-size:12px">vs</span>
-                                          <strong style="color:#e1e4e8;font-size:13px" x-text="cr.trashProfileName"></strong>
+                                        <div style="background:var(--bg-card);border:1px solid var(--text-muted-secondary);border-radius:8px;padding:10px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 6px var(--alpha-shadow)"
+                                             :style="{ borderColor: ((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) > 0 ? 'var(--accent-orange)' : 'var(--accent-green)' }">
+                                          <strong style="color:var(--text-primary);font-size:13px" x-text="ap.name"></strong>
+                                          <span style="color:var(--text-muted);font-size:12px">vs</span>
+                                          <strong style="color:var(--text-primary);font-size:13px" x-text="cr.trashProfileName"></strong>
                                           <span x-show="cr.summary.missing === 0 && cr.summary.wrongScore === 0 && cr.summary.extra === 0 && cr.summary.settingsDiffs === 0 && cr.summary.qualityDiffs === 0"
-                                                style="color:#3fb950;font-size:13px;font-weight:500;margin-left:8px">&#10003; Profile fully in sync</span>
+                                                style="color:var(--accent-green);font-size:13px;font-weight:500;margin-left:8px">&#10003; Profile fully in sync</span>
                                           <span x-show="((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) > 0"
-                                                style="color:#d29922;font-size:13px;font-weight:500;margin-left:8px"
+                                                style="color:var(--accent-orange);font-size:13px;font-weight:500;margin-left:8px"
                                                 x-text="'\u26A0 ' + ((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) + ' diffs — see filter below for details'"></span>
                                           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
                                             <!-- Reset to default — re-applies the initial "match TRaSH" selection state. -->
-                                            <button class="btn btn-sm" style="font-size:12px;padding:3px 10px;color:#8b949e;border-color:#30363d"
+                                            <button class="btn btn-sm" style="font-size:12px;padding:3px 10px;color:var(--text-secondary);border-color:var(--border-subtle)"
                                                     x-show="compareAdjustedCounts(cr).diffs > 0"
                                                     x-tt="'Undo any manual changes — restore the match-TRaSH default selection'"
                                                     @click="resetCompareToDefault(inst, cr)">&#8634; Reset to default</button>
@@ -613,7 +613,7 @@
 
                                         <!-- Filter chip bar — single source of truth for diff counts. -->
                                         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
-                                          <span style="font-size:11px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-right:6px">Filter</span>
+                                          <span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-right:6px">Filter</span>
                                           <span class="compare-chip" :class="compareFilter === 'all' ? 'active' : ''" @click="compareFilter = 'all'" x-text="'All (' + compareAdjustedCounts(cr).all + ')'"></span>
                                           <span class="compare-chip" :class="compareFilter === 'diff' ? 'active' : ''" @click="compareFilter = 'diff'" x-text="'Only diffs (' + compareAdjustedCounts(cr).diffs + ')'"></span>
                                           <span class="compare-chip compare-chip-wrong" :class="compareFilter === 'wrong' ? 'active' : ''" @click="compareFilter = 'wrong'" x-text="'⚠ Wrong score (' + compareAdjustedCounts(cr).wrong + ')'"></span>
@@ -625,17 +625,17 @@
                                         <!-- Profile Settings — one card with a 4-column table (Setting | Current | TRaSH | Sync) and sub-header rows for General / Quality / Quality Items. Rows filtered by compareFilter. Entire card hidden if filter yields 0 visible rows. Matches clonarr-compare-redesign-v3.html mockup. -->
                                         <template x-if="(cr.settingsDiffs || []).some(s => compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'wrong' && !s.match) || (compareFilter === 'match' && s.match)) || (cr.qualityDiffs || []).some(q => compareFilter === 'all' || (compareFilter === 'diff' && !q.match) || (compareFilter === 'wrong' && !q.match) || (compareFilter === 'match' && q.match))">
                                           <div class="card" style="margin-bottom:10px;overflow:hidden">
-                                            <div style="padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                                            <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
                                               <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
-                                                    :style="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match) ? 'color:#d29922' : 'color:#3fb950'"
+                                                    :style="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
                                                     x-text="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match) ? '⚠' : '✓'"></span>
-                                              <span style="font-size:14px;font-weight:600;color:#c9d1d9">Profile Settings</span>
+                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Profile Settings</span>
                                               <span style="display:flex;gap:4px;align-items:center;font-size:11px;margin-left:8px">
                                                 <template x-if="(cr.settingsDiffs || []).filter(s => !s.match).length > 0">
-                                                  <span style="color:#d29922;background:#3d2e0a;padding:1px 6px;border-radius:8px" x-text="(cr.settingsDiffs || []).filter(s => !s.match).length + ' differ'"></span>
+                                                  <span style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px" x-text="(cr.settingsDiffs || []).filter(s => !s.match).length + ' differ'"></span>
                                                 </template>
                                                 <template x-if="(cr.qualityDiffs || []).filter(q => !q.match).length > 0">
-                                                  <span style="color:#d29922;background:#3d2e0a;padding:1px 6px;border-radius:8px" x-text="(cr.qualityDiffs || []).filter(q => !q.match).length + ' quality'"></span>
+                                                  <span style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px" x-text="(cr.qualityDiffs || []).filter(q => !q.match).length + ' quality'"></span>
                                                 </template>
                                               </span>
                                               <div style="flex:1"></div>
@@ -665,7 +665,7 @@
                                                   <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !sd.match) || (compareFilter === 'wrong' && !sd.match) || (compareFilter === 'match' && sd.match)">
                                                     <td class="cb">
                                                       <template x-if="!sd.match">
-                                                        <input type="checkbox" style="margin:0;accent-color:#d29922"
+                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareSettingsSelected[iid] || {})[sd.name] !== false"
                                                                @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}">
                                                       </template>
@@ -685,7 +685,7 @@
                                                   <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !sd.match) || (compareFilter === 'wrong' && !sd.match) || (compareFilter === 'match' && sd.match)">
                                                     <td class="cb">
                                                       <template x-if="!sd.match">
-                                                        <input type="checkbox" style="margin:0;accent-color:#d29922"
+                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareSettingsSelected[iid] || {})[sd.name] !== false"
                                                                @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}">
                                                       </template>
@@ -701,15 +701,15 @@
                                                   <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !qd.match) || (compareFilter === 'wrong' && !qd.match) || (compareFilter === 'match' && qd.match)">
                                                     <td class="cb">
                                                       <template x-if="!qd.match">
-                                                        <input type="checkbox" style="margin:0;accent-color:#d29922"
+                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareQualitySelected[iid] || {})[qd.name] !== false"
                                                                @change="if (!instCompareQualitySelected[iid]) instCompareQualitySelected[iid] = {}; instCompareQualitySelected[iid][qd.name] = $event.target.checked; instCompareQualitySelected = {...instCompareQualitySelected}">
                                                       </template>
                                                     </td>
                                                     <td class="name" x-text="qd.name"></td>
-                                                    <td class="current" :style="qd.currentAllowed ? 'color:#3fb950' : 'color:#f85149'" x-text="qd.currentAllowed ? 'Enabled' : 'Disabled'"></td>
-                                                    <td :style="qd.desiredAllowed ? 'color:#3fb950' : 'color:#f85149'" x-text="qd.desiredAllowed ? 'Enabled' : 'Disabled'"></td>
-                                                    <td :style="(() => { const willSync = (instCompareQualitySelected[iid] || {})[qd.name] !== false; if (qd.match) return qd.currentAllowed ? 'color:#3fb950' : 'color:#8b949e'; const finalVal = willSync ? qd.desiredAllowed : qd.currentAllowed; return finalVal ? (willSync ? 'color:#3fb950;font-weight:600' : 'color:#3fb950') : (willSync ? 'color:#f85149;font-weight:600' : 'color:#6e7681;font-style:italic'); })()"
+                                                    <td class="current" :style="qd.currentAllowed ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="qd.currentAllowed ? 'Enabled' : 'Disabled'"></td>
+                                                    <td :style="qd.desiredAllowed ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="qd.desiredAllowed ? 'Enabled' : 'Disabled'"></td>
+                                                    <td :style="(() => { const willSync = (instCompareQualitySelected[iid] || {})[qd.name] !== false; if (qd.match) return qd.currentAllowed ? 'color:var(--accent-green)' : 'color:var(--text-secondary)'; const finalVal = willSync ? qd.desiredAllowed : qd.currentAllowed; return finalVal ? (willSync ? 'color:var(--accent-green);font-weight:600' : 'color:var(--accent-green)') : (willSync ? 'color:var(--accent-red);font-weight:600' : 'color:var(--text-muted-secondary);font-style:italic'); })()"
                                                         x-text="(() => { const willSync = (instCompareQualitySelected[iid] || {})[qd.name] !== false; const finalVal = (qd.match || willSync) ? qd.desiredAllowed : qd.currentAllowed; return finalVal ? 'Enabled' : 'Disabled'; })()"></td>
                                                   </tr>
                                                 </template>
@@ -721,15 +721,15 @@
                                         <!-- Required CFs — same 4-col table layout as Profile Settings, using CB | Name | Current | TRaSH | New columns. Status icons shown inside Name column. -->
                                         <template x-if="(cr.formatItems || []).filter(fi => compareRowVisible(compareFormatItemStatus(fi))).length > 0">
                                           <div class="card" style="margin-bottom:10px;overflow:hidden">
-                                            <div style="padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                                            <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
                                               <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
-                                                    :style="cr.formatItems.some(fi => !fi.scoreMatch || !fi.exists) ? 'color:#d29922' : 'color:#3fb950'"
+                                                    :style="cr.formatItems.some(fi => !fi.scoreMatch || !fi.exists) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
                                                     x-text="cr.formatItems.some(fi => !fi.scoreMatch || !fi.exists) ? '⚠' : '✓'"></span>
-                                              <span style="font-size:14px;font-weight:600;color:#c9d1d9">Required CFs</span>
+                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Required CFs</span>
                                               <span style="display:flex;gap:4px;align-items:center;font-size:11px;margin-left:8px">
-                                                <span style="color:#3fb950;background:#0d2f1a;padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => fi.exists && fi.scoreMatch).length + ' matching'"></span>
-                                                <span x-show="cr.formatItems.some(fi => fi.exists && !fi.scoreMatch)" style="color:#d29922;background:#3d2e0a;padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => fi.exists && !fi.scoreMatch).length + ' wrong score'"></span>
-                                                <span x-show="cr.formatItems.some(fi => !fi.exists)" style="color:#f85149;background:#3d1f1f;padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => !fi.exists).length + ' missing'"></span>
+                                                <span style="color:var(--accent-green);background:var(--fill-green-soft);padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => fi.exists && fi.scoreMatch).length + ' matching'"></span>
+                                                <span x-show="cr.formatItems.some(fi => fi.exists && !fi.scoreMatch)" style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => fi.exists && !fi.scoreMatch).length + ' wrong score'"></span>
+                                                <span x-show="cr.formatItems.some(fi => !fi.exists)" style="color:var(--accent-red);background:var(--accent-red-bg);padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => !fi.exists).length + ' missing'"></span>
                                               </span>
                                               <div style="flex:1"></div>
                                               <span class="compare-section-toggle"
@@ -754,14 +754,14 @@
                                                   <tr x-show="compareRowVisible(compareFormatItemStatus(fi))">
                                                     <td class="cb">
                                                       <template x-if="!fi.exists || !fi.scoreMatch">
-                                                        <input type="checkbox" style="margin:0;accent-color:#d29922"
+                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareSelected[iid] || {})[fi.trashId]"
                                                                @change="toggleCompareSelect(iid, fi.trashId, $event.target.checked)">
                                                       </template>
                                                     </td>
                                                     <td class="name">
                                                       <span style="margin-right:4px"
-                                                            :style="fi.exists && fi.scoreMatch ? 'color:#3fb950' : fi.exists ? 'color:#d29922' : 'color:#f85149'"
+                                                            :style="fi.exists && fi.scoreMatch ? 'color:var(--accent-green)' : fi.exists ? 'color:var(--accent-orange)' : 'color:var(--accent-red)'"
                                                             x-text="fi.exists && fi.scoreMatch ? '✓' : fi.exists ? '⚠' : '✗'"></span>
                                                       <span x-text="fi.name"></span>
                                                       <span class="cf-info" x-show="fi.description"
@@ -773,7 +773,7 @@
                                                             :class="fi.scoreOverride != null ? 'on' : ''"
                                                             x-tt="fi.scoreOverride != null ? ('Override: this score is set intentionally via a Clonarr sync rule (saved as ' + ((fi.scoreOverride > 0 ? '+' : '') + fi.scoreOverride) + ')') : ''"
                                                             x-text="fi.scoreOverride != null ? 'OR' : ''"></span>
-                                                      <span :style="fi.scoreOverride != null ? 'color:#58a6ff;font-weight:600' : ''"
+                                                      <span :style="fi.scoreOverride != null ? 'color:var(--accent-blue);font-weight:600' : ''"
                                                             x-text="fi.exists ? ((fi.currentScore > 0 ? '+' : '') + fi.currentScore) : '—'"></span>
                                                     </td>
                                                     <td :class="fi.scoreMatch ? 'target-match' : 'target-diff'"
@@ -790,16 +790,16 @@
                                         <!-- CF Groups — flat table. No outer collapse, no per-group collapse. Each group is a subsection header + its CFs listed directly below. Filter predicates hide individual rows AND entire groups when all rows are filtered. -->
                                         <template x-if="(cr.groups || []).filter(g => g.cfs.some(cf => compareRowVisible(compareGroupCFStatus(cf, g)))).length > 0">
                                           <div class="card" style="margin-bottom:10px;overflow:hidden">
-                                            <div style="padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
+                                            <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
                                               <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
-                                                    :style="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0) ? 'color:#d29922' : 'color:#3fb950'"
+                                                    :style="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
                                                     x-text="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0) ? '⚠' : '✓'"></span>
-                                              <span style="font-size:14px;font-weight:600;color:#c9d1d9">CF Groups</span>
+                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">CF Groups</span>
                                               <span style="display:flex;gap:4px;align-items:center;font-size:11px;margin-left:8px">
-                                                <span style="color:#3fb950;background:#0d2f1a;padding:1px 6px;border-radius:8px" x-text="cr.groups.length + ' groups'"></span>
-                                                <span x-show="cr.groups.some(g => g.wrongScore > 0)" style="color:#d29922;background:#3d2e0a;padding:1px 6px;border-radius:8px"
+                                                <span style="color:var(--accent-green);background:var(--fill-green-soft);padding:1px 6px;border-radius:8px" x-text="cr.groups.length + ' groups'"></span>
+                                                <span x-show="cr.groups.some(g => g.wrongScore > 0)" style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px"
                                                       x-text="cr.groups.reduce((n,g) => n + g.wrongScore, 0) + ' wrong score'"></span>
-                                                <span x-show="cr.groups.some(g => g.missing > 0)" style="color:#f85149;background:#3d1f1f;padding:1px 6px;border-radius:8px"
+                                                <span x-show="cr.groups.some(g => g.missing > 0)" style="color:var(--accent-red);background:var(--accent-red-bg);padding:1px 6px;border-radius:8px"
                                                       x-text="cr.groups.reduce((n,g) => n + g.missing, 0) + ' missing'"></span>
                                               </span>
                                               <div style="flex:1"></div>
@@ -828,32 +828,32 @@
                                                       <td colspan="5">
                                                         <template x-if="row.isGolden">
                                                           <span x-tt="stripHtml(row.group.trashDescription) || 'Exclusive required group — pick one variant'"
-                                                                style="color:#f85149;font-size:14px;margin-right:6px;cursor:help">&#9888;</span>
+                                                                style="color:var(--accent-red);font-size:14px;margin-right:6px;cursor:help">&#9888;</span>
                                                         </template>
                                                         <template x-if="!row.isGolden">
-                                                          <span :style="row.group.wrongScore > 0 || row.group.missing > 0 ? 'color:#d29922' : row.group.present > 0 && row.group.matching === row.group.present ? 'color:#3fb950' : 'color:#8b949e'"
+                                                          <span :style="row.group.wrongScore > 0 || row.group.missing > 0 ? 'color:var(--accent-orange)' : row.group.present > 0 && row.group.matching === row.group.present ? 'color:var(--accent-green)' : 'color:var(--text-secondary)'"
                                                                 x-text="row.group.wrongScore > 0 || row.group.missing > 0 ? '⚠' : row.group.present > 0 && row.group.matching === row.group.present ? '✓' : '○'"
                                                                 style="margin-right:6px"></span>
                                                         </template>
-                                                        <span :style="row.isGolden ? 'color:#f85149' : ''" x-text="row.group.name"></span>
-                                                        <span x-show="row.group.exclusive" :style="row.isGolden ? 'font-size:10px;color:#fff;background:#f85149;padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0;font-weight:600' : 'font-size:10px;color:#d29922;background:#3d2e0a;padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0'">pick one</span>
-                                                        <span x-show="row.group.defaultEnabled && !row.isGolden" style="font-size:10px;color:#3fb950;background:#0d2f1a;padding:1px 6px;border-radius:8px;margin-left:4px;text-transform:none;letter-spacing:0">default</span>
+                                                        <span :style="row.isGolden ? 'color:var(--accent-red)' : ''" x-text="row.group.name"></span>
+                                                        <span x-show="row.group.exclusive" :style="row.isGolden ? 'font-size:10px;color:var(--text-on-accent);background:var(--accent-red);padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0;font-weight:600' : 'font-size:10px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px;margin-left:8px;text-transform:none;letter-spacing:0'">pick one</span>
+                                                        <span x-show="row.group.defaultEnabled && !row.isGolden" style="font-size:10px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 6px;border-radius:8px;margin-left:4px;text-transform:none;letter-spacing:0">default</span>
                                                         <span style="float:right;font-size:10px;display:inline-flex;gap:4px">
                                                           <template x-if="row.group.present > 0">
-                                                            <span style="color:#3fb950;background:#0d2f1a;padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.present + '/' + row.group.total + ' in use'"></span>
+                                                            <span style="color:var(--accent-green);background:var(--fill-green-soft);padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.present + '/' + row.group.total + ' in use'"></span>
                                                           </template>
-                                                          <span x-show="row.group.wrongScore > 0" style="color:#d29922;background:#3d2e0a;padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.wrongScore + ' wrong score'"></span>
-                                                          <span x-show="row.group.missing > 0" style="color:#f85149;background:#3d1f1f;padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.missing + ' missing'"></span>
+                                                          <span x-show="row.group.wrongScore > 0" style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.wrongScore + ' wrong score'"></span>
+                                                          <span x-show="row.group.missing > 0" style="color:var(--accent-red);background:var(--accent-red-bg);padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.missing + ' missing'"></span>
                                                         </span>
                                                       </td>
                                                     </template>
                                                     <template x-if="row.type === 'multi'">
-                                                      <td colspan="5" style="color:#d29922;background:#3d2e0a">&#9888; Multiple CFs scored — TRaSH recommends only one with a non-zero score</td>
+                                                      <td colspan="5" style="color:var(--accent-orange);background:var(--accent-orange-bg)">&#9888; Multiple CFs scored — TRaSH recommends only one with a non-zero score</td>
                                                     </template>
                                                     <template x-if="row.type === 'cf'">
                                                       <td class="cb">
                                                         <template x-if="(row.group.exclusive && row.group.defaultEnabled) || (row.cf.exists && row.cf.inUse && !row.cf.scoreMatch) || (!row.cf.exists && row.group.defaultEnabled && row.cf.required)">
-                                                          <input type="checkbox" style="margin:0;accent-color:#d29922"
+                                                          <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                  :checked="(instCompareSelected[iid] || {})[row.cf.trashId]"
                                                                  @change="toggleCompareSelect(iid, row.cf.trashId, $event.target.checked)">
                                                         </template>
@@ -862,7 +862,7 @@
                                                     <template x-if="row.type === 'cf'">
                                                       <td class="name">
                                                         <span style="margin-right:4px"
-                                                              :style="row.cf.exists && row.cf.inUse && row.cf.scoreMatch ? 'color:#3fb950' : row.cf.exists && row.cf.inUse ? 'color:#d29922' : !row.cf.exists && row.group.defaultEnabled && row.cf.required ? 'color:#f85149' : 'color:#8b949e'"
+                                                              :style="row.cf.exists && row.cf.inUse && row.cf.scoreMatch ? 'color:var(--accent-green)' : row.cf.exists && row.cf.inUse ? 'color:var(--accent-orange)' : !row.cf.exists && row.group.defaultEnabled && row.cf.required ? 'color:var(--accent-red)' : 'color:var(--text-secondary)'"
                                                               x-text="row.cf.exists && row.cf.inUse && row.cf.scoreMatch ? '✓' : row.cf.exists && row.cf.inUse ? '⚠' : !row.cf.exists && row.group.defaultEnabled && row.cf.required ? '✗' : '○'"></span>
                                                         <span x-text="row.cf.name"></span>
                                                         <span class="cf-info" x-show="row.cf.description"
@@ -872,7 +872,7 @@
                                                           <span style="font-size:10px;margin-left:4px" x-tt="'Required by TRaSH'">&#128274;</span>
                                                         </template>
                                                         <template x-if="row.cf.default">
-                                                          <span style="font-size:10px;color:#3fb950;background:#0d2f1a;padding:1px 5px;border-radius:6px;margin-left:4px">rec</span>
+                                                          <span style="font-size:10px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 5px;border-radius:6px;margin-left:4px">rec</span>
                                                         </template>
                                                       </td>
                                                     </template>
@@ -882,7 +882,7 @@
                                                               :class="row.cf.scoreOverride != null ? 'on' : ''"
                                                               x-tt="row.cf.scoreOverride != null ? ('Override: this score is set intentionally via a Clonarr sync rule (saved as ' + ((row.cf.scoreOverride > 0 ? '+' : '') + row.cf.scoreOverride) + ')') : ''"
                                                               x-text="row.cf.scoreOverride != null ? 'OR' : ''"></span>
-                                                        <span :style="row.cf.scoreOverride != null ? 'color:#58a6ff;font-weight:600' : ''"
+                                                        <span :style="row.cf.scoreOverride != null ? 'color:var(--accent-blue);font-weight:600' : ''"
                                                               x-text="row.cf.exists ? ((row.cf.currentScore > 0 ? '+' : '') + row.cf.currentScore) : '—'"></span>
                                                       </td>
                                                     </template>
@@ -904,10 +904,10 @@
                                         <!-- Extra in Arr — flat table, no collapse. Hidden when compareFilter excludes 'extra'. -->
                                         <template x-if="cr.summary?.extra > 0 && compareRowVisible('extra')">
                                           <div class="card" style="margin-bottom:10px;overflow:hidden">
-                                            <div style="padding:10px 14px;border-bottom:1px solid #21262d;display:flex;align-items:center;gap:8px">
-                                              <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0;color:#58a6ff">&#9432;</span>
-                                              <span style="font-size:14px;font-weight:600;color:#c9d1d9">Extra in Arr</span>
-                                              <span style="font-size:11px;color:#58a6ff;background:#0d2847;padding:1px 6px;border-radius:8px;margin-left:8px" x-text="cr.summary.extra + ' CFs'"></span>
+                                            <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
+                                              <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0;color:var(--accent-blue)">&#9432;</span>
+                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Extra in Arr</span>
+                                              <span style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 6px;border-radius:8px;margin-left:8px" x-text="cr.summary.extra + ' CFs'"></span>
                                               <div style="flex:1"></div>
                                               <span class="compare-section-toggle" @click.stop="toggleAllInCompareSection(iid, cr, 'extras')">toggle all</span>
                                               <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
@@ -915,7 +915,7 @@
                                                       @click="compareQuickSyncOpen(inst, cr, 'extras')">Remove selected</button>
                                             </div>
                                             <div>
-                                            <div style="font-size:12px;color:#aaa;padding:6px 14px 2px">
+                                            <div style="font-size:12px;color:var(--text-muted);padding:6px 14px 2px">
                                               CFs scored in your Arr profile but not part of this TRaSH profile. Selecting and removing will reset their score to 0.
                                             </div>
                                             <template x-for="ecf in (cr.extraCFs || [])" :key="ecf.format">
@@ -927,17 +927,17 @@
                                                 </label>
                                                 <div class="compare-cf-name">
                                                   <span x-text="ecf.name"
-                                                        :style="(instRemoveSelected[iid] || {})[ecf.format] ? 'color:#f47067;text-decoration:line-through' : 'color:#aaa'"></span>
+                                                        :style="(instRemoveSelected[iid] || {})[ecf.format] ? 'color:var(--accent-red-soft);text-decoration:line-through' : 'color:var(--text-muted)'"></span>
                                                   <template x-if="(instRemoveSelected[iid] || {})[ecf.format]">
                                                     <span class="compare-action-label remove">will be removed</span>
                                                   </template>
                                                 </div>
                                                 <div class="compare-cf-scores">
-                                                  <span style="color:#aaa" x-text="'score: ' + ecf.score"></span>
+                                                  <span style="color:var(--text-muted)" x-text="'score: ' + ecf.score"></span>
                                                 </div>
                                                 <div class="compare-cf-actions">
                                                   <template x-if="(instRemoveSelected[iid] || {})[ecf.format]">
-                                                    <button class="btn btn-sm" style="padding:1px 5px;font-size:11px;white-space:nowrap;background:#3d1f1f;color:#f47067;border-color:#f4706744"
+                                                    <button class="btn btn-sm" style="padding:1px 5px;font-size:11px;white-space:nowrap;background:var(--accent-red-bg);color:var(--accent-red-soft);border-color:color-mix(in srgb, var(--accent-red-soft) 27%, transparent)"
                                                             @click.stop="removeSingleCF(inst, ecf.format, cr.arrProfileId)">Remove</button>
                                                   </template>
                                                 </div>
@@ -955,7 +955,7 @@
                                                         !(cr.formatItems || []).some(fi => compareRowVisible(compareFormatItemStatus(fi))) &&
                                                         !(cr.groups || []).some(g => g.cfs.some(cf => compareRowVisible(compareGroupCFStatus(cf, g)))) &&
                                                         !(compareFilter === 'extra' && cr.summary?.extra > 0)">
-                                          <div style="padding:32px;text-align:center;color:#8b949e;font-size:13px;background:#0d1117;border:1px solid #21262d;border-radius:6px;margin-top:6px">
+                                          <div style="padding:32px;text-align:center;color:var(--text-secondary);font-size:13px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:6px;margin-top:6px">
                                             <span x-text="'No ' + (compareFilter === 'diff' ? 'diffs' : compareFilter) + ' found — try a different filter'"></span>
                                           </div>
                                         </template>
@@ -970,7 +970,7 @@
                       </div>
                     </template>
                     <template x-if="!instProfiles[getCompareInstance(activeAppType)?.id]">
-                      <div style="font-size:12px;color:#aaa;padding:4px 0">Click "Load Profiles" to fetch profiles from this instance</div>
+                      <div style="font-size:12px;color:var(--text-muted);padding:4px 0">Click "Load Profiles" to fetch profiles from this instance</div>
                     </template>
                   </div>
           </template>

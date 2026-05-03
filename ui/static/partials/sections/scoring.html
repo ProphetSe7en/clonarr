@@ -2,18 +2,18 @@
       <!-- ===== Scoring Sandbox sub-tab ===== -->
       <div class="page" x-show="currentSection === 'scoring' || (currentSection === 'advanced' && advancedTab === 'scoring')" style="max-width:none">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Scoring Sandbox</div>
-        <div style="font-size:14px;color:#aaa;margin-bottom:16px;line-height:1.5">Test how releases score against your profiles. Paste a release name or search Prowlarr, then see which Custom Formats match and the total score.</div>
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">Test how releases score against your profiles. Paste a release name or search Prowlarr, then see which Custom Formats match and the total score.</div>
 
         <div style="padding:20px">
           <!-- App type + Instance selector for CF matching -->
           <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-            <label style="font-size:12px;color:#aaa;white-space:nowrap" x-tt="'Instance used to detect Custom Formats via the Arr Parse API'">Parse with:</label>
+            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap" x-tt="'Instance used to detect Custom Formats via the Arr Parse API'">Parse with:</label>
             <select class="input" style="max-width:250px;font-size:12px" x-model="sandbox[activeAppType].instanceId" @change="sandboxInstanceChanged(activeAppType)">
               <template x-for="inst in instancesOfType(activeAppType)" :key="inst.id">
                 <option :value="inst.id" x-text="inst.name"></option>
               </template>
             </select>
-            <label style="font-size:12px;color:#aaa;white-space:nowrap;margin-left:12px" x-tt="'Profile whose CF scores are applied to calculate total'">Score against:</label>
+            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap;margin-left:12px" x-tt="'Profile whose CF scores are applied to calculate total'">Score against:</label>
             <select class="input" style="max-width:300px;font-size:12px" x-model="sandbox[activeAppType].profileKey" @change="rescoreSandbox(activeAppType)">
               <option value="">— Select profile —</option>
               <template x-for="gn in getTrashProfileGroups(activeAppType)" :key="'sg:'+gn">
@@ -34,7 +34,7 @@
                 </template>
               </optgroup>
             </select>
-            <label style="font-size:12px;color:#aaa;white-space:nowrap;margin-left:12px" x-tt="'Optional second profile for side-by-side comparison'">Compare with:</label>
+            <label style="font-size:12px;color:var(--text-muted);white-space:nowrap;margin-left:12px" x-tt="'Optional second profile for side-by-side comparison'">Compare with:</label>
             <select class="input" style="max-width:300px;font-size:12px" x-model="sandbox[activeAppType].compareKey" @change="rescoreCompare(activeAppType)">
               <option value="">— None —</option>
               <template x-for="gn in getTrashProfileGroups(activeAppType)" :key="'cg:'+gn">
@@ -64,20 +64,20 @@
           </div>
 
           <!-- Quick Edit Panel -->
-          <div x-show="sandbox[activeAppType].editOpen" style="margin-bottom:16px;border:1px solid #d29922;border-radius:6px;background:#161b22;overflow:visible">
-            <div style="padding:8px 14px;background:#1c2129;display:flex;align-items:center;gap:12px;border-bottom:1px solid #30363d">
-              <span style="font-size:12px;font-weight:600;color:#d29922">Score Editor</span>
-              <span style="font-size:13px;color:#aaa">Test score changes without affecting saved profiles. All changes are temporary.</span>
+          <div x-show="sandbox[activeAppType].editOpen" style="margin-bottom:16px;border:1px solid var(--accent-orange);border-radius:6px;background:var(--bg-card);overflow:visible">
+            <div style="padding:8px 14px;background:var(--bg-elevated-hover);display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border-subtle)">
+              <span style="font-size:12px;font-weight:600;color:var(--accent-orange)">Score Editor</span>
+              <span style="font-size:13px;color:var(--text-muted)">Test score changes without affecting saved profiles. All changes are temporary.</span>
               <div style="flex:1"></div>
               <div style="display:flex;align-items:center;gap:8px">
-                <span style="font-size:13px;color:#aaa" x-tt="'Minimum total score required for a release to PASS'">Min Score:</span>
+                <span style="font-size:13px;color:var(--text-muted)" x-tt="'Minimum total score required for a release to PASS'">Min Score:</span>
                 <input type="number" class="pb-input" style="width:70px;font-size:13px"
                        :value="sandbox[activeAppType].editMinScore ?? sandbox[activeAppType].editOriginal?.minScore ?? 0"
                        @input="sandbox[activeAppType].editMinScore = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
               </div>
-              <button class="btn btn-sm" style="font-size:12px;border-color:#d29922;color:#d29922" @click="resetSandboxEdit(activeAppType)">Reset to Profile</button>
+              <button class="btn btn-sm" style="font-size:12px;border-color:var(--accent-orange);color:var(--accent-orange)" @click="resetSandboxEdit(activeAppType)">Reset to Profile</button>
             </div>
-            <div style="padding:10px 14px;column-width:250px;column-gap:24px;column-rule:1px solid #21262d">
+            <div style="padding:10px 14px;column-width:250px;column-gap:24px;column-rule:1px solid var(--bg-muted)">
               <!-- Profile CFs -->
               <template x-for="s in sandbox[activeAppType].editOriginal?.scores || []" :key="s.trashId || s.name">
                 <div style="display:flex;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
@@ -87,10 +87,10 @@
                            @change="sandbox[activeAppType].editToggles[s.trashId || s.name] = $event.target.checked; debounceSandboxEdit(activeAppType)">
                     <span class="slider"></span>
                   </label>
-                  <span style="font-size:13px;color:#c9d1d9;white-space:nowrap" x-text="s.name"></span>
+                  <span style="font-size:13px;color:var(--text-body);white-space:nowrap" x-text="s.name"></span>
                   <input type="number" class="pb-input" style="width:60px;flex-shrink:0;font-size:12px;text-align:right;font-family:monospace"
                          :value="sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score"
-                         :style="(sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score) !== s.score ? 'border-color:#d29922;color:#d29922' : ''"
+                         :style="(sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score) !== s.score ? 'border-color:var(--accent-orange);color:var(--accent-orange)' : ''"
                          @input="sandbox[activeAppType].editScores[s.trashId || s.name] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
                 </div>
               </template>
@@ -98,17 +98,17 @@
               <template x-for="key in Object.keys(sandbox[activeAppType].editToggles).filter(k => sandbox[activeAppType].editToggles[k] === 'added')" :key="'add:'+key">
                 <div style="display:flex;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
                   <button @click="delete sandbox[activeAppType].editToggles[key]; delete sandbox[activeAppType].editScores[key]; debounceSandboxEdit(activeAppType)"
-                          style="background:none;border:none;color:#f85149;font-size:12px;cursor:pointer;padding:0 2px;flex-shrink:0;width:30px;text-align:center" x-tt="'Remove'">✕</button>
-                  <span style="font-size:13px;color:#d29922;white-space:nowrap" x-text="sandbox[activeAppType]._addedCFNames?.[key] || key"></span>
-                  <input type="number" class="pb-input" style="width:60px;flex-shrink:0;font-size:12px;text-align:right;font-family:monospace;border-color:#d29922"
+                          style="background:none;border:none;color:var(--accent-red);font-size:12px;cursor:pointer;padding:0 2px;flex-shrink:0;width:30px;text-align:center" x-tt="'Remove'">✕</button>
+                  <span style="font-size:13px;color:var(--accent-orange);white-space:nowrap" x-text="sandbox[activeAppType]._addedCFNames?.[key] || key"></span>
+                  <input type="number" class="pb-input" style="width:60px;flex-shrink:0;font-size:12px;text-align:right;font-family:monospace;border-color:var(--accent-orange)"
                          :value="sandbox[activeAppType].editScores[key] ?? 0"
                          @input="sandbox[activeAppType].editScores[key] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
                 </div>
               </template>
             </div>
             <!-- Add CF button -->
-            <div style="padding:6px 14px;border-top:1px solid #21262d">
-              <button class="btn btn-sm" style="font-size:13px;border-color:#d29922;color:#d29922" @click="openSandboxCFBrowser(activeAppType)">+ Add Custom Formats</button>
+            <div style="padding:6px 14px;border-top:1px solid var(--bg-muted)">
+              <button class="btn btn-sm" style="font-size:13px;border-color:var(--accent-orange);color:var(--accent-orange)" @click="openSandboxCFBrowser(activeAppType)">+ Add Custom Formats</button>
             </div>
           </div>
 
@@ -120,7 +120,7 @@
                 :disabled="!config.prowlarr?.enabled">
                 Prowlarr Search
               </button>
-              <span x-show="!config.prowlarr?.enabled" style="font-size:13px;color:#aaa;align-self:center">Configure Prowlarr in Settings to enable search</span>
+              <span x-show="!config.prowlarr?.enabled" style="font-size:13px;color:var(--text-muted);align-self:center">Configure Prowlarr in Settings to enable search</span>
             </div>
 
             <!-- Paste mode -->
@@ -134,12 +134,12 @@
                   <span x-show="!sandbox[activeAppType].parsing">Parse</span>
                 </button>
               </div>
-              <div style="margin-top:6px;font-size:13px;color:#aaa">Press Enter or click Parse. Paste multiple names (one per line) using the area below.</div>
+              <div style="margin-top:6px;font-size:13px;color:var(--text-muted)">Press Enter or click Parse. Paste multiple names (one per line) using the area below.</div>
               <textarea class="input" style="width:100%;margin-top:8px;font-size:13px;font-family:monospace;min-height:60px"
                 x-show="sandbox[activeAppType].showBulk" x-model="sandbox[activeAppType].bulkInput"
                 placeholder="One release name per line..."></textarea>
               <div style="margin-top:4px">
-                <a style="font-size:13px;color:#58a6ff;cursor:pointer" @click="sandbox[activeAppType].showBulk = !sandbox[activeAppType].showBulk"
+                <a style="font-size:13px;color:var(--accent-blue);cursor:pointer" @click="sandbox[activeAppType].showBulk = !sandbox[activeAppType].showBulk"
                   x-text="sandbox[activeAppType].showBulk ? 'Hide bulk input' : 'Bulk paste (multiple releases)'"></a>
                 <button x-show="sandbox[activeAppType].showBulk && sandbox[activeAppType].bulkInput?.trim()" class="btn btn-sm" style="margin-left:8px"
                   @click="sandboxParseBulk(activeAppType)" :disabled="sandbox[activeAppType].parsing">Parse All</button>
@@ -156,20 +156,20 @@
                   <button class="btn btn-sm" style="font-size:12px;min-width:150px;text-align:left;display:flex;justify-content:space-between;align-items:center"
                     @click="sandbox[activeAppType].indexerDropdown = !sandbox[activeAppType].indexerDropdown">
                     <span x-text="sandboxIndexerLabel(activeAppType)"></span>
-                    <span style="font-size:12px;color:#aaa;margin-left:6px">&#9662;</span>
+                    <span style="font-size:12px;color:var(--text-muted);margin-left:6px">&#9662;</span>
                   </button>
                   <div x-show="sandbox[activeAppType].indexerDropdown" x-cloak
-                    style="position:absolute;top:100%;right:0;margin-top:4px;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:4px 0;min-width:200px;max-height:250px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
-                    <div style="padding:4px 10px;font-size:13px;color:#aaa;border-bottom:1px solid #21262d;margin-bottom:2px;display:flex;justify-content:space-between">
+                    style="position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:6px;padding:4px 0;min-width:200px;max-height:250px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px var(--alpha-shadow)">
+                    <div style="padding:4px 10px;font-size:13px;color:var(--text-muted);border-bottom:1px solid var(--bg-muted);margin-bottom:2px;display:flex;justify-content:space-between">
                       <span>Filter indexers</span>
-                      <a style="color:#58a6ff;cursor:pointer" @click="sandboxToggleAllIndexers(activeAppType)"
+                      <a style="color:var(--accent-blue);cursor:pointer" @click="sandboxToggleAllIndexers(activeAppType)"
                         x-text="sandbox[activeAppType].selectedIndexers?.length === (sandbox[activeAppType].indexers || []).length ? 'None' : 'All'"></a>
                     </div>
                     <template x-for="idx in sandbox[activeAppType].indexers || []" :key="idx.id">
-                      <label style="display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:12px;cursor:pointer;color:#c9d1d9"
-                        @mouseenter="$el.style.background='#1c2129'" @mouseleave="$el.style.background='transparent'">
+                      <label style="display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text-body)"
+                        @mouseenter="$el.style.background='var(--bg-elevated-hover)'" @mouseleave="$el.style.background='transparent'">
                         <input type="checkbox" :checked="sandbox[activeAppType].selectedIndexers?.includes(idx.id)"
-                          @change="sandboxToggleIndexer(activeAppType, idx.id)" style="accent-color:#58a6ff">
+                          @change="sandboxToggleIndexer(activeAppType, idx.id)" style="accent-color:var(--accent-blue)">
                         <span x-text="idx.name"></span>
                       </label>
                     </template>
@@ -187,11 +187,11 @@
                 <input type="text" x-model="sandbox[activeAppType].searchFilterText" placeholder="Filter results..." class="input input-sm" style="width:160px;height:28px;font-size:13px;padding:2px 8px">
                 <template x-for="res in ['2160p','1080p','720p','480p']" :key="res">
                   <button class="btn btn-sm" style="font-size:12px;padding:2px 8px;height:24px"
-                    :style="sandbox[activeAppType].searchFilterRes === res ? 'background:#238636;color:#fff;border-color:#238636' : ''"
+                    :style="sandbox[activeAppType].searchFilterRes === res ? 'background:var(--accent-green-strong);color:var(--text-on-accent);border-color:var(--accent-green-strong)' : ''"
                     @click="sandbox[activeAppType].searchFilterRes = sandbox[activeAppType].searchFilterRes === res ? '' : res"
                     x-text="res"></button>
                 </template>
-                <span style="font-size:12px;color:#aaa;margin-left:auto"
+                <span style="font-size:12px;color:var(--text-muted);margin-left:auto"
                   x-text="filteredSearchResults(activeAppType).length + '/' + sandbox[activeAppType].searchResults.length + ' shown'"></span>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 8px;height:24px"
                         @click="sandbox[activeAppType].searchResults = []; sandbox[activeAppType].searchFilterText = ''; sandbox[activeAppType].searchFilterRes = ''"
@@ -199,14 +199,14 @@
               </div>
 
               <!-- Search results -->
-              <div x-show="sandbox[activeAppType].searchResults?.length > 0" style="margin-top:6px;max-height:300px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+              <div x-show="sandbox[activeAppType].searchResults?.length > 0" style="margin-top:6px;max-height:300px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
                 <template x-for="(rel, ri) in filteredSearchResults(activeAppType)" :key="rel.guid">
-                  <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-bottom:1px solid #21262d;font-size:12px"
+                  <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-bottom:1px solid var(--bg-muted);font-size:12px"
                     :style="ri === filteredSearchResults(activeAppType).length - 1 ? 'border-bottom:none' : ''">
                     <input type="checkbox" :checked="rel._selected" @change="rel._selected = !rel._selected" style="margin-top:3px">
                     <div style="flex:1;min-width:0">
-                      <div style="font-family:monospace;font-size:13px;word-break:break-all;color:#c9d1d9" x-text="rel.title"></div>
-                      <div style="font-size:12px;color:#aaa;margin-top:2px">
+                      <div style="font-family:monospace;font-size:13px;word-break:break-all;color:var(--text-body)" x-text="rel.title"></div>
+                      <div style="font-size:12px;color:var(--text-muted);margin-top:2px">
                         <span x-text="rel.indexer"></span> &middot;
                         <span x-text="formatBytes(rel.size)"></span> &middot;
                         <span x-text="rel.seeders + ' seeders'"></span>
@@ -220,10 +220,10 @@
                   :disabled="sandbox[activeAppType].parsing || !sandbox[activeAppType].searchResults?.some(r => r._selected)">
                   Score Selected
                 </button>
-                <span style="font-size:13px;color:#aaa"
+                <span style="font-size:13px;color:var(--text-muted)"
                   x-text="(sandbox[activeAppType].searchResults?.filter(r => r._selected)?.length || 0) + ' selected'"></span>
               </div>
-              <div x-show="sandbox[activeAppType].searchError" style="margin-top:8px;font-size:12px;color:#f85149" x-text="sandbox[activeAppType].searchError"></div>
+              <div x-show="sandbox[activeAppType].searchError" style="margin-top:8px;font-size:12px;color:var(--accent-red)" x-text="sandbox[activeAppType].searchError"></div>
             </div>
           </div>
 
@@ -234,7 +234,7 @@
                 <!-- Action buttons sit above the checkbox column so the cause/effect is visually co-located. -->
                 <div style="display:flex;gap:6px;flex-wrap:wrap">
                   <button class="btn btn-sm"
-                          :style="sandbox[activeAppType].filterToSelected ? 'background:#1f6feb;border-color:#1f6feb;color:#fff' : ''"
+                          :style="sandbox[activeAppType].filterToSelected ? 'background:var(--accent-blue-strong);border-color:var(--accent-blue-strong);color:var(--text-on-accent)' : ''"
                           :disabled="!sandbox[activeAppType].filterToSelected && sandboxSelectedCount(activeAppType) === 0"
                           @click="sandbox[activeAppType].filterToSelected = !sandbox[activeAppType].filterToSelected"
                           x-tt="sandbox[activeAppType].filterToSelected ? 'Show all releases again' : 'Hide unchecked rows'"
@@ -244,11 +244,11 @@
                           x-tt="'Uncheck all'">Reset filter</button>
                   <button class="btn btn-sm" @click="sandbox[activeAppType].results = []; saveSandboxResults(activeAppType)">Clear</button>
                 </div>
-                <div style="font-size:14px;font-weight:600;color:#c9d1d9">
+                <div style="font-size:14px;font-weight:600;color:var(--text-body)">
                   <span x-text="sandbox[activeAppType].results.length + ' Release' + (sandbox[activeAppType].results.length > 1 ? 's' : '')"></span>
-                  <span x-show="sandboxSelectedCount(activeAppType) > 0" style="font-size:12px;color:#58a6ff;font-weight:500;margin-left:6px"
+                  <span x-show="sandboxSelectedCount(activeAppType) > 0" style="font-size:12px;color:var(--accent-blue);font-weight:500;margin-left:6px"
                         x-text="'· ' + sandboxSelectedCount(activeAppType) + ' selected'"></span>
-                  <span x-show="sandbox[activeAppType].sortCol === 'manual'" style="font-size:12px;color:#a371f7;font-weight:500;margin-left:6px" x-tt="'Custom order from drag-reorder. Click a column header to resort.'">· manual order</span>
+                  <span x-show="sandbox[activeAppType].sortCol === 'manual'" style="font-size:12px;color:var(--accent-purple);font-weight:500;margin-left:6px" x-tt="'Custom order from drag-reorder. Click a column header to resort.'">· manual order</span>
                 </div>
               </div>
 
@@ -257,8 +257,8 @@
                    on the active set · selection-driven actions. Selection-driven
                    actions only appear when ≥1 row is checkbox-selected, so the
                    row stays clean when the user is just browsing. -->
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:#0d1117;border:1px solid #21262d;border-radius:6px">
-                <span style="font-size:12px;color:#aaa;font-weight:500">Score sets:</span>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:6px">
+                <span style="font-size:12px;color:var(--text-muted);font-weight:500">Score sets:</span>
                 <select class="input" style="height:28px;font-size:12px;padding:2px 6px;max-width:280px"
                         x-model="sandbox[activeAppType].activeScoreSet"
                         @change="sandboxSetActiveScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
@@ -274,7 +274,7 @@
                     <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px"
                             @click="sandboxRenameScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
                             x-tt="'Rename the active score set'">Rename</button>
-                    <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:#f85149;border-color:#3d1f1f"
+                    <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-red);border-color:var(--accent-red-bg)"
                             @click="sandboxDeleteScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
                             x-tt="'Delete the active score set (releases stay in your results)'">Delete</button>
                   </span>
@@ -292,9 +292,9 @@
                      "N selected →" arrow can't orphan from its actions
                      when the row wraps on narrow viewports. -->
                 <span style="display:inline-flex;gap:6px;align-items:center" x-show="sandboxSelectedCount(activeAppType) > 0">
-                  <span style="font-size:12px;color:#58a6ff"
+                  <span style="font-size:12px;color:var(--accent-blue)"
                         x-text="sandboxSelectedCount(activeAppType) + ' selected →'"></span>
-                  <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:#d29922;border-color:#3d2f1f"
+                  <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-orange);border-color:var(--accent-orange-bg)"
                           x-show="sandbox[activeAppType].activeScoreSet"
                           @click="sandboxRemoveSelectedFromScoreSet(activeAppType)"
                           x-tt="'Remove the selected releases from this score set only — they stay in your results'">− Remove from set</button>
@@ -315,17 +315,17 @@
                    so the table goes blank. Surface a helper banner so the
                    state is obvious and the user has clear next steps. -->
               <div x-show="sandbox[activeAppType].activeScoreSet && ((sandbox[activeAppType].scoreSets || []).find(s => s.id === sandbox[activeAppType].activeScoreSet)?.titles?.length || 0) === 0"
-                   style="padding:8px 12px;background:#3d2f1f;color:#d29922;border:1px solid #3d2f1f;border-radius:6px;font-size:13px;margin-bottom:12px;line-height:1.5">
+                   style="padding:8px 12px;background:var(--accent-orange-bg);color:var(--accent-orange);border:1px solid var(--accent-orange-bg);border-radius:6px;font-size:13px;margin-bottom:12px;line-height:1.5">
                 This score set is empty. Switch to <strong>— Show all releases —</strong> above to find rows to add, or click <strong>Delete</strong> to remove the empty set.
               </div>
 
               <!-- Compact table view -->
-              <table style="width:100%;border-collapse:collapse;border:1px solid #30363d;border-radius:6px">
+              <table style="width:100%;border-collapse:collapse;border:1px solid var(--border-subtle);border-radius:6px">
                 <thead>
-                  <tr style="background:#161b22;font-size:12px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;user-select:none">
+                  <tr style="background:var(--bg-card);font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;user-select:none">
                     <th style="width:22px;padding:5px 2px 5px 6px"></th>
                     <th style="width:24px;padding:5px 2px;text-align:center">
-                      <input type="checkbox" style="accent-color:#58a6ff;cursor:pointer" x-tt="'Select/deselect all'"
+                      <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer" x-tt="'Select/deselect all'"
                              :checked="sandbox[activeAppType].results.length > 0 && sandbox[activeAppType].results.every(r => r._selected === true)"
                              @change="toggleSandboxSelectAll(activeAppType)">
                     </th>
@@ -352,89 +352,89 @@
                 <template x-for="(res, idx) in visibleSandboxResults(activeAppType)" :key="res._sid">
                   <tbody>
                     <tr :draggable="!sandbox[activeAppType].filterToSelected"
-                        @dragstart="if (!sandbox[activeAppType].filterToSelected) sandboxDragStart(activeAppType, res)"
+                        @dragstart="if (!sandbox[activeAppType].filterToSelected) { event.dataTransfer.setData('text/plain', ''); sandboxDragStart(activeAppType, res); }"
                         @dragover.prevent="if (!sandbox[activeAppType].filterToSelected) sandboxDragOver(activeAppType, res)"
                         @drop.prevent="if (!sandbox[activeAppType].filterToSelected) sandboxDrop(activeAppType, res)"
                         @dragend="sandbox[activeAppType].dragSrc = null; sandbox[activeAppType].dragOver = null"
-                        :style="sandbox[activeAppType].dragSrc === res ? 'opacity:0.35' : (sandbox[activeAppType].dragOver === res && sandbox[activeAppType].dragSrc && sandbox[activeAppType].dragSrc !== res ? 'box-shadow:inset 0 2px 0 #58a6ff' : '')"
-                        @mouseenter="if (sandbox[activeAppType].dragSrc !== res) $el.style.background='#1c2129'" @mouseleave="$el.style.background=''">
-                      <td style="padding:5px 2px 5px 6px;border-bottom:1px solid #21262d;text-align:center;color:#6e7681;user-select:none;font-size:12px"
+                        :style="sandbox[activeAppType].dragSrc === res ? 'opacity:0.35' : (sandbox[activeAppType].dragOver === res && sandbox[activeAppType].dragSrc && sandbox[activeAppType].dragSrc !== res ? 'box-shadow:inset 0 2px 0 var(--accent-blue)' : '')"
+                        @mouseenter="if (sandbox[activeAppType].dragSrc !== res) $el.style.background='var(--bg-elevated-hover)'" @mouseleave="$el.style.background=''">
+                      <td style="padding:5px 2px 5px 6px;border-bottom:1px solid var(--bg-muted);text-align:center;color:var(--text-muted-secondary);user-select:none;font-size:12px"
                           :style="sandbox[activeAppType].filterToSelected ? 'opacity:0.2;cursor:default' : 'cursor:grab'"
                           x-tt="sandbox[activeAppType].filterToSelected ? 'Drag disabled while filtering' : 'Drag to reorder'">⋮⋮</td>
-                      <td style="padding:5px 2px;border-bottom:1px solid #21262d;text-align:center" @click.stop>
-                        <input type="checkbox" style="accent-color:#58a6ff;cursor:pointer"
+                      <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center" @click.stop>
+                        <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer"
                                :checked="res._selected === true"
                                @change="res._selected = $event.target.checked">
                       </td>
-                      <td style="padding:5px 2px;border-bottom:1px solid #21262d;text-align:center" @click.stop>
+                      <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center" @click.stop>
                         <button @click.stop="openSandboxCopy(activeAppType, res)" x-tt="'Show release details for copying'"
-                          style="background:none;border:none;color:#8b949e;font-size:12px;cursor:pointer;padding:0 4px;line-height:1"
-                          @mouseenter="$el.style.color='#58a6ff'" @mouseleave="$el.style.color='#8b949e'">⧉</button>
+                          style="background:none;border:none;color:var(--text-secondary);font-size:12px;cursor:pointer;padding:0 4px;line-height:1"
+                          @mouseenter="$el.style.color='var(--accent-blue)'" @mouseleave="$el.style.color='var(--text-secondary)'">⧉</button>
                       </td>
-                      <td style="padding:5px 6px;border-bottom:1px solid #21262d;font-family:monospace;font-size:12px;color:#c9d1d9;word-break:break-all;line-height:1.4" x-text="res.title"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid #21262d;font-size:12px;line-height:1.5;white-space:normal;word-break:keep-all">
+                      <td style="padding:5px 6px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:12px;color:var(--text-body);word-break:break-all;line-height:1.4" x-text="res.title"></td>
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-size:12px;line-height:1.5;white-space:normal;word-break:keep-all">
                         <template x-for="(b, bi) in res.scoring?.breakdown?.filter(x => x.matched) || []" :key="b.name">
                           <span style="display:inline-block;margin-right:4px">
-                            <span x-show="bi > 0" style="color:#30363d;margin-right:4px">·</span>
-                            <span style="color:#aaa" x-text="b.name"></span>
+                            <span x-show="bi > 0" style="color:var(--border-subtle);margin-right:4px">·</span>
+                            <span style="color:var(--text-muted)" x-text="b.name"></span>
                             <span style="font-family:monospace;font-size:11px;font-weight:600;margin-left:2px"
-                                  :style="b.score > 0 ? 'color:#3fb950' : b.score < 0 ? 'color:#f85149' : 'color:#aaa'"
+                                  :style="b.score > 0 ? 'color:var(--accent-green)' : b.score < 0 ? 'color:var(--accent-red)' : 'color:var(--text-muted)'"
                                   x-text="b.score !== 0 ? ((b.score > 0 ? '+' : '') + b.score) : '0'"></span>
                           </span>
                         </template>
                       </td>
-                      <td style="padding:5px 4px;border-bottom:1px solid #21262d;text-align:center;white-space:nowrap">
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;white-space:nowrap">
                         <span style="font-size:11px;padding:1px 5px;border-radius:3px;font-weight:500"
-                              :style="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'background:#3d1f1f;color:#f85149;text-decoration:line-through;text-decoration-thickness:1px' : 'background:#1c2128;color:#aaa'"
+                              :style="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'background:var(--accent-red-bg);color:var(--accent-red);text-decoration:line-through;text-decoration-thickness:1px' : 'background:var(--bg-elevated);color:var(--text-muted)'"
                               x-tt="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'Quality not allowed by selected profile — Sonarr/Radarr would reject this release' : ''"
                               x-text="res.parsed?.quality || '—'"></span>
                       </td>
-                      <td style="padding:5px 4px;border-bottom:1px solid #21262d;text-align:center;font-size:12px;color:#aaa;white-space:nowrap" x-text="res.parsed?.releaseGroup || '—'"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid #21262d;text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
-                          :style="(res.scoring?.total ?? 0) >= 0 ? 'color:#3fb950' : 'color:#f85149'"
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;font-size:12px;color:var(--text-muted);white-space:nowrap" x-text="res.parsed?.releaseGroup || '—'"></td>
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
+                          :style="(res.scoring?.total ?? 0) >= 0 ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
                           x-text="res.scoring?.total ?? '—'"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid #21262d;text-align:center;white-space:nowrap">
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;white-space:nowrap">
                         <span style="font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px"
-                              :style="sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'color:#3fb950;background:#0f2d1a' : 'color:#f85149;background:#3d1f1f'"
+                              :style="sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'color:var(--accent-green);background:var(--fill-green-soft)' : 'color:var(--accent-red);background:var(--accent-red-bg)'"
                               x-tt="sandboxResultStatus(res, res.scoring, activeAppType).reason || 'Score reaches Min and quality is allowed by the profile'"
                               x-text="sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'PASS' : 'FAIL'"></span>
                       </td>
-                      <td style="padding:5px 2px;border-bottom:1px solid #21262d;text-align:center;white-space:nowrap">
+                      <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center;white-space:nowrap">
                         <button @click.stop="sandbox[activeAppType].results.splice(sandbox[activeAppType].results.indexOf(res), 1); saveSandboxResults(activeAppType)" x-tt="'Remove from results (deletes the row entirely — does not affect score sets)'"
-                          style="background:none;border:none;color:#aaa;font-size:13px;cursor:pointer;padding:0 4px;line-height:1"
-                          @mouseenter="$el.style.color='#f85149'" @mouseleave="$el.style.color='#8b949e'">&times;</button>
+                          style="background:none;border:none;color:var(--text-muted);font-size:13px;cursor:pointer;padding:0 4px;line-height:1"
+                          @mouseenter="$el.style.color='var(--accent-red)'" @mouseleave="$el.style.color='var(--text-secondary)'">&times;</button>
                       </td>
                     </tr>
                     <!-- Compare profile row -->
-                    <tr x-show="sandbox[activeAppType].compareKey && res.scoringB" style="background:#0d1117">
-                      <td style="padding:3px 2px 3px 6px;border-bottom:1px solid #30363d"></td>
-                      <td style="padding:3px 2px;border-bottom:1px solid #30363d"></td>
-                      <td style="padding:3px 2px;border-bottom:1px solid #30363d"></td>
-                      <td style="padding:3px 6px 3px 18px;border-bottom:1px solid #30363d;white-space:nowrap;font-size:11px;color:#58a6ff" x-text="'↳ ' + (sandboxCompareProfileName(activeAppType) || 'Compare')"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid #30363d;font-size:12px;line-height:1.5;white-space:normal;word-break:keep-all">
+                    <tr x-show="sandbox[activeAppType].compareKey && res.scoringB" style="background:var(--bg-page)">
+                      <td style="padding:3px 2px 3px 6px;border-bottom:1px solid var(--border-subtle)"></td>
+                      <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
+                      <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
+                      <td style="padding:3px 6px 3px 18px;border-bottom:1px solid var(--border-subtle);white-space:nowrap;font-size:11px;color:var(--accent-blue)" x-text="'↳ ' + (sandboxCompareProfileName(activeAppType) || 'Compare')"></td>
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-size:12px;line-height:1.5;white-space:normal;word-break:keep-all">
                         <template x-for="(b, bi) in res.scoringB?.breakdown?.filter(x => x.matched) || []" :key="'b'+b.name">
                           <span style="display:inline-block;margin-right:4px">
-                            <span x-show="bi > 0" style="color:#30363d;margin-right:4px">·</span>
-                            <span style="color:#aaa" x-text="b.name"></span>
+                            <span x-show="bi > 0" style="color:var(--border-subtle);margin-right:4px">·</span>
+                            <span style="color:var(--text-muted)" x-text="b.name"></span>
                             <span style="font-family:monospace;font-size:11px;font-weight:600;margin-left:2px"
-                                  :style="b.score > 0 ? 'color:#3fb950' : b.score < 0 ? 'color:#f85149' : 'color:#aaa'"
+                                  :style="b.score > 0 ? 'color:var(--accent-green)' : b.score < 0 ? 'color:var(--accent-red)' : 'color:var(--text-muted)'"
                                   x-text="b.score !== 0 ? ((b.score > 0 ? '+' : '') + b.score) : '0'"></span>
                           </span>
                         </template>
                       </td>
-                      <td style="padding:3px 4px;border-bottom:1px solid #30363d"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid #30363d"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid #30363d;text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
-                          :style="(res.scoringB?.total ?? 0) >= 0 ? 'color:#3fb950' : 'color:#f85149'"
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle)"></td>
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle)"></td>
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
+                          :style="(res.scoringB?.total ?? 0) >= 0 ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
                           x-text="res.scoringB?.total ?? '—'"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid #30363d;text-align:center;white-space:nowrap">
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:center;white-space:nowrap">
                         <span style="font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px"
-                              :style="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'color:#3fb950;background:#0f2d1a' : 'color:#f85149;background:#3d1f1f'"
+                              :style="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'color:var(--accent-green);background:var(--fill-green-soft)' : 'color:var(--accent-red);background:var(--accent-red-bg)'"
                               x-tt="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).reason || 'Score reaches Min and quality is allowed by the compare profile'"
                               x-text="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'PASS' : 'FAIL'"></span>
                       </td>
-                      <td style="padding:4px 4px;border-bottom:1px solid #30363d;text-align:center;font-size:12px;font-family:monospace;white-space:nowrap"
-                          :style="((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) > 0 ? 'color:#3fb950' : ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) < 0 ? 'color:#f85149' : 'color:#aaa'"
+                      <td style="padding:4px 4px;border-bottom:1px solid var(--border-subtle);text-align:center;font-size:12px;font-family:monospace;white-space:nowrap"
+                          :style="((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) > 0 ? 'color:var(--accent-green)' : ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) < 0 ? 'color:var(--accent-red)' : 'color:var(--text-muted)'"
                           x-text="((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) > 0 ? '+' + ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) : ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0))"></td>
                     </tr>
                   </tbody>
@@ -444,7 +444,7 @@
           </template>
 
           <!-- Empty state -->
-          <div x-show="!sandbox[activeAppType].results?.length && !sandbox[activeAppType].parsing" style="text-align:center;padding:40px;color:#aaa;font-size:13px">
+          <div x-show="!sandbox[activeAppType].results?.length && !sandbox[activeAppType].parsing" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">
             Paste a release name or search Prowlarr to see how it scores.
           </div>
         </div>

@@ -55,6 +55,19 @@ var setupTmpl = template.Must(template.New("setup").Parse(`<!DOCTYPE html>
   .err { background:#3a1a1a; color:#ff9a9a; border:1px solid #5a2a2a; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; }
   .hint { color:#888; font-size:12px; margin-top:4px; line-height:1.4; }
   footer { margin-top:18px; font-size:12px; color:#6a6e76; text-align:center; }
+  @media (prefers-color-scheme: light) {
+    body { background:#f6f8fa; color:#1f2328; }
+    .card { background:#ffffff; border-color:#d0d7de; box-shadow:0 8px 24px rgba(0,0,0,.08); }
+    .sub { color:#57606a; }
+    label { color:#24292f; }
+    input { background:#ffffff; color:#1f2328; border-color:#d0d7de; }
+    input:focus { border-color:#0969da; }
+    button { background:#0969da; }
+    button:hover { background:#0860ca; }
+    .err { background:#ffebe9; color:#82071e; border-color:#ffcecb; }
+    .hint { color:#6e7681; }
+    footer { color:#6e7681; }
+  }
 </style>
 </head>
 <body>
@@ -201,6 +214,17 @@ var loginTmpl = template.Must(template.New("login").Parse(`<!DOCTYPE html>
   button:hover { background:#5aa0f2; }
   .err { background:#3a1a1a; color:#ff9a9a; border:1px solid #5a2a2a; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; }
   footer { margin-top:18px; font-size:12px; color:#6a6e76; text-align:center; }
+  @media (prefers-color-scheme: light) {
+    body { background:#f6f8fa; color:#1f2328; }
+    .card { background:#ffffff; border-color:#d0d7de; box-shadow:0 8px 24px rgba(0,0,0,.08); }
+    label { color:#24292f; }
+    input { background:#ffffff; color:#1f2328; border-color:#d0d7de; }
+    input:focus { border-color:#0969da; }
+    button { background:#0969da; }
+    button:hover { background:#0860ca; }
+    .err { background:#ffebe9; color:#82071e; border-color:#ffcecb; }
+    footer { color:#6e7681; }
+  }
 </style>
 </head>
 <body>

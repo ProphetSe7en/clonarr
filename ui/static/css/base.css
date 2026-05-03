@@ -4,3 +4,13 @@
   [x-cloak] { display: none !important; }
   .group-desc-html b, .group-desc-html strong { color: var(--accent-orange); font-style: normal; }
 
+  /* Cross-browser scrollbar styling. Firefox has supported these properties
+     for years; Chromium added support in 121 (Jan 2024). Replaces the need
+     for ::-webkit-scrollbar rules. */
+  * { scrollbar-color: var(--text-muted-secondary) transparent; scrollbar-width: thin; }
+
+  /* Keyboard-only focus ring. :focus-visible avoids showing the ring on
+     mouse clicks while keeping it for Tab navigation. Applies to clickable
+     <div>s, buttons, links, and inputs uniformly. */
+  :focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; border-radius: 2px; }
+

@@ -3,7 +3,7 @@
   <div class="modal-overlay" x-show="showBackupModal" @click.self="showBackupModal = false" x-cloak>
     <div class="modal" style="max-width:600px">
       <div class="modal-title">Backup Instance</div>
-      <div style="font-size:12px;color:#aaa;margin-bottom:12px" x-text="backupInstance?.name || ''"></div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px" x-text="backupInstance?.name || ''"></div>
 
       <template x-if="backupLoading && backupProfiles.length === 0 && backupCFs.length === 0">
         <div style="text-align:center;padding:20px"><span class="spinner"></span></div>
@@ -12,15 +12,15 @@
       <!-- Step 1: Choose backup mode -->
       <template x-if="backupStep === 'mode' && (backupProfiles.length > 0 || backupCFs.length > 0)">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:12px">What do you want to backup?</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px">What do you want to backup?</div>
           <div style="display:flex;flex-direction:column;gap:8px">
             <button class="btn" style="text-align:left;padding:12px 16px" @click="backupMode = 'profiles'; backupStep = 'profiles'">
-              <div style="font-weight:600;color:#e1e4e8">Profiles + Custom Formats</div>
-              <div style="font-size:13px;color:#aaa;margin-top:2px">Select profiles — associated CFs with scores are auto-included</div>
+              <div style="font-weight:600;color:var(--text-primary)">Profiles + Custom Formats</div>
+              <div style="font-size:13px;color:var(--text-muted);margin-top:2px">Select profiles — associated CFs with scores are auto-included</div>
             </button>
             <button class="btn" style="text-align:left;padding:12px 16px" @click="backupMode = 'cfs-only'; backupStep = 'cfs-select'">
-              <div style="font-weight:600;color:#e1e4e8">Custom Formats Only</div>
-              <div style="font-size:13px;color:#aaa;margin-top:2px">Select individual CF definitions — no profiles or scores</div>
+              <div style="font-weight:600;color:var(--text-primary)">Custom Formats Only</div>
+              <div style="font-size:13px;color:var(--text-muted);margin-top:2px">Select individual CF definitions — no profiles or scores</div>
             </button>
           </div>
           <div class="modal-actions">
@@ -32,17 +32,17 @@
       <!-- Profile mode: Step 2a — Select profiles -->
       <template x-if="backupStep === 'profiles' && backupProfiles.length > 0">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Select Profiles</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">Select Profiles</div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
             <button class="btn btn-sm" @click="backupProfiles.forEach(p => backupSelectedProfiles[p.id] = true)">Select All</button>
             <button class="btn btn-sm" @click="backupSelectedProfiles = {}">Deselect All</button>
           </div>
-          <div style="max-height:300px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+          <div style="max-height:300px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
             <template x-for="p in backupProfiles" :key="p.id">
-              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #21262d;cursor:pointer;font-size:13px;color:#c9d1d9">
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--bg-muted);cursor:pointer;font-size:13px;color:var(--text-body)">
                 <input type="checkbox" :checked="backupSelectedProfiles[p.id]" @change="backupSelectedProfiles[p.id] = $el.checked">
                 <span x-text="p.name"></span>
-                <span style="margin-left:auto;font-size:13px;color:#aaa" x-text="p.formatItems.filter(fi => fi.score !== 0).length + ' scored CFs'"></span>
+                <span style="margin-left:auto;font-size:13px;color:var(--text-muted)" x-text="p.formatItems.filter(fi => fi.score !== 0).length + ' scored CFs'"></span>
               </label>
             </template>
           </div>
@@ -58,18 +58,18 @@
       <!-- Profile mode: Step 2b — Select CFs -->
       <template x-if="backupStep === 'cfs'">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:4px">Custom Formats</div>
-          <div style="font-size:12px;color:#aaa;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Custom Formats</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
             CFs with non-zero scores in selected profiles are auto-included. Optionally select additional score=0 CFs (info/naming CFs).
           </div>
 
           <!-- Auto-included CFs -->
           <template x-if="Object.keys(backupScoredCFs).length > 0">
             <div style="margin-bottom:12px">
-              <div style="font-size:12px;font-weight:600;color:#3fb950;margin-bottom:6px" x-text="'Auto-included (' + Object.keys(backupScoredCFs).length + ' CFs with scores)'"></div>
-              <div style="max-height:150px;overflow-y:auto;border:1px solid #21262d;border-radius:6px;background:#0d1117">
+              <div style="font-size:12px;font-weight:600;color:var(--accent-green);margin-bottom:6px" x-text="'Auto-included (' + Object.keys(backupScoredCFs).length + ' CFs with scores)'"></div>
+              <div style="max-height:150px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px;background:var(--bg-page)">
                 <template x-for="cf in backupCFs.filter(c => backupScoredCFs[c.id])" :key="cf.id">
-                  <div style="padding:4px 12px;font-size:12px;color:#aaa;border-bottom:1px solid #161b22" x-text="cf.name"></div>
+                  <div style="padding:4px 12px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--bg-card)" x-text="cf.name"></div>
                 </template>
               </div>
             </div>
@@ -79,13 +79,13 @@
           <template x-if="backupCFs.filter(c => !backupScoredCFs[c.id]).length > 0">
             <div>
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-                <div style="font-size:12px;font-weight:600;color:#d29922" x-text="'Optional (' + backupCFs.filter(c => !backupScoredCFs[c.id]).length + ' CFs with score 0)'"></div>
+                <div style="font-size:12px;font-weight:600;color:var(--accent-orange)" x-text="'Optional (' + backupCFs.filter(c => !backupScoredCFs[c.id]).length + ' CFs with score 0)'"></div>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 6px" @click="backupCFs.filter(c => !backupScoredCFs[c.id]).forEach(c => backupSelectedCFs[c.id] = true)">Select All</button>
                 <button class="btn btn-sm" style="font-size:12px;padding:2px 6px" @click="backupSelectedCFs = {}">Deselect All</button>
               </div>
-              <div style="max-height:200px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+              <div style="max-height:200px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
                 <template x-for="cf in backupCFs.filter(c => !backupScoredCFs[c.id])" :key="cf.id">
-                  <label style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:1px solid #21262d;cursor:pointer;font-size:12px;color:#c9d1d9">
+                  <label style="display:flex;align-items:center;gap:8px;padding:4px 12px;border-bottom:1px solid var(--bg-muted);cursor:pointer;font-size:12px;color:var(--text-body)">
                     <input type="checkbox" :checked="backupSelectedCFs[cf.id]" @change="backupSelectedCFs[cf.id] = $el.checked">
                     <span x-text="cf.name"></span>
                   </label>
@@ -107,14 +107,14 @@
       <!-- CF-only mode: Select CFs -->
       <template x-if="backupStep === 'cfs-select'">
         <div>
-          <div style="font-size:13px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Select Custom Formats</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px">Select Custom Formats</div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
             <button class="btn btn-sm" @click="backupCFs.forEach(c => backupSelectedCFs[c.id] = true)">Select All</button>
             <button class="btn btn-sm" @click="backupSelectedCFs = {}">Deselect All</button>
           </div>
-          <div style="max-height:350px;overflow-y:auto;border:1px solid #21262d;border-radius:6px">
+          <div style="max-height:350px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
             <template x-for="cf in backupCFs" :key="cf.id">
-              <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid #21262d;cursor:pointer;font-size:12px;color:#c9d1d9">
+              <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--bg-muted);cursor:pointer;font-size:12px;color:var(--text-body)">
                 <input type="checkbox" :checked="backupSelectedCFs[cf.id]" @change="backupSelectedCFs[cf.id] = $el.checked">
                 <span x-text="cf.name"></span>
               </label>

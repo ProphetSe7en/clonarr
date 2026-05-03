@@ -13,19 +13,19 @@
             <input class="input" x-model="cfEditorForm.name" placeholder="My Custom Format" style="padding-right:30px">
             <span x-show="cfEditorTrashMatch"
                   x-tt="'Also in TRaSH guide — you can still save.'"
-                  style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:#3a2d10;color:#e3b341;border:1px solid #d29922;border-radius:3px;padding:1px 6px;font-size:11px;font-weight:600;cursor:help;user-select:none">
+                  style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--accent-orange-bg);color:var(--cat-hq-release-groups);border:1px solid var(--accent-orange);border-radius:3px;padding:1px 6px;font-size:11px;font-weight:600;cursor:help;user-select:none">
               ⚠ guide
             </span>
           </div>
-          <div style="font-size:12px;color:#8b949e;margin-top:4px;line-height:1.4">
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;line-height:1.4">
             Sonarr/Radarr require unique CF names within an app, so this can't match another custom CF you already have. Names are case-sensitive (Arr's own rule), so <code>PCOK</code> and <code>Pcok</code> are distinct.
           </div>
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label>App Type</label>
-          <div class="input" style="background:#161b22;cursor:default;text-transform:capitalize;display:flex;align-items:center;gap:6px">
+          <div class="input" style="background:var(--bg-card);cursor:default;text-transform:capitalize;display:flex;align-items:center;gap:6px">
             <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0"
-                  :style="cfEditorForm.appType === 'radarr' ? 'background:#f5c518' : 'background:#58a6ff'"></span>
+                  :style="cfEditorForm.appType === 'radarr' ? 'background:var(--accent-orange)' : 'background:var(--accent-blue)'"></span>
             <span x-text="cfEditorForm.appType"></span>
           </div>
         </div>
@@ -55,7 +55,7 @@
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label>Include in Rename</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;color:#c9d1d9;font-size:13px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;color:var(--text-body);font-size:13px">
             <input type="checkbox" x-model="cfEditorForm.includeInRename"> Yes
           </label>
         </div>
@@ -64,8 +64,8 @@
       <!-- Specifications -->
       <div style="margin-bottom:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <label style="font-size:12px;color:#aaa;font-weight:600">Specifications</label>
-          <button class="btn btn-sm" style="background:#238636;color:#fff" @click="addCFSpec()">+ Add Spec</button>
+          <label style="font-size:12px;color:var(--text-muted);font-weight:600">Specifications</label>
+          <button class="btn btn-sm" style="background:var(--accent-green-strong);color:var(--text-on-accent)" @click="addCFSpec()">+ Add Spec</button>
         </div>
 
         <div x-show="cfEditorSchemaLoading" style="text-align:center;padding:12px">
@@ -73,21 +73,21 @@
         </div>
 
         <template x-if="cfEditorForm.specifications.length === 0 && !cfEditorSchemaLoading">
-          <div style="font-size:12px;color:#aaa;padding:16px;text-align:center;border:1px dashed #30363d;border-radius:6px">
+          <div style="font-size:12px;color:var(--text-muted);padding:16px;text-align:center;border:1px dashed var(--border-subtle);border-radius:6px">
             No specifications yet. Click "Add Spec" to add a matching rule.
           </div>
         </template>
 
         <template x-for="(spec, specIdx) in cfEditorForm.specifications" :key="spec._key">
-          <div style="border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:8px;background:#0d1117">
+          <div style="border:1px solid var(--border-subtle);border-radius:6px;padding:12px;margin-bottom:8px;background:var(--bg-page)">
             <!-- Spec header row -->
             <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:8px">
               <div>
-                <label style="font-size:13px;color:#aaa;display:block;margin-bottom:2px">Spec Name</label>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:2px">Spec Name</label>
                 <input class="input" x-model="spec.name" placeholder="Rule name" style="font-size:12px;padding:4px 8px">
               </div>
               <div>
-                <label style="font-size:13px;color:#aaa;display:block;margin-bottom:2px">Type</label>
+                <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:2px">Type</label>
                 <select class="input"
                         x-effect="populateImplSelect($el, spec.implementation)"
                         @change="spec.implementation = $el.value; onSpecTypeChange(specIdx)"
@@ -96,20 +96,20 @@
                 </select>
               </div>
               <div style="display:flex;align-items:flex-end">
-                <button class="btn btn-sm" style="color:#f85149;padding:4px 8px" @click="cfEditorForm.specifications.splice(specIdx, 1)" x-tt="'Remove spec'">&#10005;</button>
+                <button class="btn btn-sm" style="color:var(--accent-red);padding:4px 8px" @click="cfEditorForm.specifications.splice(specIdx, 1)" x-tt="'Remove spec'">&#10005;</button>
               </div>
             </div>
 
             <!-- Toggles row -->
             <div style="display:flex;gap:16px;margin-bottom:8px">
-              <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#aaa;cursor:pointer">
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-muted);cursor:pointer">
                 <input type="checkbox" x-model="spec.required">
-                <span :style="spec.required ? 'color:#3fb950;font-weight:600' : ''">Required</span>
-                <span style="font-size:12px;color:#aaa" x-text="spec.required ? '(AND)' : '(OR)'"></span>
+                <span :style="spec.required ? 'color:var(--accent-green);font-weight:600' : ''">Required</span>
+                <span style="font-size:12px;color:var(--text-muted)" x-text="spec.required ? '(AND)' : '(OR)'"></span>
               </label>
-              <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#aaa;cursor:pointer">
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-muted);cursor:pointer">
                 <input type="checkbox" x-model="spec.negate">
-                <span :style="spec.negate ? 'color:#d29922;font-weight:600' : ''">Negate</span>
+                <span :style="spec.negate ? 'color:var(--accent-orange);font-weight:600' : ''">Negate</span>
               </label>
             </div>
 
@@ -118,7 +118,7 @@
               <div>
                 <template x-for="(field, fieldIdx) in spec.fields" :key="field.name">
                   <div style="margin-bottom:6px">
-                    <label style="font-size:13px;color:#aaa;display:block;margin-bottom:2px" x-text="field.label || field.name"></label>
+                    <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:2px" x-text="field.label || field.name"></label>
                     <!-- Text input (regex, release group, etc.) -->
                     <template x-if="field.type === 'textbox'">
                       <input class="input" x-model="field.value" :placeholder="field.placeholder || ''" style="font-size:12px;padding:4px 8px;font-family:monospace">
@@ -136,7 +136,7 @@
                     </template>
                     <!-- Checkbox (exceptLanguage, etc.) -->
                     <template x-if="field.type === 'checkbox'">
-                      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:#c9d1d9">
+                      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-body)">
                         <input type="checkbox" x-model="field.value"> <span x-text="field.label || field.name"></span>
                       </label>
                     </template>
@@ -150,15 +150,15 @@
 
       <!-- Logic display -->
       <template x-if="cfEditorForm.specifications.length > 0">
-        <div style="margin-bottom:16px;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px">
-          <label style="font-size:13px;color:#aaa;display:block;margin-bottom:4px">Match Logic</label>
+        <div style="margin-bottom:16px;padding:8px 12px;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px">
+          <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:4px">Match Logic</label>
           <template x-for="(spec, si) in cfEditorForm.specifications" :key="spec._key">
             <div style="font-size:12px;display:flex;align-items:center;gap:6px;padding:2px 0">
-              <span x-show="spec.required" style="background:#238636;color:#fff;font-size:12px;padding:1px 5px;border-radius:3px">Required</span>
-              <span x-show="spec.negate" style="background:#d29922;color:#000;font-size:12px;padding:1px 5px;border-radius:3px">NOT</span>
-              <span style="color:#c9d1d9" x-text="spec.name || '(unnamed)'"></span>
-              <span style="color:#aaa;font-size:13px" x-text="'(' + (spec.implementation ? spec.implementation.replace('Specification','') : '?') + ')'"></span>
-              <span style="color:#aaa;font-size:12px;margin-left:auto" x-text="spec.required ? 'AND' : 'OR'"></span>
+              <span x-show="spec.required" style="background:var(--accent-green-strong);color:var(--text-on-accent);font-size:12px;padding:1px 5px;border-radius:3px">Required</span>
+              <span x-show="spec.negate" style="background:var(--accent-orange);color:var(--text-inverse);font-size:12px;padding:1px 5px;border-radius:3px">NOT</span>
+              <span style="color:var(--text-body)" x-text="spec.name || '(unnamed)'"></span>
+              <span style="color:var(--text-muted);font-size:13px" x-text="'(' + (spec.implementation ? spec.implementation.replace('Specification','') : '?') + ')'"></span>
+              <span style="color:var(--text-muted);font-size:12px;margin-left:auto" x-text="spec.required ? 'AND' : 'OR'"></span>
             </div>
           </template>
         </div>
@@ -166,8 +166,8 @@
 
       <!-- TRaSH schema fields — gated by CLONARR_DEV_FEATURES env + trashSchemaFields toggle. -->
       <template x-if="config.devFeatures && config.trashSchemaFields">
-        <div style="border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:16px;background:#1c1c24">
-          <div style="font-size:12px;color:#d29922;font-weight:600;margin-bottom:8px">TRaSH schema fields</div>
+        <div style="border:1px solid var(--border-subtle);border-radius:6px;padding:12px;margin-bottom:16px;background:var(--bg-card)">
+          <div style="font-size:12px;color:var(--accent-orange);font-weight:600;margin-bottom:8px">TRaSH schema fields</div>
           <div class="form-group">
             <label>Trash ID</label>
             <div style="display:flex;gap:8px">
@@ -177,7 +177,7 @@
           </div>
           <div class="form-group">
             <label>Trash Scores</label>
-            <div style="border:1px solid #30363d;border-radius:4px;padding:8px">
+            <div style="border:1px solid var(--border-subtle);border-radius:4px;padding:8px">
               <template x-for="(ts, tsIdx) in cfEditorForm.trashScores" :key="ts._key || tsIdx">
                 <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
                   <select class="input" x-model="ts.context" style="flex:1;font-size:12px;padding:3px 6px">
@@ -186,7 +186,7 @@
                     </template>
                   </select>
                   <input class="input" type="number" x-model.number="ts.score" style="width:80px;font-size:12px;padding:3px 6px" placeholder="0">
-                  <button class="btn btn-sm" style="color:#f85149;padding:2px 6px" @click="cfEditorForm.trashScores.splice(tsIdx, 1)">&#10005;</button>
+                  <button class="btn btn-sm" style="color:var(--accent-red);padding:2px 6px" @click="cfEditorForm.trashScores.splice(tsIdx, 1)">&#10005;</button>
                 </div>
               </template>
               <button class="btn btn-sm" style="margin-top:4px" @click="cfEditorForm.trashScores.push({_key: Date.now(), context:'default',score:0})">+ Add context</button>
@@ -201,26 +201,26 @@
 
       <!-- JSON Preview (collapsible) -->
       <div style="margin-bottom:16px">
-        <div style="font-size:12px;color:#58a6ff;cursor:pointer;user-select:none" @click="cfEditorShowPreview = !cfEditorShowPreview">
+        <div style="font-size:12px;color:var(--accent-blue);cursor:pointer;user-select:none" @click="cfEditorShowPreview = !cfEditorShowPreview">
           <span x-text="cfEditorShowPreview ? '▼' : '▶'"></span> JSON Preview
         </div>
         <div x-show="cfEditorShowPreview" style="margin-top:4px">
-          <pre style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;font-size:13px;color:#aaa;max-height:200px;overflow:auto;white-space:pre-wrap" x-text="getCFEditorPreviewJSON()"></pre>
+          <pre style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--text-muted);max-height:200px;overflow:auto;white-space:pre-wrap" x-text="getCFEditorPreviewJSON()"></pre>
         </div>
       </div>
 
       <!-- Result message -->
       <div x-show="cfEditorResult" style="margin-bottom:12px;font-size:12px;padding:8px 12px;border-radius:6px"
-           :style="cfEditorResult?.error ? 'background:#3d1f1f;color:#f85149' : 'background:#1f3d1f;color:#3fb950'"
+           :style="cfEditorResult?.error ? 'background:var(--accent-red-bg);color:var(--accent-red)' : 'background:var(--accent-green-bg);color:var(--accent-green)'"
            x-text="cfEditorResult?.message"></div>
 
       <!-- Footer actions -->
       <div class="modal-actions" style="flex-wrap:wrap">
         <template x-if="cfEditorMode === 'edit'">
-          <button class="btn" style="color:#f85149;margin-right:auto" @click="deleteCFFromEditor()">Delete</button>
+          <button class="btn" style="color:var(--accent-red);margin-right:auto" @click="deleteCFFromEditor()">Delete</button>
         </template>
         <template x-if="config.devFeatures && config.trashSchemaFields">
-          <button class="btn" style="color:#d29922" @click="exportTrashJSON()">Export TRaSH JSON</button>
+          <button class="btn" style="color:var(--accent-orange)" @click="exportTrashJSON()">Export TRaSH JSON</button>
         </template>
         <button class="btn" @click="showCFEditor = false">Cancel</button>
         <button class="btn btn-primary" @click="saveCFEditor()" :disabled="cfEditorSaving || !cfEditorForm.name.trim()">

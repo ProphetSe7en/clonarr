@@ -8,8 +8,8 @@
       <!-- Scrollable content region so many diffs don't push Cancel/Dry Run/Apply off-screen -->
       <div style="flex:1 1 auto;overflow-y:auto;min-height:0;padding:24px">
       <div class="modal-title">Sync Profile</div>
-      <div style="font-size:13px;color:#aaa;margin-bottom:12px">
-        Deploy <strong x-text="syncForm.profileName" style="color:#e1e4e8"></strong> to an instance
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+        Deploy <strong x-text="syncForm.profileName" style="color:var(--text-primary)"></strong> to an instance
       </div>
 
       <!-- Instance selector -->
@@ -24,12 +24,12 @@
 
       <!-- Mode selector -->
       <div style="display:flex;gap:16px;margin-bottom:16px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-          <input type="radio" value="create" x-model="syncMode" @change="autoSyncRuleForSync = null; syncForm.arrProfileId = '0'" style="accent-color:#58a6ff">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+          <input type="radio" value="create" x-model="syncMode" @change="autoSyncRuleForSync = null; syncForm.arrProfileId = '0'" style="accent-color:var(--accent-blue)">
           Create new profile
         </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#e1e4e8">
-          <input type="radio" value="update" x-model="syncMode" @change="updateAutoSyncRuleForSync()" style="accent-color:#58a6ff">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+          <input type="radio" value="update" x-model="syncMode" @change="updateAutoSyncRuleForSync()" style="accent-color:var(--accent-blue)">
           Update existing profile
         </label>
       </div>
@@ -38,9 +38,9 @@
       <div class="form-group" x-show="syncMode === 'create'">
         <label>Profile name</label>
         <input type="text" class="input" x-model="syncForm.newProfileName" placeholder="Profile name in Radarr/Sonarr">
-        <div style="font-size:13px;color:#aaa;margin-top:4px">A new quality profile will be created with CFs, scores, quality items, and cutoff</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">A new quality profile will be created with CFs, scores, quality items, and cutoff</div>
         <div x-show="syncForm.newProfileName && arrProfiles.some(p => p.name.toLowerCase() === syncForm.newProfileName.trim().toLowerCase())"
-             style="margin-top:8px;padding:8px 12px;background:#3d1f00;border:1px solid #d29922;border-radius:4px;font-size:12px;color:#d29922">
+             style="margin-top:8px;padding:8px 12px;background:var(--fill-orange-soft);border:1px solid var(--accent-orange);border-radius:4px;font-size:12px;color:var(--accent-orange)">
           &#9888; Profile "<span x-text="syncForm.newProfileName.trim()"></span>" already exists in <span x-text="syncForm.instanceName"></span>. Choose a different name to create a separate profile, or use <strong>Update existing profile</strong> to sync changes to it.
         </div>
       </div>
@@ -54,51 +54,51 @@
             <option :value="String(p.id)" x-text="p.name"></option>
           </template>
         </select>
-        <div style="font-size:13px;color:#aaa;margin-top:4px">CFs and scores will be synced according to the Custom Formats rules below. Use overrides on the profile page for score adjustments.</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">CFs and scores will be synced according to the Custom Formats rules below. Use overrides on the profile page for score adjustments.</div>
       </div>
 
       <!-- Create mode: static summary -->
       <div style="font-size:12px;margin-bottom:8px;line-height:1.6" x-show="syncMode === 'create' && profileDetail?.detail">
-        <div style="color:#e1e4e8"><span x-text="profileDetail?.detail?.totalCoreCFs || 0"></span> required CFs</div>
+        <div style="color:var(--text-primary)"><span x-text="profileDetail?.detail?.totalCoreCFs || 0"></span> required CFs</div>
         <template x-for="item in getSyncOptionalBreakdown()" :key="item.category">
-          <div style="color:#58a6ff">+ <span x-text="item.count"></span> <span x-text="item.category"></span></div>
+          <div style="color:var(--accent-blue)">+ <span x-text="item.count"></span> <span x-text="item.category"></span></div>
         </template>
       </div>
 
       <!-- Update mode: live preview from dry-run -->
       <div x-show="syncMode === 'update' && syncForm.arrProfileId && syncForm.arrProfileId !== '0'" style="font-size:12px;margin-bottom:8px">
-        <div x-show="syncPreviewLoading" style="color:#aaa">Loading preview...</div>
+        <div x-show="syncPreviewLoading" style="color:var(--text-muted)">Loading preview...</div>
         <div x-show="syncPreview && !syncPreviewLoading" style="line-height:1.6">
-          <div x-show="syncPreview?.summary?.cfsToCreate > 0" style="color:#3fb950">
+          <div x-show="syncPreview?.summary?.cfsToCreate > 0" style="color:var(--accent-green)">
             <span x-text="syncPreview?.summary?.cfsToCreate"></span> CFs to create
           </div>
-          <div x-show="syncPreview?.summary?.cfsToUpdate > 0" style="color:#58a6ff">
+          <div x-show="syncPreview?.summary?.cfsToUpdate > 0" style="color:var(--accent-blue)">
             <span x-text="syncPreview?.summary?.cfsToUpdate"></span> CFs to update
           </div>
-          <div x-show="syncPreview?.summary?.scoresToSet > 0" style="color:#d29922">
+          <div x-show="syncPreview?.summary?.scoresToSet > 0" style="color:var(--accent-orange)">
             <span x-text="syncPreview?.summary?.scoresToSet"></span> scores to set/update
           </div>
-          <div x-show="syncPreview?.summary?.scoresToZero > 0" style="color:#f47067">
+          <div x-show="syncPreview?.summary?.scoresToZero > 0" style="color:var(--accent-red-soft)">
             <span x-text="syncPreview?.summary?.scoresToZero"></span> extra scores will be zeroed
           </div>
-          <div x-show="syncPreview?.summary?.cfsUnchanged > 0" style="color:#aaa">
+          <div x-show="syncPreview?.summary?.cfsUnchanged > 0" style="color:var(--text-muted)">
             <span x-text="syncPreview?.summary?.cfsUnchanged"></span> CFs unchanged
           </div>
-          <div x-show="syncPreview?.summary?.scoresUnchanged > 0" style="color:#aaa">
+          <div x-show="syncPreview?.summary?.scoresUnchanged > 0" style="color:var(--text-muted)">
             <span x-text="syncPreview?.summary?.scoresUnchanged"></span> scores already correct
           </div>
           <template x-for="s in (syncPreview?.settingsPreview || [])" :key="s">
-            <div style="color:#58a6ff"><span x-text="s"></span></div>
+            <div style="color:var(--accent-blue)"><span x-text="s"></span></div>
           </template>
           <template x-for="q in (syncPreview?.qualityPreview || [])" :key="q">
-            <div style="color:#d29922"><span x-text="q"></span></div>
+            <div style="color:var(--accent-orange)"><span x-text="q"></span></div>
           </template>
-          <div x-show="syncPreview?.error" style="color:#f47067" x-text="syncPreview?.error"></div>
+          <div x-show="syncPreview?.error" style="color:var(--accent-red-soft)" x-text="syncPreview?.error"></div>
         </div>
       </div>
       <!-- Sync behavior rules -->
-      <div style="margin-bottom:12px;padding:10px 12px;background:#161b22;border:1px solid #30363d;border-radius:6px">
-        <div style="font-size:12px;font-weight:600;color:#e1e4e8;margin-bottom:8px">Custom Formats</div>
+      <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:6px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:8px">Custom Formats</div>
         <div style="display:flex;flex-direction:column;gap:10px">
           <!-- Behavior dropdowns are driven by the backend manifest:
                manifest.syncBehaviorAddModes / RemoveModes / ResetModes.
@@ -106,33 +106,33 @@
                internal/core/enums.go so backend validators and UI render
                from one source. -->
           <div>
-            <label style="font-size:13px;color:#aaa;display:block;margin-bottom:3px">Add</label>
+            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:3px">Add</label>
             <select class="input" x-model="syncForm.behavior.addMode" style="font-size:12px;width:100%" @change="fetchSyncPreview()">
               <template x-for="opt in (manifest.syncBehaviorAddModes || [])" :key="opt.value">
                 <option :value="opt.value" x-text="opt.label"></option>
               </template>
             </select>
-            <div style="font-size:12px;color:#aaa;margin-top:3px;line-height:1.5"
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.5"
               x-text="manifestEnumDescription('syncBehaviorAddModes', syncForm.behavior.addMode)"></div>
           </div>
           <div>
-            <label style="font-size:13px;color:#aaa;display:block;margin-bottom:3px">Scores</label>
+            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:3px">Scores</label>
             <select class="input" x-model="syncForm.behavior.removeMode" style="font-size:12px;width:100%" @change="fetchSyncPreview()">
               <template x-for="opt in (manifest.syncBehaviorRemoveModes || [])" :key="opt.value">
                 <option :value="opt.value" x-text="opt.label"></option>
               </template>
             </select>
-            <div style="font-size:12px;color:#aaa;margin-top:3px;line-height:1.5"
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.5"
               x-text="manifestEnumDescription('syncBehaviorRemoveModes', syncForm.behavior.removeMode)"></div>
           </div>
           <div x-show="syncMode === 'update'">
-            <label style="font-size:13px;color:#aaa;display:block;margin-bottom:3px">Reset</label>
+            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:3px">Reset</label>
             <select class="input" x-model="syncForm.behavior.resetMode" style="font-size:12px;width:100%" @change="fetchSyncPreview()">
               <template x-for="opt in (manifest.syncBehaviorResetModes || [])" :key="opt.value">
                 <option :value="opt.value" x-text="opt.label"></option>
               </template>
             </select>
-            <div style="font-size:12px;color:#aaa;margin-top:3px;line-height:1.5"
+            <div style="font-size:12px;color:var(--text-muted);margin-top:3px;line-height:1.5"
               x-text="manifestEnumDescription('syncBehaviorResetModes', syncForm.behavior.resetMode)"></div>
           </div>
         </div>
@@ -140,16 +140,16 @@
 
       <!-- Auto-sync toggle (hidden for builder profiles and Compare sync) -->
       <template x-if="!syncForm.importedProfileId && !syncForm._fromCompare">
-        <div style="margin-bottom:12px;padding:8px 12px;background:#161b22;border:1px solid #30363d;border-radius:6px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#e1e4e8">
-            <input type="checkbox" :checked="autoSyncRuleForSync?.enabled" @change="toggleAutoSyncForProfile($event.target.checked)" style="accent-color:#58a6ff">
+        <div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" :checked="autoSyncRuleForSync?.enabled" @change="toggleAutoSyncForProfile($event.target.checked)" style="accent-color:var(--accent-blue)">
             Auto-sync this profile
           </label>
-          <div style="font-size:13px;color:#aaa;margin-top:4px;margin-left:22px">When TRaSH Guides updates, automatically sync changes to this instance</div>
+          <div style="font-size:13px;color:var(--text-muted);margin-top:4px;margin-left:22px">When TRaSH Guides updates, automatically sync changes to this instance</div>
         </div>
       </template>
       </div><!-- /scroll region -->
-      <div class="modal-actions" style="flex-shrink:0;padding:16px 24px;border-top:1px solid #21262d;background:#161b22">
+      <div class="modal-actions" style="flex-shrink:0;padding:16px 24px;border-top:1px solid var(--bg-muted);background:var(--bg-card)">
         <button class="btn" @click="showSyncModal = false">Cancel</button>
         <button class="btn btn-blue" @click="startDryRun()" :disabled="syncing || (syncMode === 'create' && !syncForm.newProfileName.trim()) || (syncMode === 'update' && (!syncForm.arrProfileId || syncForm.arrProfileId === '0'))">Dry Run</button>
         <button class="btn btn-primary" @click="startApply()" :disabled="syncing || (syncMode === 'create' && !syncForm.newProfileName.trim()) || (syncMode === 'update' && (!syncForm.arrProfileId || syncForm.arrProfileId === '0'))">

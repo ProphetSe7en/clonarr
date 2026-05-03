@@ -10,10 +10,10 @@
         <div style="margin-bottom:10px">
           <span x-text="compareQuickSync.summary"></span>
           <template x-if="compareQuickSync.cr && compareQuickSync.inst">
-            <div style="margin-top:8px;color:#8b949e;font-size:12px">
-              Target: <strong style="color:#c9d1d9" x-text="compareQuickSync.cr?.arrProfileName"></strong>
-              on <strong style="color:#c9d1d9" x-text="compareQuickSync.inst?.name"></strong>
-              — TRaSH profile: <strong style="color:#c9d1d9" x-text="compareQuickSync.cr?.trashProfileName"></strong>
+            <div style="margin-top:8px;color:var(--text-secondary);font-size:12px">
+              Target: <strong style="color:var(--text-body)" x-text="compareQuickSync.cr?.arrProfileName"></strong>
+              on <strong style="color:var(--text-body)" x-text="compareQuickSync.inst?.name"></strong>
+              — TRaSH profile: <strong style="color:var(--text-body)" x-text="compareQuickSync.cr?.trashProfileName"></strong>
             </div>
           </template>
         </div>
