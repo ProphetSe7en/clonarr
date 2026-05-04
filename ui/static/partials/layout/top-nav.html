@@ -13,10 +13,12 @@
       <a class="tab" :class="{ active: currentSection === 'about' }" :href="navHref('about')" :aria-current="currentSection === 'about' ? 'page' : null">About</a>
     </nav>
     <div class="spacer"></div>
-    <div class="sync-status" style="position:relative">
+    <div class="sync-status" style="position:relative"
+         @keydown.escape.window="if (showChangelog) { showChangelog = false; $nextTick(() => $refs.trashChangelogButton?.focus()) }">
       <span class="dot" :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"></span>
       <template x-if="trashStatus.cloned">
         <button type="button" class="inline-action" @click="showChangelog = !showChangelog"
+                x-ref="trashChangelogButton"
                 :aria-expanded="showChangelog"
                 aria-controls="trash-changelog-dropdown"
                 style="color:inherit" x-tt="'Click for changelog'">

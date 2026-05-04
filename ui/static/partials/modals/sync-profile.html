@@ -4,10 +4,10 @@
        and Cancel close it, to prevent accidental loss of a half-edited sync
        form. Esc is bound on the wrapper via @keyup.escape.window. -->
   <div class="modal-overlay" x-show="showSyncModal" @keyup.escape.window="showSyncModal = false" x-cloak>
-    <div class="modal" style="width:560px">
+    <div class="modal" style="width:560px" role="dialog" aria-modal="true" aria-labelledby="modal-title-sync-profile" x-trap.noscroll.inert="showSyncModal">
       <!-- Scrollable content region so many diffs don't push Cancel/Dry Run/Apply off-screen -->
       <div style="flex:1 1 auto;overflow-y:auto;min-height:0;padding:24px">
-      <div class="modal-title">Sync Profile</div>
+      <h2 id="modal-title-sync-profile" class="modal-title">Sync Profile</h2>
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
         Deploy <strong x-text="syncForm.profileName" style="color:var(--text-primary)"></strong> to an instance
       </div>

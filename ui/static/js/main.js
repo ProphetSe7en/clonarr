@@ -52,6 +52,234 @@ function applyFeatureModules(target) {
   return target;
 }
 
+const modalFocusableSelector = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'iframe',
+  'object',
+  'embed',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+let scrollLockCount = 0;
+let scrollLockSnapshot = null;
+const inertElementState = new WeakMap();
+const activeModalTraps = [];
+
+function isVisibleFocusable(el) {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.disabled || el.getAttribute('aria-hidden') === 'true') return false;
+  const styles = window.getComputedStyle(el);
+  if (styles.display === 'none' || styles.visibility === 'hidden') return false;
+  return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+}
+
+function focusableElementsIn(el) {
+  return Array.from(el.querySelectorAll(modalFocusableSelector)).filter(isVisibleFocusable);
+}
+
+function lockDocumentScroll() {
+  if (scrollLockCount === 0) {
+    scrollLockSnapshot = {
+      htmlOverflow: document.documentElement.style.overflow,
+      bodyOverflow: document.body.style.overflow,
+    };
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+  }
+
+  scrollLockCount += 1;
+  let released = false;
+
+  return () => {
+    if (released) return;
+    released = true;
+    scrollLockCount = Math.max(0, scrollLockCount - 1);
+    if (scrollLockCount !== 0 || !scrollLockSnapshot) return;
+
+    document.documentElement.style.overflow = scrollLockSnapshot.htmlOverflow;
+    document.body.style.overflow = scrollLockSnapshot.bodyOverflow;
+    scrollLockSnapshot = null;
+  };
+}
+
+function inertElement(el) {
+  const existing = inertElementState.get(el);
+  if (existing) {
+    existing.count += 1;
+    return;
+  }
+
+  inertElementState.set(el, {
+    count: 1,
+    hadInert: el.hasAttribute('inert'),
+    inertValue: !!el.inert,
+    ariaHidden: el.getAttribute('aria-hidden'),
+  });
+  el.inert = true;
+  el.setAttribute('inert', '');
+  el.setAttribute('aria-hidden', 'true');
+}
+
+function releaseInertElement(el) {
+  const existing = inertElementState.get(el);
+  if (!existing) return;
+
+  existing.count -= 1;
+  if (existing.count > 0) return;
+
+  if (existing.hadInert) {
+    el.setAttribute('inert', '');
+  } else {
+    el.removeAttribute('inert');
+  }
+  el.inert = existing.inertValue;
+  if (existing.ariaHidden === null) {
+    el.removeAttribute('aria-hidden');
+  } else {
+    el.setAttribute('aria-hidden', existing.ariaHidden);
+  }
+  inertElementState.delete(el);
+}
+
+function inertModalBackground(el) {
+  const layer = el.closest('.modal-overlay') || el;
+  const inerted = [];
+  let branch = layer;
+
+  while (branch && branch.parentElement) {
+    const parent = branch.parentElement;
+    for (const child of parent.children) {
+      if (
+        child === branch
+        || child.tagName === 'SCRIPT'
+        || child.tagName === 'STYLE'
+        || child.contains(layer)
+        || layer.contains(child)
+      ) continue;
+      inertElement(child);
+      inerted.push(child);
+    }
+    if (parent === document.body) break;
+    branch = parent;
+  }
+
+  return () => {
+    inerted.forEach(releaseInertElement);
+  };
+}
+
+function registerModalTrapDirective(Alpine) {
+  Alpine.directive('trap', (el, { expression, modifiers }, { evaluateLater, effect, cleanup }) => {
+    const evaluateOpen = evaluateLater(expression || 'false');
+    const trap = {};
+    let active = false;
+    let previouslyFocused = null;
+    let releaseScroll = null;
+    let releaseInert = null;
+    let addedTabindex = false;
+    let focusTimer = null;
+
+    const clearFocusTimer = () => {
+      if (focusTimer === null) return;
+      window.clearTimeout(focusTimer);
+      focusTimer = null;
+    };
+
+    const focusFirst = () => {
+      const target = focusableElementsIn(el)[0] || el;
+      if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+    };
+
+    const isTopTrap = () => activeModalTraps[activeModalTraps.length - 1] === trap;
+
+    const onKeydown = (event) => {
+      if (!active || !isTopTrap() || event.key !== 'Tab') return;
+
+      const focusable = focusableElementsIn(el);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        el.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const current = document.activeElement;
+
+      if (event.shiftKey && (current === first || !el.contains(current))) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && (current === last || !el.contains(current))) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+
+    const onFocusIn = (event) => {
+      if (!active || !isTopTrap() || el.contains(event.target)) return;
+      focusFirst();
+    };
+
+    const activate = () => {
+      if (active) return;
+      active = true;
+      activeModalTraps.push(trap);
+      previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+      if (!el.hasAttribute('tabindex')) {
+        el.setAttribute('tabindex', '-1');
+        addedTabindex = true;
+      }
+      if (modifiers.includes('noscroll')) releaseScroll = lockDocumentScroll();
+      if (modifiers.includes('inert')) releaseInert = inertModalBackground(el);
+
+      document.addEventListener('keydown', onKeydown, true);
+      document.addEventListener('focusin', onFocusIn, true);
+      focusTimer = window.setTimeout(() => {
+        focusTimer = null;
+        if (active && el.isConnected && !el.contains(document.activeElement)) focusFirst();
+      }, 0);
+    };
+
+    const deactivate = () => {
+      if (!active) return;
+      active = false;
+      const stackIndex = activeModalTraps.lastIndexOf(trap);
+      if (stackIndex !== -1) activeModalTraps.splice(stackIndex, 1);
+      clearFocusTimer();
+      document.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('focusin', onFocusIn, true);
+      if (releaseInert) releaseInert();
+      if (releaseScroll) releaseScroll();
+      releaseInert = null;
+      releaseScroll = null;
+      if (addedTabindex) {
+        el.removeAttribute('tabindex');
+        addedTabindex = false;
+      }
+      if (previouslyFocused && previouslyFocused.isConnected && document.body.contains(previouslyFocused)) {
+        previouslyFocused.focus({ preventScroll: true });
+      }
+      previouslyFocused = null;
+    };
+
+    effect(() => {
+      evaluateOpen((open) => {
+        if (open) activate();
+        else deactivate();
+      });
+    });
+
+    cleanup(deactivate);
+  });
+}
+
 export function clonarr() {
   return applyFeatureModules({
     ...baseState(),
@@ -422,6 +650,7 @@ Object.assign(window, {
 //     already loaded — we just register directly.
 function registerClonarr() {
   window.Alpine.data('clonarr', clonarr);
+  registerModalTrapDirective(window.Alpine);
   // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
   // Replaces native title="" for elements where the OS tooltip would overflow
   // the viewport (right-edge buttons, long messages). Wires mouseenter/leave

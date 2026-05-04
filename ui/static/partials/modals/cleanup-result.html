@@ -1,11 +1,11 @@
 {{define "modals/cleanup-result"}}
   <!-- Cleanup results modal (shared across tabs) -->
   <template x-if="cleanupResult">
-    <div class="modal-overlay" @click.self="cleanupResult = null">
-      <div class="modal" style="max-width:700px">
+    <div class="modal-overlay" @click.self="cleanupResult = null" @keydown.escape.window="cleanupResult = null">
+      <div class="modal" style="max-width:700px" role="dialog" aria-modal="true" aria-labelledby="modal-title-cleanup-result" x-trap.noscroll.inert="cleanupResult">
         <div class="modal-header">
-          <div class="modal-title" x-text="cleanupActionLabel(cleanupResult.action) + ' — ' + cleanupResult.instance"></div>
-          <button class="modal-close" @click="cleanupResult = null">&times;</button>
+          <h2 id="modal-title-cleanup-result" class="modal-title" x-text="cleanupActionLabel(cleanupResult.action) + ' — ' + cleanupResult.instance"></h2>
+          <button class="modal-close" aria-label="Close cleanup result" @click="cleanupResult = null">&times;</button>
         </div>
         <div class="modal-body" style="max-height:500px;overflow-y:auto">
           <!-- Apply result -->

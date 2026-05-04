@@ -1,9 +1,9 @@
 {{define "modals/export-profile"}}
   <!-- ==================== IMPORT MODAL ==================== -->
   <!-- ==================== EXPORT MODAL ==================== -->
-  <div class="modal-overlay" x-show="showExportModal" @click.self="closeExportModal()" x-cloak>
-    <div class="modal" style="max-width:700px">
-      <div class="modal-title">Export Profile</div>
+  <div class="modal-overlay" x-show="showExportModal" @click.self="closeExportModal()" @keydown.escape.window="closeExportModal()" x-cloak>
+    <div class="modal" style="max-width:700px" role="dialog" aria-modal="true" aria-labelledby="modal-title-export-profile" x-trap.noscroll.inert="showExportModal">
+      <h2 id="modal-title-export-profile" class="modal-title">Export Profile</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
         Copy this profile configuration to use in other tools or share with others.
       </div>

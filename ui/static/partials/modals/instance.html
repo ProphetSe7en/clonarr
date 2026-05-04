@@ -1,8 +1,8 @@
 {{define "modals/instance"}}
   <!-- ==================== INSTANCE MODAL ==================== -->
-  <div class="modal-overlay" x-show="showInstanceModal" @click.self="showInstanceModal = false" x-cloak>
-    <div class="modal">
-      <div class="modal-title" x-text="editingInstance ? 'Edit Instance' : 'Add Instance'"></div>
+  <div class="modal-overlay" x-show="showInstanceModal" @click.self="showInstanceModal = false" @keydown.escape.window="showInstanceModal = false" x-cloak>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title-instance" x-trap.noscroll.inert="showInstanceModal">
+      <h2 id="modal-title-instance" class="modal-title" x-text="editingInstance ? 'Edit Instance' : 'Add Instance'"></h2>
       <div class="form-group">
         <label>Name</label>
         <input class="input" x-model="instanceForm.name" placeholder="e.g. Radarr HD">

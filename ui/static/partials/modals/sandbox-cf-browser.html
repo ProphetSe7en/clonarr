@@ -1,10 +1,10 @@
 {{define "modals/sandbox-cf-browser"}}
   <!-- ==================== SANDBOX CF BROWSER MODAL ==================== -->
-  <div class="modal-overlay" x-show="sandboxCFBrowser.open" @click.self="closeSandboxCFBrowser()" x-cloak>
-    <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;width:700px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column">
+  <div class="modal-overlay" x-show="sandboxCFBrowser.open" @click.self="closeSandboxCFBrowser()" @keydown.escape.window="closeSandboxCFBrowser()" x-cloak>
+    <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:12px;width:700px;max-width:90vw;max-height:80vh;display:flex;flex-direction:column" role="dialog" aria-modal="true" aria-labelledby="modal-title-sandbox-cf-browser" x-trap.noscroll.inert="sandboxCFBrowser.open">
       <!-- Header -->
       <div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:12px">
-        <div style="font-size:15px;font-weight:600">Add Custom Formats</div>
+        <h2 id="modal-title-sandbox-cf-browser" style="font-size:15px;font-weight:600">Add Custom Formats</h2>
         <input type="text" class="pb-input" placeholder="Filter..." style="width:200px;font-size:13px;margin-left:auto"
                x-model="sandboxCFBrowser.filter">
         <button class="btn btn-sm" @click="closeSandboxCFBrowser()">Done</button>
