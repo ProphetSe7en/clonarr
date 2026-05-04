@@ -659,10 +659,13 @@ function registerClonarr() {
   // Dynamic text:  x-tt="someDynamicExpr"
   window.Alpine.directive('tt', (el, { expression }, { evaluateLater, cleanup }) => {
     const getTipText = evaluateLater(expression);
-    // currentEl tracks the element the user is hovering RIGHT NOW. evaluateLater
-    // resolves via microtask, so for dynamic expressions the user could already
-    // have moved away by the time the callback fires. We compare against the
-    // currentEl snapshot to avoid showing a stale tooltip after mouseleave.
+    let idStr = el.getAttribute('id');
+    if (!idStr) {
+      idStr = 'tt-' + Math.random().toString(36).substr(2, 9);
+      el.setAttribute('id', idStr);
+    }
+    el.setAttribute('aria-describedby', 'global-tooltip');
+
     let currentEl = null;
     const onEnter = (e) => {
       currentEl = e.currentTarget;
@@ -678,11 +681,23 @@ function registerClonarr() {
       const data = window.Alpine.$data(el);
       if (data && data.hideTooltip) data.hideTooltip();
     };
+    const onEsc = (e) => {
+      if (e.key === 'Escape') {
+        const data = window.Alpine.$data(el);
+        if (data && data.tt && data.tt.show) data.hideTooltip();
+      }
+    };
     el.addEventListener('mouseenter', onEnter);
     el.addEventListener('mouseleave', onLeave);
+    el.addEventListener('focusin', onEnter);
+    el.addEventListener('focusout', onLeave);
+    window.addEventListener('keydown', onEsc);
     cleanup(() => {
       el.removeEventListener('mouseenter', onEnter);
       el.removeEventListener('mouseleave', onLeave);
+      el.removeEventListener('focusin', onEnter);
+      el.removeEventListener('focusout', onLeave);
+      window.removeEventListener('keydown', onEsc);
     });
   });
 }

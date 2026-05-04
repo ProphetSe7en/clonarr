@@ -1,6 +1,9 @@
   /* Cards */
   .card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
 
+  /* Form Error */
+  .field-error { color: var(--accent-red); font-size: 12px; margin-top: 4px; }
+
   /* Instance cards */
   .instance-header { display: flex; align-items: center; padding: 16px 20px; cursor: pointer; user-select: none; }
   .instance-header:hover { background: var(--bg-elevated-hover); }

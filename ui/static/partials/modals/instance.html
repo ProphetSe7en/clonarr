@@ -5,7 +5,10 @@
       <h2 id="modal-title-instance" class="modal-title" x-text="editingInstance ? 'Edit Instance' : 'Add Instance'"></h2>
       <div class="form-group">
         <label>Name</label>
-        <input class="input" x-model="instanceForm.name" placeholder="e.g. Radarr HD">
+        <input class="input" x-model="instanceForm.name" placeholder="e.g. Radarr HD"
+               :aria-invalid="!!instanceFormErrors.name"
+               :aria-describedby="instanceFormErrors.name ? 'instance-name-error' : null">
+        <div id="instance-name-error" class="field-error" x-show="instanceFormErrors.name" x-text="instanceFormErrors.name"></div>
       </div>
       <div class="form-group">
         <label>Type</label>
@@ -16,11 +19,17 @@
       </div>
       <div class="form-group">
         <label>URL</label>
-        <input class="input" x-model="instanceForm.url" placeholder="http://192.168.86.22:7878" autocomplete="one-time-code">
+        <input class="input" x-model="instanceForm.url" placeholder="http://192.168.86.22:7878" autocomplete="one-time-code"
+               :aria-invalid="!!instanceFormErrors.url"
+               :aria-describedby="instanceFormErrors.url ? 'instance-url-error' : null">
+        <div id="instance-url-error" class="field-error" x-show="instanceFormErrors.url" x-text="instanceFormErrors.url"></div>
       </div>
       <div class="form-group">
         <label>API Key</label>
-        <input class="input" x-model="instanceForm.apiKey" :placeholder="editingInstance ? 'Leave empty to keep current key' : 'Radarr/Sonarr API key'" :type="editingInstance && !instanceForm.apiKey ? 'text' : 'password'" autocomplete="one-time-code">
+        <input class="input" x-model="instanceForm.apiKey" :placeholder="editingInstance ? 'Leave empty to keep current key' : 'Radarr/Sonarr API key'" :type="editingInstance && !instanceForm.apiKey ? 'text' : 'password'" autocomplete="one-time-code"
+               :aria-invalid="!!instanceFormErrors.apiKey"
+               :aria-describedby="instanceFormErrors.apiKey ? 'instance-apikey-error' : null">
+        <div id="instance-apikey-error" class="field-error" x-show="instanceFormErrors.apiKey" x-text="instanceFormErrors.apiKey"></div>
         <div x-show="editingInstance && !instanceForm.apiKey" style="font-size:13px;color:var(--text-muted);margin-top:4px">API key is saved — leave empty to keep it, or enter a new one to replace it.</div>
       </div>
       <!-- Test result -->

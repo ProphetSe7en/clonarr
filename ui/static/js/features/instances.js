@@ -6,6 +6,7 @@ export default {
     showInstanceModal: false,
     editingInstance: null,
     instanceForm: { name: '', type: 'radarr', url: '', apiKey: '' },
+    instanceFormErrors: {},
     modalTestResult: null,
   },
 
@@ -40,6 +41,12 @@ export default {
     },
 
     async saveInstance() {
+      this.instanceFormErrors = {};
+      if (!this.instanceForm.url) this.instanceFormErrors.url = 'URL is required';
+      if (!this.instanceForm.name) this.instanceFormErrors.name = 'Name is required';
+      if (!this.editingInstance && !this.instanceForm.apiKey) this.instanceFormErrors.apiKey = 'API Key is required';
+      if (Object.keys(this.instanceFormErrors).length > 0) return;
+
       const data = { ...this.instanceForm };
       let r;
       if (this.editingInstance) {

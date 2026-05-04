@@ -91,7 +91,7 @@ export default {
       const app = this.activeAppType;
       let hash = '#' + app + '/' + s;
       if (s === 'profiles') hash += '/' + (this.getProfileTab(app) || 'trash-sync');
-      else if (s === 'advanced') hash += '/' + (this.advancedTab || 'builder');
+        else if (s === 'advanced') hash += '/' + (this.advancedTab || 'group-builder');
       return hash;
     },
 
@@ -158,7 +158,7 @@ export default {
       const validSections = ['profiles','custom-formats','quality-size','naming','maintenance','advanced','settings','about'];
       const validSettings = ['instances','trash','prowlarr','notifications','display','security','advanced'];
       const validProfileTabs = ['trash-sync','history','compare'];
-      const validAdvancedTabs = ['builder','scoring','import'];
+        const validAdvancedTabs = ['builder','group-builder','scoring','import'];
       this._navSkipPush = true;
       try {
         if (parts[0] === 'settings') {

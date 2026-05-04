@@ -21,8 +21,10 @@
       </label>
       <input type="password" class="input" x-model="disableAuthPassword" autocomplete="current-password" placeholder="current password"
              @keydown.enter="disableAuthPassword && (disableAuthModalOpen = false, saveSecurityConfig(true))"
-             style="width:100%;margin-bottom:8px">
-      <div x-show="disableAuthError" x-text="disableAuthError" style="color:var(--accent-red-soft);font-size:12px;margin:0 0 10px"></div>
+             style="width:100%;margin-bottom:8px"
+             :aria-invalid="!!disableAuthError"
+             :aria-describedby="disableAuthError ? 'disable-auth-error' : null">
+      <div id="disable-auth-error" class="field-error" x-show="disableAuthError" x-text="disableAuthError"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn btn-secondary"
                 @click="disableAuthModalOpen = false; disableAuthError = ''; disableAuthPassword = ''; config.authentication = authStatus.authentication || 'forms'">Cancel</button>
