@@ -149,6 +149,67 @@ export function clonarr() {
       };
       this.$watch('advancedTab', ensureSandbox);
       this.$watch('currentSection', ensureSandbox);
+
+      // Nav anchors set location.hash directly, which fires hashchange (not
+      // popstate). Mirror the popstate handler so anchor clicks restore state.
+      // restoreFromHash early-returns when hash already matches state, so this
+      // is safe to fire alongside watchers that call pushNav.
+      window.addEventListener('hashchange', () => this.restoreFromHash(location.hash));
+
+      // Section change clears stale per-section state (was inline in the old
+      // switchSection). Fires for both anchor clicks and hash restoration.
+      this.$watch('currentSection', () => {
+        this.profileDetail = null;
+        this.syncPlan = null;
+        this.syncResult = null;
+      });
+
+      // Settings → Security loads the API key. Was inline on the old
+      // settings-nav @click; now driven by state so right-click → "Open in
+      // new tab" on `#settings/security` also fetches.
+      this.$watch('settingsSection', (s) => {
+        if (s === 'security') this.fetchApiKey();
+      });
+
+      // Advanced → CF Group Builder loads CFs/profiles for the active app
+      // type. Was inline on the @click; now state-driven.
+      this.$watch('advancedTab', (t) => {
+        if (this.currentSection === 'advanced' && t === 'group-builder') {
+          this.cfgbLoad(this.activeAppType);
+        }
+      });
+
+      // Profiles → History loads sync history for every instance of the
+      // active app type. Triggers on tab change OR app-type change while the
+      // History tab is active.
+      const ensureHistory = () => {
+        if (this.currentSection === 'profiles' && this.getProfileTab(this.activeAppType) === 'history') {
+          this.instancesOfType(this.activeAppType).forEach(i => this.loadSyncHistory(i.id));
+        }
+      };
+      this.$watch('profileTabs', ensureHistory);
+
+      // App-type change (Radarr ↔ Sonarr) replays the side-effects that used
+      // to live in _doSwitchAppType: clear stale per-section state, auto-pick
+      // the maintenance instance when only one exists for the new type, and
+      // reload Advanced sub-tabs that are app-type-scoped.
+      this.$watch('activeAppType', (appType) => {
+        this.profileDetail = null;
+        this.syncPlan = null;
+        this.syncResult = null;
+        const typeInsts = this.instances.filter(i => i.type === appType);
+        if (typeInsts.length === 1) {
+          this.maintenanceInstanceId = typeInsts[0].id;
+          this.cleanupInstanceId = typeInsts[0].id;
+          this.loadCleanupKeep();
+          this.loadCleanupCFNames();
+        }
+        if (this.currentSection === 'advanced') {
+          if (this.advancedTab === 'group-builder') this.cfgbLoad(appType);
+          else if (this.advancedTab === 'scoring') this.loadSandbox(appType);
+        }
+        ensureHistory();
+      });
       await this.loadConfig();
       this.fetchAuthStatus(); // render header user-menu and banner state early
       await this.loadInstances();

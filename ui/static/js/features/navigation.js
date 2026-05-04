@@ -95,6 +95,53 @@ export default {
       return hash;
     },
 
+    // navHref builds the hash that a target section/sub-tab would produce,
+    // without mutating any state. Used by nav anchors so right-click → "Open
+    // in new tab" and "Copy link address" work, and the browser can show the
+    // URL on hover.
+    //
+    // opts: { appType, profileTab, advancedTab, settingsSection } — each
+    // defaults to the current state when omitted.
+    navHref(section, opts = {}) {
+      if (section === 'settings') {
+        return '#settings/' + (opts.settingsSection || this.settingsSection || 'instances');
+      }
+      if (section === 'about') return '#about';
+      const app = opts.appType || this.activeAppType;
+      let hash = '#' + app + '/' + section;
+      if (section === 'profiles') {
+        hash += '/' + (opts.profileTab || this.getProfileTab(app) || 'trash-sync');
+      } else if (section === 'advanced') {
+        hash += '/' + (opts.advancedTab || this.advancedTab || 'builder');
+      }
+      return hash;
+    },
+
+    // cfgbNeedsConfirm intercepts an app-type anchor click when the CF Group
+    // Builder has unsaved work. Returns true (and pops a confirm modal) only
+    // for plain left-clicks; modifier-clicks (Ctrl/Cmd/Shift/middle-click) are
+    // allowed through so right-click → "Open in new tab" preserves the dirty
+    // draft in the original tab.
+    cfgbNeedsConfirm($event, appType) {
+      if ($event.metaKey || $event.ctrlKey || $event.shiftKey || $event.altKey || $event.button === 1) return false;
+      if (this.currentSection !== 'advanced' || this.advancedTab !== 'group-builder') return false;
+      if (appType === this.activeAppType) return false;
+      if (typeof this.cfgbIsDirty !== 'function' || !this.cfgbIsDirty()) return false;
+      const label = this.cfgbEditingId
+        ? 'changes to "' + (this.cfgbName || '(unnamed)') + '"'
+        : 'the unsaved cf-group draft';
+      const targetHref = this.navHref('advanced', { appType, advancedTab: 'group-builder' });
+      this.confirmModal = {
+        show: true,
+        title: 'Discard unsaved cf-group work?',
+        message: 'Switch to ' + appType + ' and discard ' + label + '?\n\nThe saved copy on disk (if any) is unaffected.',
+        confirmLabel: 'Switch to ' + appType,
+        onConfirm: () => { location.hash = targetHref; },
+        onCancel: () => {},
+      };
+      return true;
+    },
+
     pushNav() {
       if (this._navSkipPush) return;
       const hash = this.buildNavHash();
@@ -103,9 +150,13 @@ export default {
 
     restoreFromHash(hash) {
       if (!hash || hash === '#') return false;
+      // Guard against the watch-loop: pushNav writes the hash, the browser
+      // fires hashchange, this runs, watchers re-fire pushNav. Early-return
+      // when the hash already matches the state we'd produce.
+      if (hash === this.buildNavHash()) return true;
       const parts = hash.replace(/^#/, '').split('/');
       const validSections = ['profiles','custom-formats','quality-size','naming','maintenance','advanced','settings','about'];
-      const validSettings = ['instances','trash','prowlarr','notifications','display','advanced'];
+      const validSettings = ['instances','trash','prowlarr','notifications','display','security','advanced'];
       const validProfileTabs = ['trash-sync','history','compare'];
       const validAdvancedTabs = ['builder','scoring','import'];
       this._navSkipPush = true;

@@ -2,16 +2,16 @@
   <!-- Top Navigation -->
   <div class="topnav">
     <div class="logo"><img src="icons/clonarr.png" alt="" style="width:28px;height:28px;border-radius:6px;vertical-align:middle;margin-right:8px">Clonarr</div>
-    <div class="tabs">
-      <div class="tab" :class="{ active: currentSection === 'profiles' }" @click="switchSection('profiles')">Profiles</div>
-      <div class="tab" :class="{ active: currentSection === 'custom-formats' }" @click="switchSection('custom-formats')">Custom Formats</div>
-      <div class="tab" :class="{ active: currentSection === 'quality-size' }" @click="switchSection('quality-size')">Quality Definitions</div>
-      <div class="tab" :class="{ active: currentSection === 'naming' }" @click="switchSection('naming')">File Naming</div>
-      <div class="tab" :class="{ active: currentSection === 'maintenance' }" @click="switchSection('maintenance')">Maintenance</div>
-      <div class="tab" x-show="config.devMode" :class="{ active: currentSection === 'advanced' }" @click="switchSection('advanced')">Advanced</div>
-      <div class="tab" :class="{ active: currentSection === 'settings' }" @click="switchSection('settings')">Settings</div>
-      <div class="tab" :class="{ active: currentSection === 'about' }" @click="switchSection('about')">About</div>
-    </div>
+    <nav class="tabs" aria-label="Main">
+      <a class="tab" :class="{ active: currentSection === 'profiles' }" :href="navHref('profiles')" :aria-current="currentSection === 'profiles' ? 'page' : null">Profiles</a>
+      <a class="tab" :class="{ active: currentSection === 'custom-formats' }" :href="navHref('custom-formats')" :aria-current="currentSection === 'custom-formats' ? 'page' : null">Custom Formats</a>
+      <a class="tab" :class="{ active: currentSection === 'quality-size' }" :href="navHref('quality-size')" :aria-current="currentSection === 'quality-size' ? 'page' : null">Quality Definitions</a>
+      <a class="tab" :class="{ active: currentSection === 'naming' }" :href="navHref('naming')" :aria-current="currentSection === 'naming' ? 'page' : null">File Naming</a>
+      <a class="tab" :class="{ active: currentSection === 'maintenance' }" :href="navHref('maintenance')" :aria-current="currentSection === 'maintenance' ? 'page' : null">Maintenance</a>
+      <a class="tab" x-show="config.devMode" :class="{ active: currentSection === 'advanced' }" :href="navHref('advanced')" :aria-current="currentSection === 'advanced' ? 'page' : null">Advanced</a>
+      <a class="tab" :class="{ active: currentSection === 'settings' }" :href="navHref('settings')" :aria-current="currentSection === 'settings' ? 'page' : null">Settings</a>
+      <a class="tab" :class="{ active: currentSection === 'about' }" :href="navHref('about')" :aria-current="currentSection === 'about' ? 'page' : null">About</a>
+    </nav>
     <div class="spacer"></div>
     <div class="sync-status" style="position:relative">
       <span class="dot" :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"></span>

@@ -43,9 +43,10 @@
   /* Settings — sidebar + content panel layout (matching vpn-gateway / PurgeBot) */
   .settings-layout { display: flex; gap: 0; min-height: 400px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; }
   .settings-sidebar { width: 180px; flex-shrink: 0; border-right: 1px solid var(--border-subtle); padding-top: 8px; }
-  .settings-nav { display: block; padding: 10px 16px; font-size: 14px; color: var(--text-secondary); cursor: pointer; border-left: 3px solid transparent; transition: color 0.15s, background 0.15s; }
+  .settings-nav { display: block; padding: 10px 16px; font-size: 14px; color: var(--text-secondary); cursor: pointer; border-left: 3px solid transparent; transition: color 0.15s, background 0.15s; text-decoration: none; }
   .settings-nav:hover { color: var(--text-body); background: var(--alpha-hover); }
   .settings-nav-active { color: var(--text-body); border-left-color: var(--accent-green); background: var(--alpha-active); }
+  .settings-nav:focus-visible { outline-offset: -2px; }
   .settings-content { flex: 1; padding: 16px 24px; }
   .settings-section-title { font-size: 16px; font-weight: 600; color: var(--text-body); margin-bottom: 4px; }
   .settings-section-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
