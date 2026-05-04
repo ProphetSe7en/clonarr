@@ -110,9 +110,12 @@
                 </template>
               </div>
               <template x-if="profileDetail?.detail?.profile?.trash_description">
-                <div @click="showProfileInfo = !showProfileInfo" style="margin-top:8px;cursor:pointer;font-size:12px;color:var(--accent-blue);user-select:none;display:inline-block">
+                <button type="button" class="inline-action" @click="showProfileInfo = !showProfileInfo"
+                        :aria-expanded="showProfileInfo"
+                        aria-controls="profile-info-panel"
+                        style="margin-top:8px;font-size:12px;color:var(--accent-blue);user-select:none;display:inline-block">
                   <span x-text="showProfileInfo ? '▾' : '▸'"></span> Profile info
-                </div>
+                </button>
               </template>
             </div>
             <div style="display:flex;gap:8px;flex-shrink:0" x-show="profileDetail?.detail?.imported">
@@ -128,7 +131,7 @@
           </div>
           <!-- Profile info panel (full-width below flex row, so expanding it doesn't push buttons) -->
           <template x-if="profileDetail?.detail?.profile?.trash_description">
-            <div x-show="showProfileInfo" x-cloak style="margin-top:10px;padding:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:6px;font-size:12px;color:var(--text-muted);line-height:1.5">
+            <div id="profile-info-panel" x-show="showProfileInfo" x-cloak style="margin-top:10px;padding:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:6px;font-size:12px;color:var(--text-muted);line-height:1.5">
               <span x-html="sanitizeHTML(profileDetail.detail.profile.trash_description)"></span>
               <template x-if="profileDetail.detail.profile.trash_url">
                 <a :href="profileDetail.detail.profile.trash_url" target="_blank" rel="noopener" style="display:block;margin-top:6px;color:var(--accent-blue);font-size:13px;text-decoration:none">View on TRaSH Guides &rarr;</a>
@@ -203,17 +206,22 @@
                  (label | TRaSH-default+↺ | input) so the input column always sits at the
                  same X-coordinate across rows regardless of override state. -->
             <div class="pd-card pd-card-general">
-              <div @click="pdGeneralCollapsed = !pdGeneralCollapsed"
-                   style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px">
-                <span class="detail-section-chevron" :class="{ open: !pdGeneralCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-                <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">General</span>
-                <template x-if="pdGeneralChangeCount() > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="pdGeneralChangeCount() + (pdGeneralChangeCount() === 1 ? ' override' : ' overrides')"></span>
-                </template>
-                <template x-if="pdGeneralChangeCount() === 0">
-                  <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
-                </template>
-                <span style="margin-left:auto" @click.stop>
+              <div style="display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px">
+                <button type="button" class="collapse-toggle"
+                        style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                        @click="pdGeneralCollapsed = !pdGeneralCollapsed"
+                        :aria-expanded="!pdGeneralCollapsed"
+                        aria-controls="pd-general-body">
+                  <span class="detail-section-chevron" :class="{ open: !pdGeneralCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
+                  <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">General</span>
+                  <template x-if="pdGeneralChangeCount() > 0">
+                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="pdGeneralChangeCount() + (pdGeneralChangeCount() === 1 ? ' override' : ' overrides')"></span>
+                  </template>
+                  <template x-if="pdGeneralChangeCount() === 0">
+                    <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
+                  </template>
+                </button>
+                <span>
                   <button class="btn" x-show="pdGeneralChangeCount() > 0"
                           style="font-size:11px;padding:1px 8px;border-color:var(--accent-red);color:var(--accent-red)"
                           x-tt="'Reset all General values to Profile defaults'"
@@ -225,7 +233,7 @@
                    TRaSH/↺ sit immediately to the left of input (no empty middle gap), and
                    input sits at the right edge with width:150px (overrides pd-input's
                    max-width:50% which would otherwise shrink it inside the cluster). -->
-              <div x-show="!pdGeneralCollapsed" style="display:flex;flex-direction:column;gap:4px">
+              <div id="pd-general-body" x-show="!pdGeneralCollapsed" style="display:flex;flex-direction:column;gap:4px">
                 <!-- Language (Radarr only — Sonarr removed language from profiles in v4).
                      ON: Default + ↺ + select. OFF: plain value text (read-only). -->
                 <div class="pd-row" x-show="activeAppType === 'radarr'">
@@ -351,24 +359,29 @@
                  it to a modal so the card never grows to full width). Card still spans full
                  width when the editor is open — that part goes away in Step 2. -->
             <div class="pd-card pd-card-quality">
-              <div @click="pdQualityCollapsed = !pdQualityCollapsed"
-                   style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px">
-                <span class="detail-section-chevron" :class="{ open: !pdQualityCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-                <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
-                <template x-if="pdQualityChangeCount() + pdQualityItemsChangeCount() > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="(pdQualityChangeCount() + pdQualityItemsChangeCount()) + ' change' + (pdQualityChangeCount() + pdQualityItemsChangeCount() === 1 ? '' : 's')"></span>
-                </template>
-                <template x-if="pdQualityChangeCount() + pdQualityItemsChangeCount() === 0">
-                  <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
-                </template>
-                <span style="margin-left:auto" @click.stop>
+              <div style="display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px">
+                <button type="button" class="collapse-toggle"
+                        style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                        @click="pdQualityCollapsed = !pdQualityCollapsed"
+                        :aria-expanded="!pdQualityCollapsed"
+                        aria-controls="pd-quality-body">
+                  <span class="detail-section-chevron" :class="{ open: !pdQualityCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
+                  <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
+                  <template x-if="pdQualityChangeCount() + pdQualityItemsChangeCount() > 0">
+                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="(pdQualityChangeCount() + pdQualityItemsChangeCount()) + ' change' + (pdQualityChangeCount() + pdQualityItemsChangeCount() === 1 ? '' : 's')"></span>
+                  </template>
+                  <template x-if="pdQualityChangeCount() + pdQualityItemsChangeCount() === 0">
+                    <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
+                  </template>
+                </button>
+                <span>
                   <button class="btn" x-show="pdQualityChangeCount() + pdQualityItemsChangeCount() > 0"
                           style="font-size:11px;padding:1px 8px;border-color:var(--accent-red);color:var(--accent-red)"
                           x-tt="'Reset Quality cutoff and items to Profile defaults'"
                           @click="pdResetQuality(); qsResetAll()">&#8634; Reset Quality</button>
                 </span>
               </div>
-              <div x-show="!pdQualityCollapsed">
+              <div id="pd-quality-body" x-show="!pdQualityCollapsed">
                 <div style="display:flex;flex-direction:column;gap:4px">
                   <!-- Cutoff row. ON: Default + ↺ + select. OFF: plain value text. -->
                   <div class="pd-row">
@@ -600,25 +613,30 @@
                has been changed from the profile default. Edits to Required/Group CF
                score inputs (gated on pdOverridesEnabled) populate this list. -->
           <div class="pd-card pd-card-cfscores" style="margin-top:18px;padding:10px 14px">
-            <div @click="pdCFScoresCollapsed = !pdCFScoresCollapsed"
-                 :style="pdCFScoresCollapsed ? 'display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none' : 'display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px'">
-              <span class="detail-section-chevron" :class="{ open: !pdCFScoresCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-              <span style="font-size:13px;color:var(--text-primary);font-weight:600">Overridden Scores</span>
-              <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0">
-                <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px"
-                      x-text="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length + ' override' + (Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 1 ? '' : 's')"></span>
-              </template>
-              <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 0">
-                <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
-              </template>
-              <span style="margin-left:auto" @click.stop>
+            <div :style="pdCFScoresCollapsed ? 'display:flex;align-items:center;gap:8px' : 'display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px'">
+              <button type="button" class="collapse-toggle"
+                      style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                      @click="pdCFScoresCollapsed = !pdCFScoresCollapsed"
+                      :aria-expanded="!pdCFScoresCollapsed"
+                      aria-controls="pd-cf-scores-body">
+                <span class="detail-section-chevron" :class="{ open: !pdCFScoresCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
+                <span style="font-size:13px;color:var(--text-primary);font-weight:600">Overridden Scores</span>
+                <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0">
+                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px"
+                        x-text="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length + ' override' + (Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 1 ? '' : 's')"></span>
+                </template>
+                <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 0">
+                  <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
+                </template>
+              </button>
+              <span>
                 <button class="btn" x-show="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0"
                         style="font-size:11px;padding:1px 8px;border-color:var(--accent-red);color:var(--accent-red)"
                         x-tt="'Reset all CF score overrides to Profile defaults'"
                         @click="cfScoreOverrides = {}">&#8634; Reset Overridden</button>
               </span>
             </div>
-            <div x-show="!pdCFScoresCollapsed">
+            <div id="pd-cf-scores-body" x-show="!pdCFScoresCollapsed">
               <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0">
                 <div :style="'column-count:' + (Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 8 ? 2 : 1) + ';column-gap:24px'">
                   <template x-for="tid in Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).sort((a,b) => (resolveCFName(a)).localeCompare(resolveCFName(b)))" :key="'so-'+tid">
@@ -629,8 +647,8 @@
                       <input type="number" class="pb-score-input overridden" style="width:65px;flex-shrink:0"
                              :value="cfScoreOverrides[tid]"
                              @change="const v = parseInt($event.target.value) || 0; const def = resolveCFDefaultScore(tid); if (v === def) { const {[tid]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [tid]: v}; }">
-                      <span @click="const {[tid]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                            style="color:var(--accent-red);font-size:12px;cursor:pointer;flex-shrink:0;margin-left:2px" x-tt="'Reset to Profile default'">&#8634;</span>
+                      <button type="button" class="inline-action" @click="const {[tid]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                              style="color:var(--accent-red);font-size:12px;flex-shrink:0;margin-left:2px" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                     </div>
                   </template>
                 </div>
@@ -646,17 +664,22 @@
                a full yellow border. Lazy-load picker on first expand. -->
           <div class="pd-card pd-card-extracfs" style="margin-top:18px;padding:10px 14px"
                x-effect="if (!pdExtraCFsCollapsed && extraCFAllCFs.length === 0 && profileDetail?.instance?.type) loadExtraCFList()">
-          <div @click="pdExtraCFsCollapsed = !pdExtraCFsCollapsed"
-               :style="pdExtraCFsCollapsed ? 'display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none' : 'display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px'">
-            <span class="detail-section-chevron" :class="{ open: !pdExtraCFsCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-            <span style="font-size:13px;color:var(--text-primary);font-weight:600">Additional Custom Formats</span>
-            <template x-if="Object.keys(extraCFs).length > 0">
-              <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="Object.keys(extraCFs).length + ' added'"></span>
-            </template>
-            <template x-if="Object.keys(extraCFs).length === 0">
-              <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">None</span>
-            </template>
-            <span style="margin-left:auto" @click.stop>
+          <div :style="pdExtraCFsCollapsed ? 'display:flex;align-items:center;gap:8px' : 'display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px'">
+            <button type="button" class="collapse-toggle"
+                    style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                    @click="pdExtraCFsCollapsed = !pdExtraCFsCollapsed"
+                    :aria-expanded="!pdExtraCFsCollapsed"
+                    aria-controls="pd-extra-cfs-body">
+              <span class="detail-section-chevron" :class="{ open: !pdExtraCFsCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
+              <span style="font-size:13px;color:var(--text-primary);font-weight:600">Additional Custom Formats</span>
+              <template x-if="Object.keys(extraCFs).length > 0">
+                <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="Object.keys(extraCFs).length + ' added'"></span>
+              </template>
+              <template x-if="Object.keys(extraCFs).length === 0">
+                <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">None</span>
+              </template>
+            </button>
+            <span>
               <input x-show="!pdExtraCFsCollapsed" type="text" class="input" x-model="extraCFSearch" placeholder="Search..." style="font-size:12px;width:140px;padding:2px 8px;margin-right:6px">
               <button class="btn" x-show="Object.keys(extraCFs).length > 0"
                       style="font-size:11px;padding:1px 8px;border-color:var(--accent-red);color:var(--accent-red)"
@@ -664,7 +687,7 @@
                       @click="extraCFs = {}">&#8634; Reset Additional</button>
             </span>
           </div>
-          <div x-show="!pdExtraCFsCollapsed">
+          <div id="pd-extra-cfs-body" x-show="!pdExtraCFsCollapsed">
             <div style="font-size:13px;color:var(--accent-red);font-weight:600;margin-bottom:10px">&#9888; Non-standard for this profile — use at your own risk</div>
             <template x-if="extraCFAllCFs.length === 0">
               <div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:4px 0">Loading custom formats...</div>
@@ -680,13 +703,15 @@
                 <template x-for="group in extraCFGroups" :key="'ag-'+group.name">
                   <template x-if="group.cfs.some(cf => extraCFs[cf.trashId] !== undefined)">
                     <div class="detail-section" :class="getCategoryClass(group.category)">
-                      <div class="detail-section-header" @click="detailSections['added_'+group.name] = !detailSections['added_'+group.name]">
+                      <button type="button" class="detail-section-header"
+                              @click="detailSections['added_'+group.name] = !detailSections['added_'+group.name]"
+                              :aria-expanded="detailSections['added_'+group.name]">
                         <span class="detail-section-chevron" :class="{ open: detailSections['added_'+group.name] }">&#9654;</span>
-                        <div style="font-size:13px;font-weight:500" x-text="group.name"></div>
-                        <div style="font-size:12px;color:var(--accent-orange);margin-left:8px"
-                             x-text="group.cfs.filter(cf => extraCFs[cf.trashId] !== undefined).length + ' added'"></div>
+                        <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                        <span style="font-size:12px;color:var(--accent-orange);margin-left:8px"
+                              x-text="group.cfs.filter(cf => extraCFs[cf.trashId] !== undefined).length + ' added'"></span>
                         <span style="margin-right:auto"></span>
-                      </div>
+                      </button>
                       <div x-show="detailSections['added_'+group.name]">
                         <template x-for="cf in group.cfs.filter(cf => extraCFs[cf.trashId] !== undefined)" :key="'as-'+cf.trashId">
                           <div class="cf-row">
@@ -719,11 +744,16 @@
               <div class="detail-section" :class="getCategoryClass(group.category)"
                    x-show="group.cfs.some(cf => !_extraInProfile(cf.trashId) && (!extraCFSearch || cf.name.toLowerCase().includes(extraCFSearch.toLowerCase())))"
                    style="margin-bottom:4px">
-                <div class="detail-section-header" @click="detailSections['extra_'+group.name] = !detailSections['extra_'+group.name]">
-                  <span class="detail-section-chevron" :class="{ open: detailSections['extra_'+group.name] }">&#9654;</span>
-                  <div style="font-size:13px;font-weight:500" x-text="group.name"></div>
-                  <div x-text="(() => { const total = group.cfs.filter(cf => !_extraInProfile(cf.trashId)).length; const added = group.cfs.filter(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] !== undefined).length; return added + '/' + total + (added > 0 ? ' added' : ''); })()"
-                       :style="'font-size:12px;margin-left:8px;color:' + (group.cfs.some(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] !== undefined) ? 'var(--accent-orange)' : 'var(--text-muted)')"></div>
+                <div class="detail-section-header">
+                  <button type="button" class="collapse-toggle"
+                          style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                          @click="detailSections['extra_'+group.name] = !detailSections['extra_'+group.name]"
+                          :aria-expanded="detailSections['extra_'+group.name]">
+                    <span class="detail-section-chevron" :class="{ open: detailSections['extra_'+group.name] }">&#9654;</span>
+                    <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                    <span x-text="(() => { const total = group.cfs.filter(cf => !_extraInProfile(cf.trashId)).length; const added = group.cfs.filter(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] !== undefined).length; return added + '/' + total + (added > 0 ? ' added' : ''); })()"
+                          :style="'font-size:12px;margin-left:8px;color:' + (group.cfs.some(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] !== undefined) ? 'var(--accent-orange)' : 'var(--text-muted)')"></span>
+                  </button>
                   <span style="margin-right:auto"></span>
                   <label class="toggle toggle-sm" @click.stop x-tt="'Add or remove every selectable CF in this group'">
                     <input type="checkbox"
@@ -761,22 +791,24 @@
         <template x-if="profileDetail?.detail?.imported && profileDetail?.detail?.importedRequiredCategories?.length > 0">
           <div>
             <div class="detail-section cat-required-core" style="margin-bottom:8px">
-              <div class="detail-section-header" @click="toggleDetailSection('importedReq')">
+              <button type="button" class="detail-section-header" @click="toggleDetailSection('importedReq')"
+                      :aria-expanded="detailSections.importedReq">
                 <span class="detail-section-chevron" :class="{ open: detailSections.importedReq }">&#9654;</span>
-                <div style="font-size:13px;font-weight:600">Required Custom Formats</div>
-                <div style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="profileDetail.detail.importedRequiredCategories.reduce((n,c) => n + c.cfs.length, 0) + ' CFs'"></div>
-              </div>
+                <span style="font-size:13px;font-weight:600">Required Custom Formats</span>
+                <span style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="profileDetail.detail.importedRequiredCategories.reduce((n,c) => n + c.cfs.length, 0) + ' CFs'"></span>
+              </button>
               <div class="section-desc" x-show="detailSections.importedReq">
                 Required for this profile. Always included when syncing.
               </div>
               <div x-show="detailSections.importedReq">
                 <template x-for="cat in profileDetail.detail.importedRequiredCategories" :key="'req-'+cat.category">
                   <div class="detail-section" :class="getCategoryClass(cat.category)" style="margin-bottom:2px">
-                    <div class="detail-section-header" @click="toggleGroupExpanded('req', cat.category)">
+                    <button type="button" class="detail-section-header" @click="toggleGroupExpanded('req', cat.category)"
+                            :aria-expanded="groupExpanded['req/' + cat.category]">
                       <span class="detail-section-chevron" :class="{ open: groupExpanded['req/' + cat.category] }">&#9654;</span>
-                      <div style="font-size:13px;font-weight:600" x-text="cat.category"></div>
-                      <div style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="cat.cfs.length + '/' + cat.cfs.length"></div>
-                    </div>
+                      <span style="font-size:13px;font-weight:600" x-text="cat.category"></span>
+                      <span style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="cat.cfs.length + '/' + cat.cfs.length"></span>
+                    </button>
                     <div x-show="groupExpanded['req/' + cat.category]">
                       <template x-for="cf in cat.cfs" :key="cf.trashId">
                         <div class="cf-row">
@@ -787,8 +819,8 @@
                                      :value="cfScoreOverrides[cf.trashId] ?? cf.score ?? 0"
                                      @change="const v = parseInt($event.target.value) || 0; if (v === (cf.score ?? 0)) { const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [cf.trashId]: v}; }"
                                      style="width:65px">
-                              <span x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                                    style="color:var(--accent-red);font-size:12px;cursor:pointer;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'">&#8634;</span>
+                              <button type="button" class="inline-action" x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                                      style="color:var(--accent-red);font-size:12px;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                             </div>
                           </template>
                           <template x-if="!pdOverridesEnabled">
@@ -810,12 +842,13 @@
         <!-- Imported profile: Golden Rule (pick one — required but with choice) -->
         <template x-if="profileDetail?.detail?.imported && profileDetail?.detail?.importedGoldenRule?.length > 0">
           <div class="detail-section cat-golden-rule" style="margin-bottom:8px">
-            <div class="detail-section-header" @click="toggleDetailSection('goldenRule')">
+            <button type="button" class="detail-section-header" @click="toggleDetailSection('goldenRule')"
+                    :aria-expanded="detailSections.goldenRule">
               <span class="detail-section-chevron" :class="{ open: detailSections.goldenRule }">&#9654;</span>
-              <div style="font-size:13px;font-weight:600">Golden Rule</div>
+              <span style="font-size:13px;font-weight:600">Golden Rule</span>
               <span style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 5px;border-radius:3px">pick one</span>
               <span style="margin-right:auto"></span>
-            </div>
+            </button>
             <div x-show="detailSections.goldenRule">
               <div style="padding:6px 16px;font-size:13px;color:var(--accent-blue)">Please ensure you only score or enable one of them in your Quality Profile!</div>
               <template x-for="cf in profileDetail.detail.importedGoldenRule" :key="cf.trashId">
@@ -840,10 +873,15 @@
           <div>
             <template x-for="cat in profileDetail.detail.importedCategories" :key="cat.category">
               <div class="detail-section" :class="getCategoryClass(cat.category)" style="margin-bottom:8px">
-                <div class="detail-section-header" @click="toggleDetailSection(cat.category)">
-                  <span class="detail-section-chevron" :class="{ open: detailSections[cat.category] }">&#9654;</span>
-                  <div style="font-size:13px;font-weight:600" x-text="cat.category"></div>
-                  <div style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="cat.cfs.filter(cf => selectedOptionalCFs[cf.trashId]).length + '/' + cat.cfs.length"></div>
+                <div class="detail-section-header">
+                  <button type="button" class="collapse-toggle"
+                          style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                          @click="toggleDetailSection(cat.category)"
+                          :aria-expanded="detailSections[cat.category]">
+                    <span class="detail-section-chevron" :class="{ open: detailSections[cat.category] }">&#9654;</span>
+                    <span style="font-size:13px;font-weight:600" x-text="cat.category"></span>
+                    <span style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="cat.cfs.filter(cf => selectedOptionalCFs[cf.trashId]).length + '/' + cat.cfs.length"></span>
+                  </button>
                   <label class="toggle toggle-sm" @click.stop>
                     <input type="checkbox"
                            :checked="cat.cfs.every(cf => selectedOptionalCFs[cf.trashId])"
@@ -872,10 +910,11 @@
             <!-- Quality items -->
             <template x-if="profileDetail?.detail?.profile?.items?.length > 0">
               <div class="detail-section">
-                <div class="detail-section-header" @click="toggleGroupExpanded('imported', 'qualities')">
-                  <div class="detail-section-label">Quality Settings</div>
+                <button type="button" class="detail-section-header" @click="toggleGroupExpanded('imported', 'qualities')"
+                        :aria-expanded="groupExpanded['imported/qualities']">
+                  <span class="detail-section-label">Quality Settings</span>
                   <span class="detail-section-chevron" :class="{ open: groupExpanded['imported/qualities'] }">&#9654;</span>
-                </div>
+                </button>
                 <div x-show="groupExpanded['imported/qualities']" style="padding:12px 16px;font-size:12px;color:var(--text-body)">
                   <template x-for="q in profileDetail.detail.profile.items" :key="q.name">
                     <div style="padding:4px 0;display:flex;gap:8px;align-items:center">
@@ -899,11 +938,12 @@
             <!-- Profile section: formatItems not in any group -->
             <template x-if="(profileDetail.detail.formatItemNames || []).length > 0">
               <div class="detail-section cat-required-core">
-                <div class="detail-section-header" @click="toggleDetailSection('core')">
+                <button type="button" class="detail-section-header" @click="toggleDetailSection('core')"
+                        :aria-expanded="detailSections.core">
                   <span class="detail-section-chevron" :class="{ open: detailSections.core }">&#9654;</span>
-                  <div style="font-size:13px;font-weight:600">Required CFs</div>
-                  <div style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="profileDetail.detail.formatItemNames.length + ' custom formats'"></div>
-                </div>
+                  <span style="font-size:13px;font-weight:600">Required CFs</span>
+                  <span style="font-size:13px;color:var(--text-muted);margin-right:auto" x-text="profileDetail.detail.formatItemNames.length + ' custom formats'"></span>
+                </button>
                 <div class="section-desc" x-show="detailSections.core">
                   Required for this profile. Always included when syncing.
                 </div>
@@ -918,8 +958,8 @@
                                  :value="cfScoreOverrides[fi.trashId] ?? fi.score ?? 0"
                                  @change="const v = parseInt($event.target.value) || 0; if (v === (fi.score ?? 0)) { const {[fi.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [fi.trashId]: v}; }"
                                  style="width:65px">
-                          <span x-show="cfScoreOverrides[fi.trashId] !== undefined" @click="const {[fi.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                                style="color:var(--accent-red);font-size:12px;cursor:pointer;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'">&#8634;</span>
+                          <button type="button" class="inline-action" x-show="cfScoreOverrides[fi.trashId] !== undefined" @click="const {[fi.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                                  style="color:var(--accent-red);font-size:12px;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                         </div>
                       </template>
                       <template x-if="!pdOverridesEnabled">
@@ -942,20 +982,25 @@
             <!-- Flat list of TRaSH CF groups -->
             <template x-for="group in (profileDetail.detail.trashGroups || [])" :key="group.name">
               <div class="detail-section" :class="getCategoryClass(group.category)" style="margin-bottom:4px">
-                <div class="detail-section-header" @click="toggleGroupExpanded('tg', group.name)">
-                  <span class="detail-section-chevron" :class="{ open: groupExpanded['tg/' + group.name] }">&#9654;</span>
-                  <div style="font-size:13px;font-weight:500" x-text="group.name"></div>
-                  <span x-show="group.exclusive" style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 5px;border-radius:3px">pick one</span>
-                  <span x-show="group.defaultEnabled" style="font-size:11px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 5px;border-radius:3px">default</span>
-                  <div style="font-size:13px;color:var(--text-muted);margin-left:8px"
-                       x-text="(() => { const on = selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled; if (!on) return '0/' + group.cfs.length; return group.cfs.filter(cf => cf.required || selectedOptionalCFs[cf.trashId]).length + '/' + group.cfs.length; })()"></div>
-                  <template x-if="group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
-                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 5px;border-radius:3px;margin-right:auto"
-                          x-text="group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length + ' override' + (group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length !== 1 ? 's' : '')"></span>
-                  </template>
-                  <template x-if="!group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
-                    <span style="margin-right:auto"></span>
-                  </template>
+                <div class="detail-section-header">
+                  <button type="button" class="collapse-toggle"
+                          style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                          @click="toggleGroupExpanded('tg', group.name)"
+                          :aria-expanded="groupExpanded['tg/' + group.name]">
+                    <span class="detail-section-chevron" :class="{ open: groupExpanded['tg/' + group.name] }">&#9654;</span>
+                    <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                    <span x-show="group.exclusive" style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 5px;border-radius:3px">pick one</span>
+                    <span x-show="group.defaultEnabled" style="font-size:11px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 5px;border-radius:3px">default</span>
+                    <span style="font-size:13px;color:var(--text-muted);margin-left:8px"
+                          x-text="(() => { const on = selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled; if (!on) return '0/' + group.cfs.length; return group.cfs.filter(cf => cf.required || selectedOptionalCFs[cf.trashId]).length + '/' + group.cfs.length; })()"></span>
+                    <template x-if="group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
+                      <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 5px;border-radius:3px;margin-right:auto"
+                            x-text="group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length + ' override' + (group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length !== 1 ? 's' : '')"></span>
+                    </template>
+                    <template x-if="!group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
+                      <span style="margin-right:auto"></span>
+                    </template>
+                  </button>
                   <!-- Group toggle — shown for every group, including exclusive pick-one groups
                        (Golden Rule). TRaSH's schema marks those CFs `required: false`, so the
                        group itself is optional; "exclusive" only describes picking at most one
@@ -1017,8 +1062,8 @@
                                  :value="cfScoreOverrides[cf.trashId] ?? cf.score ?? 0"
                                  @change="const v = parseInt($event.target.value) || 0; if (v === (cf.score ?? 0)) { const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [cf.trashId]: v}; }"
                                  style="width:65px">
-                          <span x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                                style="color:var(--accent-red);font-size:12px;cursor:pointer;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'">&#8634;</span>
+                          <button type="button" class="inline-action" x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                                  style="color:var(--accent-red);font-size:12px;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                         </div>
                       </template>
                       <template x-if="!(pdOverridesEnabled && (cf.required ? (selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled) : selectedOptionalCFs[cf.trashId]))">

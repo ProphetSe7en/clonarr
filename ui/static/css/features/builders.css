@@ -38,7 +38,7 @@
   .pb-hint { font-size:12px; color: var(--text-secondary); margin-left: 96px; }
   .pb-separator { border-top: 1px solid var(--bg-muted); margin: 2px 0; }
   /* CF category list */
-  .pb-cat-header { display: flex; align-items: center; padding: 10px 16px; cursor: pointer; user-select: none; gap: 8px; }
+  .pb-cat-header { display: flex; align-items: center; padding: 10px 16px; cursor: pointer; user-select: none; gap: 8px; border: 0; background: transparent; width: 100%; text-align: left; color: inherit; font-family: inherit; }
   .pb-group-header { display: flex; align-items: center; padding: 6px 16px 6px 24px; cursor: pointer; user-select: none; gap: 6px; border-top: 1px solid var(--bg-card); }
   .pb-group-header:hover { background: var(--bg-elevated-hover); }
   .pb-group-header .group-name { font-size: 12px; color: var(--text-body); font-weight: 500; }
@@ -54,7 +54,7 @@
   .pb-cf-name { flex: 1; font-size: 13px; display: flex; align-items: center; gap: 6px; min-width: 0; }
   /* pb-req-pill removed — replaced by pb-state-pill (Req/Opt/Fmt three-state) */
   /* Three-state CF pills (group CFs) */
-  .pb-state-pill { font-size:12px; padding: 2px 8px; border-radius: 10px; cursor: pointer; user-select: none; border: 1px solid var(--border-subtle); font-weight: 600; color: var(--text-muted); background: var(--bg-card); }
+  .pb-state-pill { font-size:12px; padding: 2px 8px; border-radius: 10px; cursor: pointer; user-select: none; border: 1px solid var(--border-subtle); font-weight: 600; color: var(--text-muted); background: var(--bg-card); font-family: inherit; line-height: 1.2; }
   .pb-state-pill:hover { border-color: var(--text-secondary); color: var(--text-muted); }
   .pb-state-pill.active-req { background: var(--fill-green-soft); color: var(--accent-green); border-color: var(--accent-green-strong); }
   .pb-state-pill.active-opt { background: var(--fill-orange-soft); color: var(--accent-orange); border-color: var(--accent-orange-strong); }
@@ -86,4 +86,3 @@
   .pd-settings .toggle .slider { border-radius: 7px; }
   .pd-settings .toggle .slider:before { width: 10px; height: 10px; }
   .pd-settings .toggle input:checked + .slider:before { transform: translateX(12px); }
-

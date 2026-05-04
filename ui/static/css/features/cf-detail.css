@@ -1,6 +1,6 @@
   /* CF sections in profile detail */
   .cf-section { padding: 0; }
-  .cf-section-title { display: flex; align-items: center; padding: 6px 16px 6px 24px; cursor: pointer; user-select: none; gap: 6px; border-top: 1px solid var(--bg-card); font-size: 12px; font-weight: 500; color: var(--text-body); }
+  .cf-section-title { display: flex; align-items: center; padding: 6px 16px 6px 24px; cursor: pointer; user-select: none; gap: 6px; border: 0; border-top: 1px solid var(--bg-card); background: transparent; width: 100%; text-align: left; font-family: inherit; font-size: 12px; font-weight: 500; color: var(--text-body); }
   .cf-row { display: flex; align-items: center; padding: 6px 16px 6px 36px; border-bottom: 1px solid var(--bg-card); gap: 8px; }
   .cf-row:hover { background: var(--bg-elevated-hover); }
   .cf-row:last-child { border-bottom: none; }
@@ -12,7 +12,7 @@
 
   /* Detail section headers */
   .detail-section { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; margin-bottom: 6px; overflow: hidden; }
-  .detail-section-header { display: flex; align-items: center; padding: 10px 16px; cursor: pointer; user-select: none; gap: 8px; }
+  .detail-section-header { display: flex; align-items: center; padding: 10px 16px; cursor: pointer; user-select: none; gap: 8px; border: 0; background: transparent; width: 100%; text-align: left; color: inherit; font-family: inherit; }
   .detail-section-header:hover { background: var(--bg-elevated-hover); }
   .detail-section-label { font-size: 13px; font-weight: 600; flex: 1; }
   .detail-section-count { font-size:13px; color: var(--text-secondary); margin-right: auto; }

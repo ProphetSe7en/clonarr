@@ -16,7 +16,10 @@
     <div class="sync-status" style="position:relative">
       <span class="dot" :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"></span>
       <template x-if="trashStatus.cloned">
-        <span @click="showChangelog = !showChangelog" style="cursor:pointer" x-tt="'Click for changelog'">
+        <button type="button" class="inline-action" @click="showChangelog = !showChangelog"
+                :aria-expanded="showChangelog"
+                aria-controls="trash-changelog-dropdown"
+                style="color:inherit" x-tt="'Click for changelog'">
           <span class="sync-label">TRaSH synced</span> <span x-text="formatSyncTime(trashStatus.lastPull)"></span>
           <span class="sync-commit" x-show="trashStatus.commitHash" style="color:var(--text-muted);font-size:12px;margin-left:4px" x-text="trashStatus.commitHash"></span>
           <span class="sync-next" x-show="config.pullInterval && config.pullInterval !== 'off' && trashStatus.lastPull"
@@ -24,7 +27,7 @@
                 x-text="'· next ' + nextPullTime()"></span>
           <span style="color:var(--text-muted);font-size:12px;margin-left:2px;transition:transform 0.2s;display:inline-block"
                 :style="showChangelog ? 'transform:rotate(180deg)' : ''">&#9662;</span>
-        </span>
+        </button>
       </template>
       <template x-if="!trashStatus.cloned">
         <span>TRaSH not synced</span>
@@ -35,7 +38,7 @@
       </button>
 
       <!-- Changelog dropdown -->
-      <div x-show="showChangelog" @click.outside="showChangelog = false" x-cloak class="changelog-dropdown">
+      <div id="trash-changelog-dropdown" x-show="showChangelog" @click.outside="showChangelog = false" x-cloak class="changelog-dropdown">
 
         <!-- Last pull diff -->
         <template x-if="trashStatus.lastDiff">

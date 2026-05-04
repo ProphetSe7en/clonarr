@@ -68,7 +68,7 @@
   .compare-section-title { font-size:13px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); padding: 8px 0 4px; letter-spacing: 0.5px; }
   .compare-section-header { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; }
   .compare-section-header .compare-section-title { padding: 0; }
-  .compare-section-toggle { font-size:12px; color: var(--accent-blue); cursor: pointer; margin-left: auto; }
+  .compare-section-toggle { font-size:12px; color: var(--accent-blue); cursor: pointer; margin-left: auto; background: transparent; border: 0; padding: 0; font-family: inherit; }
   .compare-section-toggle:hover { text-decoration: underline; }
   /* Compare settings table — 4-col layout so Current and TRaSH values line up vertically instead of wrapping inline. Source: clonarr-compare-redesign-v3.html mockup. */
   .cmp-settings-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -101,7 +101,7 @@
   .cmp-settings-table td.actions { text-align: right; }
 
   /* Compare view filter chips — sized to match the diff chips in the summary bar */
-  .compare-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted); font-size: 12px; line-height: 1.4; cursor: pointer; user-select: none; transition: border-color 0.12s, color 0.12s, background 0.12s; }
+  .compare-chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted); font-size: 12px; line-height: 1.4; cursor: pointer; user-select: none; transition: border-color 0.12s, color 0.12s, background 0.12s; font-family: inherit; }
   .compare-chip:hover { border-color: var(--accent-blue); color: var(--text-body); }
   .compare-chip.active { background: var(--accent-blue); color: var(--bg-page); border-color: var(--accent-blue); font-weight: 600; }
   .compare-chip-wrong.active { background: var(--accent-orange); border-color: var(--accent-orange); }

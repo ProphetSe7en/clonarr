@@ -32,6 +32,28 @@
   .btn-sm { padding: 4px 10px; font-size:13px; }
   .btn-icon { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:15px; padding:2px 4px; border-radius:4px; line-height:1; }
   .btn-icon:hover { color:var(--text-primary); background:var(--bg-muted); }
+  .collapse-toggle,
+  .sort-header,
+  .inline-action {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: left;
+  }
+  .collapse-toggle { width: 100%; }
+  .collapse-toggle:focus-visible,
+  .sort-header:focus-visible,
+  .inline-action:focus-visible,
+  .profile-group-header:focus-visible,
+  .detail-section-header:focus-visible,
+  .pb-cat-header:focus-visible,
+  .cf-section-title:focus-visible,
+  .pb-state-pill:focus-visible { outline-offset: -2px; }
+  .inline-action { display: inline-flex; align-items: center; }
+  .inline-action:hover { text-decoration: underline; }
   /* Toggle switches */
   /* .toggle styles live in the dedicated block below. Kept separate from the
      rest of reset styles to avoid breaking legacy dev/cached pages during editing. */
@@ -117,4 +139,3 @@
   .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
   .empty-state .title { font-size: 16px; color: var(--text-primary); margin-bottom: 8px; }
   .empty-state .desc { font-size: 13px; }
-

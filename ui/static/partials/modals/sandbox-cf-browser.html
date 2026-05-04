@@ -16,11 +16,13 @@
           <div style="margin-bottom:4px">
             <!-- Category header -->
             <div :class="getCategoryClass(cat.category)" style="margin:0 8px">
-              <div class="pb-cat-header" @click="sandboxCFBrowser.expanded[cat.category] = !sandboxCFBrowser.expanded[cat.category]">
+              <button type="button" class="pb-cat-header"
+                      @click="sandboxCFBrowser.expanded[cat.category] = !sandboxCFBrowser.expanded[cat.category]"
+                      :aria-expanded="sandboxCFBrowser.expanded[cat.category]">
                 <span class="profile-group-chevron" :class="{ open: sandboxCFBrowser.expanded[cat.category] }">&#9654;</span>
                 <span style="font-size:13px;font-weight:500" x-text="cat.category"></span>
                 <span class="pb-cat-count" x-text="sandboxCFBrowserCatCount(cat)"></span>
-              </div>
+              </button>
             </div>
 
             <!-- CFs in category -->
@@ -55,11 +57,13 @@
         <!-- Custom CFs section -->
         <template x-if="(sandboxCFBrowser.customCFs || []).length > 0">
           <div style="margin:4px 8px 0">
-            <div class="pb-cat-header" style="border-left:3px solid var(--accent-orange)" @click="sandboxCFBrowser.expanded['Custom'] = !sandboxCFBrowser.expanded['Custom']">
+            <button type="button" class="pb-cat-header" style="border-left:3px solid var(--accent-orange)"
+                    @click="sandboxCFBrowser.expanded['Custom'] = !sandboxCFBrowser.expanded['Custom']"
+                    :aria-expanded="sandboxCFBrowser.expanded['Custom']">
               <span class="profile-group-chevron" :class="{ open: sandboxCFBrowser.expanded['Custom'] }">&#9654;</span>
               <span style="font-size:13px;font-weight:500;color:var(--accent-orange)">Custom CFs</span>
               <span class="pb-cat-count" x-text="(sandboxCFBrowser.customCFs || []).length"></span>
-            </div>
+            </button>
             <div x-show="sandboxCFBrowser.expanded['Custom']">
               <template x-for="cf in sandboxCFBrowser.customCFs || []" :key="cf.id">
                 <div x-show="!sandboxCFBrowser.filter || cf.name.toLowerCase().includes(sandboxCFBrowser.filter.toLowerCase())"

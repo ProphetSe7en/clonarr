@@ -29,12 +29,14 @@
 
       <!-- Settings Card -->
       <div class="card" style="overflow:visible;margin-top:16px">
-        <div class="profile-group-header" @click="pbSettingsOpen = !pbSettingsOpen">
+        <button type="button" class="profile-group-header" @click="pbSettingsOpen = !pbSettingsOpen"
+                :aria-expanded="pbSettingsOpen"
+                aria-controls="pb-settings-body">
           <span class="profile-group-chevron" :class="{ open: pbSettingsOpen }">&#9654;</span>
           <span>Profile Settings</span>
           <span style="font-size:12px;color:var(--text-muted);margin-left:auto" x-text="pbSelectedCount() + ' CFs selected'"></span>
-        </div>
-        <div x-show="pbSettingsOpen">
+        </button>
+        <div id="pb-settings-body" x-show="pbSettingsOpen">
           <div style="padding:14px 20px;display:flex;flex-direction:column;gap:14px">
             <!-- Profile Name -->
             <div class="pb-header" style="margin-bottom:0">
@@ -347,12 +349,15 @@
             <!-- TRaSH schema fields — collapsible, grey stripe. Gated by CLONARR_DEV_FEATURES env + trashSchemaFields toggle. -->
             <template x-if="config.devFeatures && config.trashSchemaFields">
               <div class="pd-card" style="border-left:3px solid var(--text-muted-secondary);padding:10px 18px">
-                <div @click="pbAdvancedOpen = !pbAdvancedOpen" style="cursor:pointer;display:flex;align-items:center;gap:8px">
+                <button type="button" class="collapse-toggle" @click="pbAdvancedOpen = !pbAdvancedOpen"
+                        :aria-expanded="pbAdvancedOpen"
+                        aria-controls="pb-advanced-body"
+                        style="display:flex;align-items:center;gap:8px">
                   <span style="color:var(--text-secondary)" x-text="pbAdvancedOpen ? '▾' : '▸'"></span>
                   <span style="font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;font-weight:700">Advanced Mode</span>
                   <span style="font-size:11px;color:var(--text-secondary)">TRaSH ID, Group number, HTML description</span>
-                </div>
-                <div x-show="pbAdvancedOpen" style="margin-top:12px">
+                </button>
+                <div id="pb-advanced-body" x-show="pbAdvancedOpen" style="margin-top:12px">
                 <div class="pb-dev-fields">
                   <div style="font-size:12px;color:var(--accent-orange);margin-bottom:6px">Advanced fields</div>
                 <div class="pb-wide-row" style="margin-bottom:6px">
@@ -390,11 +395,13 @@
       <template x-if="!pbLoading && pbCategories.length > 0">
         <div>
           <div class="card" style="margin-bottom:12px">
-            <div class="pb-cat-header" @click="pbExpandedCats['__formatItems__'] = !(pbExpandedCats['__formatItems__'] ?? true)">
+            <button type="button" class="pb-cat-header"
+                    @click="pbExpandedCats['__formatItems__'] = !(pbExpandedCats['__formatItems__'] ?? true)"
+                    :aria-expanded="pbExpandedCats['__formatItems__'] ?? true">
               <span class="profile-group-chevron" :class="{ open: pbExpandedCats['__formatItems__'] ?? true }">&#9654;</span>
               <span style="font-size:13px;font-weight:500">Required CFs</span>
               <span class="pb-cat-count" x-text="pbFormatItemCount() + ' in formatItems'"></span>
-            </div>
+            </button>
             <div x-show="pbExpandedCats['__formatItems__'] ?? true">
               <div style="padding:8px 16px;font-size:12px;color:var(--text-muted);border-bottom:1px solid var(--bg-card);line-height:1.5">
                 These CFs are added to the profile's <code style="background:var(--bg-muted);padding:1px 4px;border-radius:2px;color:var(--text-body);font-size:13px">formatItems</code> — they are mandatory and always synced. End users cannot disable them.
@@ -430,9 +437,10 @@
               </div>
               <!-- Add more CFs (collapsed, with search) -->
               <div style="padding:6px 16px;border-top:1px solid var(--bg-card);display:flex;align-items:center;gap:12px">
-                <span style="font-size:13px;color:var(--accent-blue);cursor:pointer;flex-shrink:0"
-                      @click="pbAddMoreOpen = !pbAddMoreOpen; pbFormatItemSearch = ''"
-                      x-text="pbAddMoreOpen ? '▾ Hide available CFs' : '▸ Add more CFs...'"></span>
+                <button type="button" class="inline-action" style="font-size:13px;color:var(--accent-blue);flex-shrink:0"
+                        @click="pbAddMoreOpen = !pbAddMoreOpen; pbFormatItemSearch = ''"
+                        :aria-expanded="pbAddMoreOpen"
+                        x-text="pbAddMoreOpen ? '▾ Hide available CFs' : '▸ Add more CFs...'"></button>
                 <template x-if="pbAddMoreOpen">
                   <input type="text" class="pb-input" x-model="pbFormatItemSearch"
                          placeholder="Search CFs..."
@@ -474,24 +482,29 @@
 
           <template x-for="group in pbSortedGroups()" :key="'grp-'+group.groupTrashId">
             <div class="card" :class="getCategoryClass(group._category || '')" style="margin-bottom:8px">
-              <div class="pb-cat-header" @click="pbExpandedGroups[group.groupTrashId] = !(pbExpandedGroups[group.groupTrashId] ?? false)">
-                <span class="profile-group-chevron" :class="{ open: pbExpandedGroups[group.groupTrashId] }">&#9654;</span>
-                <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
-                <span x-show="group.exclusive" class="group-badge badge-exclusive">pick one</span>
-                <span x-show="group.defaultEnabled" class="group-badge badge-default">default</span>
-                <span class="pb-cat-count" x-text="group.cfs.length + ' CFs'"></span>
+              <div class="pb-cat-header">
+                <button type="button" class="collapse-toggle"
+                        style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                        @click="pbExpandedGroups[group.groupTrashId] = !(pbExpandedGroups[group.groupTrashId] ?? false)"
+                        :aria-expanded="pbExpandedGroups[group.groupTrashId] ?? false">
+                  <span class="profile-group-chevron" :class="{ open: pbExpandedGroups[group.groupTrashId] }">&#9654;</span>
+                  <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                  <span x-show="group.exclusive" class="group-badge badge-exclusive">pick one</span>
+                  <span x-show="group.defaultEnabled" class="group-badge badge-default">default</span>
+                  <span class="pb-cat-count" x-text="group.cfs.length + ' CFs'"></span>
+                </button>
                 <!-- Group-level state pills -->
-                <div style="display:flex;gap:4px;margin-left:auto" @click.stop>
+                <div style="display:flex;gap:4px;margin-left:auto">
                   <span class="pb-state-pill" :class="{ 'active-req': true }" x-show="false"></span>
-                  <span class="pb-state-pill"
-                        :class="{ 'active-req': !pbGroupHasAnyState(group, 'optional') && !pbGroupHasAnyState(group, 'formatItems') }"
-                        @click="pbSetGroupState(group, 'required')" x-tt="'Set all CFs to Required'">Req</span>
-                  <span class="pb-state-pill"
-                        :class="{ 'active-opt': pbGroupHasAllState(group, 'optional') }"
-                        @click="pbSetGroupState(group, 'optional')" x-tt="'Set all CFs to Optional'">Opt</span>
-                  <span class="pb-state-pill"
-                        :class="{ 'active-fmt': pbGroupHasAllState(group, 'formatItems') }"
-                        @click="pbSetGroupState(group, 'formatItems')" x-tt="'Move all CFs to formatItems'">Fmt</span>
+                  <button type="button" class="pb-state-pill"
+                          :class="{ 'active-req': !pbGroupHasAnyState(group, 'optional') && !pbGroupHasAnyState(group, 'formatItems') }"
+                          @click="pbSetGroupState(group, 'required')" x-tt="'Set all CFs to Required'">Req</button>
+                  <button type="button" class="pb-state-pill"
+                          :class="{ 'active-opt': pbGroupHasAllState(group, 'optional') }"
+                          @click="pbSetGroupState(group, 'optional')" x-tt="'Set all CFs to Optional'">Opt</button>
+                  <button type="button" class="pb-state-pill"
+                          :class="{ 'active-fmt': pbGroupHasAllState(group, 'formatItems') }"
+                          @click="pbSetGroupState(group, 'formatItems')" x-tt="'Move all CFs to formatItems'">Fmt</button>
                 </div>
                 <label class="toggle toggle-sm" @click.stop>
                   <input type="checkbox" :checked="pbIsGroupEnabled(group)"
@@ -535,15 +548,15 @@
                     </div>
                     <!-- Three-state pills: Req / Opt / Fmt -->
                     <div style="display:flex;gap:4px;flex-shrink:0">
-                      <span class="pb-state-pill" :class="{ 'active-req': pbGetCFState(cf) === 'required' }"
-                            @click="pbSetCFState(cf.trashId, 'required')"
-                            x-tt="'Required — mandatory when group is active'">Req</span>
-                      <span class="pb-state-pill" :class="{ 'active-opt': pbGetCFState(cf) === 'optional' }"
-                            @click="pbSetCFState(cf.trashId, 'optional')"
-                            x-tt="'Optional — user chooses within group'">Opt</span>
-                      <span class="pb-state-pill" :class="{ 'active-fmt': pbGetCFState(cf) === 'formatItems' }"
-                            @click="pbSetCFState(cf.trashId, 'formatItems')"
-                            x-tt="'formatItems — always mandatory in profile'">Fmt</span>
+                      <button type="button" class="pb-state-pill" :class="{ 'active-req': pbGetCFState(cf) === 'required' }"
+                              @click="pbSetCFState(cf.trashId, 'required')"
+                              x-tt="'Required — mandatory when group is active'">Req</button>
+                      <button type="button" class="pb-state-pill" :class="{ 'active-opt': pbGetCFState(cf) === 'optional' }"
+                              @click="pbSetCFState(cf.trashId, 'optional')"
+                              x-tt="'Optional — user chooses within group'">Opt</button>
+                      <button type="button" class="pb-state-pill" :class="{ 'active-fmt': pbGetCFState(cf) === 'formatItems' }"
+                              @click="pbSetCFState(cf.trashId, 'formatItems')"
+                              x-tt="'formatItems — always mandatory in profile'">Fmt</button>
                     </div>
                     <input type="number" class="pb-score-input"
                            x-show="pbIsGroupEnabled(group) || pb.formatItemCFs[cf.trashId]"
