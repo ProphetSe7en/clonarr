@@ -52,6 +52,10 @@ function applyFeatureModules(target) {
   return target;
 }
 
+// Local modal focus trap used by the modal partials. It provides the subset of
+// Alpine Focus we need without another plugin: tab containment, focus restore,
+// optional scroll lock, and optional inert background content. Scroll/inert
+// state is reference-counted so stacked prompts unwind cleanly.
 const modalFocusableSelector = [
   'a[href]',
   'area[href]',
@@ -408,8 +412,8 @@ export function clonarr() {
       });
 
       // Profiles → History loads sync history for every instance of the
-      // active app type. Triggers on tab change OR app-type change while the
-      // History tab is active.
+      // active app type. Triggers on profileTabs state change OR app-type
+      // change while the History tab is active.
       const ensureHistory = () => {
         if (this.currentSection === 'profiles' && this.getProfileTab(this.activeAppType) === 'history') {
           this.instancesOfType(this.activeAppType).forEach(i => this.loadSyncHistory(i.id));
@@ -523,7 +527,7 @@ export function clonarr() {
         this.loadInstanceQS(type, inst.id);
         this.loadInstanceNaming(type);
       }
-      // Maintenance: auto-select based on current tab type
+      // Maintenance: auto-select based on current app type
       const currentType = this.activeAppType;
       const maintInsts = this.instances.filter(i => i.type === currentType);
       if (maintInsts.length === 1) {
@@ -642,7 +646,7 @@ Object.assign(window, {
 // Register the clonarr() data factory with Alpine.
 //
 // Belt-and-suspenders ordering:
-//   - Belt: index.html loads this module BEFORE the Alpine CDN <script>
+//   - Belt: index.html loads this module BEFORE the Alpine script
 //     so document-order rules guarantee main.js runs first and the
 //     alpine:init listener is registered before Alpine.start() fires it.
 //   - Suspenders: if a future HTML edit reorders the tags, the
@@ -653,8 +657,8 @@ function registerClonarr() {
   registerModalTrapDirective(window.Alpine);
   // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
   // Replaces native title="" for elements where the OS tooltip would overflow
-  // the viewport (right-edge buttons, long messages). Wires mouseenter/leave
-  // listeners that call showTooltip / hideTooltip on the root clonarr scope.
+  // the viewport (right-edge buttons, long messages). Wires hover, focus, and
+  // Escape handlers to showTooltip / hideTooltip on the root clonarr scope.
   // Static text:   x-tt="'Reset all overrides'"
   // Dynamic text:  x-tt="someDynamicExpr"
   window.Alpine.directive('tt', (el, { expression }, { evaluateLater, cleanup }) => {
@@ -666,6 +670,8 @@ function registerClonarr() {
     }
     el.setAttribute('aria-describedby', 'global-tooltip');
 
+    // evaluateLater resolves on a microtask; track the current trigger so a
+    // dynamic tooltip cannot appear after pointer/focus already left.
     let currentEl = null;
     const onEnter = (e) => {
       currentEl = e.currentTarget;

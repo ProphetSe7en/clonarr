@@ -1,5 +1,5 @@
 {{define "modals/cleanup-result"}}
-  <!-- Cleanup results modal (shared across tabs) -->
+  <!-- Cleanup results modal shared by every cleanup action. -->
   <template x-if="cleanupResult">
     <div class="modal-overlay" @click.self="cleanupResult = null" @keydown.escape.window="cleanupResult = null">
       <div class="modal" style="max-width:700px" role="dialog" aria-modal="true" aria-labelledby="modal-title-cleanup-result" x-trap.noscroll.inert="cleanupResult">

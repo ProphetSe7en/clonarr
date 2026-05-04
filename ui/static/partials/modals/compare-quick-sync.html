@@ -1,5 +1,4 @@
 {{define "modals/compare-quick-sync"}}
-  <!-- Confirm modal -->
   <!-- Per-card Quick Sync modal — simplified confirm with Sync/Dry Run/Cancel, no dropdowns. -->
   <div class="modal-overlay" x-show="compareQuickSync.show" @click.self="if (!compareQuickSync.running) compareQuickSync = { show: false }" @keydown.escape.window="if (!compareQuickSync.running) compareQuickSync = { show: false }" x-cloak>
     <div class="modal" style="max-width:440px" role="dialog" aria-modal="true" aria-labelledby="modal-title-compare-quick-sync" x-trap.noscroll.inert="compareQuickSync.show" @click.stop>

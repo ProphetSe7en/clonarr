@@ -1,8 +1,8 @@
 {{define "sections/app-pages"}}
-  <!-- ==================== APP PAGES (Radarr/Sonarr) ==================== -->
+  <!-- ==================== APP-SCOPED SECTIONS (Radarr/Sonarr) ==================== -->
   <template x-if="true">
     <div x-show="!['settings','about'].includes(currentSection) && !profileDetail && !profileBuilder">
-      <!-- App type + section sub-tabs (universal bar, matches page width) -->
+      <!-- App selector + section sub-tabs (universal bar, matches page width) -->
       <nav class="profile-tabs" aria-label="App and section" style="max-width:1100px;margin:0 auto;padding:0 24px;background:transparent;border-bottom:1px solid var(--bg-muted)">
         <template x-for="appType in availableAppTypes" :key="'global-'+appType">
           <a class="profile-tab" :class="{ active: activeAppType === appType }"
@@ -30,7 +30,7 @@
           </div>
         </template>
       </nav>
-      <!-- Sub-tabs (hidden, replaced by top nav) -->
+      <!-- Section bodies shown by currentSection / advancedTab state. -->
       {{template "sections/profiles" .}}
       {{template "sections/custom-formats" .}}
       {{template "sections/quality-size" .}}

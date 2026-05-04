@@ -3,6 +3,9 @@ export default {
     _navSkipPush: false,
   },
   methods: {
+    // Legacy tab-switching helpers are kept for older call sites. New
+    // navigation should use real anchors from navHref(), with section/app
+    // side effects attached to state watchers in init().
     switchTab(tab) {
       this.debugLog('UI', `Tab: ${tab}`);
       this.currentTab = tab;
@@ -10,7 +13,7 @@ export default {
       this.profileDetail = null;
       this.syncPlan = null;
       this.syncResult = null;
-      // Auto-select maintenance instance for this tab type if only one
+      // Auto-select maintenance instance for this legacy app tab if only one.
       const typeInsts = this.instances.filter(i => i.type === tab);
       if (typeInsts.length === 1 && this.maintenanceInstanceId !== typeInsts[0].id) {
         this.maintenanceInstanceId = typeInsts[0].id;
@@ -72,7 +75,7 @@ export default {
         this.loadCleanupKeep();
         this.loadCleanupCFNames();
       }
-      // Reload tab-scoped data that depends on appType. The CF Group Builder
+      // Reload app-scoped Advanced data. The CF Group Builder
       // pulls CFs, profiles, and saved groups per Radarr/Sonarr — without this
       // the Radarr list keeps showing when the user flips to Sonarr.
       // Scoring Sandbox has the same issue; reload it too for parity.
@@ -82,7 +85,7 @@ export default {
       }
     },
 
-    // --- Browser History API (back/forward navigation) ---
+    // --- Hash routing (back/forward, bookmarks, copyable nav links) ---
     // Hash format: #appType/section[/subtab] — e.g. #radarr/profiles/compare, #settings/prowlarr, #about
     buildNavHash() {
       const s = this.currentSection;
@@ -91,7 +94,7 @@ export default {
       const app = this.activeAppType;
       let hash = '#' + app + '/' + s;
       if (s === 'profiles') hash += '/' + (this.getProfileTab(app) || 'trash-sync');
-        else if (s === 'advanced') hash += '/' + (this.advancedTab || 'group-builder');
+      else if (s === 'advanced') hash += '/' + (this.advancedTab || 'group-builder');
       return hash;
     },
 
@@ -158,7 +161,7 @@ export default {
       const validSections = ['profiles','custom-formats','quality-size','naming','maintenance','advanced','settings','about'];
       const validSettings = ['instances','trash','prowlarr','notifications','display','security','advanced'];
       const validProfileTabs = ['trash-sync','history','compare'];
-        const validAdvancedTabs = ['builder','group-builder','scoring','import'];
+      const validAdvancedTabs = ['builder','group-builder','scoring','import'];
       this._navSkipPush = true;
       try {
         if (parts[0] === 'settings') {
