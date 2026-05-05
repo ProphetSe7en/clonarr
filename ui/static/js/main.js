@@ -77,6 +77,7 @@ const activeModalTraps = [];
 let activeTooltipData = null;
 let activeTooltipOwner = null;
 let tooltipEscapeListenerRegistered = false;
+let skipLinkHandlerRegistered = false;
 
 function isVisibleFocusable(el) {
   if (!(el instanceof HTMLElement)) return false;
@@ -297,6 +298,22 @@ function registerTooltipEscapeListener() {
     }
     activeTooltipData = null;
     activeTooltipOwner = null;
+  });
+}
+
+// Skip-link click → focus #main-content. preventDefault keeps location.hash
+// clean — our hash routing would otherwise interpret #main-content as a nav
+// target. Delegated listener so we don't need an inline onclick on the anchor
+// (CSP-tightening compatibility — see docs/security TODO #8).
+function registerSkipLinkHandler() {
+  if (skipLinkHandlerRegistered) return;
+  skipLinkHandlerRegistered = true;
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('.skip-link');
+    if (!link) return;
+    event.preventDefault();
+    const main = document.getElementById('main-content');
+    if (main) main.focus();
   });
 }
 
@@ -672,6 +689,7 @@ function registerClonarr() {
   window.Alpine.data('clonarr', clonarr);
   registerModalTrapDirective(window.Alpine);
   registerTooltipEscapeListener();
+  registerSkipLinkHandler();
   // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
   // Replaces native title="" for elements where the OS tooltip would overflow
   // the viewport (right-edge buttons, long messages). Wires hover, focus, and
