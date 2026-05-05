@@ -94,7 +94,7 @@ export default {
       const app = this.activeAppType;
       let hash = '#' + app + '/' + s;
       if (s === 'profiles') hash += '/' + (this.getProfileTab(app) || 'trash-sync');
-      else if (s === 'advanced') hash += '/' + (this.advancedTab || 'group-builder');
+      else if (s === 'advanced') hash += '/' + (this.advancedTab || 'builder');
       return hash;
     },
 

@@ -74,6 +74,9 @@ let scrollLockCount = 0;
 let scrollLockSnapshot = null;
 const inertElementState = new WeakMap();
 const activeModalTraps = [];
+let activeTooltipData = null;
+let activeTooltipOwner = null;
+let tooltipEscapeListenerRegistered = false;
 
 function isVisibleFocusable(el) {
   if (!(el instanceof HTMLElement)) return false;
@@ -281,6 +284,19 @@ function registerModalTrapDirective(Alpine) {
     });
 
     cleanup(deactivate);
+  });
+}
+
+function registerTooltipEscapeListener() {
+  if (tooltipEscapeListenerRegistered) return;
+  tooltipEscapeListenerRegistered = true;
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (activeTooltipData?.tt?.show && activeTooltipData.hideTooltip) {
+      activeTooltipData.hideTooltip();
+    }
+    activeTooltipData = null;
+    activeTooltipOwner = null;
   });
 }
 
@@ -655,10 +671,11 @@ Object.assign(window, {
 function registerClonarr() {
   window.Alpine.data('clonarr', clonarr);
   registerModalTrapDirective(window.Alpine);
+  registerTooltipEscapeListener();
   // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
   // Replaces native title="" for elements where the OS tooltip would overflow
   // the viewport (right-edge buttons, long messages). Wires hover, focus, and
-  // Escape handlers to showTooltip / hideTooltip on the root clonarr scope.
+  // shared Escape handling to showTooltip / hideTooltip on the root clonarr scope.
   // Static text:   x-tt="'Reset all overrides'"
   // Dynamic text:  x-tt="someDynamicExpr"
   window.Alpine.directive('tt', (el, { expression }, { evaluateLater, cleanup }) => {
@@ -672,38 +689,44 @@ function registerClonarr() {
 
     // evaluateLater resolves on a microtask; track the current trigger so a
     // dynamic tooltip cannot appear after pointer/focus already left.
+    const tooltipOwner = {};
     let currentEl = null;
     const onEnter = (e) => {
       currentEl = e.currentTarget;
       const target = e.currentTarget;
       getTipText((text) => {
         if (text && currentEl === target) {
-          window.Alpine.$data(el).showTooltip(target, text);
+          const data = window.Alpine.$data(el);
+          if (data && data.showTooltip) {
+            data.showTooltip(target, text);
+            activeTooltipData = data;
+            activeTooltipOwner = tooltipOwner;
+          }
         }
       });
     };
     const onLeave = () => {
       currentEl = null;
       const data = window.Alpine.$data(el);
-      if (data && data.hideTooltip) data.hideTooltip();
-    };
-    const onEsc = (e) => {
-      if (e.key === 'Escape') {
-        const data = window.Alpine.$data(el);
-        if (data && data.tt && data.tt.show) data.hideTooltip();
+      if (activeTooltipOwner === tooltipOwner && data && data.hideTooltip) {
+        data.hideTooltip();
+        activeTooltipData = null;
+        activeTooltipOwner = null;
       }
     };
     el.addEventListener('mouseenter', onEnter);
     el.addEventListener('mouseleave', onLeave);
     el.addEventListener('focusin', onEnter);
     el.addEventListener('focusout', onLeave);
-    window.addEventListener('keydown', onEsc);
     cleanup(() => {
       el.removeEventListener('mouseenter', onEnter);
       el.removeEventListener('mouseleave', onLeave);
       el.removeEventListener('focusin', onEnter);
       el.removeEventListener('focusout', onLeave);
-      window.removeEventListener('keydown', onEsc);
+      if (activeTooltipOwner === tooltipOwner) {
+        activeTooltipData = null;
+        activeTooltipOwner = null;
+      }
     });
   });
 }

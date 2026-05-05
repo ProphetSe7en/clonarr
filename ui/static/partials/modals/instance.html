@@ -45,7 +45,7 @@
         </template>
       </div>
       <div class="modal-actions">
-        <button class="btn" @click="testConnectionInModal()" :disabled="!instanceForm.url || !instanceForm.apiKey || modalTestResult === 'testing'">Test</button>
+        <button class="btn" @click="testConnectionInModal()" :disabled="!(instanceForm.url || '').trim() || (!editingInstance && !(instanceForm.apiKey || '').trim()) || modalTestResult === 'testing'">Test</button>
         <div style="flex:1"></div>
         <button class="btn" @click="showInstanceModal = false">Cancel</button>
         <button class="btn btn-primary" @click="saveInstance()">
