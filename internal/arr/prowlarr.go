@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -170,10 +171,11 @@ func (c *ProwlarrClient) Search(query string, categories []int, indexerIDs []int
 		return nil, fmt.Errorf("parse results: %w", err)
 	}
 
-	const maxResults = 200
+	const maxResults = 1000
 	releases := make([]ProwlarrRelease, 0, min(len(raw), maxResults))
 	for _, r := range raw {
 		if len(releases) >= maxResults {
+			log.Printf("Prowlarr search '%s' returned %d results, truncated to %d (raise maxResults if this happens often)", query, len(raw), maxResults)
 			break
 		}
 		var full struct {
