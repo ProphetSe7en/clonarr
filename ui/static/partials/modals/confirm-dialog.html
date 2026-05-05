@@ -1,9 +1,9 @@
 {{define "modals/confirm-dialog"}}
   <!-- z-index:2000 so confirm prompts always sit above any custom modal
        (e.g. Quality Items editor at z-index:1000). -->
-  <div class="modal-overlay" style="z-index:2000" x-show="confirmModal.show" @click.self="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-cloak>
-    <div class="modal" style="max-width:420px">
-      <div class="modal-title" x-text="confirmModal.title"></div>
+  <div class="modal-overlay" style="z-index:2000" x-show="confirmModal.show" @click.self="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" @keydown.escape.window="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-cloak>
+    <div class="modal" style="max-width:420px" role="dialog" aria-modal="true" aria-labelledby="modal-title-confirm-dialog" x-trap.noscroll.inert="confirmModal.show">
+      <h2 id="modal-title-confirm-dialog" class="modal-title" x-text="confirmModal.title"></h2>
       <div style="font-size:13px;color:var(--text-muted);white-space:pre-line;line-height:1.6" x-show="!confirmModal.html" x-text="confirmModal.message"></div>
       <div style="font-size:13px;color:var(--text-muted);line-height:1.6" x-show="confirmModal.html" x-html="confirmModal.message"></div>
       <div class="modal-actions">

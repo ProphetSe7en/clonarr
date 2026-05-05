@@ -52,6 +52,254 @@ function applyFeatureModules(target) {
   return target;
 }
 
+// Local modal focus trap used by the modal partials. It provides the subset of
+// Alpine Focus we need without another plugin: tab containment, focus restore,
+// optional scroll lock, and optional inert background content. Scroll/inert
+// state is reference-counted so stacked prompts unwind cleanly.
+const modalFocusableSelector = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'iframe',
+  'object',
+  'embed',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+let scrollLockCount = 0;
+let scrollLockSnapshot = null;
+const inertElementState = new WeakMap();
+const activeModalTraps = [];
+let activeTooltipData = null;
+let activeTooltipOwner = null;
+let tooltipEscapeListenerRegistered = false;
+
+function isVisibleFocusable(el) {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.disabled || el.getAttribute('aria-hidden') === 'true') return false;
+  const styles = window.getComputedStyle(el);
+  if (styles.display === 'none' || styles.visibility === 'hidden') return false;
+  return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+}
+
+function focusableElementsIn(el) {
+  return Array.from(el.querySelectorAll(modalFocusableSelector)).filter(isVisibleFocusable);
+}
+
+function lockDocumentScroll() {
+  if (scrollLockCount === 0) {
+    scrollLockSnapshot = {
+      htmlOverflow: document.documentElement.style.overflow,
+      bodyOverflow: document.body.style.overflow,
+    };
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+  }
+
+  scrollLockCount += 1;
+  let released = false;
+
+  return () => {
+    if (released) return;
+    released = true;
+    scrollLockCount = Math.max(0, scrollLockCount - 1);
+    if (scrollLockCount !== 0 || !scrollLockSnapshot) return;
+
+    document.documentElement.style.overflow = scrollLockSnapshot.htmlOverflow;
+    document.body.style.overflow = scrollLockSnapshot.bodyOverflow;
+    scrollLockSnapshot = null;
+  };
+}
+
+function inertElement(el) {
+  const existing = inertElementState.get(el);
+  if (existing) {
+    existing.count += 1;
+    return;
+  }
+
+  inertElementState.set(el, {
+    count: 1,
+    hadInert: el.hasAttribute('inert'),
+    inertValue: !!el.inert,
+    ariaHidden: el.getAttribute('aria-hidden'),
+  });
+  el.inert = true;
+  el.setAttribute('inert', '');
+  el.setAttribute('aria-hidden', 'true');
+}
+
+function releaseInertElement(el) {
+  const existing = inertElementState.get(el);
+  if (!existing) return;
+
+  existing.count -= 1;
+  if (existing.count > 0) return;
+
+  if (existing.hadInert) {
+    el.setAttribute('inert', '');
+  } else {
+    el.removeAttribute('inert');
+  }
+  el.inert = existing.inertValue;
+  if (existing.ariaHidden === null) {
+    el.removeAttribute('aria-hidden');
+  } else {
+    el.setAttribute('aria-hidden', existing.ariaHidden);
+  }
+  inertElementState.delete(el);
+}
+
+function inertModalBackground(el) {
+  const layer = el.closest('.modal-overlay') || el;
+  const inerted = [];
+  let branch = layer;
+
+  while (branch && branch.parentElement) {
+    const parent = branch.parentElement;
+    for (const child of parent.children) {
+      if (
+        child === branch
+        || child.tagName === 'SCRIPT'
+        || child.tagName === 'STYLE'
+        || child.contains(layer)
+        || layer.contains(child)
+      ) continue;
+      inertElement(child);
+      inerted.push(child);
+    }
+    if (parent === document.body) break;
+    branch = parent;
+  }
+
+  return () => {
+    inerted.forEach(releaseInertElement);
+  };
+}
+
+function registerModalTrapDirective(Alpine) {
+  Alpine.directive('trap', (el, { expression, modifiers }, { evaluateLater, effect, cleanup }) => {
+    const evaluateOpen = evaluateLater(expression || 'false');
+    const trap = {};
+    let active = false;
+    let previouslyFocused = null;
+    let releaseScroll = null;
+    let releaseInert = null;
+    let addedTabindex = false;
+    let focusTimer = null;
+
+    const clearFocusTimer = () => {
+      if (focusTimer === null) return;
+      window.clearTimeout(focusTimer);
+      focusTimer = null;
+    };
+
+    const focusFirst = () => {
+      const target = focusableElementsIn(el)[0] || el;
+      if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+    };
+
+    const isTopTrap = () => activeModalTraps[activeModalTraps.length - 1] === trap;
+
+    const onKeydown = (event) => {
+      if (!active || !isTopTrap() || event.key !== 'Tab') return;
+
+      const focusable = focusableElementsIn(el);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        el.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const current = document.activeElement;
+
+      if (event.shiftKey && (current === first || !el.contains(current))) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && (current === last || !el.contains(current))) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+
+    const onFocusIn = (event) => {
+      if (!active || !isTopTrap() || el.contains(event.target)) return;
+      focusFirst();
+    };
+
+    const activate = () => {
+      if (active) return;
+      active = true;
+      activeModalTraps.push(trap);
+      previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+      if (!el.hasAttribute('tabindex')) {
+        el.setAttribute('tabindex', '-1');
+        addedTabindex = true;
+      }
+      if (modifiers.includes('noscroll')) releaseScroll = lockDocumentScroll();
+      if (modifiers.includes('inert')) releaseInert = inertModalBackground(el);
+
+      document.addEventListener('keydown', onKeydown, true);
+      document.addEventListener('focusin', onFocusIn, true);
+      focusTimer = window.setTimeout(() => {
+        focusTimer = null;
+        if (active && el.isConnected && !el.contains(document.activeElement)) focusFirst();
+      }, 0);
+    };
+
+    const deactivate = () => {
+      if (!active) return;
+      active = false;
+      const stackIndex = activeModalTraps.lastIndexOf(trap);
+      if (stackIndex !== -1) activeModalTraps.splice(stackIndex, 1);
+      clearFocusTimer();
+      document.removeEventListener('keydown', onKeydown, true);
+      document.removeEventListener('focusin', onFocusIn, true);
+      if (releaseInert) releaseInert();
+      if (releaseScroll) releaseScroll();
+      releaseInert = null;
+      releaseScroll = null;
+      if (addedTabindex) {
+        el.removeAttribute('tabindex');
+        addedTabindex = false;
+      }
+      if (previouslyFocused && previouslyFocused.isConnected && document.body.contains(previouslyFocused)) {
+        previouslyFocused.focus({ preventScroll: true });
+      }
+      previouslyFocused = null;
+    };
+
+    effect(() => {
+      evaluateOpen((open) => {
+        if (open) activate();
+        else deactivate();
+      });
+    });
+
+    cleanup(deactivate);
+  });
+}
+
+function registerTooltipEscapeListener() {
+  if (tooltipEscapeListenerRegistered) return;
+  tooltipEscapeListenerRegistered = true;
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (activeTooltipData?.tt?.show && activeTooltipData.hideTooltip) {
+      activeTooltipData.hideTooltip();
+    }
+    activeTooltipData = null;
+    activeTooltipOwner = null;
+  });
+}
+
 export function clonarr() {
   return applyFeatureModules({
     ...baseState(),
@@ -149,6 +397,67 @@ export function clonarr() {
       };
       this.$watch('advancedTab', ensureSandbox);
       this.$watch('currentSection', ensureSandbox);
+
+      // Nav anchors set location.hash directly, which fires hashchange (not
+      // popstate). Mirror the popstate handler so anchor clicks restore state.
+      // restoreFromHash early-returns when hash already matches state, so this
+      // is safe to fire alongside watchers that call pushNav.
+      window.addEventListener('hashchange', () => this.restoreFromHash(location.hash));
+
+      // Section change clears stale per-section state (was inline in the old
+      // switchSection). Fires for both anchor clicks and hash restoration.
+      this.$watch('currentSection', () => {
+        this.profileDetail = null;
+        this.syncPlan = null;
+        this.syncResult = null;
+      });
+
+      // Settings → Security loads the API key. Was inline on the old
+      // settings-nav @click; now driven by state so right-click → "Open in
+      // new tab" on `#settings/security` also fetches.
+      this.$watch('settingsSection', (s) => {
+        if (s === 'security') this.fetchApiKey();
+      });
+
+      // Advanced → CF Group Builder loads CFs/profiles for the active app
+      // type. Was inline on the @click; now state-driven.
+      this.$watch('advancedTab', (t) => {
+        if (this.currentSection === 'advanced' && t === 'group-builder') {
+          this.cfgbLoad(this.activeAppType);
+        }
+      });
+
+      // Profiles → History loads sync history for every instance of the
+      // active app type. Triggers on profileTabs state change OR app-type
+      // change while the History tab is active.
+      const ensureHistory = () => {
+        if (this.currentSection === 'profiles' && this.getProfileTab(this.activeAppType) === 'history') {
+          this.instancesOfType(this.activeAppType).forEach(i => this.loadSyncHistory(i.id));
+        }
+      };
+      this.$watch('profileTabs', ensureHistory);
+
+      // App-type change (Radarr ↔ Sonarr) replays the side-effects that used
+      // to live in _doSwitchAppType: clear stale per-section state, auto-pick
+      // the maintenance instance when only one exists for the new type, and
+      // reload Advanced sub-tabs that are app-type-scoped.
+      this.$watch('activeAppType', (appType) => {
+        this.profileDetail = null;
+        this.syncPlan = null;
+        this.syncResult = null;
+        const typeInsts = this.instances.filter(i => i.type === appType);
+        if (typeInsts.length === 1) {
+          this.maintenanceInstanceId = typeInsts[0].id;
+          this.cleanupInstanceId = typeInsts[0].id;
+          this.loadCleanupKeep();
+          this.loadCleanupCFNames();
+        }
+        if (this.currentSection === 'advanced') {
+          if (this.advancedTab === 'group-builder') this.cfgbLoad(appType);
+          else if (this.advancedTab === 'scoring') this.loadSandbox(appType);
+        }
+        ensureHistory();
+      });
       await this.loadConfig();
       this.fetchAuthStatus(); // render header user-menu and banner state early
       await this.loadInstances();
@@ -234,7 +543,7 @@ export function clonarr() {
         this.loadInstanceQS(type, inst.id);
         this.loadInstanceNaming(type);
       }
-      // Maintenance: auto-select based on current tab type
+      // Maintenance: auto-select based on current app type
       const currentType = this.activeAppType;
       const maintInsts = this.instances.filter(i => i.type === currentType);
       if (maintInsts.length === 1) {
@@ -353,7 +662,7 @@ Object.assign(window, {
 // Register the clonarr() data factory with Alpine.
 //
 // Belt-and-suspenders ordering:
-//   - Belt: index.html loads this module BEFORE the Alpine CDN <script>
+//   - Belt: index.html loads this module BEFORE the Alpine script
 //     so document-order rules guarantee main.js runs first and the
 //     alpine:init listener is registered before Alpine.start() fires it.
 //   - Suspenders: if a future HTML edit reorders the tags, the
@@ -361,38 +670,63 @@ Object.assign(window, {
 //     already loaded — we just register directly.
 function registerClonarr() {
   window.Alpine.data('clonarr', clonarr);
+  registerModalTrapDirective(window.Alpine);
+  registerTooltipEscapeListener();
   // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
   // Replaces native title="" for elements where the OS tooltip would overflow
-  // the viewport (right-edge buttons, long messages). Wires mouseenter/leave
-  // listeners that call showTooltip / hideTooltip on the root clonarr scope.
+  // the viewport (right-edge buttons, long messages). Wires hover, focus, and
+  // shared Escape handling to showTooltip / hideTooltip on the root clonarr scope.
   // Static text:   x-tt="'Reset all overrides'"
   // Dynamic text:  x-tt="someDynamicExpr"
   window.Alpine.directive('tt', (el, { expression }, { evaluateLater, cleanup }) => {
     const getTipText = evaluateLater(expression);
-    // currentEl tracks the element the user is hovering RIGHT NOW. evaluateLater
-    // resolves via microtask, so for dynamic expressions the user could already
-    // have moved away by the time the callback fires. We compare against the
-    // currentEl snapshot to avoid showing a stale tooltip after mouseleave.
+    let idStr = el.getAttribute('id');
+    if (!idStr) {
+      idStr = 'tt-' + Math.random().toString(36).substr(2, 9);
+      el.setAttribute('id', idStr);
+    }
+    el.setAttribute('aria-describedby', 'global-tooltip');
+
+    // evaluateLater resolves on a microtask; track the current trigger so a
+    // dynamic tooltip cannot appear after pointer/focus already left.
+    const tooltipOwner = {};
     let currentEl = null;
     const onEnter = (e) => {
       currentEl = e.currentTarget;
       const target = e.currentTarget;
       getTipText((text) => {
         if (text && currentEl === target) {
-          window.Alpine.$data(el).showTooltip(target, text);
+          const data = window.Alpine.$data(el);
+          if (data && data.showTooltip) {
+            data.showTooltip(target, text);
+            activeTooltipData = data;
+            activeTooltipOwner = tooltipOwner;
+          }
         }
       });
     };
     const onLeave = () => {
       currentEl = null;
       const data = window.Alpine.$data(el);
-      if (data && data.hideTooltip) data.hideTooltip();
+      if (activeTooltipOwner === tooltipOwner && data && data.hideTooltip) {
+        data.hideTooltip();
+        activeTooltipData = null;
+        activeTooltipOwner = null;
+      }
     };
     el.addEventListener('mouseenter', onEnter);
     el.addEventListener('mouseleave', onLeave);
+    el.addEventListener('focusin', onEnter);
+    el.addEventListener('focusout', onLeave);
     cleanup(() => {
       el.removeEventListener('mouseenter', onEnter);
       el.removeEventListener('mouseleave', onLeave);
+      el.removeEventListener('focusin', onEnter);
+      el.removeEventListener('focusout', onLeave);
+      if (activeTooltipOwner === tooltipOwner) {
+        activeTooltipData = null;
+        activeTooltipOwner = null;
+      }
     });
   });
 }

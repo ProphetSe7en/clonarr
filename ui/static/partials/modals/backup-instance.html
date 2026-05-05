@@ -1,8 +1,8 @@
 {{define "modals/backup-instance"}}
   <!-- Backup modal -->
-  <div class="modal-overlay" x-show="showBackupModal" @click.self="showBackupModal = false" x-cloak>
-    <div class="modal" style="max-width:600px">
-      <div class="modal-title">Backup Instance</div>
+  <div class="modal-overlay" x-show="showBackupModal" @click.self="showBackupModal = false" @keydown.escape.window="showBackupModal = false" x-cloak>
+    <div class="modal" style="max-width:600px" role="dialog" aria-modal="true" aria-labelledby="modal-title-backup-instance" x-trap.noscroll.inert="showBackupModal">
+      <h2 id="modal-title-backup-instance" class="modal-title">Backup Instance</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px" x-text="backupInstance?.name || ''"></div>
 
       <template x-if="backupLoading && backupProfiles.length === 0 && backupCFs.length === 0">

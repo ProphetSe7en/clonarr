@@ -1,8 +1,8 @@
 {{define "modals/import-cf"}}
   <!-- Import Custom CFs Modal -->
-  <div class="modal-overlay" x-show="showImportCFModal" @click.self="showImportCFModal = false" x-cloak>
-    <div class="modal" style="max-width:600px">
-      <div class="modal-title">Import Custom Formats</div>
+  <div class="modal-overlay" x-show="showImportCFModal" @click.self="showImportCFModal = false" @keydown.escape.window="showImportCFModal = false" x-cloak>
+    <div class="modal" style="max-width:600px" role="dialog" aria-modal="true" aria-labelledby="modal-title-import-cf" x-trap.noscroll.inert="showImportCFModal">
+      <h2 id="modal-title-import-cf" class="modal-title">Import Custom Formats</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
         Import custom formats from an Arr instance or JSON. Imported CFs appear in the CF browser and are available in the profile builder.
       </div>

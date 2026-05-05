@@ -1,5 +1,5 @@
 {{define "sections/scoring"}}
-      <!-- ===== Scoring Sandbox sub-tab ===== -->
+      <!-- ===== Scoring Sandbox section / Advanced sub-tab ===== -->
       <div class="page" x-show="currentSection === 'scoring' || (currentSection === 'advanced' && advancedTab === 'scoring')" style="max-width:none">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Scoring Sandbox</div>
         <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">Test how releases score against your profiles. Paste a release name or search Prowlarr, then see which Custom Formats match and the total score.</div>
@@ -330,21 +330,36 @@
                              @change="toggleSandboxSelectAll(activeAppType)">
                     </th>
                     <th style="width:22px;padding:5px 2px"></th>
-                    <th style="text-align:left;padding:5px 6px;font-weight:500;cursor:pointer;white-space:nowrap" @click="toggleSandboxSort(activeAppType, 'title')">
-                      Release <span x-show="sandbox[activeAppType].sortCol==='title'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                    <th style="text-align:left;padding:5px 6px;font-weight:500;white-space:nowrap"
+                        :aria-sort="sandbox[activeAppType].sortCol === 'title' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      <button type="button" class="sort-header" style="width:100%;text-align:left;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'title')">
+                        Release <span x-show="sandbox[activeAppType].sortCol==='title'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                      </button>
                     </th>
                     <th style="text-align:left;padding:5px 4px;font-weight:500;white-space:nowrap">Matched CFs</th>
-                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:80px;cursor:pointer;white-space:nowrap" @click="toggleSandboxSort(activeAppType, 'quality')">
-                      Quality <span x-show="sandbox[activeAppType].sortCol==='quality'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:80px;white-space:nowrap"
+                        :aria-sort="sandbox[activeAppType].sortCol === 'quality' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      <button type="button" class="sort-header" style="width:100%;text-align:center;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'quality')">
+                        Quality <span x-show="sandbox[activeAppType].sortCol==='quality'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                      </button>
                     </th>
-                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:64px;cursor:pointer;white-space:nowrap" @click="toggleSandboxSort(activeAppType, 'group')">
-                      Group <span x-show="sandbox[activeAppType].sortCol==='group'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:64px;white-space:nowrap"
+                        :aria-sort="sandbox[activeAppType].sortCol === 'group' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      <button type="button" class="sort-header" style="width:100%;text-align:center;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'group')">
+                        Group <span x-show="sandbox[activeAppType].sortCol==='group'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                      </button>
                     </th>
-                    <th style="text-align:right;padding:5px 4px;font-weight:500;width:60px;cursor:pointer;white-space:nowrap" @click="toggleSandboxSort(activeAppType, 'score')">
-                      Score <span x-show="sandbox[activeAppType].sortCol==='score'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                    <th style="text-align:right;padding:5px 4px;font-weight:500;width:60px;white-space:nowrap"
+                        :aria-sort="sandbox[activeAppType].sortCol === 'score' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      <button type="button" class="sort-header" style="width:100%;text-align:right;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'score')">
+                        Score <span x-show="sandbox[activeAppType].sortCol==='score'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                      </button>
                     </th>
-                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:52px;cursor:pointer;white-space:nowrap" @click="toggleSandboxSort(activeAppType, 'status')">
-                      Status <span x-show="sandbox[activeAppType].sortCol==='status'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:52px;white-space:nowrap"
+                        :aria-sort="sandbox[activeAppType].sortCol === 'status' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                      <button type="button" class="sort-header" style="width:100%;text-align:center;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'status')">
+                        Status <span x-show="sandbox[activeAppType].sortCol==='status'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
+                      </button>
                     </th>
                     <th style="width:24px;padding:5px 2px"></th>
                   </tr>

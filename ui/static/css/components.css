@@ -1,6 +1,9 @@
   /* Cards */
   .card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
 
+  /* Form Error */
+  .field-error { color: var(--accent-red); font-size: 12px; margin-top: 4px; }
+
   /* Instance cards */
   .instance-header { display: flex; align-items: center; padding: 16px 20px; cursor: pointer; user-select: none; }
   .instance-header:hover { background: var(--bg-elevated-hover); }
@@ -32,6 +35,28 @@
   .btn-sm { padding: 4px 10px; font-size:13px; }
   .btn-icon { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:15px; padding:2px 4px; border-radius:4px; line-height:1; }
   .btn-icon:hover { color:var(--text-primary); background:var(--bg-muted); }
+  .collapse-toggle,
+  .sort-header,
+  .inline-action {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: left;
+  }
+  .collapse-toggle { width: 100%; }
+  .collapse-toggle:focus-visible,
+  .sort-header:focus-visible,
+  .inline-action:focus-visible,
+  .profile-group-header:focus-visible,
+  .detail-section-header:focus-visible,
+  .pb-cat-header:focus-visible,
+  .cf-section-title:focus-visible,
+  .pb-state-pill:focus-visible { outline-offset: -2px; }
+  .inline-action { display: inline-flex; align-items: center; }
+  .inline-action:hover { text-decoration: underline; }
   /* Toggle switches */
   /* .toggle styles live in the dedicated block below. Kept separate from the
      rest of reset styles to avoid breaking legacy dev/cached pages during editing. */
@@ -43,9 +68,10 @@
   /* Settings — sidebar + content panel layout (matching vpn-gateway / PurgeBot) */
   .settings-layout { display: flex; gap: 0; min-height: 400px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; }
   .settings-sidebar { width: 180px; flex-shrink: 0; border-right: 1px solid var(--border-subtle); padding-top: 8px; }
-  .settings-nav { display: block; padding: 10px 16px; font-size: 14px; color: var(--text-secondary); cursor: pointer; border-left: 3px solid transparent; transition: color 0.15s, background 0.15s; }
+  .settings-nav { display: block; padding: 10px 16px; font-size: 14px; color: var(--text-secondary); cursor: pointer; border-left: 3px solid transparent; transition: color 0.15s, background 0.15s; text-decoration: none; }
   .settings-nav:hover { color: var(--text-body); background: var(--alpha-hover); }
   .settings-nav-active { color: var(--text-body); border-left-color: var(--accent-green); background: var(--alpha-active); }
+  .settings-nav:focus-visible { outline-offset: -2px; }
   .settings-content { flex: 1; padding: 16px 24px; }
   .settings-section-title { font-size: 16px; font-weight: 600; color: var(--text-body); margin-bottom: 4px; }
   .settings-section-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
@@ -116,4 +142,3 @@
   .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
   .empty-state .title { font-size: 16px; color: var(--text-primary); margin-bottom: 8px; }
   .empty-state .desc { font-size: 13px; }
-

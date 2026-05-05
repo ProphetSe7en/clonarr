@@ -1,8 +1,8 @@
 {{define "modals/cf-export"}}
   <!-- Export TRaSH JSON Modal -->
-  <div class="modal-overlay" x-show="cfExportContent" @click.self="cfExportContent = ''" x-cloak>
-    <div class="modal" style="max-width:700px">
-      <div class="modal-title">Export TRaSH JSON</div>
+  <div class="modal-overlay" x-show="cfExportContent" @click.self="cfExportContent = ''" @keydown.escape.window="cfExportContent = ''" x-cloak>
+    <div class="modal" style="max-width:700px" role="dialog" aria-modal="true" aria-labelledby="modal-title-cf-export" x-trap.noscroll.inert="cfExportContent">
+      <h2 id="modal-title-cf-export" class="modal-title">Export TRaSH JSON</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
         TRaSH Guides format — use this to share custom formats or contribute to the guides.
       </div>

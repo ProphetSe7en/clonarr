@@ -1,8 +1,8 @@
 {{define "modals/restore-instance"}}
   <!-- Restore modal -->
-  <div class="modal-overlay" x-show="showRestoreModal" @click.self="showRestoreModal = false" x-cloak>
-    <div class="modal" style="max-width:600px">
-      <div class="modal-title">Restore to Instance</div>
+  <div class="modal-overlay" x-show="showRestoreModal" @click.self="showRestoreModal = false" @keydown.escape.window="showRestoreModal = false" x-cloak>
+    <div class="modal" style="max-width:600px" role="dialog" aria-modal="true" aria-labelledby="modal-title-restore-instance" x-trap.noscroll.inert="showRestoreModal">
+      <h2 id="modal-title-restore-instance" class="modal-title">Restore to Instance</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px" x-text="restoreInstance?.name || ''"></div>
 
       <!-- Step 1: Upload file -->

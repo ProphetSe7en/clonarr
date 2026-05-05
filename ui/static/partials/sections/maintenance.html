@@ -1,5 +1,5 @@
 {{define "sections/maintenance"}}
-      <!-- ===== Maintenance sub-tab ===== -->
+      <!-- ===== Maintenance section ===== -->
       <div class="page" x-show="currentSection === 'maintenance'">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Backup &amp; Maintenance</div>
         <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">Backup and restore instance data, clean up custom formats and scores.</div>
@@ -118,10 +118,10 @@
                               <div x-show="cleanupKeepFocused && cleanupKeepSuggestions.length > 0" @mousedown.prevent
                                    style="position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:0 0 6px 6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px var(--alpha-shadow)">
                                 <template x-for="(suggestion, si) in cleanupKeepSuggestions" :key="si">
-                                  <div @click="addCleanupKeepName(suggestion)"
-                                       style="padding:6px 10px;font-size:12px;color:var(--text-body);cursor:pointer;border-bottom:1px solid var(--bg-muted)"
-                                       @mouseenter="$el.style.background='color-mix(in srgb, var(--accent-blue-strong) 20%, transparent)'" @mouseleave="$el.style.background='transparent'"
-                                       x-text="suggestion"></div>
+                                  <button type="button" @click="addCleanupKeepName(suggestion)"
+                                          style="display:block;width:100%;padding:6px 10px;font-size:12px;color:var(--text-body);cursor:pointer;border:0;border-bottom:1px solid var(--bg-muted);background:transparent;text-align:left;font:inherit"
+                                          @mouseenter="$el.style.background='color-mix(in srgb, var(--accent-blue-strong) 20%, transparent)'" @mouseleave="$el.style.background='transparent'"
+                                          x-text="suggestion"></button>
                                 </template>
                               </div>
                             </div>
@@ -144,7 +144,7 @@
                               <template x-for="(name, idx) in [...cleanupKeepList].sort((a,b) => a.localeCompare(b))" :key="'kl-'+idx">
                                 <div style="break-inside:avoid;display:flex;align-items:center;padding:1px 0;font-size:12px">
                                   <span style="color:var(--accent-blue);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="name"></span>
-                                  <span style="color:var(--text-secondary);cursor:pointer;font-size:13px;flex-shrink:0;margin-left:4px" @click="removeCleanupKeep(cleanupKeepList.indexOf(name))" x-tt="'Remove'">&times;</span>
+                                  <button type="button" class="inline-action" style="color:var(--text-secondary);font-size:13px;flex-shrink:0;margin-left:4px" @click="removeCleanupKeep(cleanupKeepList.indexOf(name))" x-tt="'Remove'" aria-label="Remove from keep list">&times;</button>
                                 </div>
                               </template>
                             </div>

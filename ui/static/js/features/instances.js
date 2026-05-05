@@ -6,10 +6,20 @@ export default {
     showInstanceModal: false,
     editingInstance: null,
     instanceForm: { name: '', type: 'radarr', url: '', apiKey: '' },
+    instanceFormErrors: {},
     modalTestResult: null,
   },
 
   methods: {
+    normalizedInstanceForm() {
+      return {
+        name: (this.instanceForm.name || '').trim(),
+        type: (this.instanceForm.type || '').trim(),
+        url: (this.instanceForm.url || '').trim(),
+        apiKey: (this.instanceForm.apiKey || '').trim(),
+      };
+    },
+
     async loadInstances() {
       try {
         const r = await fetch('/api/instances');
@@ -40,7 +50,13 @@ export default {
     },
 
     async saveInstance() {
-      const data = { ...this.instanceForm };
+      const data = this.normalizedInstanceForm();
+      this.instanceFormErrors = {};
+      if (!data.url) this.instanceFormErrors.url = 'URL is required';
+      if (!data.name) this.instanceFormErrors.name = 'Name is required';
+      if (!this.editingInstance && !data.apiKey) this.instanceFormErrors.apiKey = 'API Key is required';
+      if (Object.keys(this.instanceFormErrors).length > 0) return;
+
       let r;
       if (this.editingInstance) {
         if (!data.apiKey) data.apiKey = this.editingInstance.apiKey;
@@ -117,15 +133,16 @@ export default {
     async testConnectionInModal() {
       this.modalTestResult = 'testing';
       try {
+        const formData = this.normalizedInstanceForm();
         let r;
-        if (this.editingInstance && !this.instanceForm.apiKey) {
+        if (this.editingInstance && !formData.apiKey) {
           // Use saved instance endpoint, which has the real API key.
           r = await fetch(`/api/instances/${this.editingInstance.id}/test`, { method: 'POST' });
         } else {
           r = await fetch('/api/test-connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: this.instanceForm.url, apiKey: this.instanceForm.apiKey })
+            body: JSON.stringify({ url: formData.url, apiKey: formData.apiKey })
           });
         }
         const data = await r.json();

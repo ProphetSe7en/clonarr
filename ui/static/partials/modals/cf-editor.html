@@ -1,9 +1,9 @@
 {{define "modals/cf-editor"}}
   <!-- CF Editor Modal (Create/Edit) -->
   <template x-if="showCFEditor">
-  <div class="modal-overlay" @click.self="showCFEditor = false">
-    <div class="modal" style="max-width:720px;max-height:90vh;overflow-y:auto">
-      <div class="modal-title" x-text="cfEditorMode === 'edit' ? 'Edit Custom Format' : 'Create Custom Format'"></div>
+  <div class="modal-overlay" @click.self="showCFEditor = false" @keydown.escape.window="showCFEditor = false">
+    <div class="modal" style="max-width:720px;max-height:90vh;overflow-y:auto" role="dialog" aria-modal="true" aria-labelledby="modal-title-cf-editor" x-trap.noscroll.inert="showCFEditor">
+      <h2 id="modal-title-cf-editor" class="modal-title" x-text="cfEditorMode === 'edit' ? 'Edit Custom Format' : 'Create Custom Format'"></h2>
 
       <!-- Header fields -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
@@ -201,10 +201,13 @@
 
       <!-- JSON Preview (collapsible) -->
       <div style="margin-bottom:16px">
-        <div style="font-size:12px;color:var(--accent-blue);cursor:pointer;user-select:none" @click="cfEditorShowPreview = !cfEditorShowPreview">
+        <button type="button" class="collapse-toggle" style="font-size:12px;color:var(--accent-blue);user-select:none"
+                @click="cfEditorShowPreview = !cfEditorShowPreview"
+                :aria-expanded="cfEditorShowPreview"
+                aria-controls="cf-editor-preview">
           <span x-text="cfEditorShowPreview ? '▼' : '▶'"></span> JSON Preview
-        </div>
-        <div x-show="cfEditorShowPreview" style="margin-top:4px">
+        </button>
+        <div id="cf-editor-preview" x-show="cfEditorShowPreview" style="margin-top:4px">
           <pre style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--text-muted);max-height:200px;overflow:auto;white-space:pre-wrap" x-text="getCFEditorPreviewJSON()"></pre>
         </div>
       </div>

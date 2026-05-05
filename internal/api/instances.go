@@ -40,6 +40,10 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Invalid JSON")
 		return
 	}
+	inst.Name = strings.TrimSpace(inst.Name)
+	inst.Type = strings.TrimSpace(inst.Type)
+	inst.URL = strings.TrimSpace(inst.URL)
+	inst.APIKey = strings.TrimSpace(inst.APIKey)
 
 	if inst.Name == "" || inst.URL == "" || inst.APIKey == "" {
 		writeError(w, 400, "name, url, and apiKey are required")
@@ -75,6 +79,10 @@ func (s *Server) handleUpdateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Invalid JSON")
 		return
 	}
+	inst.Name = strings.TrimSpace(inst.Name)
+	inst.Type = strings.TrimSpace(inst.Type)
+	inst.URL = strings.TrimSpace(inst.URL)
+	inst.APIKey = strings.TrimSpace(inst.APIKey)
 
 	if inst.Name == "" || inst.URL == "" {
 		writeError(w, 400, "name and url are required")
@@ -213,6 +221,8 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Invalid JSON")
 		return
 	}
+	req.URL = strings.TrimSpace(req.URL)
+	req.APIKey = strings.TrimSpace(req.APIKey)
 	if req.URL == "" || req.APIKey == "" {
 		writeError(w, 400, "url and apiKey are required")
 		return
@@ -2240,4 +2250,3 @@ func (s *Server) handleTrashNaming(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, ad.Naming)
 }
-

@@ -1,5 +1,5 @@
 {{define "sections/profiles"}}
-      <!-- ===== Profiles sub-tab ===== -->
+      <!-- ===== Profiles section ===== -->
       <div x-show="currentSection === 'profiles'">
 
 
@@ -24,11 +24,17 @@
 
           <!-- Collapsible Sync Rules (always visible) -->
             <div class="card" style="margin-bottom:20px">
-              <div style="display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:8px;border-left:3px solid var(--text-primary)" @click="syncRulesExpanded = { ...syncRulesExpanded, [activeAppType]: !syncRulesExpanded[activeAppType] }">
-                <span class="profile-group-chevron" :class="{ open: syncRulesExpanded[activeAppType] }">&#9654;</span>
-                <span style="font-size:13px;font-weight:500">Sync Rules</span>
-                <span style="font-size:13px;color:var(--text-muted);margin-left:auto"
-                      x-text="(() => { let count = 0; for (const inst of instancesOfType(activeAppType)) count += sortedSyncRules(inst.id).length; return count > 0 ? count + ' synced profile' + (count !== 1 ? 's' : '') : 'No syncs yet'; })()"></span>
+              <div style="display:flex;align-items:center;padding:12px 16px;gap:8px;border-left:3px solid var(--text-primary)">
+                <button type="button" class="collapse-toggle"
+                        style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                        @click="syncRulesExpanded = { ...syncRulesExpanded, [activeAppType]: !syncRulesExpanded[activeAppType] }"
+                        :aria-expanded="syncRulesExpanded[activeAppType]"
+                        aria-controls="sync-rules-body">
+                  <span class="profile-group-chevron" :class="{ open: syncRulesExpanded[activeAppType] }">&#9654;</span>
+                  <span style="font-size:13px;font-weight:500">Sync Rules</span>
+                  <span style="font-size:13px;color:var(--text-muted);margin-left:auto"
+                        x-text="(() => { let count = 0; for (const inst of instancesOfType(activeAppType)) count += sortedSyncRules(inst.id).length; return count > 0 ? count + ' synced profile' + (count !== 1 ? 's' : '') : 'No syncs yet'; })()"></span>
+                </button>
                 <button class="btn btn-sm"
                         @click.stop="setAutoSyncPaused(!autoSyncSettings.paused)"
                         x-tt="autoSyncSettings.paused ? 'Resume auto-sync' : 'Pause auto-sync (scheduled + after-pull). Manual syncs unaffected.'"
@@ -37,7 +43,7 @@
                                 : 'font-size:12px;padding:2px 8px;border-color:var(--border-subtle);color:var(--text-secondary);margin-left:8px'"
                         x-text="autoSyncSettings.paused ? '▶ Resume Auto-Sync' : '⏸ Pause Auto-Sync'"></button>
               </div>
-              <div x-show="syncRulesExpanded[activeAppType]" style="border-top:1px solid var(--bg-muted)">
+              <div id="sync-rules-body" x-show="syncRulesExpanded[activeAppType]" style="border-top:1px solid var(--bg-muted)">
                 <template x-for="inst in instancesOfType(activeAppType)" :key="'sr-'+inst.id">
                   <template x-if="sortedSyncRules(inst.id).length > 0">
                     <div>
@@ -46,13 +52,17 @@
                         <button class="btn btn-sm" style="margin-left:auto;font-size:12px;padding:2px 8px;border-color:var(--accent-green-strong);color:var(--accent-green)" @click.stop="syncAllForInstance(inst)" x-tt="'Re-sync all profiles with auto-sync enabled on this instance'">Sync All</button>
                       </div>
                       <div style="display:flex;align-items:center;padding:4px 16px;gap:8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--bg-card);user-select:none">
-                        <span style="width:200px;flex-shrink:0;cursor:pointer;white-space:nowrap" @click="toggleSyncRulesSort('trash')">
+                        <button type="button" class="sort-header" style="width:200px;flex-shrink:0;white-space:nowrap;text-transform:inherit;letter-spacing:inherit"
+                                @click="toggleSyncRulesSort('trash')"
+                                :aria-sort="syncRulesSort.col === 'trash' ? (syncRulesSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'">
                           TRaSH Profile <span x-show="syncRulesSort.col==='trash'" x-text="syncRulesSort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span>
-                        </span>
+                        </button>
                         <span style="width:20px;flex-shrink:0"></span>
-                        <span style="width:200px;flex-shrink:0;cursor:pointer;white-space:nowrap" @click="toggleSyncRulesSort('arr')">
+                        <button type="button" class="sort-header" style="width:200px;flex-shrink:0;white-space:nowrap;text-transform:inherit;letter-spacing:inherit"
+                                @click="toggleSyncRulesSort('arr')"
+                                :aria-sort="syncRulesSort.col === 'arr' ? (syncRulesSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'">
                           Arr Profile <span x-show="syncRulesSort.col==='arr'" x-text="syncRulesSort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span>
-                        </span>
+                        </button>
                         <span style="width:100px;flex-shrink:0">Auto-Sync</span>
                         <span style="flex:1;text-align:center">Details</span>
                         <span style="width:180px;flex-shrink:0;text-align:center">Actions</span>
@@ -71,7 +81,7 @@
                             </template>
                             <template x-if="!sh.orphanedAt && !editing">
                               <span>
-                                <span style="color:var(--text-primary);cursor:pointer;border-bottom:1px dashed var(--border-subtle)" @click.stop="newName = sh.arrProfileName; editing = true" x-tt="'Click to rename in Arr'" x-text="sh.arrProfileName"></span>
+                                <button type="button" class="inline-action" style="color:var(--text-primary);border-bottom:1px dashed var(--border-subtle)" @click.stop="newName = sh.arrProfileName; editing = true" x-tt="'Click to rename in Arr'" x-text="sh.arrProfileName"></button>
                                 <span style="color:var(--text-muted);font-size:12px" x-text="'ID ' + sh.arrProfileId"></span>
                               </span>
                             </template>
@@ -153,11 +163,12 @@
           <div>
             <template x-for="group in groupedProfiles(activeAppType)" :key="group.name">
               <div class="card" :class="'grp-' + group.name.toLowerCase().replace(/[^a-z]/g, '')">
-                <div class="profile-group-header" @click="toggleProfileGroup(activeAppType, group.name)">
+                <button type="button" class="profile-group-header" @click="toggleProfileGroup(activeAppType, group.name)"
+                        :aria-expanded="isProfileGroupExpanded(activeAppType, group.name)">
                   <span class="profile-group-chevron" :class="{ open: isProfileGroupExpanded(activeAppType, group.name) }">&#9654;</span>
                   <span x-text="group.name"></span>
                   <span class="profile-group-count" x-text="group.profiles.length + (group.profiles.length === 1 ? ' profile' : ' profiles')"></span>
-                </div>
+                </button>
                 <div x-show="isProfileGroupExpanded(activeAppType, group.name)">
                   <template x-for="p in group.profiles" :key="p.trashId">
                     <div class="profile-row">
@@ -204,11 +215,19 @@
                 <!-- Table layout for proper column alignment -->
                 <!-- Column headers -->
                 <div style="display:flex;align-items:center;padding:4px 16px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--bg-card);user-select:none">
-                  <div style="flex:none;width:240px;cursor:pointer" @click="toggleHistorySort('trash')">TRaSH Profile <span x-show="historySort.col==='trash'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></div>
+                  <button type="button" class="sort-header" style="flex:none;width:240px;text-transform:inherit;letter-spacing:inherit"
+                          @click="toggleHistorySort('trash')"
+                          :aria-sort="historySort.col === 'trash' ? (historySort.dir === 'asc' ? 'ascending' : 'descending') : 'none'">TRaSH Profile <span x-show="historySort.col==='trash'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></button>
                   <div style="flex:none;width:20px"></div>
-                  <div style="flex:none;width:240px;cursor:pointer" @click="toggleHistorySort('arr')">Arr Profile <span x-show="historySort.col==='arr'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></div>
-                  <div style="flex:none;width:100px;cursor:pointer" @click="toggleHistorySort('changed')">Last Changed <span x-show="historySort.col==='changed'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></div>
-                  <div style="flex:none;width:55px;text-align:center;cursor:pointer" @click="toggleHistorySort('events')">Events <span x-show="historySort.col==='events'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></div>
+                  <button type="button" class="sort-header" style="flex:none;width:240px;text-transform:inherit;letter-spacing:inherit"
+                          @click="toggleHistorySort('arr')"
+                          :aria-sort="historySort.col === 'arr' ? (historySort.dir === 'asc' ? 'ascending' : 'descending') : 'none'">Arr Profile <span x-show="historySort.col==='arr'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></button>
+                  <button type="button" class="sort-header" style="flex:none;width:100px;text-transform:inherit;letter-spacing:inherit"
+                          @click="toggleHistorySort('changed')"
+                          :aria-sort="historySort.col === 'changed' ? (historySort.dir === 'asc' ? 'ascending' : 'descending') : 'none'">Last Changed <span x-show="historySort.col==='changed'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></button>
+                  <button type="button" class="sort-header" style="flex:none;width:55px;text-align:center;text-transform:inherit;letter-spacing:inherit"
+                          @click="toggleHistorySort('events')"
+                          :aria-sort="historySort.col === 'events' ? (historySort.dir === 'asc' ? 'ascending' : 'descending') : 'none'">Events <span x-show="historySort.col==='events'" x-text="historySort.dir==='asc'?'▲':'▼'" style="font-size:10px"></span></button>
                   <div style="flex:1;text-align:right;padding-right:4px">Last Changes</div>
                 </div>
                 <!-- Data rows -->
@@ -619,12 +638,12 @@
                                         <!-- Filter chip bar — single source of truth for diff counts. -->
                                         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
                                           <span style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-right:6px">Filter</span>
-                                          <span class="compare-chip" :class="compareFilter === 'all' ? 'active' : ''" @click="compareFilter = 'all'" x-text="'All (' + compareAdjustedCounts(cr).all + ')'"></span>
-                                          <span class="compare-chip" :class="compareFilter === 'diff' ? 'active' : ''" @click="compareFilter = 'diff'" x-text="'Only diffs (' + compareAdjustedCounts(cr).diffs + ')'"></span>
-                                          <span class="compare-chip compare-chip-wrong" :class="compareFilter === 'wrong' ? 'active' : ''" @click="compareFilter = 'wrong'" x-text="'⚠ Wrong score (' + compareAdjustedCounts(cr).wrong + ')'"></span>
-                                          <span class="compare-chip compare-chip-missing" :class="compareFilter === 'missing' ? 'active' : ''" @click="compareFilter = 'missing'" x-tt="'Golden Rule groups count as 1 item — pick 1 of the available variants'" x-text="'✗ Missing (' + compareAdjustedCounts(cr).missing + ')'"></span>
-                                          <span class="compare-chip compare-chip-extra" :class="compareFilter === 'extra' ? 'active' : ''" @click="compareFilter = 'extra'" x-text="'+ Extra (' + compareAdjustedCounts(cr).extra + ')'"></span>
-                                          <span class="compare-chip compare-chip-match" :class="compareFilter === 'match' ? 'active' : ''" @click="compareFilter = 'match'" x-text="'✓ Matching (' + compareAdjustedCounts(cr).matching + ')'"></span>
+                                          <button type="button" class="compare-chip" :class="compareFilter === 'all' ? 'active' : ''" :aria-pressed="compareFilter === 'all'" @click="compareFilter = 'all'" x-text="'All (' + compareAdjustedCounts(cr).all + ')'"></button>
+                                          <button type="button" class="compare-chip" :class="compareFilter === 'diff' ? 'active' : ''" :aria-pressed="compareFilter === 'diff'" @click="compareFilter = 'diff'" x-text="'Only diffs (' + compareAdjustedCounts(cr).diffs + ')'"></button>
+                                          <button type="button" class="compare-chip compare-chip-wrong" :class="compareFilter === 'wrong' ? 'active' : ''" :aria-pressed="compareFilter === 'wrong'" @click="compareFilter = 'wrong'" x-text="'⚠ Wrong score (' + compareAdjustedCounts(cr).wrong + ')'"></button>
+                                          <button type="button" class="compare-chip compare-chip-missing" :class="compareFilter === 'missing' ? 'active' : ''" :aria-pressed="compareFilter === 'missing'" @click="compareFilter = 'missing'" x-tt="'Golden Rule groups count as 1 item — pick 1 of the available variants'" x-text="'✗ Missing (' + compareAdjustedCounts(cr).missing + ')'"></button>
+                                          <button type="button" class="compare-chip compare-chip-extra" :class="compareFilter === 'extra' ? 'active' : ''" :aria-pressed="compareFilter === 'extra'" @click="compareFilter = 'extra'" x-text="'+ Extra (' + compareAdjustedCounts(cr).extra + ')'"></button>
+                                          <button type="button" class="compare-chip compare-chip-match" :class="compareFilter === 'match' ? 'active' : ''" :aria-pressed="compareFilter === 'match'" @click="compareFilter = 'match'" x-text="'✓ Matching (' + compareAdjustedCounts(cr).matching + ')'"></button>
                                         </div>
 
                                         <!-- Profile Settings — one card with a 4-column table (Setting | Current | TRaSH | Sync) and sub-header rows for General / Quality / Quality Items. Rows filtered by compareFilter. Entire card hidden if filter yields 0 visible rows. Matches clonarr-compare-redesign-v3.html mockup. -->
@@ -644,9 +663,9 @@
                                                 </template>
                                               </span>
                                               <div style="flex:1"></div>
-                                              <span class="compare-section-toggle"
-                                                    x-show="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match)"
-                                                    @click.stop="toggleAllInCompareSection(iid, cr, 'settings')">toggle all</span>
+                                              <button type="button" class="compare-section-toggle"
+                                                      x-show="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match)"
+                                                      @click.stop="toggleAllInCompareSection(iid, cr, 'settings')">toggle all</button>
                                               <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
                                                       x-show="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match)"
                                                       @click="compareQuickSyncOpen(inst, cr, 'settings')">Sync selected</button>
@@ -737,9 +756,9 @@
                                                 <span x-show="cr.formatItems.some(fi => !fi.exists)" style="color:var(--accent-red);background:var(--accent-red-bg);padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => !fi.exists).length + ' missing'"></span>
                                               </span>
                                               <div style="flex:1"></div>
-                                              <span class="compare-section-toggle"
-                                                    x-show="cr.formatItems.some(fi => !fi.exists || !fi.scoreMatch)"
-                                                    @click.stop="toggleAllInCompareSection(iid, cr, 'requiredCfs')">toggle all</span>
+                                              <button type="button" class="compare-section-toggle"
+                                                      x-show="cr.formatItems.some(fi => !fi.exists || !fi.scoreMatch)"
+                                                      @click.stop="toggleAllInCompareSection(iid, cr, 'requiredCfs')">toggle all</button>
                                               <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
                                                       x-show="cr.formatItems.some(fi => !fi.exists || !fi.scoreMatch)"
                                                       @click="compareQuickSyncOpen(inst, cr, 'requiredCfs')">Sync selected</button>
@@ -808,9 +827,9 @@
                                                       x-text="cr.groups.reduce((n,g) => n + g.missing, 0) + ' missing'"></span>
                                               </span>
                                               <div style="flex:1"></div>
-                                              <span class="compare-section-toggle"
-                                                    x-show="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0)"
-                                                    @click.stop="toggleAllInCompareSection(iid, cr, 'groups')">toggle all</span>
+                                              <button type="button" class="compare-section-toggle"
+                                                      x-show="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0)"
+                                                      @click.stop="toggleAllInCompareSection(iid, cr, 'groups')">toggle all</button>
                                               <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
                                                       x-show="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0)"
                                                       @click="compareQuickSyncOpen(inst, cr, 'groups')">Sync selected</button>
@@ -914,7 +933,7 @@
                                               <span style="font-size:14px;font-weight:600;color:var(--text-body)">Extra in Arr</span>
                                               <span style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 6px;border-radius:8px;margin-left:8px" x-text="cr.summary.extra + ' CFs'"></span>
                                               <div style="flex:1"></div>
-                                              <span class="compare-section-toggle" @click.stop="toggleAllInCompareSection(iid, cr, 'extras')">toggle all</span>
+                                              <button type="button" class="compare-section-toggle" @click.stop="toggleAllInCompareSection(iid, cr, 'extras')">toggle all</button>
                                               <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
                                                       x-show="getRemoveSelectedCount(iid) > 0"
                                                       @click="compareQuickSyncOpen(inst, cr, 'extras')">Remove selected</button>

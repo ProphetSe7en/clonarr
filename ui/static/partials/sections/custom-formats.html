@@ -1,5 +1,5 @@
 {{define "sections/custom-formats"}}
-      <!-- ===== Custom Formats sub-tab ===== -->
+      <!-- ===== Custom Formats section ===== -->
       <div class="page" x-show="currentSection === 'custom-formats'">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Custom Formats</div>
         <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">All Custom Formats from TRaSH Guides, organized by category. Use Create to build a custom format from scratch, or Import to add existing formats from an Arr instance or JSON.</div>
@@ -17,12 +17,13 @@
             </div>
             <template x-for="cat in getCFBrowseGroups(activeAppType)" :key="cat.displayName">
               <div class="detail-section" :class="getCategoryClass(cat.category)" style="margin-bottom:8px">
-                <div class="detail-section-header" @click="toggleDetailSection('cfb_' + cat.displayName)" style="cursor:pointer"
-                     :style="cat.isCustom ? 'border-left:3px solid var(--accent-orange);background:var(--accent-orange-bg)' : ''">
-                  <div class="detail-section-label" :style="cat.isCustom ? 'color:var(--accent-orange)' : ''" x-text="cat.displayName"></div>
-                  <div class="detail-section-count" x-text="cat.totalCFs + ' CFs'"></div>
+                <button type="button" class="detail-section-header" @click="toggleDetailSection('cfb_' + cat.displayName)"
+                        :aria-expanded="detailSections['cfb_' + cat.displayName]"
+                        :style="cat.isCustom ? 'border-left:3px solid var(--accent-orange);background:var(--accent-orange-bg)' : ''">
+                  <span class="detail-section-label" :style="cat.isCustom ? 'color:var(--accent-orange)' : ''" x-text="cat.displayName"></span>
+                  <span class="detail-section-count" x-text="cat.totalCFs + ' CFs'"></span>
                   <span class="detail-section-chevron" :class="{ open: detailSections['cfb_' + cat.displayName] }">&#9654;</span>
-                </div>
+                </button>
                 <div x-show="detailSections['cfb_' + cat.displayName]">
                   <template x-for="group in cat.groups" :key="group.name">
                     <div class="cf-section">
@@ -41,8 +42,8 @@
                                   <span x-text="cf.name"></span>
                                   <span x-show="cf.isCustom" style="font-size:12px;color:var(--accent-orange);border:1px solid var(--accent-orange);border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
                                   <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-blue);cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'">&#9998;</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-red);cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'">&#10005;</span>
+                                  <button type="button" class="inline-action" x-show="cf.isCustom" style="font-size:13px;color:var(--accent-blue);margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'" aria-label="Edit custom format">&#9998;</button>
+                                  <button type="button" class="inline-action" x-show="cf.isCustom" style="font-size:13px;color:var(--accent-red);margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'" aria-label="Delete custom format">&#10005;</button>
                                 </div>
                                 <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
                                      x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
@@ -62,8 +63,8 @@
                                   <span x-text="cf.name"></span>
                                   <span x-show="cf.isCustom" style="font-size:12px;color:var(--accent-orange);border:1px solid var(--accent-orange);border-radius:3px;padding:0 4px;margin-left:6px">Custom</span>
                                   <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-blue);cursor:pointer;margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'">&#9998;</span>
-                                  <span x-show="cf.isCustom" style="font-size:13px;color:var(--accent-red);cursor:pointer;margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'">&#10005;</span>
+                                  <button type="button" class="inline-action" x-show="cf.isCustom" style="font-size:13px;color:var(--accent-blue);margin-left:6px" @click="openCFEditor('edit', activeAppType, cf)" x-tt="'Edit'" aria-label="Edit custom format">&#9998;</button>
+                                  <button type="button" class="inline-action" x-show="cf.isCustom" style="font-size:13px;color:var(--accent-red);margin-left:4px" @click="deleteCustomCF(cf, activeAppType)" x-tt="'Delete'" aria-label="Delete custom format">&#10005;</button>
                                 </div>
                                 <div class="cf-score" :class="cf.score > 0 ? 'positive' : cf.score < 0 ? 'negative' : 'zero'"
                                      x-text="cf.score !== undefined ? ((cf.score > 0 ? '+' : '') + cf.score) : '—'"></div>
@@ -75,15 +76,16 @@
                       <!-- Multi-CF group: collapsible sub-headers -->
                       <template x-if="cat.groups.length > 1 && group.cfs.length > 1">
                         <div>
-                          <div class="cf-section-title" style="cursor:pointer;user-select:none"
-                               @click="toggleGroupExpanded('cfb_' + cat.displayName, group.shortName)">
-                            <div style="display:flex;align-items:center;gap:8px">
+                          <button type="button" class="cf-section-title"
+                                  @click="toggleGroupExpanded('cfb_' + cat.displayName, group.shortName)"
+                                  :aria-expanded="groupExpanded['cfb_' + cat.displayName + '/' + group.shortName]">
+                            <span style="display:flex;align-items:center;gap:8px">
                               <span class="detail-section-chevron" style="font-size:12px"
                                     :class="{ open: groupExpanded['cfb_' + cat.displayName + '/' + group.shortName] }">&#9654;</span>
                               <span x-text="group.shortName"></span>
                               <span style="font-size:13px;color:var(--text-muted)" x-text="group.cfs.length + ' CFs'"></span>
-                            </div>
-                          </div>
+                            </span>
+                          </button>
                           <div x-show="groupExpanded['cfb_' + cat.displayName + '/' + group.shortName]">
                             <!-- Group description from TRaSH (sourced from cat.trashDescription / group.trash_description JSON) -->
                             <div x-show="cat.trashDescription" class="group-desc-html"

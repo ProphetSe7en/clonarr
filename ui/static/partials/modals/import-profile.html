@@ -1,7 +1,7 @@
 {{define "modals/import-profile"}}
-  <div class="modal-overlay" x-show="showImportModal !== false" @click.self="showImportModal = false" x-cloak>
-    <div class="modal" style="max-width:600px">
-      <div class="modal-title">Import Profile</div>
+  <div class="modal-overlay" x-show="showImportModal !== false" @click.self="showImportModal = false" @keydown.escape.window="showImportModal = false" x-cloak>
+    <div class="modal" style="max-width:600px" role="dialog" aria-modal="true" aria-labelledby="modal-title-import-profile" x-trap.noscroll.inert="showImportModal !== false">
+      <h2 id="modal-title-import-profile" class="modal-title">Import Profile</h2>
       <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
         Paste or upload a profile configuration. Supports Recyclarr YAML, TRaSH JSON, and Clonarr JSON. Multiple profiles and both Radarr and Sonarr are detected automatically.
       </div>

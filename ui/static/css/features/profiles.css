@@ -1,5 +1,5 @@
   /* Profile group headers (collapsible) */
-  .profile-group-header { display: flex; align-items: center; padding: 10px 16px; font-size: 13px; color: var(--text-primary); font-weight: 500; border-bottom: 1px solid var(--bg-muted); cursor: pointer; user-select: none; gap: 8px; }
+  .profile-group-header { display: flex; align-items: center; padding: 10px 16px; font-size: 13px; color: var(--text-primary); font-weight: 500; border: 0; border-bottom: 1px solid var(--bg-muted); background: transparent; width: 100%; text-align: left; cursor: pointer; user-select: none; gap: 8px; font-family: inherit; }
   .profile-group-header:hover { background: var(--bg-elevated-hover); }
   .profile-group-chevron { font-size:12px; transition: transform 0.2s; color: var(--text-secondary); }
   .profile-group-chevron.open { transform: rotate(90deg); }
@@ -27,17 +27,19 @@
   .back-link { color: var(--accent-blue); font-size: 13px; cursor: pointer; text-decoration: none; }
   .back-link:hover { text-decoration: underline; }
 
-  /* Sub-tabs (under Radarr/Sonarr) */
+  /* Legacy subtabs plus the current app/section navigation bar */
   .subtabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-subtle); padding: 0 24px; background: var(--bg-card); }
-  .subtab { padding: 10px 16px; font-size: 14px; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; }
+  .subtab { padding: 10px 16px; font-size: 14px; color: var(--text-soft); cursor: pointer; border: 0; border-bottom: 2px solid transparent; background: transparent; user-select: none; font-family: inherit; }
   .subtab:hover { color: var(--text-primary); }
   .subtab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+  .subtab:focus-visible { outline-offset: -2px; }
   .profile-tabs { display: flex; gap: 0; padding: 0 24px; background: var(--bg-page); border-bottom: 1px solid var(--bg-muted); }
-  .profile-tab { padding: 10px 16px; font-size: 15px; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; font-weight: 500; }
+  .profile-tab { padding: 10px 16px; font-size: 15px; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; user-select: none; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; }
   .profile-tab:hover { color: var(--text-muted); }
   .profile-tab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+  .profile-tab:focus-visible { outline-offset: -2px; }
 
-  /* App type toggle pills */
+  /* App type toggle pills used by older embedded controls */
   .app-pill { padding: 5px 16px; font-size: 12px; font-weight: 500; border: 1px solid var(--border-subtle); border-radius: 20px; cursor: pointer; background: transparent; color: var(--text-muted); transition: all 0.15s; }
   .app-pill:hover { color: var(--text-primary); border-color: var(--text-secondary); }
   .app-pill.active-radarr { background: var(--fill-radarr); color: var(--accent-orange-bright); border-color: var(--accent-orange-bright); }

@@ -14,3 +14,13 @@
      <div>s, buttons, links, and inputs uniformly. */
   :focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; border-radius: 2px; }
 
+  /* Skip-link: visually hidden until focused, then jumps into the top-left
+     corner. First focusable element on the page so keyboard users can skip
+     past the topnav directly to <main id="main-content">. */
+  .skip-link { position: absolute; left: -9999px; top: 0; background: var(--bg-card); color: var(--text-primary); padding: 8px 12px; border: 2px solid var(--accent-blue); border-radius: 4px; z-index: 9999; text-decoration: none; font-weight: 500; }
+  .skip-link:focus { left: 8px; top: 8px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  /* Suppress the default focus outline on <main> when it receives focus
+     programmatically from the skip-link — it's a focus target, not an
+     interactive element. */
+  main:focus { outline: none; }

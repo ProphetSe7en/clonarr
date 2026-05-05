@@ -133,10 +133,10 @@
   /* Text — bumped contrast for legibility on muted bg */
   --text-primary: #1f2328;
   --text-body: #24292f;
-  --text-secondary: #4d535b;
-  --text-muted: #4d535b;
-  --text-muted-secondary: #57606a;
-  --text-soft: #4d535b;
+  --text-secondary: #32383f;
+  --text-muted: #42474e;
+  --text-muted-secondary: #525964;
+  --text-soft: #525964;
   --text-inverse: #ffffff;
   --text-on-accent: #ffffff;
 
