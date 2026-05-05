@@ -1,5 +1,83 @@
 # Changelog
 
+## v2.5.4
+
+A polish-and-fixes release. Light theme support, smarter tooltips, a
+big quality-of-life pass on the Profile editor, and a follow-up on
+last release's `TRUSTED_PROXIES` hostnames work.
+
+### New
+
+- **Light theme.** A second built-in theme that follows your OS
+  setting by default. Switch in Settings → Display, or pick System
+  to match your OS. Cross-browser parity fixes baked in.
+
+- **Quality items always reorderable.** Drag-and-drop to change the
+  order of qualities in a profile no longer requires opening Edit
+  Groups first. Drop on a gap reorders; drop on another row still
+  needs Edit Groups (that's the merge-into-group action).
+
+### Changed
+
+- **Profile Detail "Customize" toggle.** One global toggle replaces
+  the per-section "Hide overrides" toggles. Off = clean
+  "All values follow profile defaults" view; On = full editor with
+  all override controls visible. Auto-on if you've already saved
+  overrides on the rule.
+
+- **Tooltips.** Switched from native browser tooltips to a custom
+  system that flips around viewport edges so long messages no longer
+  get cut off at the screen edge. Also positions correctly when
+  you've set a non-100% UI Scale in your browser.
+
+- **"Additional Custom Formats" picker** (renamed from "Extra").
+  Card design now matches the Groups section, CFs you've added
+  group by source (mirroring how you picked them), and stay visible
+  with an orange highlight after Add.
+
+- **Sync log entries** show how many overrides and score-overrides
+  were applied per sync — easier to see at a glance what changed.
+
+- **TRaSH pull operations** log a per-app diff summary after each
+  pull (CFs added/removed, profiles added/removed, naming changes,
+  quality size changes). First place to look when something behaves
+  differently after a pull.
+
+### Fixed
+
+- **`TRUSTED_PROXIES` with hostnames in docker-compose.** Follow-up
+  to v2.5.3's hostname support: setups where docker-compose service
+  names weren't resolving from inside the Clonarr container now work.
+  Closes the docker-compose half of #40.
+
+- **Instance Test no longer rejects DNS hostnames** that resolve
+  to a mix of routable and non-routable IPs — common with Tailscale
+  and dual-stack setups. The check now requires *all* resolved IPs
+  to be blocked before refusing.
+
+- **Quality "phantom overrides".** Just opening the Edit Quality
+  modal no longer persists a Quality override on the sync rule.
+  An override is now only saved when you actually change something.
+
+- **Naming page example labels.** "Movie:" no longer shows up in
+  Sonarr's Episode / Series / Season sections — each section uses
+  its own example label.
+
+- **Dark theme legibility.** Muted labels are easier to read now,
+  especially in the Profile editor and sync history.
+
+### Under the hood
+
+- **Internal UI code reorganized** into smaller, easier-to-maintain
+  pieces. No user-facing change — sets the foundation for future
+  UI work.
+
+### Credit
+
+Thanks again to [@ColeSpringer](https://github.com/ColeSpringer) for
+PR #41 (UI modularization), PR #42 (light theme + cross-browser
+parity), and PR #43 (DNS hostname fix). Big help across this release.
+
 ## v2.5.3
 
 Scoring Sandbox overhaul, hostname-friendly `TRUSTED_PROXIES`, plus a
