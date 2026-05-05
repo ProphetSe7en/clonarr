@@ -6,15 +6,15 @@
 
     <div class="settings-layout">
       <!-- Sidebar nav -->
-      <div class="settings-sidebar">
-        <div class="settings-nav" :class="settingsSection === 'instances' && 'settings-nav-active'" @click="settingsSection = 'instances'; pushNav()">Instances</div>
-        <div class="settings-nav" :class="settingsSection === 'trash' && 'settings-nav-active'" @click="settingsSection = 'trash'; pushNav()">TRaSH Guides</div>
-        <div class="settings-nav" x-show="config.devMode" :class="settingsSection === 'prowlarr' && 'settings-nav-active'" @click="settingsSection = 'prowlarr'; pushNav()">Prowlarr</div>
-        <div class="settings-nav" :class="settingsSection === 'notifications' && 'settings-nav-active'" @click="settingsSection = 'notifications'; pushNav()">Notifications</div>
-        <div class="settings-nav" :class="settingsSection === 'display' && 'settings-nav-active'" @click="settingsSection = 'display'; pushNav()">Display</div>
-        <div class="settings-nav" :class="settingsSection === 'security' && 'settings-nav-active'" @click="settingsSection = 'security'; pushNav(); fetchApiKey()">Security</div>
-        <div class="settings-nav" :class="settingsSection === 'advanced' && 'settings-nav-active'" @click="settingsSection = 'advanced'; pushNav()">Advanced</div>
-      </div>
+      <nav class="settings-sidebar" aria-label="Settings">
+        <a class="settings-nav" :class="settingsSection === 'instances' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'instances' })" :aria-current="settingsSection === 'instances' ? 'page' : null">Instances</a>
+        <a class="settings-nav" :class="settingsSection === 'trash' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'trash' })" :aria-current="settingsSection === 'trash' ? 'page' : null">TRaSH Guides</a>
+        <a class="settings-nav" x-show="config.devMode" :class="settingsSection === 'prowlarr' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'prowlarr' })" :aria-current="settingsSection === 'prowlarr' ? 'page' : null">Prowlarr</a>
+        <a class="settings-nav" :class="settingsSection === 'notifications' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'notifications' })" :aria-current="settingsSection === 'notifications' ? 'page' : null">Notifications</a>
+        <a class="settings-nav" :class="settingsSection === 'display' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'display' })" :aria-current="settingsSection === 'display' ? 'page' : null">Display</a>
+        <a class="settings-nav" :class="settingsSection === 'security' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'security' })" :aria-current="settingsSection === 'security' ? 'page' : null">Security</a>
+        <a class="settings-nav" :class="settingsSection === 'advanced' && 'settings-nav-active'" :href="navHref('settings', { settingsSection: 'advanced' })" :aria-current="settingsSection === 'advanced' ? 'page' : null">Advanced</a>
+      </nav>
 
       <!-- Content panel -->
       <div class="settings-content">

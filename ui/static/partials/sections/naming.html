@@ -1,5 +1,5 @@
 {{define "sections/naming"}}
-      <!-- ===== File Naming sub-tab ===== -->
+      <!-- ===== File Naming section ===== -->
       <div class="page" x-show="currentSection === 'naming'">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">File Naming</div>
         <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">TRaSH recommended naming schemes for folders and files. Select a media server tab and an instance to compare and apply.</div>
@@ -124,10 +124,10 @@
               </div>
               <!-- Media server tabs -->
               <div style="display:flex;align-items:center;border-bottom:1px solid var(--bg-muted);padding:0 16px">
-                <div class="subtab" :class="{ active: (namingMediaServer[activeAppType] || 'standard') === 'standard' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'standard'}">Standard</div>
-                <div class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'plex' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'plex'}">Plex</div>
-                <div class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'emby' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'emby'}">Emby</div>
-                <div class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'jellyfin' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'jellyfin'}">Jellyfin</div>
+                <button type="button" class="subtab" :class="{ active: (namingMediaServer[activeAppType] || 'standard') === 'standard' }" :aria-pressed="(namingMediaServer[activeAppType] || 'standard') === 'standard'" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'standard'}">Standard</button>
+                <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'plex' }" :aria-pressed="namingMediaServer[activeAppType] === 'plex'" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'plex'}">Plex</button>
+                <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'emby' }" :aria-pressed="namingMediaServer[activeAppType] === 'emby'" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'emby'}">Emby</button>
+                <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'jellyfin' }" :aria-pressed="namingMediaServer[activeAppType] === 'jellyfin'" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'jellyfin'}">Jellyfin</button>
               </div>
 
               <div style="padding:16px">
@@ -203,10 +203,10 @@
                         <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="scheme.label"></span>
                         <span x-show="scheme.recommended" style="font-size:12px;background:var(--accent-green-strong);color:var(--text-on-accent);padding:1px 6px;border-radius:3px">Recommended</span>
                         <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
-                          <span style="font-size:12px;color:var(--accent-blue);cursor:pointer" @click="copyToClipboard(scheme.pattern)">Copy</span>
+                          <button type="button" class="inline-action" style="font-size:12px;color:var(--accent-blue)" @click="copyToClipboard(scheme.pattern)">Copy</button>
                           <template x-if="namingSelectedInstance[activeAppType]">
-                            <span style="font-size:12px;color:var(--accent-orange);cursor:pointer"
-                              @click="$el.textContent='Syncing...'; $el.style.color='var(--text-secondary)'; applyNamingScheme(activeAppType, section.key, scheme).then(() => { $el.textContent='✓ Synced'; $el.style.color='var(--accent-green)'; setTimeout(() => { $el.textContent='Sync'; $el.style.color='var(--accent-orange)'; }, 2000); })">Sync</span>
+                            <button type="button" class="inline-action" style="font-size:12px;color:var(--accent-orange)"
+                              @click="$el.textContent='Syncing...'; $el.style.color='var(--text-secondary)'; applyNamingScheme(activeAppType, section.key, scheme).then(() => { $el.textContent='✓ Synced'; $el.style.color='var(--accent-green)'; setTimeout(() => { $el.textContent='Sync'; $el.style.color='var(--accent-orange)'; }, 2000); })">Sync</button>
                           </template>
                         </span>
                       </div>

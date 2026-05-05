@@ -2,11 +2,11 @@
   <!-- Sandbox Copy modal — per-row "share these release details" popup. Plain-text block
        inside a <pre> so the user can highlight portions manually, plus a one-click Copy. -->
   <div class="modal-overlay" x-show="sandboxCopyModal.show" @keydown.escape.window="sandboxCopyModal.show = false" x-cloak>
-    <div class="modal" style="max-width:720px;width:90vw">
-      <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+    <div class="modal" style="max-width:720px;width:90vw" role="dialog" aria-modal="true" aria-labelledby="modal-title-sandbox-copy" x-trap.noscroll.inert="sandboxCopyModal.show">
+      <h2 id="modal-title-sandbox-copy" class="modal-title" style="display:flex;align-items:center;gap:8px">
         <span>Release Details</span>
         <span style="font-size:11px;color:var(--text-secondary);font-weight:400">(selectable · copy for sharing)</span>
-      </div>
+      </h2>
       <pre style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:12px 14px;margin:0;max-height:60vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;color:var(--text-body);white-space:pre-wrap;user-select:text" x-text="sandboxCopyModal.text"></pre>
       <div class="modal-actions">
         <button class="btn" @click="sandboxCopyModal.show = false">Close</button>

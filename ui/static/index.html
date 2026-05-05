@@ -40,9 +40,16 @@
 </head>
 <body>
 
+<!-- Skip-link: first focusable element on the page so keyboard users can
+     jump past the topnav. preventDefault keeps location.hash clean — our
+     hash routing would otherwise interpret #main-content as a nav target. -->
+<a href="#main-content" class="skip-link"
+   onclick="event.preventDefault(); var m = document.getElementById('main-content'); if (m) m.focus();">Skip to main content</a>
+
 <div x-data="clonarr" x-init="init()" x-cloak>
 
   {{template "layout/top-nav" .}}
+  <main id="main-content" tabindex="-1">
   {{template "sections/app-pages" .}}
   {{template "sections/advanced" .}}
   {{template "overlays/profile-builder" .}}
@@ -50,6 +57,7 @@
   {{template "modals/cleanup-result" .}}
   {{template "sections/settings" .}}
   {{template "sections/about" .}}
+  </main>
   {{template "modals/instance" .}}
   {{template "modals/notification-agent" .}}
   {{template "modals/sandbox-cf-browser" .}}

@@ -9,9 +9,9 @@
       - kind="field"     → one input row (Field) bound to agentModal.config[name]
       - kind="priority"  → 3 priority levels with checkbox + number input
   -->
-  <div class="modal-overlay" x-show="agentModal.show" @click.self="agentModal.show = false" x-cloak>
-    <div class="modal" style="min-width:480px;max-width:560px">
-      <div class="modal-title" x-text="agentModal.editId ? 'Edit Notification Agent' : 'Add Notification Agent'"></div>
+  <div class="modal-overlay" x-show="agentModal.show" @click.self="agentModal.show = false" @keydown.escape.window="agentModal.show = false" x-cloak>
+    <div class="modal" style="min-width:480px;max-width:560px" role="dialog" aria-modal="true" aria-labelledby="modal-title-notification-agent" x-trap.noscroll.inert="agentModal.show">
+      <h2 id="modal-title-notification-agent" class="modal-title" x-text="agentModal.editId ? 'Edit Notification Agent' : 'Add Notification Agent'"></h2>
 
       <!-- Name -->
       <div class="form-group">

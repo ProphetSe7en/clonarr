@@ -2,9 +2,12 @@
   .topnav { display: flex; align-items: center; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); padding: 0 24px; height: 56px; }
   .topnav .logo { font-size: 18px; font-weight: 700; color: var(--accent-blue); margin-right: 32px; letter-spacing: -0.5px; }
   .topnav .tabs { display: flex; gap: 0; height: 100%; }
-  .topnav .tab { padding: 0 20px; height: 100%; display: flex; align-items: center; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; font-size: 15px; font-weight: 500; transition: all 0.15s; user-select: none; }
+  .topnav .tab { padding: 0 20px; height: 100%; display: flex; align-items: center; color: var(--text-soft); cursor: pointer; border-bottom: 2px solid transparent; font-size: 15px; font-weight: 500; transition: all 0.15s; user-select: none; text-decoration: none; }
   .topnav .tab:hover { color: var(--text-primary); }
   .topnav .tab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
+  /* Inset focus ring so it sits inside the 56px topnav cell (default
+     outline-offset would clip against the bottom border). */
+  .topnav .tab:focus-visible { outline-offset: -2px; }
   .topnav .badge { background: var(--border-subtle); color: var(--text-muted); font-size:13px; padding: 1px 6px; border-radius: 10px; margin-left: 6px; }
   .topnav .tab.active .badge { background: var(--accent-blue-muted); color: var(--accent-blue); }
   .topnav .spacer { flex: 1; }

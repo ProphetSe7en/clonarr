@@ -355,10 +355,15 @@
             <div style="overflow-y:auto;flex:1;padding:8px;background:var(--bg-page)">
               <template x-for="grp in cfgbGroupedProfiles()" :key="grp.name">
                 <div class="card" :class="'grp-' + grp.name.toLowerCase().replace(/[^a-z]/g, '')" style="margin-bottom:6px">
-                  <div class="profile-group-header" @click="cfgbToggleProfileGroupCard(grp.name)">
-                    <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }">&#9654;</span>
-                    <span style="flex:1" x-text="grp.name"></span>
-                    <span class="profile-group-count" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
+                  <div class="profile-group-header">
+                    <button type="button" class="collapse-toggle"
+                            style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
+                            @click="cfgbToggleProfileGroupCard(grp.name)"
+                            :aria-expanded="cfgbIsProfileGroupExpanded(grp.name)">
+                      <span class="profile-group-chevron" :class="{ open: cfgbIsProfileGroupExpanded(grp.name) }">&#9654;</span>
+                      <span style="flex:1" x-text="grp.name"></span>
+                      <span class="profile-group-count" x-text="cfgbGroupSelectedCount(grp) + ' / ' + grp.profiles.length"></span>
+                    </button>
                     <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted)" @click.stop x-tt="'Select all ' + grp.name + ' profiles'">
                       <input type="checkbox" :checked="cfgbGroupAllSelected(grp)" @change="cfgbToggleGroupAll(grp, $event.target.checked)">
                       all
@@ -404,11 +409,14 @@
 
         <!-- JSON preview (collapsible — Alpine pattern, matches other Clonarr collapsibles) -->
         <div style="margin-top:8px">
-          <div @click="cfgbPreviewOpen = !cfgbPreviewOpen" style="cursor:pointer;font-size:13px;color:var(--text-muted);padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
+          <button type="button" class="collapse-toggle" @click="cfgbPreviewOpen = !cfgbPreviewOpen"
+                  :aria-expanded="cfgbPreviewOpen"
+                  aria-controls="cfgb-preview-body"
+                  style="font-size:13px;color:var(--text-muted);padding:6px 0;display:flex;align-items:center;gap:6px;user-select:none">
             <span class="detail-section-chevron" :class="{ open: cfgbPreviewOpen }">▶</span>
             <span>JSON preview</span>
-          </div>
-          <pre x-show="cfgbPreviewOpen" x-cloak style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:var(--text-body);max-height:300px;overflow-y:auto" x-text="cfgbGenerateJSON()"></pre>
+          </button>
+          <pre id="cfgb-preview-body" x-show="cfgbPreviewOpen" x-cloak style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:var(--text-body);max-height:300px;overflow-y:auto" x-text="cfgbGenerateJSON()"></pre>
         </div>
       </div>
     </div>
