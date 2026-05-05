@@ -164,14 +164,14 @@ func (s *Server) handleScoringParseBatch(w http.ResponseWriter, r *http.Request)
 	}
 	// Cap is a safety net against accidental huge pastes, not a per-request
 	// rate limit — the loop below is sequential against the Arr Parse API,
-	// which is lightweight (in-process regex matching, no DB writes). 200
-	// covers practical sandbox use (TRaSH-style profile testing typically
-	// involves 50-150 release-name variants).
-	if len(req.Titles) > 200 {
-		writeError(w, 400, "Maximum 200 titles per batch")
+	// which is lightweight (in-process regex matching, no DB writes). 1000
+	// matches the Prowlarr search cap so a full search-and-score round-trip
+	// works in one batch (~100s at ~100ms/call against a healthy Arr).
+	if len(req.Titles) > 1000 {
+		writeError(w, 400, "Maximum 1000 titles per batch")
 		return
 	}
-	// Disable the global write timeout for this route — 200 sequential Parse
+	// Disable the global write timeout for this route — 1000 sequential Parse
 	// calls against a slow Arr can exceed the default 30s. Resetting the
 	// http.ResponseController gives this handler unlimited time to stream
 	// the response. The Arr request itself still has its own timeout via
