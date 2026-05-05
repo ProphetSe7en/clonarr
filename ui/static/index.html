@@ -41,10 +41,9 @@
 <body>
 
 <!-- Skip-link: first focusable element on the page so keyboard users can
-     jump past the topnav. preventDefault keeps location.hash clean — our
-     hash routing would otherwise interpret #main-content as a nav target. -->
-<a href="#main-content" class="skip-link"
-   onclick="event.preventDefault(); var m = document.getElementById('main-content'); if (m) m.focus();">Skip to main content</a>
+     jump past the topnav. Click is intercepted by registerSkipLinkHandler()
+     in main.js (CSP-tightening compatibility — no inline onclick). -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
 <div x-data="clonarr" x-init="init()" x-cloak>
 
