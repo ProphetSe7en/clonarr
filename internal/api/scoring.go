@@ -12,10 +12,23 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 // --- Scoring Sandbox ---
+
+// Prowlarr search cooldown: prevent rapid-fire Sandbox searches that could
+// trigger tracker rate-limits / bans. 120s between searches is generous for
+// realistic Sandbox use (search → look at results → score-select → repeat)
+// and aggressive enough to stop button-mash abuse. In-memory state, single-
+// tenant, no persistence — resets on container restart.
+const prowlarrSearchCooldown = 120 * time.Second
+
+var (
+	prowlarrSearchMu     sync.Mutex
+	prowlarrSearchLastAt time.Time
+)
 
 func (s *Server) handleTestProwlarr(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -85,6 +98,20 @@ func (s *Server) handleScoringProwlarrSearch(w http.ResponseWriter, r *http.Requ
 		writeError(w, 400, "Prowlarr not configured or disabled")
 		return
 	}
+
+	// Cooldown check — block rapid-fire searches before they hit Prowlarr.
+	prowlarrSearchMu.Lock()
+	elapsed := time.Since(prowlarrSearchLastAt)
+	if !prowlarrSearchLastAt.IsZero() && elapsed < prowlarrSearchCooldown {
+		retryAfter := int((prowlarrSearchCooldown - elapsed).Seconds()) + 1
+		prowlarrSearchMu.Unlock()
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+		writeError(w, 429, fmt.Sprintf("Search rate limited — wait %ds before searching again", retryAfter))
+		return
+	}
+	prowlarrSearchLastAt = time.Now()
+	prowlarrSearchMu.Unlock()
+
 	client := arr.NewProwlarrClient(cfg.Prowlarr.URL, cfg.Prowlarr.APIKey, s.Core.HTTPClient)
 	releases, err := client.Search(req.Query, req.Categories, req.IndexerIDs)
 	if err != nil {
@@ -359,12 +386,20 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 	}
 
 	// QualityRanks maps each ALLOWED quality name to its rank in the
-	// active profile (low rank = lower priority, group members share
-	// the group's outer rank). Disallowed qualities are omitted so the
-	// sandbox can use absence-in-map as the "Sonarr/Radarr would reject
-	// this quality" signal — that turns the sandbox PASS/FAIL into a
-	// real Sonarr/Radarr search-result simulation, not just a score
-	// threshold check.
+	// active profile. Convention: HIGHER rank = HIGHER priority, group
+	// members share the group's outer rank. Disallowed qualities are
+	// omitted so the sandbox can use absence-in-map as the "Sonarr/
+	// Radarr would reject this quality" signal — that turns the
+	// sandbox PASS/FAIL into a real Sonarr/Radarr search-result
+	// simulation, not just a score threshold check.
+	//
+	// Convention NOTE: TRaSH JSON and Recyclarr YAML store items[]
+	// HIGHEST-FIRST (items[0] = recommended quality), but Arr's
+	// /qualityprofile API returns items[] HIGHEST-LAST (items[len-1]
+	// = top of Arr UI = highest priority). To unify, we invert the
+	// index for trash + import sources so all three populate the same
+	// "high rank = high priority" convention. Sort logic in scoring.js
+	// then ranks deterministically across all profile types.
 	result := struct {
 		Scores       []ScoreEntry   `json:"scores"`
 		MinScore     int            `json:"minScore"`
@@ -382,25 +417,30 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		// Find profile for minFormatScore + quality ranks. Outer index
-		// is the rank; group members share the group's index. Only
-		// Allowed=true items are recorded so the sandbox can use map-
-		// absence as the "Sonarr/Radarr would reject this quality"
-		// signal — TRaSH guide confirms "Only checked qualities are
-		// wanted" for both Radarr and Sonarr.
+		// Find profile for minFormatScore + quality ranks. TRaSH JSON
+		// stores items[] HIGHEST-FIRST (items[0] = recommended quality),
+		// so we invert the index to match the "high rank = high priority"
+		// convention used everywhere else (sort code, inst-source).
+		// Group members share the group's outer rank. Only Allowed=true
+		// items are recorded so the sandbox can use map-absence as the
+		// "Sonarr/Radarr would reject this quality" signal — TRaSH guide
+		// confirms "Only checked qualities are wanted" for both
+		// Radarr and Sonarr.
 		for _, p := range ad.Profiles {
 			if p.TrashID == trashID {
 				result.MinScore = p.MinFormatScore
+				n := len(p.Items)
 				for idx, it := range p.Items {
 					if !it.Allowed {
 						continue
 					}
+					rank := n - 1 - idx
 					if len(it.Items) > 0 {
 						for _, sub := range it.Items {
-							result.QualityRanks[sub] = idx
+							result.QualityRanks[sub] = rank
 						}
 					} else {
-						result.QualityRanks[it.Name] = idx
+						result.QualityRanks[it.Name] = rank
 					}
 				}
 				break
@@ -454,18 +494,22 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		result.MinScore = prof.MinFormatScore
-		// Quality ranks — only Allowed items, same outer-index-as-rank
-		// rule as trash branch (see comment there).
+		// Quality ranks — only Allowed items. Imported profiles inherit
+		// TRaSH/Recyclarr's HIGHEST-FIRST item order, so invert idx to
+		// match the "high rank = high priority" convention (see top
+		// comment).
+		nq := len(prof.Qualities)
 		for idx, it := range prof.Qualities {
 			if !it.Allowed {
 				continue
 			}
+			rank := nq - 1 - idx
 			if len(it.Items) > 0 {
 				for _, sub := range it.Items {
-					result.QualityRanks[sub] = idx
+					result.QualityRanks[sub] = rank
 				}
 			} else {
-				result.QualityRanks[it.Name] = idx
+				result.QualityRanks[it.Name] = rank
 			}
 		}
 
@@ -514,10 +558,13 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 						Score:   fi.Score,
 					})
 				}
-				// Quality ranks — only Allowed items. Outer index is the
-				// rank; group members share the group's outer index.
-				// Arr returns nested ArrQualityItem so we walk inside
-				// each outer item without bumping the rank.
+				// Quality ranks — only Allowed items. Arr's qualityprofile
+				// API returns items[] HIGHEST-LAST (items[0] = lowest
+				// priority, items[len-1] = top of UI = highest priority),
+				// which already matches our "high rank = high priority"
+				// convention — use idx directly. Group members share the
+				// group's outer index. Arr returns nested ArrQualityItem
+				// so we walk inside each outer item without bumping rank.
 				for idx, it := range p.Items {
 					if !it.Allowed {
 						continue

@@ -152,16 +152,27 @@ export default {
         const q = r.parsed?.quality || '';
         return (qRank && q in qRank) ? qRank[q] : -1;
       };
+      // Pass/fail outer key for score + quality sorts. PASS rows always
+      // group above FAIL rows regardless of asc/desc on the secondary
+      // keys — intermixing passes and fails (e.g. score-too-low rows
+      // landing between higher-scoring passes of the same quality)
+      // makes the table read as random. FAIL rows still sort by the
+      // same quality+score logic within their own block.
+      const passOf = (r) => this.sandboxResultStatus(r, r.scoring, appType).pass ? 1 : 0;
       results.sort((a, b) => {
         switch (col) {
           case 'score': {
-            // Quality first (dir flips both keys together), score within quality.
+            // Pass/fail outer, then quality, then score within quality.
+            const dp = passOf(b) - passOf(a);
+            if (dp !== 0) return dp;
             const dq = rankOf(a) - rankOf(b);
             if (dq !== 0) return dir * dq;
             return dir * ((a.scoring?.total ?? -99999) - (b.scoring?.total ?? -99999));
           }
           case 'quality': {
-            // Pure quality sort — title as tie-break for stable display.
+            // Pass/fail outer, then quality rank, title as final tie-break.
+            const dp = passOf(b) - passOf(a);
+            if (dp !== 0) return dp;
             const dq = rankOf(a) - rankOf(b);
             if (dq !== 0) return dir * dq;
             return (a.title || '').localeCompare(b.title || '');
@@ -402,6 +413,7 @@ export default {
       const sb = this.sandbox[appType];
       const query = sb.searchQuery?.trim();
       if (!query) return;
+      if (sb.searchCooldownRemaining > 0) return;
       if (sb.searchAbort) sb.searchAbort.abort();
       const abort = new AbortController();
       sb.searchAbort = abort;
@@ -428,14 +440,42 @@ export default {
           body: JSON.stringify({ query, categories, indexerIds }),
           signal: abort.signal
         });
+        if (r.status === 429) {
+          // Server cooldown active — sync our timer to the server's Retry-After
+          // so the button reflects actual time remaining. Defends against
+          // multiple browser tabs / lost-state edge cases.
+          const retryAfter = parseInt(r.headers.get('Retry-After'), 10) || 120;
+          this.startSearchCooldown(appType, retryAfter);
+          const e = await r.json().catch(() => ({}));
+          sb.searchError = e.error || `Search rate limited — wait ${retryAfter}s`;
+          return;
+        }
         if (!r.ok) { const e = await r.json().catch(() => ({})); sb.searchError = e.error || 'Search failed'; return; }
         const results = await r.json();
         sb.searchResults = results.map(r => ({ ...r, _selected: false }));
+        // Successful search → start 120s cooldown to match server.
+        this.startSearchCooldown(appType, 120);
       } catch (e) {
         if (e.name === 'AbortError') { sb.searchError = ''; return; }
         sb.searchError = 'Search error: ' + e.message;
       }
       finally { sb.searching = false; sb.searchAbort = null; }
+    },
+
+    // Per-app-type cooldown ticker. setInterval lives only while cooldown
+    // is active — cleaned up when remaining hits 0 or another search starts.
+    // No global timer, no leaked intervals.
+    startSearchCooldown(appType, seconds) {
+      const sb = this.sandbox[appType];
+      sb.searchCooldownRemaining = seconds;
+      if (sb._searchCooldownTimer) clearInterval(sb._searchCooldownTimer);
+      sb._searchCooldownTimer = setInterval(() => {
+        sb.searchCooldownRemaining = Math.max(0, sb.searchCooldownRemaining - 1);
+        if (sb.searchCooldownRemaining === 0) {
+          clearInterval(sb._searchCooldownTimer);
+          sb._searchCooldownTimer = null;
+        }
+      }, 1000);
     },
 
     sandboxCancelSearch(appType) {
