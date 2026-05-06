@@ -5,8 +5,8 @@ export default {
     namingInstanceData: {},
     namingApplyResult: {},
     namingMediaServer: {},
-    namingPlexSingleEntry: {},
     namingFAQExpanded: false,
+    namingIDInfoExpanded: false,
   },
 
   methods: {
@@ -24,33 +24,30 @@ export default {
       return this.namingData[appType] || null;
     },
 
-    getNamingSections(appType, mediaServer, plexSingleEntry) {
+    getNamingSections(appType, mediaServer) {
       const n = this.getNaming(appType);
       if (!n) return [];
       const ms = mediaServer || 'standard';
 
-      // Descriptions sourced verbatim from TRaSH-Guides where available.
-      // Schemes without TRaSH-authored descriptions have no desc field.
-      // The "recommended" flag is set per-app below (perAppRecommended) — TRaSH
-      // recommends TMDb for Radarr (movies) and TVDb for Sonarr (TV) because
-      // those guarantee a metadata match. IMDb is only matched indirectly via
-      // the TMDb/TVDb entry's IMDb-ID association. See
-      // includes/{radarr,sonarr}/{tmdb,tvdb}-imdb-info.md in the TRaSH repo.
+      // Labels only — descriptions are sourced from TRaSH JSON if present
+      // (currently absent across all keys; TRaSH plans to add descriptions per
+      // scheme in a future release). When that lands, makeSchemes below reads
+      // them straight from the JSON and the existing UI render-paths pick them
+      // up automatically (HTML uses x-show="scheme.description" / "section.description").
+      // No "recommended" flag — Clonarr does not editorialize on top of TRaSH's
+      // own JSON; users decide which variant suits them.
       const schemeDesc = {
-        // 'standard' (file) — TRaSH lists this as the first tab in "Standard Movie/Series Format"
-        // section but does NOT explicitly call this specific variant "recommended". The whole
-        // section title implies recommendation, but per-variant text is silent. No badge.
         'standard': { label: 'Standard' },
-        // 'default' (folder) — TRaSH MD says verbatim "The minimum needed and recommended format"
-        // for the "Standard Folder" tab (which maps to this key). Explicit endorsement → badge.
-        'default': { label: 'Default', recommended: true },
-        'original': { label: 'Original Title', desc: 'Another option is to use {Original Title} instead of the recommended naming scheme above. {Original Title} uses the title of the release, which includes all the information from the release itself. The benefit of this naming scheme is that it prevents download loops that can happen during import when there\'s a mismatch between the release title and the file contents (for example, if the release title says DTS-ES but the contents are actually DTS). The downside is that you have less control over how the files are named.' },
-        'p2p-scene': { label: 'P2P / Scene', desc: 'Use P2P/Scene naming if you don\'t like spaces and brackets in the filename. It\'s the closest to the P2P/scene naming scheme, except it uses the exact audio and HDR formats from the media file, where the original release or filename might be unclear.' },
+        'default': { label: 'Default' },
+        'original': { label: 'Original Title' },
+        'p2p-scene': { label: 'P2P / Scene' },
         'plex-imdb': { label: 'Plex (IMDb)' },
         'plex-tmdb': { label: 'Plex (TMDb)' },
         'plex-tvdb': { label: 'Plex (TVDb)' },
         'plex-anime-imdb': { label: 'Plex Anime (IMDb)' },
         'plex-anime-tmdb': { label: 'Plex Anime (TMDb)' },
+        'plex-edition-alt-imdb': { label: 'Plex (IMDb, single entry)' },
+        'plex-edition-alt-tmdb': { label: 'Plex (TMDb, single entry)' },
         'emby-imdb': { label: 'Emby (IMDb)' },
         'emby-tmdb': { label: 'Emby (TMDb)' },
         'emby-tvdb': { label: 'Emby (TVDb)' },
@@ -61,19 +58,6 @@ export default {
         'jellyfin-tvdb': { label: 'Jellyfin (TVDb)' },
         'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)' },
         'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)' },
-      };
-
-      // Per-app "Recommended" badge. TRaSH's tmdb-imdb-info.md (Radarr) and
-      // tvdb-imdb-info.md (Sonarr) state that TMDb/TVDb are usually better
-      // because they guarantee a metadata match, whereas IMDb only matches
-      // indirectly via the TMDb/TVDb entry's IMDb-ID association.
-      // Anime variants are NOT in this set: TRaSH endorses TMDb/TVDb over IMDb
-      // generally, but does not explicitly call out the anime variants as
-      // "recommended" — the prose targets the regular media-server schemes.
-      // Sonarr's naming JSON also has no anime variants in series naming.
-      const perAppRecommended = {
-        radarr: new Set(['plex-tmdb', 'emby-tmdb', 'jellyfin-tmdb']),
-        sonarr: new Set(['plex-tvdb', 'emby-tvdb', 'jellyfin-tvdb']),
       };
 
       // Media server key filters
@@ -87,14 +71,6 @@ export default {
       const filterFn = ms === 'standard'
         ? k => standardKeys.has(k)
         : (msFilters[ms] || (() => true));
-
-      const applyEditionToggle = (pattern, example) => {
-        if (!plexSingleEntry || ms !== 'plex') return { pattern, example };
-        return {
-          pattern: pattern.replace(/\{edition-\{Edition Tags\}\}/g, '{Edition Tags}'),
-          example: example ? example.replace(/\{edition-([^}]+)\}/g, '$1') : example,
-        };
-      };
 
       const radarrExamples = {
         folder: {
@@ -143,54 +119,43 @@ export default {
       };
 
       // Enforce consistent ordering
-      const keyOrder = ['standard', 'default', 'plex-imdb', 'plex-tmdb', 'plex-anime-imdb', 'plex-anime-tmdb', 'plex-tvdb',
+      const keyOrder = ['standard', 'default', 'plex-imdb', 'plex-tmdb', 'plex-anime-imdb', 'plex-anime-tmdb',
+        'plex-edition-alt-imdb', 'plex-edition-alt-tmdb', 'plex-tvdb',
         'emby-imdb', 'emby-tmdb', 'emby-anime-imdb', 'emby-anime-tmdb', 'emby-tvdb',
         'jellyfin-imdb', 'jellyfin-tmdb', 'jellyfin-anime-imdb', 'jellyfin-anime-tmdb', 'jellyfin-tvdb',
         'original', 'p2p-scene'];
 
+      // Pattern values can be plain strings (current TRaSH JSON shape) OR
+      // objects with `pattern`/`description` once TRaSH adds per-scheme
+      // descriptions. Code handles both shapes so the future migration is
+      // a no-op for us.
       const makeSchemes = (map, sectionKey, examplesMap) => {
         const entries = Object.entries(map || {}).filter(([key]) => filterFn(key));
         entries.sort((a, b) => {
           const ai = keyOrder.indexOf(a[0]), bi = keyOrder.indexOf(b[0]);
           return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-        return entries.map(([key, pattern]) => {
+        return entries.map(([key, value]) => {
           const meta = schemeDesc[key] || { label: key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) };
-          const ed = applyEditionToggle(pattern, examplesMap?.[key] || '');
+          // Future-compat: TRaSH may ship descriptions per scheme. Accept both
+          // string-pattern and {pattern, description} object shapes.
+          const pattern = typeof value === 'string' ? value : (value?.pattern || '');
+          const trashDesc = typeof value === 'object' ? (value?.description || '') : '';
           return {
             key,
             label: meta.label || key,
-            recommended: meta.recommended || perAppRecommended[appType]?.has(key) || false,
-            description: meta.desc || '',
-            pattern: ed.pattern,
-            example: ed.example,
+            description: trashDesc,
+            pattern,
+            example: examplesMap?.[key] || '',
           };
         });
       };
 
       const sections = [];
 
-      // Section descriptions sourced verbatim from TRaSH-Guides where available.
-      // Sonarr: docs/Sonarr/Sonarr-recommended-naming-scheme.md
-      // Radarr: docs/Radarr/Radarr-recommended-naming-scheme.md (+ includes/radarr/radarr-folder-name-after-year-info.md)
-      const radarrFileDesc = {
-        standard: '',
-        plex: 'This naming scheme is designed to work with the New Plex Agent.',
-        emby: 'Source: Emby Wiki/Docs',
-        jellyfin: 'Source: Jellyfin Wiki/Docs',
-      };
-      const radarrFolderDesc = {
-        standard: 'The minimum needed and recommended format',
-        plex: 'Keep in mind adding anything additional after the release year could give issues during a fresh import into Radarr, but it can help for movies that have the same release name and year',
-        emby: 'Keep in mind adding anything additional after the release year could give issues during a fresh import into Radarr, but it can help for movies that have the same release name and year',
-        jellyfin: 'Keep in mind adding anything additional after the release year could give issues during a fresh import into Radarr, but it can help for movies that have the same release name and year',
-      };
-      const sonarrSeriesDesc = {
-        standard: '',
-        plex: 'This naming scheme is made to be used with the New Plex TV Series Scanner.',
-        emby: 'Source: Emby Wiki/Docs',
-        jellyfin: 'Source: Jellyfin Wiki/Docs — Jellyfin doesn\'t support IMDb IDs for shows.',
-      };
+      // No editorial section descriptions — Clonarr does not commentary on top
+      // of TRaSH JSON. When TRaSH ships descriptions per scheme/section in JSON,
+      // makeSchemes above reads them through automatically.
 
       if (appType === 'radarr') {
         // File format first, folder second
@@ -200,9 +165,8 @@ export default {
             key: 'file',
             label: 'Standard Movie Format',
             exampleLabel: 'Movie',
-            description: radarrFileDesc[ms] || '',
+            description: '',
             schemes: fileSchemes,
-            showEditionToggle: ms === 'plex',
           });
         }
         const folderSchemes = makeSchemes(n.folder, 'folder', radarrExamples.folder);
@@ -211,7 +175,7 @@ export default {
             key: 'folder',
             label: 'Movie Folder Format',
             exampleLabel: 'Folder',
-            description: radarrFolderDesc[ms] || '',
+            description: '',
             schemes: folderSchemes,
           });
         }
@@ -235,16 +199,27 @@ export default {
           key: 'series',
           label: 'Series Folder Format',
           exampleLabel: 'Series',
-          description: sonarrSeriesDesc[ms] || '',
+          description: '',
           schemes: seriesSchemes,
         });
-        if (n.season && ms === 'standard') {
+        // Season folder shows on every media-server tab — pattern doesn't vary
+        // by server, and hiding it on Plex/Emby/Jellyfin tabs made users think
+        // it had disappeared. Bypass the ms-filter (TRaSH ships only `default`
+        // for season; if per-server variants are ever added, makeSchemes can
+        // be reintroduced here).
+        if (n.season) {
+          const seasonSchemes = Object.entries(n.season).map(([key, value]) => {
+            const meta = schemeDesc[key] || { label: key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) };
+            const pattern = typeof value === 'string' ? value : (value?.pattern || '');
+            const trashDesc = typeof value === 'object' ? (value?.description || '') : '';
+            return { key, label: meta.label || key, description: trashDesc, pattern, example: key === 'default' ? 'Season 01' : '' };
+          });
           sections.push({
             key: 'season',
             label: 'Season Folder Format',
             exampleLabel: 'Season',
-            description: 'For this, there\'s only one real option to use in our opinion.',
-            schemes: makeSchemes(n.season, 'season', { 'default': 'Season 01' }),
+            description: '',
+            schemes: seasonSchemes,
           });
         }
       }
@@ -272,20 +247,79 @@ export default {
       } catch (e) { console.error('Failed to load instance naming:', e); }
     },
 
+    // Maps section keys to the matching field on namingInstanceData so the
+    // confirm-modal can show "Currently: X / Change to: Y" before applying.
+    namingCurrentFieldFor(appType, sectionKey) {
+      if (appType === 'radarr') {
+        if (sectionKey === 'file') return 'standardMovieFormat';
+        if (sectionKey === 'folder') return 'movieFolderFormat';
+      } else {
+        if (sectionKey === 'episodes-standard') return 'standardEpisodeFormat';
+        if (sectionKey === 'episodes-daily') return 'dailyEpisodeFormat';
+        if (sectionKey === 'episodes-anime') return 'animeEpisodeFormat';
+        if (sectionKey === 'series') return 'seriesFolderFormat';
+        if (sectionKey === 'season') return 'seasonFolderFormat';
+      }
+      return null;
+    },
+
+    // Open confirmModal with current → new pattern preview before applying.
+    // Per feedback_dryrun_preview: destructive-ish UI ops should show a
+    // concrete preview, not just "Are you sure?".
+    confirmApplyNamingScheme(appType, sectionKey, scheme) {
+      const instId = this.namingSelectedInstance[appType];
+      if (!instId) return;
+      const instName = this.getInstanceName(appType, instId);
+      const fieldName = this.namingCurrentFieldFor(appType, sectionKey);
+      const currentPattern = fieldName ? (this.namingInstanceData[appType]?.[fieldName] || '(not set)') : '(unknown)';
+      const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const sectionLabel = sectionKey.startsWith('episodes-')
+        ? 'Episode (' + sectionKey.slice(9) + ')'
+        : sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1);
+      const message =
+        '<div style="margin-bottom:10px">Apply <strong>' + escapeHtml(scheme.label) + '</strong> ' + escapeHtml(sectionLabel) + ' naming to <strong>' + escapeHtml(instName) + '</strong>?</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:14px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Currently</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-muted)">' + escapeHtml(currentPattern) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Change to</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--accent-orange);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' + escapeHtml(scheme.pattern) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;font-style:italic">Existing files in ' + escapeHtml(instName) + ' will be renamed on next sync if "Rename" is enabled there.</div>';
+      this.confirmModal = {
+        show: true,
+        title: 'Apply naming scheme',
+        message,
+        html: true,
+        confirmLabel: 'Apply',
+        cancelLabel: 'Cancel',
+        onConfirm: () => this.applyNamingScheme(appType, sectionKey, scheme),
+        onCancel: () => {},
+      };
+    },
+
     async applyNamingScheme(appType, sectionKey, scheme) {
       const instId = this.namingSelectedInstance[appType];
       if (!instId) return;
       const instName = this.getInstanceName(appType, instId);
-      const body = {};
-      if (sectionKey === 'folder' || sectionKey === 'series' || sectionKey === 'season') {
-        body[sectionKey] = scheme.pattern;
-        if (sectionKey === 'series') body.series = scheme.pattern;
-        if (sectionKey === 'season') body.season = scheme.pattern;
-        if (sectionKey === 'folder') body.folder = scheme.pattern;
-      } else {
-        // file/episodes section
-        body.file = scheme.pattern;
+      // Maps section keys to the request-body field expected by handleApplyNaming
+      // in internal/api/instances.go. Backend reads body.{field} and writes it
+      // to the matching Arr setting (req.Daily → animeEpisodeFormat, etc.).
+      // Pre-fix bug: all episode types fell through to body.file, so syncing
+      // Daily or Anime overwrote standardEpisodeFormat instead of the targeted
+      // format. Now explicit per-section mapping.
+      const fieldMap = {
+        'file': 'file',                  // Radarr movie file format → standardMovieFormat
+        'folder': 'folder',              // Radarr movie folder format → movieFolderFormat
+        'series': 'series',              // Sonarr series folder → seriesFolderFormat
+        'season': 'season',              // Sonarr season folder → seasonFolderFormat
+        'episodes-standard': 'file',     // Sonarr standardEpisodeFormat (backend uses "file" key for it)
+        'episodes-daily': 'daily',       // Sonarr dailyEpisodeFormat
+        'episodes-anime': 'anime',       // Sonarr animeEpisodeFormat
+      };
+      const field = fieldMap[sectionKey];
+      if (!field) {
+        this.namingApplyResult = { ...this.namingApplyResult, [appType]: `Unknown section: ${sectionKey}` };
+        return;
       }
+      const body = { [field]: scheme.pattern };
       try {
         const r = await fetch(`/api/instances/${instId}/naming`, {
           method: 'PUT',

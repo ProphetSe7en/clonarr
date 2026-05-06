@@ -2,7 +2,7 @@
       <!-- ===== File Naming section ===== -->
       <div class="page" x-show="currentSection === 'naming'">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">File Naming</div>
-        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">TRaSH recommended naming schemes for folders and files. Select a media server tab and an instance to compare and apply.</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">TRaSH recommended naming schemes for folders and files. Select a media server tab and an instance to compare and apply.</div>
         <!-- Shared info cards — text sourced verbatim from TRaSH-Guides:
              includes/starr/renaming-description-faq.md
              includes/{sonarr,radarr}/{imdb-vs-tvdb,imdb-vs-tmdb}.md
@@ -11,19 +11,19 @@
           <div style="padding:12px 16px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px"
                @click="namingFAQExpanded = !namingFAQExpanded">
             <span class="detail-section-chevron" :class="{ open: namingFAQExpanded }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-            <span style="font-weight:600;color:var(--text-primary);font-size:15px">Why use a naming scheme?</span>
-            <span style="font-size:12px;color:var(--text-secondary);margin-left:auto" x-show="!namingFAQExpanded">click to expand</span>
+            <span style="font-weight:600;color:var(--text-primary);font-size:14px">Why use a naming scheme?</span>
+            <span style="font-size:11px;color:var(--text-secondary);margin-left:auto" x-show="!namingFAQExpanded">click to expand</span>
           </div>
           <div x-show="namingFAQExpanded" x-cloak style="padding:0 16px 14px;border-top:1px solid var(--bg-muted)">
             <!-- Intro: verbatim from includes/starr/renaming-description-faq.md -->
-            <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:10px">
+            <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-top:10px">
               While naming is a personal choice, adding non-recoverable information to your filenames is strongly recommended for several good reasons.
             </div>
 
             <!-- Q1 -->
             <div style="margin-top:14px">
-              <div style="font-weight:600;color:var(--text-body);font-size:14px;margin-bottom:4px">Why should I include extra information in filenames?</div>
-              <ul style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
+              <div style="font-weight:600;color:var(--text-body);font-size:13px;margin-bottom:4px">Why should I include extra information in filenames?</div>
+              <ul style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
                 <li><strong style="color:var(--text-body)">Easy re-imports</strong> — If you ever need to reinstall or re-import your media in Radarr/Sonarr or media servers like Plex/Emby/Jellyfin, having all the details in the filename helps everything get imported correctly. Without this info, files might get wrongly identified as HDTV or WEB-DL quality.</li>
                 <li><strong style="color:var(--text-body)">Prevents duplicate downloads</strong> — Radarr/Sonarr won't accidentally download the same file again.</li>
               </ul>
@@ -31,8 +31,8 @@
 
             <!-- Q2 -->
             <div style="margin-top:14px">
-              <div style="font-weight:600;color:var(--text-body);font-size:14px;margin-bottom:4px">What's non-recoverable information and can't be recovered later?</div>
-              <ul style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
+              <div style="font-weight:600;color:var(--text-body);font-size:13px;margin-bottom:4px">What's non-recoverable information and can't be recovered later?</div>
+              <ul style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
                 <li><strong style="color:var(--text-body)">Quality source</strong> (HDTV, WEB-DL, Blu-ray, Remux, etc.)</li>
                 <li><strong style="color:var(--text-body)">Release group</strong> (the team that created the release)</li>
                 <li><strong style="color:var(--text-body)">Edition type</strong> (Director's Cut, Theatrical, Unrated, etc.)</li>
@@ -42,8 +42,8 @@
 
             <!-- Q3 -->
             <div style="margin-top:14px">
-              <div style="font-weight:600;color:var(--text-body);font-size:14px;margin-bottom:4px">Why is the non-recoverable information important/needed?</div>
-              <ul style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
+              <div style="font-weight:600;color:var(--text-body);font-size:13px;margin-bottom:4px">Why is the non-recoverable information important/needed?</div>
+              <ul style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
                 <li><strong style="color:var(--text-body)">Stops download loops</strong> — With proper naming, Radarr/Sonarr knows what you already have.</li>
                 <li><strong style="color:var(--text-body)">Quality source</strong> — Can you tell what quality <code style="background:var(--bg-page);padding:1px 4px;border-radius:3px;color:var(--code-string)">Movie (2023).mkv</code> is just by looking at it? Probably not. Without this info, you can't easily upgrade or downgrade your files, and you might download the same movie or TV show again.</li>
                 <li><strong style="color:var(--text-body)">Release group</strong> — Knowing the release group helps you identify if there are known issues with that specific release. It also helps you find extra information about hybrid releases or source materials.</li>
@@ -54,16 +54,16 @@
 
             <!-- Q4 -->
             <div style="margin-top:14px">
-              <div style="font-weight:600;color:var(--text-body);font-size:14px;margin-bottom:4px">Don't Plex, Emby, and Jellyfin work fine with simple names like <code style="background:var(--bg-page);padding:1px 4px;border-radius:3px;color:var(--code-string)">movie (year).ext</code> / <code style="background:var(--bg-page);padding:1px 4px;border-radius:3px;color:var(--code-string)">tv showname SxxExx.ext</code>?</div>
-              <ul style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
+              <div style="font-weight:600;color:var(--text-body);font-size:13px;margin-bottom:4px">Don't Plex, Emby, and Jellyfin work fine with simple names like <code style="background:var(--bg-page);padding:1px 4px;border-radius:3px;color:var(--code-string)">movie (year).ext</code> / <code style="background:var(--bg-page);padding:1px 4px;border-radius:3px;color:var(--code-string)">tv showname SxxExx.ext</code>?</div>
+              <ul style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
                 <li>Yes, they do work with simple names. However, these media servers only care about organizing and playing your files — they don't track quality or help prevent duplicate downloads. That's what Radarr/Sonarr handles.</li>
               </ul>
             </div>
 
             <!-- Q5 -->
             <div style="margin-top:14px">
-              <div style="font-weight:600;color:var(--text-body);font-size:14px;margin-bottom:4px">Why are the recommended filenames so long?</div>
-              <ul style="font-size:12px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
+              <div style="font-weight:600;color:var(--text-body);font-size:13px;margin-bottom:4px">Why are the recommended filenames so long?</div>
+              <ul style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 0 18px;padding:0">
                 <li><strong style="color:var(--text-body)">Complete information</strong> — To ensure your files have all the details needed to prevent download loops after import.</li>
                 <li><strong style="color:var(--text-body)">Only used parts show up</strong> — If your file doesn't have certain attributes (like being a repack), those parts won't appear in the filename.</li>
                 <li><strong style="color:var(--text-body)">Media servers hide filenames anyway</strong> — Plex, Emby, and Jellyfin display movie titles and show information, not the actual filename, so the length doesn't matter for viewing.</li>
@@ -74,26 +74,33 @@
           </div>
         </div>
 
-        <div class="card" style="padding:14px 16px;margin:12px 0 0">
-          <div style="font-weight:600;margin-bottom:8px;color:var(--text-primary);font-size:13px" x-text="activeAppType === 'radarr' ? 'IMDb vs TMDb' : 'IMDb vs TVDb'"></div>
-          <!-- Info banner — leads the card so the most actionable line is the first thing the user sees.
-               Verbatim from includes/{radarr,sonarr}/{tmdb,tvdb}-imdb-info.md (TRaSH renders these as
-               !!! info admonitions; we use a blue info box with an ⓘ icon to match the visual semantics
-               while keeping the wording byte-for-byte identical to the source). -->
-          <div style="font-size:12px;line-height:1.6;padding:8px 10px;background:var(--fill-blue-soft);border-left:3px solid var(--accent-blue);border-radius:3px;color:var(--text-body);display:flex;align-items:flex-start;gap:8px">
-            <span style="color:var(--accent-blue);font-size:14px;line-height:1.4;flex-shrink:0">&#9432;</span>
-            <strong style="color:var(--text-body);font-weight:600" x-text="activeAppType === 'radarr'
-              ? 'TMDb is usually better as it guarantees a match, IMDb only gets matched if the TMDb entry has the correct IMDb ID association.'
-              : 'TVDb is usually better as it guarantees a match, IMDb only gets matched if the TVDb entry has the correct IMDb ID association.'"></strong>
+        <!-- IMDb vs TMDb/TVDb card — collapsible, default closed. Same pattern
+             as the "Why use a naming scheme?" card above so the two info cards
+             behave consistently. -->
+        <div class="card" style="padding:0;margin:12px 0 0;overflow:hidden">
+          <div style="padding:12px 16px;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px"
+               @click="namingIDInfoExpanded = !namingIDInfoExpanded">
+            <span class="detail-section-chevron" :class="{ open: namingIDInfoExpanded }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
+            <span style="font-weight:600;color:var(--text-primary);font-size:14px" x-text="activeAppType === 'radarr' ? 'IMDb vs TMDb' : 'IMDb vs TVDb'"></span>
+            <span style="font-size:11px;color:var(--text-secondary);margin-left:auto" x-show="!namingIDInfoExpanded">click to expand</span>
           </div>
-          <!-- Trade-off context — verbatim from includes/{radarr,sonarr}/imdb-vs-{tmdb,tvdb}.md -->
-          <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:10px"
-               x-text="activeAppType === 'radarr'
-            ? 'While both IMDb and TMDb IDs are unique, TMDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TMDb as its metadata source, they can be seen as \'more aligned\' with Radarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'
-            : 'While both IMDb and TVDb IDs are unique, TVDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TVDb as its metadata source, they can be seen as \'more aligned\' with Sonarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'"></div>
-          <div style="font-size:11px;color:var(--text-secondary);margin-top:8px;font-style:italic" x-text="activeAppType === 'radarr'
-            ? 'Source: TRaSH-Guides — includes/radarr/{tmdb-imdb-info,imdb-vs-tmdb}.md'
-            : 'Source: TRaSH-Guides — includes/sonarr/{tvdb-imdb-info,imdb-vs-tvdb}.md'"></div>
+          <div x-show="namingIDInfoExpanded" x-cloak style="padding:0 16px 14px;border-top:1px solid var(--bg-muted)">
+            <!-- Info banner verbatim from includes/{radarr,sonarr}/{tmdb,tvdb}-imdb-info.md -->
+            <div style="font-size:13px;line-height:1.6;padding:8px 10px;margin-top:10px;background:var(--fill-blue-soft);border-left:3px solid var(--accent-blue);border-radius:3px;color:var(--text-body);display:flex;align-items:flex-start;gap:8px">
+              <span style="color:var(--accent-blue);font-size:14px;line-height:1.4;flex-shrink:0">&#9432;</span>
+              <strong style="color:var(--text-body);font-weight:600" x-text="activeAppType === 'radarr'
+                ? 'TMDb is usually better as it guarantees a match, IMDb only gets matched if the TMDb entry has the correct IMDb ID association.'
+                : 'TVDb is usually better as it guarantees a match, IMDb only gets matched if the TVDb entry has the correct IMDb ID association.'"></strong>
+            </div>
+            <!-- Trade-off context verbatim from includes/{radarr,sonarr}/imdb-vs-{tmdb,tvdb}.md -->
+            <div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-top:10px"
+                 x-text="activeAppType === 'radarr'
+              ? 'While both IMDb and TMDb IDs are unique, TMDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TMDb as its metadata source, they can be seen as \'more aligned\' with Radarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'
+              : 'While both IMDb and TVDb IDs are unique, TVDb can occasionally remove IDs entirely, sometimes only to be re-added with a new ID later. However, due to using TVDb as its metadata source, they can be seen as \'more aligned\' with Sonarr. IMDb IDs on the other hand, once present, are very accurate and rarely ever change.'"></div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:14px;font-style:italic" x-text="activeAppType === 'radarr'
+              ? 'Source: TRaSH-Guides — includes/radarr/{tmdb-imdb-info,imdb-vs-tmdb}.md'
+              : 'Source: TRaSH-Guides — includes/sonarr/{tvdb-imdb-info,imdb-vs-tvdb}.md'"></div>
+          </div>
         </div>
         <template x-if="getNaming(activeAppType)">
           <div>
@@ -102,7 +109,7 @@
               <!-- Instance selector -->
               <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--bg-muted)">
                 <span style="font-size:13px;color:var(--text-muted)">Instance:</span>
-                <select class="input" style="width:200px;font-size:12px;padding:4px 8px"
+                <select class="input" style="width:200px;font-size:13px;padding:4px 8px"
                   @change="namingSelectedInstance = { ...namingSelectedInstance, [activeAppType]: $event.target.value }; if ($event.target.value) { const _inst = instances.find(i => i.id === $event.target.value); if (_inst) testInstance(_inst); } loadInstanceNaming(activeAppType)">
                   <option value="" :selected="!namingSelectedInstance[activeAppType]">Select instance...</option>
                   <template x-for="inst in instancesOfType(activeAppType)" :key="inst.id">
@@ -141,18 +148,26 @@
                       <span style="font-size:11px;color:var(--accent-orange);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Current on instance</span>
                       <span style="font-size:11px;color:var(--text-secondary)">— compare with TRaSH-recommended schemes below</span>
                     </div>
+                    <!-- Grid layout: fixed-width label column + flex-1 pattern column.
+                         minmax(0, 1fr) on the pattern column lets overflow-x:auto scroll
+                         long patterns instead of forcing the grid to grow horizontally.
+                         Only Clonarr-managed format strings are surfaced here — Arr's
+                         renameMovies/renameEpisodes is its own setting we don't change,
+                         showing it implied false ownership. -->
                     <template x-if="activeAppType === 'radarr'">
-                      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
-                        <div><span style="color:var(--text-muted)">File:</span> <span style="font-family:monospace;color:var(--text-muted)" x-text="namingInstanceData[activeAppType].standardMovieFormat || '(not set)'"></span></div>
-                        <div><span style="color:var(--text-muted)">Folder:</span> <span style="font-family:monospace;color:var(--text-muted)" x-text="namingInstanceData[activeAppType].movieFolderFormat || '(not set)'"></span></div>
-                        <div><span style="color:var(--text-muted)">Rename:</span> <span :style="namingInstanceData[activeAppType].renameMovies ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="namingInstanceData[activeAppType].renameMovies ? 'On' : 'Off'"></span></div>
+                      <div style="display:grid;grid-template-columns:70px minmax(0, 1fr);gap:4px 12px;font-size:13px;align-items:baseline">
+                        <span style="color:var(--text-muted)">File:</span>
+                        <span style="font-family:monospace;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType].standardMovieFormat || '(not set)'"></span>
+                        <span style="color:var(--text-muted)">Folder:</span>
+                        <span style="font-family:monospace;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType].movieFolderFormat || '(not set)'"></span>
                       </div>
                     </template>
                     <template x-if="activeAppType === 'sonarr'">
-                      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
-                        <div><span style="color:var(--text-muted)">Episode:</span> <span style="font-family:monospace;color:var(--text-muted)" x-text="namingInstanceData[activeAppType].standardEpisodeFormat || '(not set)'"></span></div>
-                        <div><span style="color:var(--text-muted)">Series:</span> <span style="font-family:monospace;color:var(--text-muted)" x-text="namingInstanceData[activeAppType].seriesFolderFormat || '(not set)'"></span></div>
-                        <div><span style="color:var(--text-muted)">Rename:</span> <span :style="namingInstanceData[activeAppType].renameEpisodes ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="namingInstanceData[activeAppType].renameEpisodes ? 'On' : 'Off'"></span></div>
+                      <div style="display:grid;grid-template-columns:70px minmax(0, 1fr);gap:4px 12px;font-size:13px;align-items:baseline">
+                        <span style="color:var(--text-muted)">Episode:</span>
+                        <span style="font-family:monospace;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType].standardEpisodeFormat || '(not set)'"></span>
+                        <span style="color:var(--text-muted)">Series:</span>
+                        <span style="font-family:monospace;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType].seriesFolderFormat || '(not set)'"></span>
                       </div>
                     </template>
                   </div>
@@ -161,77 +176,35 @@
                 <!-- Naming apply result -->
                 <template x-if="namingApplyResult[activeAppType]">
                   <div style="padding:8px 12px;margin-bottom:12px;border-left:3px solid var(--accent-green);background:var(--bg-page);border-radius:4px">
-                    <div style="font-size:12px;color:var(--accent-green)" x-text="namingApplyResult[activeAppType]"></div>
+                    <div style="font-size:13px;color:var(--accent-green)" x-text="namingApplyResult[activeAppType]"></div>
                   </div>
                 </template>
 
-              <!-- Naming sections rendered by media server tab -->
-              <template x-for="section in getNamingSections(activeAppType, namingMediaServer[activeAppType] || 'standard', namingPlexSingleEntry[activeAppType])" :key="section.key">
+              <!-- Naming sections rendered by media server tab. Section + scheme
+                   descriptions are rendered when present (today: empty unless
+                   TRaSH ships them in JSON; future-ready). -->
+              <template x-for="section in getNamingSections(activeAppType, namingMediaServer[activeAppType] || 'standard')" :key="section.key">
                 <div style="margin-bottom:16px">
-                  <!-- Edition Tags box (only for Plex file sections)
-                       Text sourced verbatim from TRaSH-Guides:
-                       docs/Radarr/Radarr-recommended-naming-scheme.md (!!! danger admonition under the Plex section) -->
-                  <template x-if="section.showEditionToggle">
-                    <div style="border:1px solid var(--bg-muted);border-left:3px solid var(--accent-orange);border-radius:6px;padding:14px 16px;margin-bottom:12px">
-                      <div style="display:flex;align-items:flex-start;gap:12px">
-                        <div style="flex:1">
-                          <div style="font-weight:600;margin-bottom:6px;color:var(--text-primary);font-size:13px">Edition Tags</div>
-                          <div style="font-size:12px;color:var(--text-muted);line-height:1.6">
-                            If you use the <code style="background:var(--bg-muted);padding:1px 5px;border-radius:3px;color:var(--accent-purple-soft)">{edition-{Edition Tags}}</code> part of the recommended file name, Plex will recognize the movie edition and add it to the Plex interface — for example, Director's Cut.
-                          </div>
-                          <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:6px">
-                            However, this means that if you have two copies of a movie with different editions in a single <strong style="color:var(--text-body)">merged library</strong> — for example, a 1080p Director's Cut and a 2160p Theatrical Edition — these will appear as <strong style="color:var(--accent-red)">two separate items</strong> in Plex.
-                          </div>
-                          <div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:6px">
-                            If you want a movie to appear only once per library when you keep more than one copy of a movie, replace <code style="background:var(--bg-muted);padding:1px 5px;border-radius:3px;color:var(--accent-purple-soft)">{edition-{Edition Tags}}</code> with <code style="background:var(--bg-muted);padding:1px 5px;border-radius:3px;color:var(--accent-purple-soft)">{Edition Tags}</code>.
-                          </div>
-                        </div>
-                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px;flex-shrink:0">
-                          <label class="toggle"><input type="checkbox" :checked="namingPlexSingleEntry[activeAppType]" @change="namingPlexSingleEntry = {...namingPlexSingleEntry, [activeAppType]: $event.target.checked}"><span class="slider"></span></label>
-                          <span style="font-size:12px;white-space:nowrap" :style="namingPlexSingleEntry[activeAppType] ? 'color:var(--accent-green)' : 'color:var(--text-muted)'" x-text="namingPlexSingleEntry[activeAppType] ? 'Single entry' : 'Per edition'"></span>
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-
-                  <div style="font-weight:600;margin-bottom:4px;color:var(--text-primary)" x-text="section.label"></div>
+                  <div style="font-weight:600;margin-bottom:4px;color:var(--text-primary);font-size:14px" x-text="section.label"></div>
                   <div x-show="section.description" style="font-size:13px;color:var(--text-muted);margin-bottom:10px;line-height:1.5" x-text="section.description"></div>
 
                   <template x-for="scheme in section.schemes" :key="scheme.key">
                     <div style="margin-bottom:10px;padding:8px;background:var(--bg-page);border-radius:4px;border:1px solid var(--bg-muted)">
-                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-                        <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="scheme.label"></span>
-                        <span x-show="scheme.recommended" style="font-size:12px;background:var(--accent-green-strong);color:var(--text-on-accent);padding:1px 6px;border-radius:3px">Recommended</span>
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                        <span style="font-size:13px;font-weight:600;color:var(--text-body)" x-text="scheme.label"></span>
                         <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
                           <button type="button" class="inline-action" style="font-size:12px;color:var(--accent-blue)" @click="copyToClipboard(scheme.pattern)">Copy</button>
                           <template x-if="namingSelectedInstance[activeAppType]">
                             <button type="button" class="inline-action" style="font-size:12px;color:var(--accent-orange)"
-                              @click="$el.textContent='Syncing...'; $el.style.color='var(--text-secondary)'; applyNamingScheme(activeAppType, section.key, scheme).then(() => { $el.textContent='✓ Synced'; $el.style.color='var(--accent-green)'; setTimeout(() => { $el.textContent='Sync'; $el.style.color='var(--accent-orange)'; }, 2000); })">Sync</button>
+                              @click="confirmApplyNamingScheme(activeAppType, section.key, scheme)">Sync</button>
                           </template>
                         </span>
                       </div>
                       <div x-show="scheme.description" style="font-size:13px;color:var(--text-muted);margin-bottom:6px;line-height:1.4" x-text="scheme.description"></div>
-                      <div style="font-family:monospace;font-size:13px;color:var(--code-string);background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:4px;padding:6px 8px;word-break:break-all" x-text="scheme.pattern"></div>
-                      <div x-show="scheme.example" style="font-family:monospace;font-size:12px;color:var(--text-muted);margin-top:4px;word-break:break-all">
+                      <div style="font-family:monospace;font-size:13px;color:var(--code-string);background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:4px;padding:6px 8px;white-space:nowrap;overflow-x:auto" x-text="scheme.pattern"></div>
+                      <div x-show="scheme.example" style="font-family:monospace;font-size:13px;color:var(--text-muted);margin-top:4px;white-space:nowrap;overflow-x:auto">
                         <strong style="color:var(--text-muted);font-weight:600" x-text="(section.exampleLabel || 'Example') + ':'"></strong> <span x-text="scheme.example"></span>
                       </div>
-                      <!-- Extra advice for "Original Title" scheme (verbatim from TRaSH:
-                           docs/{Radarr,Sonarr}/-recommended-naming-scheme.md § Original Title) -->
-                      <template x-if="scheme.key === 'original'">
-                        <div style="margin-top:10px;padding:10px;background:var(--bg-page);border-left:3px solid var(--accent-blue);border-radius:3px">
-                          <div style="font-size:13px;color:var(--text-body);line-height:1.5">
-                            <strong>If you use this alternate naming scheme</strong>, we suggest using <code style="background:var(--bg-muted);padding:1px 5px;border-radius:3px;color:var(--code-string);font-family:monospace">{Original Title}</code> instead of <code style="background:var(--bg-muted);padding:1px 5px;border-radius:3px;color:var(--code-string);font-family:monospace">{Original Filename}</code>.
-                          </div>
-                          <div style="font-size:13px;color:var(--text-body);margin-top:8px"><strong>Why?</strong></div>
-                          <div style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-top:4px">
-                            The filename can be obscured or unclear, whereas the release naming is clear, especially when you use Usenet.
-                          </div>
-                          <div style="font-family:monospace;font-size:12px;margin-top:8px;line-height:1.7;word-break:break-all">
-                            <div><span style="color:var(--code-string)">{Original Title}</span> <span style="color:var(--text-secondary)">=&gt;</span> <span style="color:var(--text-muted)" x-text="activeAppType === 'radarr' ? 'The.Movie.Title.2010.REMASTERED.1080p.BluRay.x264-RlsGrp' : 'The.Series.Title.S01E01.Episode.Title.1080p.AMZN.WEB-DL.DDP5.1.H.264-RlsGrp'"></span></div>
-                            <div><span style="color:var(--code-string)">{Original Filename}</span> <span style="color:var(--text-secondary)">=&gt;</span> <span style="color:var(--text-muted)" x-text="activeAppType === 'radarr' ? 'rlsgrp-karatekid-1080p or lchd-tkk1080p or t1i0p3s7i8yuti' : 'show episode 1-1080p or lchd-tkk1080p or t1i0p3s7i8yuti'"></span></div>
-                          </div>
-                        </div>
-                      </template>
                     </div>
                   </template>
                 </div>

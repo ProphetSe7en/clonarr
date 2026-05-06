@@ -176,7 +176,9 @@
                   </div>
                 </div>
                 <button x-show="!sandbox[activeAppType].searching" class="btn btn-primary btn-sm" @click="sandboxSearch(activeAppType)"
-                  :disabled="!sandbox[activeAppType].searchQuery?.trim()">Search</button>
+                  :disabled="!sandbox[activeAppType].searchQuery?.trim() || sandbox[activeAppType].searchCooldownRemaining > 0"
+                  x-text="sandbox[activeAppType].searchCooldownRemaining > 0 ? 'Wait ' + sandbox[activeAppType].searchCooldownRemaining + 's' : 'Search'"
+                  x-tt="sandbox[activeAppType].searchCooldownRemaining > 0 ? 'Cooldown active to avoid hammering your indexers — protects against tracker rate-limits.' : ''"></button>
                 <button x-show="sandbox[activeAppType].searching" class="btn btn-danger btn-sm" @click="sandboxCancelSearch(activeAppType)">
                   <span class="spinner" style="width:12px;height:12px;border-width:1.5px;display:inline-block;vertical-align:middle;margin-right:4px"></span> Cancel
                 </button>
@@ -257,47 +259,47 @@
                    on the active set · selection-driven actions. Selection-driven
                    actions only appear when ≥1 row is checkbox-selected, so the
                    row stays clean when the user is just browsing. -->
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:6px">
-                <span style="font-size:12px;color:var(--text-muted);font-weight:500">Score sets:</span>
-                <select class="input" style="height:28px;font-size:12px;padding:2px 6px;max-width:280px"
-                        x-model="sandbox[activeAppType].activeScoreSet"
-                        @change="sandboxSetActiveScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
-                        x-tt="'Filter the table to a saved score set, or show all releases'">
-                  <option value="">— Show all releases —</option>
-                  <template x-for="s in sandbox[activeAppType].scoreSets || []" :key="s.id">
-                    <option :value="s.id" x-text="s.name + ' (' + (s.titles?.length || 0) + ')'"></option>
+              <!-- Two stacked rows in one panel.
+                   Row 1 (always when sets exist): dropdown + manage on active set.
+                   Row 2 (only when ≥1 row selected): selection-driven actions.
+                   Splits the previous single flex-wrap row that wrapped
+                   unpredictably on narrow viewports — checkbox-driven actions
+                   now read as a clear group. -->
+              <div style="margin-bottom:12px;padding:8px 10px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:6px;display:flex;flex-direction:column;gap:6px">
+                <!-- Row 1: Set selection + manage -->
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:12px;color:var(--text-muted);font-weight:500">Score sets:</span>
+                  <select class="input" style="height:28px;font-size:12px;padding:2px 6px;max-width:280px"
+                          x-model="sandbox[activeAppType].activeScoreSet"
+                          @change="sandboxSetActiveScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
+                          x-tt="'Filter the table to a saved score set, or show all releases'">
+                    <option value="">— Show all releases —</option>
+                    <template x-for="s in sandbox[activeAppType].scoreSets || []" :key="s.id">
+                      <option :value="s.id" x-text="s.name + ' (' + (s.titles?.length || 0) + ')'"></option>
+                    </template>
+                  </select>
+                  <template x-if="sandbox[activeAppType].activeScoreSet">
+                    <span style="display:inline-flex;gap:4px">
+                      <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px"
+                              @click="sandboxRenameScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
+                              x-tt="'Rename the active score set'">Rename</button>
+                      <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-red);border-color:var(--accent-red-bg)"
+                              @click="sandboxDeleteScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
+                              x-tt="'Delete the active score set (releases stay in your results)'">Delete</button>
+                    </span>
                   </template>
-                </select>
-                <!-- Active-set manage actions: only when a set is selected. -->
-                <template x-if="sandbox[activeAppType].activeScoreSet">
-                  <span style="display:inline-flex;gap:4px">
-                    <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px"
-                            @click="sandboxRenameScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
-                            x-tt="'Rename the active score set'">Rename</button>
-                    <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-red);border-color:var(--accent-red-bg)"
-                            @click="sandboxDeleteScoreSet(activeAppType, sandbox[activeAppType].activeScoreSet)"
-                            x-tt="'Delete the active score set (releases stay in your results)'">Delete</button>
-                  </span>
-                </template>
-                <!-- Primary action: "+ New set" — always visible. Lets the
-                     user fork selected rows into a sibling set without
-                     first switching the dropdown back to "Show all".
-                     Disabled until ≥1 row is selected so the button
-                     explains via tooltip how to enable it. -->
-                <button class="btn btn-sm btn-primary" style="height:28px;font-size:12px;padding:2px 8px;white-space:nowrap"
-                        :disabled="sandboxSelectedCount(activeAppType) === 0"
-                        @click="sandboxCreateScoreSetFromSelected(activeAppType)"
-                        x-tt="sandboxSelectedCount(activeAppType) === 0 ? 'Select one or more releases below first, then click to save them as a new score set' : 'Save the currently selected releases as a new score set'">+ New set</button>
-                <!-- Selection-driven cluster grouped together so the
-                     "N selected →" arrow can't orphan from its actions
-                     when the row wraps on narrow viewports. -->
-                <span style="display:inline-flex;gap:6px;align-items:center" x-show="sandboxSelectedCount(activeAppType) > 0">
+                </div>
+                <!-- Row 2: Selection-driven actions, only when ≥1 selected.
+                     "+ New set" lives here too so all checkbox-driven actions
+                     are in the same place — no jump between rows to find
+                     what selecting rows enables. -->
+                <div x-show="sandboxSelectedCount(activeAppType) > 0"
+                     style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--bg-muted)">
                   <span style="font-size:12px;color:var(--accent-blue)"
                         x-text="sandboxSelectedCount(activeAppType) + ' selected →'"></span>
-                  <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-orange);border-color:var(--accent-orange-bg)"
-                          x-show="sandbox[activeAppType].activeScoreSet"
-                          @click="sandboxRemoveSelectedFromScoreSet(activeAppType)"
-                          x-tt="'Remove the selected releases from this score set only — they stay in your results'">− Remove from set</button>
+                  <button class="btn btn-sm btn-primary" style="height:28px;font-size:12px;padding:2px 8px;white-space:nowrap"
+                          @click="sandboxCreateScoreSetFromSelected(activeAppType)"
+                          x-tt="'Save the selected releases as a new score set'">+ New set</button>
                   <select class="input" style="height:28px;font-size:12px;padding:2px 6px;max-width:200px"
                           x-show="(sandbox[activeAppType].scoreSets?.length || 0) > 0"
                           @change="if ($event.target.value) { sandboxAddSelectedToScoreSet(activeAppType, $event.target.value); $event.target.value = ''; }"
@@ -307,7 +309,11 @@
                       <option :value="s.id" x-text="s.name"></option>
                     </template>
                   </select>
-                </span>
+                  <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-orange);border-color:var(--accent-orange-bg)"
+                          x-show="sandbox[activeAppType].activeScoreSet"
+                          @click="sandboxRemoveSelectedFromScoreSet(activeAppType)"
+                          x-tt="'Remove the selected releases from this score set only — they stay in your results'">− Remove from set</button>
+                </div>
               </div>
 
               <!-- Empty active-set notice — when the user has emptied a set
@@ -317,6 +323,16 @@
               <div x-show="sandbox[activeAppType].activeScoreSet && ((sandbox[activeAppType].scoreSets || []).find(s => s.id === sandbox[activeAppType].activeScoreSet)?.titles?.length || 0) === 0"
                    style="padding:8px 12px;background:var(--accent-orange-bg);color:var(--accent-orange);border:1px solid var(--accent-orange-bg);border-radius:6px;font-size:13px;margin-bottom:12px;line-height:1.5">
                 This score set is empty. Switch to <strong>— Show all releases —</strong> above to find rows to add, or click <strong>Delete</strong> to remove the empty set.
+              </div>
+
+              <!-- Non-score sort warning — Sonarr/Radarr's pick order is
+                   strictly "quality first, then CF score within quality"
+                   (TRaSH: Quality Trumps All). Other column sorts are
+                   useful for browsing but don't reflect what Arr would
+                   actually grab. Click-to-fix link in the message. -->
+              <div x-show="sandbox[activeAppType].sortCol && sandbox[activeAppType].sortCol !== 'score' && sandbox[activeAppType].sortCol !== 'manual'"
+                   style="padding:6px 10px;background:var(--accent-orange-bg);color:var(--accent-orange);border:1px solid var(--accent-orange-bg);border-left:3px solid var(--accent-orange);border-radius:4px;font-size:13px;margin-bottom:10px;line-height:1.5">
+                Sonarr/Radarr's real pick order is <strong>quality first, then score within each quality</strong> (Quality Trumps All). The current sort is for browsing — click <a href="#" @click.prevent="toggleSandboxSort(activeAppType, 'score')" style="color:var(--accent-blue);text-decoration:underline">Score</a> to see what Arr would actually grab.
               </div>
 
               <!-- Compact table view -->
@@ -341,12 +357,6 @@
                         :aria-sort="sandbox[activeAppType].sortCol === 'quality' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                       <button type="button" class="sort-header" style="width:100%;text-align:center;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'quality')">
                         Quality <span x-show="sandbox[activeAppType].sortCol==='quality'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
-                      </button>
-                    </th>
-                    <th style="text-align:center;padding:5px 4px;font-weight:500;width:64px;white-space:nowrap"
-                        :aria-sort="sandbox[activeAppType].sortCol === 'group' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
-                      <button type="button" class="sort-header" style="width:100%;text-align:center;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'group')">
-                        Group <span x-show="sandbox[activeAppType].sortCol==='group'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
                       </button>
                     </th>
                     <th style="text-align:right;padding:5px 4px;font-weight:500;width:60px;white-space:nowrap"
@@ -404,7 +414,6 @@
                               x-tt="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'Quality not allowed by selected profile — Sonarr/Radarr would reject this release' : ''"
                               x-text="res.parsed?.quality || '—'"></span>
                       </td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;font-size:12px;color:var(--text-muted);white-space:nowrap" x-text="res.parsed?.releaseGroup || '—'"></td>
                       <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
                           :style="(res.scoring?.total ?? 0) >= 0 ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
                           x-text="res.scoring?.total ?? '—'"></td>
@@ -437,7 +446,6 @@
                           </span>
                         </template>
                       </td>
-                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
                           :style="(res.scoringB?.total ?? 0) >= 0 ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
