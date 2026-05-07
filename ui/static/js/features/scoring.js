@@ -1057,10 +1057,18 @@ export default {
       const breakdown = [];
       const matchedKeys = new Set();
 
-      // Score matched CFs
+      // Score matched CFs. Only include CFs that exist in the active
+      // profile — the Arr Parse API returns ALL CFs that matched the
+      // release in the user's Arr instance (TRaSH ones + user customs
+      // + release-group CFs + anything else). Non-profile CFs would
+      // show up as 0-score "matched" rows that pollute the breakdown
+      // and confuse "what would this profile actually score". Filter
+      // them out entirely — if a CF isn't in the profile, the profile
+      // wouldn't score it.
       for (const cf of result.matchedCFs) {
         const entry = (cf.trashId && byTrashId[cf.trashId]) || byName[cf.name];
-        const score = entry?.score ?? 0;
+        if (!entry) continue;
+        const score = entry.score;
         total += score;
         breakdown.push({ name: cf.name, trashId: cf.trashId, score, matched: true });
         if (cf.trashId) matchedKeys.add(cf.trashId);

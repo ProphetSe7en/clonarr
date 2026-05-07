@@ -459,10 +459,20 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			seen[cf.TrashID] = true
 		}
 
-		// Get optional CFs from categories (use the profile's score context)
+		// Get optional CFs from categories (use the profile's score context).
+		// Filter to DefaultEnabled groups only: a TRaSH profile's "default
+		// state" (what Recyclarr would apply if you took the profile as-is)
+		// includes formatItems + default-enabled cf-groups. Optional groups
+		// (movie-versions, accessibility, non-General streaming services,
+		// etc.) require explicit user opt-in via Recyclarr include lists,
+		// so leaving them out here matches what users actually see in their
+		// Arr instance after a default sync.
 		cfCategories := core.ProfileCFCategories(ad, trashID)
 		for _, cat := range cfCategories {
 			for _, g := range cat.Groups {
+				if !g.DefaultEnabled {
+					continue
+				}
 				for _, cf := range g.CFs {
 					if seen[cf.TrashID] {
 						continue

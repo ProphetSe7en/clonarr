@@ -396,32 +396,29 @@
                           style="background:none;border:none;color:var(--text-secondary);font-size:12px;cursor:pointer;padding:0 4px;line-height:1"
                           @mouseenter="$el.style.color='var(--accent-blue)'" @mouseleave="$el.style.color='var(--text-secondary)'">⧉</button>
                       </td>
-                      <td style="padding:5px 6px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:12px;color:var(--text-body);word-break:break-all;line-height:1.4" x-text="res.title"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-size:12px;line-height:1.5;white-space:normal;word-break:keep-all">
+                      <td style="padding:5px 6px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;color:var(--text-body);word-break:break-all;line-height:1.4" x-text="res.title"></td>
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all">
                         <template x-for="(b, bi) in res.scoring?.breakdown?.filter(x => x.matched) || []" :key="b.name">
                           <span style="display:inline-block;margin-right:4px">
                             <span x-show="bi > 0" style="color:var(--border-subtle);margin-right:4px">·</span>
                             <span style="color:var(--text-muted)" x-text="b.name"></span>
-                            <span style="font-family:monospace;font-size:11px;font-weight:600;margin-left:2px"
-                                  :style="b.score > 0 ? 'color:var(--accent-green)' : b.score < 0 ? 'color:var(--accent-red)' : 'color:var(--text-muted)'"
+                            <span style="font-family:monospace;font-size:11px;font-weight:600;margin-left:2px;color:var(--text-muted)"
+                                  :style="{color: b.score > 0 ? 'var(--accent-green)' : b.score < 0 ? 'var(--accent-red)' : 'var(--text-muted)'}"
                                   x-text="b.score !== 0 ? ((b.score > 0 ? '+' : '') + b.score) : '0'"></span>
                           </span>
                         </template>
                       </td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;white-space:nowrap">
-                        <span style="font-size:11px;padding:1px 5px;border-radius:3px;font-weight:500"
-                              :style="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'background:var(--accent-red-bg);color:var(--accent-red);text-decoration:line-through;text-decoration-thickness:1px' : 'background:var(--bg-elevated);color:var(--text-muted)'"
-                              x-tt="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'Quality not allowed by selected profile — Sonarr/Radarr would reject this release' : ''"
-                              x-text="res.parsed?.quality || '—'"></span>
-                      </td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
-                          :style="(res.scoring?.total ?? 0) >= 0 ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;font-family:monospace;font-size:11px;line-height:1.4;white-space:nowrap;color:var(--text-muted)"
+                          :style="{color: sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'var(--accent-red)' : 'var(--text-muted)', 'text-decoration': sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'line-through' : 'none', 'text-decoration-thickness': '1px'}"
+                          x-tt="sandboxQualityAllowed(res, activeAppType, sandbox[activeAppType].profileKey) === false ? 'Quality not allowed by selected profile — Sonarr/Radarr would reject this release' : ''"
+                          x-text="res.parsed?.quality || '—'"></td>
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:right;font-family:monospace;font-size:11px;line-height:1.4;font-weight:600;white-space:nowrap;color:var(--accent-green)"
+                          :style="{color: (res.scoring?.total ?? 0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}"
                           x-text="res.scoring?.total ?? '—'"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;white-space:nowrap">
-                        <span style="font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px"
-                              :style="sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'color:var(--accent-green);background:var(--fill-green-soft)' : 'color:var(--accent-red);background:var(--accent-red-bg)'"
-                              x-tt="sandboxResultStatus(res, res.scoring, activeAppType).reason || 'Score reaches Min and quality is allowed by the profile'"
-                              x-text="sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'PASS' : 'FAIL'"></span>
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);text-align:center;font-family:monospace;font-size:11px;line-height:1.4;white-space:nowrap;color:var(--accent-green)"
+                          :style="{color: sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'var(--accent-green)' : 'var(--accent-red)'}"
+                          x-tt="sandboxResultStatus(res, res.scoring, activeAppType).reason || 'Score reaches Min and quality is allowed by the profile'"
+                          x-text="sandboxResultStatus(res, res.scoring, activeAppType).pass ? 'PASS' : 'FAIL'">
                       </td>
                       <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center;white-space:nowrap">
                         <button @click.stop="sandbox[activeAppType].results.splice(sandbox[activeAppType].results.indexOf(res), 1); saveSandboxResults(activeAppType)" x-tt="'Remove from results (deletes the row entirely — does not affect score sets)'"
@@ -435,29 +432,27 @@
                       <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 6px 3px 18px;border-bottom:1px solid var(--border-subtle);white-space:nowrap;font-size:11px;color:var(--accent-blue)" x-text="'↳ ' + (sandboxCompareProfileName(activeAppType) || 'Compare')"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-size:12px;line-height:1.5;white-space:normal;word-break:keep-all">
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all">
                         <template x-for="(b, bi) in res.scoringB?.breakdown?.filter(x => x.matched) || []" :key="'b'+b.name">
                           <span style="display:inline-block;margin-right:4px">
                             <span x-show="bi > 0" style="color:var(--border-subtle);margin-right:4px">·</span>
                             <span style="color:var(--text-muted)" x-text="b.name"></span>
-                            <span style="font-family:monospace;font-size:11px;font-weight:600;margin-left:2px"
-                                  :style="b.score > 0 ? 'color:var(--accent-green)' : b.score < 0 ? 'color:var(--accent-red)' : 'color:var(--text-muted)'"
+                            <span style="font-family:monospace;font-size:11px;font-weight:600;margin-left:2px;color:var(--text-muted)"
+                                  :style="{color: b.score > 0 ? 'var(--accent-green)' : b.score < 0 ? 'var(--accent-red)' : 'var(--text-muted)'}"
                                   x-text="b.score !== 0 ? ((b.score > 0 ? '+' : '') + b.score) : '0'"></span>
                           </span>
                         </template>
                       </td>
                       <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle)"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:right;font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap"
-                          :style="(res.scoringB?.total ?? 0) >= 0 ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:right;font-family:monospace;font-size:11px;font-weight:600;white-space:nowrap;color:var(--accent-green)"
+                          :style="{color: (res.scoringB?.total ?? 0) >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}"
                           x-text="res.scoringB?.total ?? '—'"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:center;white-space:nowrap">
-                        <span style="font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px"
-                              :style="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'color:var(--accent-green);background:var(--fill-green-soft)' : 'color:var(--accent-red);background:var(--accent-red-bg)'"
-                              x-tt="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).reason || 'Score reaches Min and quality is allowed by the compare profile'"
-                              x-text="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'PASS' : 'FAIL'"></span>
-                      </td>
-                      <td style="padding:4px 4px;border-bottom:1px solid var(--border-subtle);text-align:center;font-size:12px;font-family:monospace;white-space:nowrap"
-                          :style="((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) > 0 ? 'color:var(--accent-green)' : ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) < 0 ? 'color:var(--accent-red)' : 'color:var(--text-muted)'"
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);text-align:center;font-family:monospace;font-size:11px;line-height:1.4;white-space:nowrap;color:var(--accent-green)"
+                          :style="{color: sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'var(--accent-green)' : 'var(--accent-red)'}"
+                          x-tt="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).reason || 'Score reaches Min and quality is allowed by the compare profile'"
+                          x-text="sandboxResultStatus(res, res.scoringB, activeAppType, sandbox[activeAppType].compareKey).pass ? 'PASS' : 'FAIL'"></td>
+                      <td style="padding:4px 4px;border-bottom:1px solid var(--border-subtle);text-align:center;font-size:11px;font-family:monospace;white-space:nowrap;color:var(--text-muted)"
+                          :style="{color: ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) > 0 ? 'var(--accent-green)' : ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) < 0 ? 'var(--accent-red)' : 'var(--text-muted)'}"
                           x-text="((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) > 0 ? '+' + ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0)) : ((res.scoringB?.total ?? 0) - (res.scoring?.total ?? 0))"></td>
                     </tr>
                   </tbody>
