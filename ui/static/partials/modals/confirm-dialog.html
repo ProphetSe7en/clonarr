@@ -7,7 +7,12 @@
       <div style="font-size:13px;color:var(--text-muted);white-space:pre-line;line-height:1.6" x-show="!confirmModal.html" x-text="confirmModal.message"></div>
       <div style="font-size:13px;color:var(--text-muted);line-height:1.6" x-show="confirmModal.html" x-html="confirmModal.message"></div>
       <div class="modal-actions">
-        <button class="btn" @click="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-text="confirmModal.cancelLabel || 'Cancel'"></button>
+        <!-- hideCancel hides the Cancel button entirely — used by info-only
+             modals (e.g. naming Compare) that have a single "Close" primary
+             action and don't need a redundant secondary close. Default false
+             keeps the existing two-button confirm flow for all other
+             callers that don't set this flag. -->
+        <button x-show="!confirmModal.hideCancel" class="btn" @click="confirmModal.show = false; if(confirmModal.onCancel) confirmModal.onCancel()" x-text="confirmModal.cancelLabel || 'Cancel'"></button>
         <button x-show="confirmModal.secondaryLabel" x-cloak class="btn"
                 @click="confirmModal.show = false; if(confirmModal.onSecondary) confirmModal.onSecondary()"
                 x-text="confirmModal.secondaryLabel"></button>

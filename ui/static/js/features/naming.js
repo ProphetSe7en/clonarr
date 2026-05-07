@@ -7,6 +7,10 @@ export default {
     namingMediaServer: {},
     namingFAQExpanded: false,
     namingIDInfoExpanded: false,
+    // Per-section card expansion state. Keyed by sectionKey within each
+    // appType. Default: undefined (treated as collapsed). Lets each card
+    // open independently so users only see the section they're working on.
+    namingSectionExpanded: {},
   },
 
   methods: {
@@ -60,17 +64,31 @@ export default {
         'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)' },
       };
 
-      // Media server key filters
+      // Per-section media-server filter. Each variant-having section
+      // gets its OWN tab bar in the UI (section-scoped, not page-level)
+      // so the active tab is always visible alongside its content. The
+      // shared `mediaServer` arg drives all of them — clicking a tab
+      // anywhere flips them all together. Sections that don't vary per
+      // server (Episode types, Season Folder) ignore the filter entirely
+      // and always show their `main` schemes.
       const msFilters = {
-        standard: k => !k.includes('-'),  // standard, default, original, p2p-scene have no media server prefix
+        standard: k => !k.includes('-') || k === 'default' || k === 'original' || k === 'p2p-scene',
         plex: k => k.startsWith('plex-'),
         emby: k => k.startsWith('emby-'),
         jellyfin: k => k.startsWith('jellyfin-'),
       };
+      // Standard/main keys (server-agnostic — no prefix)
       const standardKeys = new Set(['standard', 'default', 'original', 'p2p-scene']);
-      const filterFn = ms === 'standard'
-        ? k => standardKeys.has(k)
-        : (msFilters[ms] || (() => true));
+
+      // A section "varies per server" if its key map contains any
+      // plex-/emby-/jellyfin- prefixed keys. Used to decide whether
+      // to render the section-scoped tab bar.
+      const sectionVaries = (map) => {
+        for (const k of Object.keys(map || {})) {
+          if (k.startsWith('plex-') || k.startsWith('emby-') || k.startsWith('jellyfin-')) return true;
+        }
+        return false;
+      };
 
       const radarrExamples = {
         folder: {
@@ -129,7 +147,14 @@ export default {
       // objects with `pattern`/`description` once TRaSH adds per-scheme
       // descriptions. Code handles both shapes so the future migration is
       // a no-op for us.
-      const makeSchemes = (map, sectionKey, examplesMap) => {
+      const makeSchemes = (map, sectionKey, examplesMap, varies) => {
+        // For variant-having sections, filter by active tab (`ms`).
+        // For sections that don't vary, ignore the filter and show all
+        // their (main) schemes — they have only one set of schemes
+        // regardless of server.
+        const filterFn = varies
+          ? (ms === 'standard' ? k => standardKeys.has(k) : (msFilters[ms] || (() => true)))
+          : (() => true);
         const entries = Object.entries(map || {}).filter(([key]) => filterFn(key));
         entries.sort((a, b) => {
           const ai = keyOrder.indexOf(a[0]), bi = keyOrder.indexOf(b[0]);
@@ -137,16 +162,22 @@ export default {
         });
         return entries.map(([key, value]) => {
           const meta = schemeDesc[key] || { label: key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) };
-          // Future-compat: TRaSH may ship descriptions per scheme. Accept both
-          // string-pattern and {pattern, description} object shapes.
           const pattern = typeof value === 'string' ? value : (value?.pattern || '');
           const trashDesc = typeof value === 'object' ? (value?.description || '') : '';
+          // Tier classifies the scheme on the Standard tab so the UI can
+          // insert an "Alternative Naming Options" divider between the
+          // recommended scheme (`standard`/`default`) and the alternatives
+          // (`original`, `p2p-scene`). Server-prefixed schemes (plex-/emby-/
+          // jellyfin-) are always 'recommended' — no alt-naming concept on
+          // those tabs, so the divider naturally won't render there.
+          const tier = (key === 'original' || key === 'p2p-scene') ? 'alternative' : 'recommended';
           return {
             key,
             label: meta.label || key,
             description: trashDesc,
             pattern,
             example: examplesMap?.[key] || '',
+            tier,
           };
         });
       };
@@ -158,55 +189,68 @@ export default {
       // makeSchemes above reads them through automatically.
 
       if (appType === 'radarr') {
-        // File format first, folder second
-        const fileSchemes = makeSchemes(n.file, 'file', radarrExamples.file);
+        // File format first, folder second. Both vary per media server,
+        // so each gets its own section-scoped tab bar in the UI.
+        const fileVaries = sectionVaries(n.file);
+        const fileSchemes = makeSchemes(n.file, 'file', radarrExamples.file, fileVaries);
         if (fileSchemes.length > 0) {
           sections.push({
             key: 'file',
             label: 'Standard Movie Format',
             exampleLabel: 'Movie',
             description: '',
+            varies: fileVaries,
             schemes: fileSchemes,
           });
         }
-        const folderSchemes = makeSchemes(n.folder, 'folder', radarrExamples.folder);
+        const folderVaries = sectionVaries(n.folder);
+        const folderSchemes = makeSchemes(n.folder, 'folder', radarrExamples.folder, folderVaries);
         if (folderSchemes.length > 0) {
           sections.push({
             key: 'folder',
             label: 'Movie Folder Format',
             exampleLabel: 'Folder',
             description: '',
+            varies: folderVaries,
             schemes: folderSchemes,
           });
         }
       } else {
-        // Episodes first (most important)
-        for (const [epType, schemes] of Object.entries(n.episodes || {})) {
+        // Sonarr: episode formats don't vary per server (TRaSH JSON only
+        // ships default/original/p2p-scene per type, no plex-/emby-/jellyfin-
+        // variants). Series folder DOES vary. Season folder doesn't.
+        // Display order: Standard → Anime → Daily (per user preference;
+        // matches likely-of-use frequency for most libraries).
+        const epTypeOrder = ['standard', 'anime', 'daily'];
+        for (const epType of epTypeOrder) {
+          const schemes = n.episodes?.[epType];
+          if (!schemes) continue;
           const epLabel = epType.charAt(0).toUpperCase() + epType.slice(1);
-          const epSchemes = makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType]);
+          const epVaries = sectionVaries(schemes);
+          const epSchemes = makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType], epVaries);
           if (epSchemes.length > 0) {
             sections.push({
               key: 'episodes-' + epType,
               label: 'Episode Format — ' + epLabel,
               exampleLabel: 'Episode',
               description: '',
+              varies: epVaries,
               schemes: epSchemes,
             });
           }
         }
-        const seriesSchemes = makeSchemes(n.series, 'series', sonarrExamples.series);
+        const seriesVaries = sectionVaries(n.series);
+        const seriesSchemes = makeSchemes(n.series, 'series', sonarrExamples.series, seriesVaries);
         if (seriesSchemes.length > 0) sections.push({
           key: 'series',
           label: 'Series Folder Format',
           exampleLabel: 'Series',
           description: '',
+          varies: seriesVaries,
           schemes: seriesSchemes,
         });
-        // Season folder shows on every media-server tab — pattern doesn't vary
-        // by server, and hiding it on Plex/Emby/Jellyfin tabs made users think
-        // it had disappeared. Bypass the ms-filter (TRaSH ships only `default`
-        // for season; if per-server variants are ever added, makeSchemes can
-        // be reintroduced here).
+        // Season folder: TRaSH ships only `default` for season — single
+        // server-agnostic option. No tab bar needed.
         if (n.season) {
           const seasonSchemes = Object.entries(n.season).map(([key, value]) => {
             const meta = schemeDesc[key] || { label: key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) };
@@ -219,6 +263,7 @@ export default {
             label: 'Season Folder Format',
             exampleLabel: 'Season',
             description: '',
+            varies: false,
             schemes: seasonSchemes,
           });
         }
@@ -263,6 +308,123 @@ export default {
       return null;
     },
 
+    // Token-level diff: split both patterns on token boundaries (curly
+    // braces, brackets, dots, dashes, spaces preserved as separators) and
+    // mark each token as added / removed / unchanged via simple LCS-like
+    // pass. Good enough for naming patterns which are usually mostly the
+    // same with one or two token swaps. Returns array of {text, type}
+    // where type is 'same' / 'add' / 'remove'.
+    //
+    // Brace regex handles depth-2 nesting (e.g. {edition-{Edition Tags}},
+    // {tmdb-{TmdbId}}) which TRaSH patterns use — flat `[^}]*` would
+    // truncate at the first `}` and leave the outer closing brace as a
+    // stray token. Bracket regex stays flat — TRaSH bracket tokens are
+    // never nested.
+    diffNamingTokens(oldPattern, newPattern) {
+      const tokenize = (s) => (s || '').split(/(\{(?:[^{}]|\{[^{}]*\})*\}|\[[^\]]*\]|[ .\-_])/g).filter(t => t !== '');
+      const a = tokenize(oldPattern);
+      const b = tokenize(newPattern);
+      // LCS table
+      const m = a.length, n = b.length;
+      const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+      // Backtrack to build diff
+      const out = [];
+      let i = m, j = n;
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+          out.unshift({ text: a[i - 1], type: 'same' });
+          i--; j--;
+        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+          out.unshift({ text: b[j - 1], type: 'add' });
+          j--;
+        } else {
+          out.unshift({ text: a[i - 1], type: 'remove' });
+          i--;
+        }
+      }
+      return out;
+    },
+
+    // Build the HTML for the current/new pattern comparison. Used by both
+    // confirmApplyNamingScheme (with Apply button) and compareNamingScheme
+    // (read-only). Centralizes the diff rendering so both flows share the
+    // same visualization.
+    namingComparisonHTML(appType, sectionKey, scheme) {
+      const fieldName = this.namingCurrentFieldFor(appType, sectionKey);
+      const rawCurrent = fieldName ? this.namingInstanceData[appType]?.[fieldName] : null;
+      const isUnset = !rawCurrent;
+      const currentPattern = rawCurrent || '(not set)';
+      const newPattern = scheme.pattern;
+      const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+      // First-time set: instance has no current value. Skip the diff row —
+      // showing "(not set)" tokens marked red-strikethrough alongside the
+      // entire new pattern marked green is technically correct but reads
+      // as if something was removed. Just show "Currently: (not set)" +
+      // the new pattern; user understands it's a fresh assignment.
+      if (isUnset) {
+        return (
+          '<div style="font-size:11px;color:var(--text-secondary);margin-top:14px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Currently on instance</div>' +
+          '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:3px;padding:6px 8px;color:var(--text-muted);font-style:italic">(not set)</div>' +
+          '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Would set to</div>' +
+          '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-left:3px solid var(--accent-green);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' + escapeHtml(newPattern) + '</div>'
+        );
+      }
+
+      const diff = this.diffNamingTokens(currentPattern, newPattern);
+      const diffHTML = diff.map(t => {
+        const text = escapeHtml(t.text);
+        if (t.type === 'add') return `<span style="background:var(--accent-green-bg);color:var(--accent-green);padding:0 2px;border-radius:2px">${text}</span>`;
+        if (t.type === 'remove') return `<span style="background:var(--accent-red-bg);color:var(--accent-red);padding:0 2px;border-radius:2px;text-decoration:line-through">${text}</span>`;
+        return text;
+      }).join('');
+      return (
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:14px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Currently on instance</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-left:3px solid var(--accent-red);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-muted)">' + escapeHtml(currentPattern) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Would change to</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-left:3px solid var(--accent-green);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' + escapeHtml(newPattern) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Diff (added in green, removed in red)</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' + diffHTML + '</div>'
+      );
+    },
+
+    // Read-only comparison modal — shows the same diff as the Apply confirm
+    // modal but without committing the change. Useful for evaluating
+    // multiple schemes against the current instance state before deciding
+    // which to apply.
+    compareNamingScheme(appType, sectionKey, scheme) {
+      const instId = this.namingSelectedInstance[appType];
+      if (!instId) return;
+      const instName = this.getInstanceName(appType, instId);
+      const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const sectionLabel = sectionKey.startsWith('episodes-')
+        ? 'Episode (' + sectionKey.slice(9) + ')'
+        : sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1);
+      const message =
+        '<div style="margin-bottom:6px">Comparing <strong>' + escapeHtml(scheme.label) + '</strong> ' + escapeHtml(sectionLabel) + ' naming against <strong>' + escapeHtml(instName) + '</strong>.</div>' +
+        this.namingComparisonHTML(appType, sectionKey, scheme);
+      this.confirmModal = {
+        show: true,
+        title: 'Compare naming scheme',
+        message,
+        html: true,
+        confirmLabel: 'Apply',
+        cancelLabel: 'Close',
+        // hideCancel defaults to false — both buttons visible. User can
+        // close to back out, or Apply directly if the diff looks good.
+        // Compare and Sync now lead to the same end state; difference is
+        // framing (Compare = "looking at options", Sync = "I know I want
+        // this").
+        onConfirm: () => this.applyNamingScheme(appType, sectionKey, scheme),
+        onCancel: () => {},
+      };
+    },
+
     // Open confirmModal with current → new pattern preview before applying.
     // Per feedback_dryrun_preview: destructive-ish UI ops should show a
     // concrete preview, not just "Are you sure?".
@@ -270,18 +432,13 @@ export default {
       const instId = this.namingSelectedInstance[appType];
       if (!instId) return;
       const instName = this.getInstanceName(appType, instId);
-      const fieldName = this.namingCurrentFieldFor(appType, sectionKey);
-      const currentPattern = fieldName ? (this.namingInstanceData[appType]?.[fieldName] || '(not set)') : '(unknown)';
       const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       const sectionLabel = sectionKey.startsWith('episodes-')
         ? 'Episode (' + sectionKey.slice(9) + ')'
         : sectionKey.charAt(0).toUpperCase() + sectionKey.slice(1);
       const message =
-        '<div style="margin-bottom:10px">Apply <strong>' + escapeHtml(scheme.label) + '</strong> ' + escapeHtml(sectionLabel) + ' naming to <strong>' + escapeHtml(instName) + '</strong>?</div>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-top:14px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Currently</div>' +
-        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--bg-muted);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-muted)">' + escapeHtml(currentPattern) + '</div>' +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Change to</div>' +
-        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--accent-orange);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' + escapeHtml(scheme.pattern) + '</div>' +
+        '<div style="margin-bottom:6px">Apply <strong>' + escapeHtml(scheme.label) + '</strong> ' + escapeHtml(sectionLabel) + ' naming to <strong>' + escapeHtml(instName) + '</strong>?</div>' +
+        this.namingComparisonHTML(appType, sectionKey, scheme) +
         '<div style="font-size:11px;color:var(--text-secondary);margin-top:10px;font-style:italic">Existing files in ' + escapeHtml(instName) + ' will be renamed on next sync if "Rename" is enabled there.</div>';
       this.confirmModal = {
         show: true,

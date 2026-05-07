@@ -243,7 +243,7 @@ export default function baseState() {
     qsSyncing: {},       // per app-type: boolean
     qsSyncResult: {},    // per app-type: { ok, message }
     qsAutoSync: {},      // per app-type: { enabled, type }
-    confirmModal: { show: false, title: '', message: '', confirmLabel: '', cancelLabel: '', secondaryLabel: '', onConfirm: null, onCancel: null, onSecondary: null },
+    confirmModal: { show: false, title: '', message: '', confirmLabel: '', cancelLabel: '', secondaryLabel: '', hideCancel: false, onConfirm: null, onCancel: null, onSecondary: null },
     inputModal: { show: false, title: '', message: '', value: '', placeholder: '', confirmLabel: '', onConfirm: null, onCancel: null },
     sandboxCopyModal: { show: false, title: '', text: '', copied: false },
     toasts: [], // { id, message, type: 'info'|'warning'|'error', timeout }
