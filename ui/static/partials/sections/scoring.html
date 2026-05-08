@@ -397,7 +397,10 @@
                           @mouseenter="$el.style.color='var(--accent-blue)'" @mouseleave="$el.style.color='var(--text-secondary)'">⧉</button>
                       </td>
                       <td style="padding:5px 6px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;color:var(--text-body);word-break:break-all;line-height:1.4" x-text="res.title"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all">
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all"
+                          :class="(res.scoring?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'sb-matched-compact' : ''"
+                          @click.stop="(res.scoring?.breakdown?.filter(x => x.matched) || []).length > 8 && openSandboxCopy(activeAppType, res)"
+                          x-tt="(res.scoring?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'Click to see the full match list' : ''">
                         <template x-for="(b, bi) in res.scoring?.breakdown?.filter(x => x.matched) || []" :key="b.name">
                           <span style="display:inline-block;margin-right:4px">
                             <span x-show="bi > 0" style="color:var(--border-subtle);margin-right:4px">·</span>
@@ -432,7 +435,10 @@
                       <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 6px 3px 18px;border-bottom:1px solid var(--border-subtle);white-space:nowrap;font-size:11px;color:var(--accent-blue)" x-text="'↳ ' + (sandboxCompareProfileName(activeAppType) || 'Compare')"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all">
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all"
+                          :class="(res.scoringB?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'sb-matched-compact' : ''"
+                          @click.stop="(res.scoringB?.breakdown?.filter(x => x.matched) || []).length > 8 && openSandboxCopy(activeAppType, res)"
+                          x-tt="(res.scoringB?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'Click to see the full match list' : ''">
                         <template x-for="(b, bi) in res.scoringB?.breakdown?.filter(x => x.matched) || []" :key="'b'+b.name">
                           <span style="display:inline-block;margin-right:4px">
                             <span x-show="bi > 0" style="color:var(--border-subtle);margin-right:4px">·</span>

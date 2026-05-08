@@ -1,1 +1,15 @@
 /* Scoring sandbox styles live mostly in shared components and inline layout for now. */
+
+/* Matched CFs cell clips long lists to ~2 lines with a soft fade so a
+   release that matches 30 CFs doesn't blow the row height up. The fade is
+   a mask (works against any row background, no overlay div) and the cell
+   becomes click-to-expand into the full breakdown panel. Only applied via
+   :class when the matched count exceeds the threshold (~8). */
+.sb-matched-compact {
+  position: relative;
+  max-height: 3em;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+}
