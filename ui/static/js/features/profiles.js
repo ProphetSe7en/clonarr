@@ -1983,23 +1983,33 @@ export default {
     // --- Quick Sync ---
 
     async quickSync(inst, sh, silent = false) {
+      // Look up the rule once — used for importedProfileId fallback AND
+      // for the SelectedCFs source-of-truth lookup below.
+      const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
       // Fallback: check auto-sync rule for importedProfileId if missing from history (pre-1.7.1 migration)
       let importedProfileId = sh.importedProfileId || '';
-      if (!importedProfileId) {
-        const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
-        if (rule?.importedProfileId) importedProfileId = rule.importedProfileId;
+      if (!importedProfileId && rule?.importedProfileId) {
+        importedProfileId = rule.importedProfileId;
       }
+      // Prefer the rule's SelectedCFs as the authoritative source. Sync
+      // history's stored SelectedCFs may lag if the auto-sync no-changes
+      // path skipped the history refresh, or if the rule was modified
+      // outside the sync history flow. Fall back to sh.selectedCFs only
+      // for orphaned profiles where no rule mapping exists.
+      const selectedCFs = (rule && Array.isArray(rule.selectedCFs))
+        ? rule.selectedCFs.slice()
+        : Object.keys(sh.selectedCFs || {}).filter(k => sh.selectedCFs[k]);
       const body = {
         instanceId: inst.id,
         profileTrashId: sh.profileTrashId,
         importedProfileId,
         arrProfileId: sh.arrProfileId,
-        selectedCFs: Object.keys(sh.selectedCFs || {}).filter(k => sh.selectedCFs[k]),
-        scoreOverrides: sh.scoreOverrides || null,
-        qualityOverrides: sh.qualityOverrides || null,
-        qualityStructure: sh.qualityStructure || null,
-        overrides: sh.overrides || null,
-        behavior: sh.behavior || null
+        selectedCFs,
+        scoreOverrides: (rule && rule.scoreOverrides) || sh.scoreOverrides || null,
+        qualityOverrides: (rule && rule.qualityOverrides) || sh.qualityOverrides || null,
+        qualityStructure: (rule && rule.qualityStructure) || sh.qualityStructure || null,
+        overrides: (rule && rule.overrides) || sh.overrides || null,
+        behavior: (rule && rule.behavior) || sh.behavior || null
       };
       try {
         const r = await fetch('/api/sync/apply', {
@@ -2238,20 +2248,53 @@ export default {
       // Restore optional CF selections from sync history
       if (sh.selectedCFs && Object.keys(sh.selectedCFs).length > 0) {
         const groups = this.profileDetail?.detail?.trashGroups || [];
+        // Look up the rule's PriorAvailableGroups snapshot — backend stamps
+        // this at every successful sync, and migrates pre-fix rules from
+        // their LastSyncCommit on first AutoSyncAfterPull. We use it to
+        // tell "user explicitly opted out of an existing group" apart
+        // from "group is brand new since last sync (TRaSH restructure)".
+        const ruleForRestore = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+        const priorAvailable = (ruleForRestore && ruleForRestore.priorAvailableGroups) || {};
+        // The rule's SelectedCFs is the authoritative source of "what's
+        // currently in the rule's sync set". sh.selectedCFs may lag if
+        // the auto-sync no-changes path skipped the history refresh
+        // (pre-fix data) or if the rule was modified outside the sync
+        // history flow. When a rule is found, prefer its SelectedCFs;
+        // fall back to sh.selectedCFs for orphaned / unmapped profiles.
+        const effectiveSelectedCFs = (ruleForRestore && Array.isArray(ruleForRestore.selectedCFs))
+          ? Object.fromEntries(ruleForRestore.selectedCFs.map(id => [id, true]))
+          : sh.selectedCFs;
         for (const group of groups) {
-          // Check if ANY CF from this group (required or optional) was in the sync
-          const groupWasSynced = group.cfs.some(cf => sh.selectedCFs[cf.trashId]);
+          const groupWasSynced = group.cfs.some(cf => effectiveSelectedCFs[cf.trashId]);
+          const groupExistedAtLastSync = group.trashId && (group.trashId in priorAvailable);
           for (const cf of group.cfs) {
-            if (!cf.required) {
-              this.selectedOptionalCFs[cf.trashId] = !!sh.selectedCFs[cf.trashId];
+            if (cf.required) continue;
+            if (effectiveSelectedCFs[cf.trashId]) {
+              // CF is currently in the rule's selection → restore as on.
+              this.selectedOptionalCFs[cf.trashId] = true;
+            } else if (groupExistedAtLastSync || !group.defaultEnabled) {
+              // Either the group existed at last sync (user's "off" choice
+              // is preserved) OR the group is opt-in (per-CF default
+              // doesn't apply when group is off). Mark CF off explicitly.
+              this.selectedOptionalCFs[cf.trashId] = false;
+            } else if (cf.default) {
+              // Brand-new default-on group + CF is default-on within the
+              // group → default to on (matches TRaSH's recommendation).
+              this.selectedOptionalCFs[cf.trashId] = true;
+            } else {
+              // Brand-new default-on group but CF is opt-in within → off.
+              this.selectedOptionalCFs[cf.trashId] = false;
             }
           }
-          // Restore group state based on whether any CF from it was synced
+          // Group toggle
           if (groupWasSynced) {
             this.selectedOptionalCFs['__grp_' + group.name] = true;
-          } else if (group.defaultEnabled) {
+          } else if (group.defaultEnabled && groupExistedAtLastSync) {
+            // Existing default-on group with no activity → user opted out → off.
             this.selectedOptionalCFs['__grp_' + group.name] = false;
           }
+          // else: brand-new default-on group → leave undefined →
+          // render fallback uses group.defaultEnabled (= true).
         }
         this.selectedOptionalCFs = { ...this.selectedOptionalCFs };
       }

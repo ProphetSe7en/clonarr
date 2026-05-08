@@ -22,6 +22,13 @@ func (app *App) AutoSyncAfterPull(trigger string) {
 	// Clean up stale rules/history for Arr profiles that no longer exist
 	app.CleanupStaleRules()
 
+	// One-time migration for pre-fix rules: derive PriorAvailableGroups
+	// retroactively from each rule's LastSyncCommit so brand-new TRaSH
+	// groups (e.g. the May 2026 French Unwanted restructure) aren't
+	// auto-disabled by restoreFromSyncHistory's "no group activity =
+	// opted out" heuristic. Idempotent — skips rules already migrated.
+	app.MigratePriorAvailableGroups()
+
 	cfg := app.Config.Get()
 	if cfg.AutoSync.Paused {
 		// Global pause is on — skip all auto-driven sync. Manual actions
@@ -165,12 +172,28 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		return outcomeError, ""
 	}
 
+	// Auto-include CFs from default-on cf-groups that are brand new since
+	// the last successful sync of this rule (TRaSH structural restructure
+	// detection). Without this, CFs that moved from profile.formatItems
+	// into a new default-on group would be dropped by the sync plan and
+	// their scores reset to 0 in Arr — see ExpandSelectedCFsForBrandNewGroups
+	// for full reasoning. We persist the expanded SelectedCFs back to the
+	// rule before plan-building so subsequent syncs keep including them
+	// even after the group is no longer brand-new from
+	// PriorAvailableGroups' perspective.
+	expandedCFs, expansionAdded := ExpandSelectedCFsForBrandNewGroups(rule, ad)
+	if len(expansionAdded) > 0 {
+		app.UpdateAutoSyncRuleSelectedCFs(rule.ID, expandedCFs)
+		rule.SelectedCFs = expandedCFs // local copy for the rest of this run
+		log.Printf("Auto-sync: rule %s — auto-included %d CF(s) from new default-on cf-group(s) (TRaSH restructure detection)", rule.ID, len(expansionAdded))
+	}
+
 	// Build sync request from rule
 	req := SyncRequest{
 		InstanceID:       rule.InstanceID,
 		ProfileTrashID:   rule.TrashProfileID,
 		ArrProfileID:     rule.ArrProfileID,
-		SelectedCFs:      rule.SelectedCFs,
+		SelectedCFs:      expandedCFs,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
 		QualityStructure: rule.QualityStructure,
@@ -244,7 +267,23 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		// extra Logf line here; the per-rule trace stays at 2 lines
 		// (begin + end) for the common no-op path.
 		log.Printf("Auto-sync: rule %s — no changes for %s", rule.ID, inst.Name)
-		app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
+		app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID))
+		// Refresh sync history's SelectedCFs to mirror the rule's current
+		// SelectedCFs. Two reasons:
+		//   1) ExpandSelectedCFsForBrandNewGroups may have just added CFs
+		//      (TRaSH structural restructure detection) — without refresh,
+		//      frontend's restoreFromSyncHistory would mark them inactive.
+		//   2) An earlier expansion sync may have run on the no-changes
+		//      path and skipped the refresh; subsequent loads would still
+		//      see stale data. Refreshing unconditionally on no-changes
+		//      keeps history.SelectedCFs in lockstep with rule.SelectedCFs.
+		// We update in-place rather than writing a new history entry to
+		// avoid bloating history with no-op events.
+		selectedCFMap := make(map[string]bool, len(rule.SelectedCFs))
+		for _, id := range rule.SelectedCFs {
+			selectedCFMap[id] = true
+		}
+		app.RefreshLatestSyncHistorySelectedCFs(inst.ID, req.ArrProfileID, selectedCFMap)
 		return outcomeNoChange, ""
 	}
 
@@ -303,7 +342,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		return outcomeError, ""
 	}
 
-	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit)
+	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID))
 
 	// Update sync history (mirror manual sync — api/sync.go handleApply).
 	allCFIDs := make([]string, 0)
@@ -660,18 +699,246 @@ func IsConnectionError(err error) bool {
 		strings.Contains(msg, "dial tcp")
 }
 
+// ExpandSelectedCFsForBrandNewGroups returns rule.SelectedCFs augmented
+// with CFs from default-on cf-groups that are BRAND NEW since the rule's
+// last successful sync. A group is "brand new" if its trash_id is NOT in
+// rule.PriorAvailableGroups but it currently applies to the rule's
+// profile (via quality_profiles.include) AND has Default == "true".
+//
+// Why: when TRaSH moves CFs from profile.formatItems into a new default-on
+// cf-group (e.g. May 2026 French Unwanted restructure), the rule's saved
+// SelectedCFs doesn't carry those CFs (they were implicit via formatItems,
+// not explicitly selected). Without expansion, sync builds a plan that
+// drops those CFs → Arr resets their scores to 0. With expansion, the
+// new group's required+default CFs are included so the sync output matches
+// pre-restructure behavior.
+//
+// The second return value is the list of newly-added CF trash_ids,
+// empty if no expansion was needed. Callers persist these back to
+// rule.SelectedCFs after a successful sync so subsequent syncs (when
+// the group is no longer brand-new) keep including them.
+func ExpandSelectedCFsForBrandNewGroups(rule AutoSyncRule, ad *AppData) ([]string, []string) {
+	if ad == nil || rule.TrashProfileID == "" {
+		return rule.SelectedCFs, nil
+	}
+	// Conservative: only expand when we have a confirmed snapshot from a
+	// prior sync. Without one we can't distinguish "rule never synced
+	// (user's create-rule UI choices are authoritative — they may have
+	// explicitly opted out of a default-on group)" from "TRaSH added a
+	// new group since last sync". Skipping expansion in the unsafe case
+	// means a user with a dead LastSyncCommit might still see the
+	// reset-bug after a structural restructure — they fix it via UI
+	// toggle. That's the lesser evil compared to silently overriding
+	// an explicit opt-out.
+	if len(rule.PriorAvailableGroups) == 0 {
+		return rule.SelectedCFs, nil
+	}
+	expanded := append([]string{}, rule.SelectedCFs...)
+	seen := make(map[string]bool, len(expanded))
+	for _, tid := range expanded {
+		seen[tid] = true
+	}
+	var added []string
+
+	for _, group := range ad.CFGroups {
+		if group.Default != "true" {
+			continue // not a default-on group; user must opt-in explicitly
+		}
+		applies := false
+		for _, profTID := range group.QualityProfiles.Include {
+			if profTID == rule.TrashProfileID {
+				applies = true
+				break
+			}
+		}
+		if !applies {
+			continue
+		}
+		// Skip groups that already existed at the last successful sync.
+		// If user had a chance to toggle and didn't enable, that's an
+		// implicit opt-out — we respect it.
+		if rule.PriorAvailableGroups != nil {
+			if _, existed := rule.PriorAvailableGroups[group.TrashID]; existed {
+				continue
+			}
+		}
+		// Brand-new default-on group. Add its required+default CFs.
+		for _, cf := range group.CustomFormats {
+			isDefault := cf.Default != nil && *cf.Default
+			if !cf.Required && !isDefault {
+				continue
+			}
+			if !seen[cf.TrashID] {
+				expanded = append(expanded, cf.TrashID)
+				seen[cf.TrashID] = true
+				added = append(added, cf.TrashID)
+			}
+		}
+	}
+	return expanded, added
+}
+
+// MigratePriorAvailableGroups scans all rules and populates
+// PriorAvailableGroups for any rule that has a LastSyncCommit but no
+// snapshot yet. Computes the snapshot retroactively by reading the
+// trash-guides repo at the rule's LastSyncCommit. Idempotent — rules
+// already carrying a snapshot are skipped.
+//
+// Why: restoreFromSyncHistory uses PriorAvailableGroups to distinguish
+// "user explicitly opted out of an existing group" from "group is
+// brand new since last sync". Without this migration, pre-fix rules
+// hit by TRaSH structural restructures (CFs moving from formatItems
+// into a new default-on cf-group) would have the new group auto-set
+// to false, silently zeroing the user's previous CF blocks.
+func (app *App) MigratePriorAvailableGroups() {
+	cfg := app.Config.Get()
+	if len(cfg.AutoSync.Rules) == 0 {
+		return
+	}
+
+	// Cache by commit hash — many rules typically share the same
+	// LastSyncCommit, so we git-read each commit's groups only once.
+	commitCache := make(map[string]map[string]CommitGroupInfo)
+
+	var migrated int
+	for _, rule := range cfg.AutoSync.Rules {
+		if rule.PriorAvailableGroups != nil {
+			continue // already migrated
+		}
+		if rule.LastSyncCommit == "" {
+			continue // never successfully synced — nothing to migrate from
+		}
+		if rule.TrashProfileID == "" {
+			continue // imported profile — group resolution is a separate path
+		}
+
+		commitGroups, ok := commitCache[rule.LastSyncCommit]
+		if !ok {
+			commitGroups = app.Trash.GroupsAtCommit(rule.LastSyncCommit)
+			commitCache[rule.LastSyncCommit] = commitGroups
+		}
+
+		// Filter to groups that included this rule's profile at that commit.
+		snapshot := make(map[string]bool)
+		for groupTID, info := range commitGroups {
+			for _, profTID := range info.Includes {
+				if profTID == rule.TrashProfileID {
+					snapshot[groupTID] = info.DefaultEnabled
+					break
+				}
+			}
+		}
+
+		// Save. Even an empty snapshot is recorded (as empty map) so we
+		// don't repeat the migration on every pull tick — the empty map
+		// itself signals "we've looked, found nothing relevant".
+		ruleID := rule.ID
+		app.Config.Update(func(cfg *Config) {
+			for i := range cfg.AutoSync.Rules {
+				if cfg.AutoSync.Rules[i].ID == ruleID {
+					if cfg.AutoSync.Rules[i].PriorAvailableGroups == nil {
+						cfg.AutoSync.Rules[i].PriorAvailableGroups = snapshot
+					}
+					return
+				}
+			}
+		})
+		migrated++
+	}
+
+	if migrated > 0 {
+		log.Printf("Migration: populated PriorAvailableGroups for %d rule(s) from LastSyncCommit", migrated)
+	}
+}
+
+// RefreshLatestSyncHistorySelectedCFs updates the latest sync history
+// entry's SelectedCFs map for an instance+profile pair. Used when the
+// auto-sync no-changes path runs but ExpandSelectedCFsForBrandNewGroups
+// added CFs — the rule's SelectedCFs has been updated, but the existing
+// sync history entry's SelectedCFs is now stale. Frontend's
+// restoreFromSyncHistory uses sync history's SelectedCFs (not the rule's)
+// to drive the UI's group/CF toggle state, so without this refresh it
+// would mark the expanded CFs as inactive and Dry Run would propose
+// resetting their scores to 0. We update in-place rather than writing
+// a new history entry to avoid bloating history with no-op events.
+func (app *App) RefreshLatestSyncHistorySelectedCFs(instanceID string, arrProfileID int, selectedCFMap map[string]bool) {
+	app.Config.Update(func(cfg *Config) {
+		latestIdx := -1
+		var latestTime string
+		for i := range cfg.SyncHistory {
+			sh := &cfg.SyncHistory[i]
+			if sh.InstanceID != instanceID || sh.ArrProfileID != arrProfileID {
+				continue
+			}
+			if sh.LastSync > latestTime {
+				latestTime = sh.LastSync
+				latestIdx = i
+			}
+		}
+		if latestIdx == -1 {
+			return // no entry to refresh
+		}
+		cfg.SyncHistory[latestIdx].SelectedCFs = selectedCFMap
+	})
+}
+
+// UpdateAutoSyncRuleSelectedCFs persists a rule's SelectedCFs list. Used
+// after ExpandSelectedCFsForBrandNewGroups added CFs from a brand-new
+// default-on cf-group; we save the expanded set so subsequent syncs (when
+// the group is no longer brand-new from PriorAvailableGroups' perspective)
+// continue to include those CFs.
+func (app *App) UpdateAutoSyncRuleSelectedCFs(ruleID string, selectedCFs []string) {
+	app.Config.Update(func(cfg *Config) {
+		for i := range cfg.AutoSync.Rules {
+			if cfg.AutoSync.Rules[i].ID == ruleID {
+				cfg.AutoSync.Rules[i].SelectedCFs = selectedCFs
+				return
+			}
+		}
+	})
+}
+
 // updateAutoSyncRuleCommit updates the last sync commit and clears error for a rule.
-func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string) {
+// priorGroups is the snapshot of cf-groups available for this rule's profile at
+// this sync — written so future loads can distinguish "user opted out of an
+// existing group" from "group is brand new since last sync". Pass nil to leave
+// the snapshot unchanged (e.g. when the caller hasn't computed it).
+func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string, priorGroups map[string]bool) {
 	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
 				cfg.AutoSync.Rules[i].LastSyncCommit = commit
 				cfg.AutoSync.Rules[i].LastSyncTime = time.Now().Format(time.RFC3339)
 				cfg.AutoSync.Rules[i].LastSyncError = ""
+				if priorGroups != nil {
+					cfg.AutoSync.Rules[i].PriorAvailableGroups = priorGroups
+				}
 				return
 			}
 		}
 	})
+}
+
+// ComputeAvailableGroups returns map of cf-group trash_id → group.Default == "true"
+// for cf-groups that include profileTrashID in their quality_profiles.include
+// list. Used at sync time to snapshot rule state into PriorAvailableGroups.
+// Frontend then uses presence/absence of a group's trash_id in this map to
+// distinguish "group existed at last sync" (use existing heuristic) from
+// "group is brand new since last sync" (use group's defaultEnabled).
+func ComputeAvailableGroups(ad *AppData, profileTrashID string) map[string]bool {
+	if ad == nil || profileTrashID == "" {
+		return nil
+	}
+	result := make(map[string]bool)
+	for _, group := range ad.CFGroups {
+		for _, profTID := range group.QualityProfiles.Include {
+			if profTID == profileTrashID {
+				result[group.TrashID] = group.Default == "true"
+				break
+			}
+		}
+	}
+	return result
 }
 
 // updateAutoSyncRuleError sets the last error for a rule (does NOT update commit).

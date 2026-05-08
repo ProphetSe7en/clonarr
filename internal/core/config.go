@@ -100,6 +100,14 @@ type AutoSyncRule struct {
 	LastSyncCommit    string          `json:"lastSyncCommit,omitempty"`
 	LastSyncTime      string          `json:"lastSyncTime,omitempty"`
 	LastSyncError     string          `json:"lastSyncError,omitempty"`
+	// PriorAvailableGroups is a snapshot of which cf-groups were available
+	// for this rule's profile at last successful sync. Map of
+	// group_trash_id → was_default_enabled_at_last_sync. Used to detect
+	// brand-new groups added by TRaSH restructures so they aren't auto-
+	// disabled by restoreFromSyncHistory's "no group activity = opted out"
+	// heuristic. Empty for pre-fix rules; populated lazily at startup
+	// via LastSyncCommit + git lookup, then on every successful sync.
+	PriorAvailableGroups map[string]bool `json:"priorAvailableGroups,omitempty"`
 	// OrphanedAt is set (RFC3339 timestamp) when clonarr's drift-check
 	// detects that ArrProfileID no longer resolves in the target Arr
 	// instance. Auto-sync skips orphaned rules; the UI exposes Restore

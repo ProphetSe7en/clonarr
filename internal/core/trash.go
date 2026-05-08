@@ -602,6 +602,69 @@ func classifyTrashPath(p string) *PullChange {
 	return &PullChange{App: app, Category: cat, Name: name}
 }
 
+// CommitGroupInfo describes a cf-group's state at a specific git commit.
+// Returned by GroupsAtCommit and used by the rule-migration path so
+// pre-fix rules can populate PriorAvailableGroups retroactively.
+type CommitGroupInfo struct {
+	DefaultEnabled bool     // group.Default == "true" at this commit
+	Includes       []string // profile trash_ids in quality_profiles.include
+}
+
+// GroupsAtCommit returns cf-group trash_ids and their state at the given
+// git commit. Walks both radarr/cf-groups/ and sonarr/cf-groups/ and
+// reads each .json via `git show <commit>:<path>`. Errors are absorbed
+// (specific commit may not exist after shallow-clone re-init) — caller
+// treats empty result as "no info, leave migration entry empty".
+func (ts *TrashStore) GroupsAtCommit(commit string) map[string]CommitGroupInfo {
+	if commit == "" || ts.dataDir == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	result := make(map[string]CommitGroupInfo)
+	for _, app := range []string{"radarr", "sonarr"} {
+		dir := "docs/json/" + app + "/cf-groups/"
+		listCmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "ls-tree", "--name-only", commit, dir)
+		listOut, err := listCmd.Output()
+		if err != nil {
+			continue
+		}
+		for _, path := range strings.Split(strings.TrimSpace(string(listOut)), "\n") {
+			if !strings.HasSuffix(path, ".json") {
+				continue
+			}
+			showCmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "show", commit+":"+path)
+			content, err := showCmd.Output()
+			if err != nil {
+				continue
+			}
+			var g struct {
+				TrashID         string `json:"trash_id"`
+				Default         string `json:"default"`
+				QualityProfiles struct {
+					Include map[string]string `json:"include"`
+				} `json:"quality_profiles"`
+			}
+			if err := json.Unmarshal(content, &g); err != nil {
+				continue
+			}
+			if g.TrashID == "" {
+				continue
+			}
+			includes := make([]string, 0, len(g.QualityProfiles.Include))
+			for _, profTID := range g.QualityProfiles.Include {
+				includes = append(includes, profTID)
+			}
+			result[g.TrashID] = CommitGroupInfo{
+				DefaultEnabled: g.Default == "true",
+				Includes:       includes,
+			}
+		}
+	}
+	return result
+}
+
 // DiffPull runs `git diff --name-status <prev>..<new> -- docs/json/` and
 // classifies each changed file. Returns an empty PullChangeSet if either commit
 // hash is missing or unchanged (no diff to report). Errors are surfaced so
@@ -1341,11 +1404,10 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 	for _, group := range ad.CFGroups {
 		category, shortName := ParseCategoryPrefix(group.Name)
 
-		// Same defaultEnabled logic as ProfileCFCategories
+		// Trust TRaSH's `default` flag. quality_profiles.include already
+		// scopes which groups appear per profile, so the flag is authoritative
+		// within that scope.
 		defaultEnabled := group.Default == "true"
-		if category == "Streaming Services" && shortName != "General" {
-			defaultEnabled = false
-		}
 
 		// Detect exclusive groups
 		exclusive := strings.Contains(strings.ToLower(group.TrashDescription), "only score or enable one") ||
@@ -1797,6 +1859,7 @@ type CategoryCFGroup struct {
 	Name             string                `json:"name"`      // "[Audio] Audio Formats"
 	ShortName        string                `json:"shortName"` // "Audio Formats"
 	Category         string                `json:"category"`  // "Audio"
+	TrashID          string                `json:"trashId"`   // matches CFGroup.TrashID — used by frontend to look up rule.priorAvailableGroups for new-vs-existing classification
 	TrashDescription string                `json:"trashDescription"`
 	DefaultEnabled   bool                  `json:"defaultEnabled"` // group.Default == "true"
 	Exclusive        bool                  `json:"exclusive"`      // only one CF can be active (Golden Rule)
@@ -2042,17 +2105,16 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 
 		category, shortName := ParseCategoryPrefix(group.Name)
 
-		// For Streaming Services, only "General" is enabled by default
+		// Trust TRaSH's `default` flag. quality_profiles.include already
+		// scopes which groups appear per profile.
 		defaultEnabled := group.Default == "true"
-		if category == "Streaming Services" && shortName != "General" {
-			defaultEnabled = false
-		}
 
 		// Detect exclusive groups (Golden Rule: "only score or enable one")
 		exclusive := strings.Contains(strings.ToLower(group.TrashDescription), "only score or enable one") ||
 			strings.Contains(strings.ToLower(group.TrashDescription), "only enable one")
 
 		cg := CategoryCFGroup{
+			TrashID:          group.TrashID,
 			Name:             group.Name,
 			ShortName:        shortName,
 			Category:         category,
@@ -2198,15 +2260,15 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 
 		category, shortName := ParseCategoryPrefix(group.Name)
 
+		// Trust TRaSH's `default` flag. quality_profiles.include already
+		// scopes which groups appear per profile.
 		defaultEnabled := group.Default == "true"
-		if category == "Streaming Services" && shortName != "General" {
-			defaultEnabled = false
-		}
 
 		exclusive := strings.Contains(strings.ToLower(group.TrashDescription), "only score or enable one") ||
 			strings.Contains(strings.ToLower(group.TrashDescription), "only enable one")
 
 		cg := CategoryCFGroup{
+			TrashID:          group.TrashID,
 			Name:             group.Name,
 			ShortName:        shortName,
 			Category:         category,
@@ -2382,6 +2444,7 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 			strings.Contains(strings.ToLower(group.TrashDescription), "only enable one")
 
 		cg := CategoryCFGroup{
+			TrashID:          group.TrashID,
 			Name:             group.Name,
 			ShortName:        shortName,
 			Category:         category,
