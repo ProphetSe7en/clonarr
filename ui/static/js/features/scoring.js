@@ -673,6 +673,33 @@ export default {
       this.showToast(`Removed ${removed} release${removed > 1 ? 's' : ''} from "${set.name}" (still in results).`, 'info', 4000);
     },
 
+    // Wipe all release rows from the table. Destructive — no undo.
+    // Also clears the active score-set selection because keeping it
+    // selected would show a count like "5 of 5" while displaying zero
+    // rows (set's titles can no longer match anything in empty results).
+    // Score sets themselves are kept — only the active selection clears.
+    async sandboxClearResults(appType) {
+      const sb = this.sandbox[appType];
+      const count = (sb.results || []).length;
+      if (count === 0) return;
+      const ok = await new Promise(resolve => {
+        this.confirmModal = {
+          show: true,
+          title: 'Clear all results?',
+          message: `Wipe all ${count} release row${count === 1 ? '' : 's'} from the table. Saved score sets are kept, but any active set will unselect since its releases are gone. This cannot be undone — paste/search again to repopulate.`,
+          confirmLabel: 'Clear',
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false)
+        };
+      });
+      if (!ok) return;
+      sb.results = [];
+      sb.activeScoreSet = '';
+      sb.filterToSelected = false;
+      this.saveSandboxResults(appType);
+      this.sandboxSaveScoreSets(appType);
+    },
+
     async sandboxDeleteScoreSet(appType, id) {
       const sb = this.sandbox[appType];
       const set = (sb.scoreSets || []).find(s => s.id === id);

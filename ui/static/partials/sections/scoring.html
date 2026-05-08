@@ -232,26 +232,31 @@
           <!-- Results -->
           <template x-if="sandbox[activeAppType].results?.length > 0">
             <div>
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
-                <!-- Action buttons sit above the checkbox column so the cause/effect is visually co-located. -->
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <button class="btn btn-sm"
-                          :style="sandbox[activeAppType].filterToSelected ? 'background:var(--accent-blue-strong);border-color:var(--accent-blue-strong);color:var(--text-on-accent)' : ''"
-                          :disabled="!sandbox[activeAppType].filterToSelected && sandboxSelectedCount(activeAppType) === 0"
-                          @click="sandbox[activeAppType].filterToSelected = !sandbox[activeAppType].filterToSelected"
-                          x-tt="sandbox[activeAppType].filterToSelected ? 'Show all releases again' : 'Hide unchecked rows'"
-                          x-text="sandbox[activeAppType].filterToSelected ? '✓ Filtered to selected' : 'Filter to selected'"></button>
-                  <button class="btn btn-sm" x-show="sandboxSelectedCount(activeAppType) > 0"
-                          @click="sandbox[activeAppType].results.forEach(r => r._selected = false); sandbox[activeAppType].results = [...sandbox[activeAppType].results]; sandbox[activeAppType].filterToSelected = false"
-                          x-tt="'Uncheck all'">Reset filter</button>
-                  <button class="btn btn-sm" @click="sandbox[activeAppType].results = []; saveSandboxResults(activeAppType)">Clear</button>
-                </div>
-                <div style="font-size:14px;font-weight:600;color:var(--text-body)">
-                  <span x-text="sandbox[activeAppType].results.length + ' Release' + (sandbox[activeAppType].results.length > 1 ? 's' : '')"></span>
-                  <span x-show="sandboxSelectedCount(activeAppType) > 0" style="font-size:12px;color:var(--accent-blue);font-weight:500;margin-left:6px"
-                        x-text="'· ' + sandboxSelectedCount(activeAppType) + ' selected'"></span>
-                  <span x-show="sandbox[activeAppType].sortCol === 'manual'" style="font-size:12px;color:var(--accent-purple);font-weight:500;margin-left:6px" x-tt="'Custom order from drag-reorder. Click a column header to resort.'">· manual order</span>
-                </div>
+              <!-- Count alone on its own row — separated from action buttons
+                   so the buttons aren't visually claimed by the bulk-paste
+                   section above. -->
+              <div style="margin-bottom:6px;font-size:14px;font-weight:600;color:var(--text-body)">
+                <span x-text="sandbox[activeAppType].results.length + ' Release' + (sandbox[activeAppType].results.length > 1 ? 's' : '')"></span>
+                <span x-show="sandboxSelectedCount(activeAppType) > 0" style="font-size:12px;color:var(--accent-blue);font-weight:500;margin-left:6px"
+                      x-text="'· ' + sandboxSelectedCount(activeAppType) + ' selected'"></span>
+                <span x-show="sandbox[activeAppType].sortCol === 'manual'" style="font-size:12px;color:var(--accent-purple);font-weight:500;margin-left:6px" x-tt="'Custom order from drag-reorder. Click a column header to resort.'">· manual order</span>
+              </div>
+              <!-- Action buttons row — below the count, above the score-sets
+                   panel. Clear is red because it's destructive. -->
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+                <button class="btn btn-sm"
+                        :style="sandbox[activeAppType].filterToSelected ? 'background:var(--accent-blue-strong);border-color:var(--accent-blue-strong);color:var(--text-on-accent)' : ''"
+                        :disabled="!sandbox[activeAppType].filterToSelected && sandboxSelectedCount(activeAppType) === 0"
+                        @click="sandbox[activeAppType].filterToSelected = !sandbox[activeAppType].filterToSelected"
+                        x-tt="sandbox[activeAppType].filterToSelected ? 'Show all releases again' : 'Hide unchecked rows'"
+                        x-text="sandbox[activeAppType].filterToSelected ? '✓ Filtered to selected' : 'Filter to selected'"></button>
+                <button class="btn btn-sm" x-show="sandboxSelectedCount(activeAppType) > 0"
+                        @click="sandbox[activeAppType].results.forEach(r => r._selected = false); sandbox[activeAppType].results = [...sandbox[activeAppType].results]; sandbox[activeAppType].filterToSelected = false"
+                        x-tt="'Uncheck all'">Reset filter</button>
+                <button class="btn btn-sm"
+                        style="border-color:var(--accent-red);color:var(--accent-red)"
+                        @click="sandboxClearResults(activeAppType)"
+                        x-tt="'Wipe ALL release rows from the table. Destructive — no undo. Score sets are kept but unselected.'">Clear</button>
               </div>
 
               <!-- Score Sets row — saved subsets of releases for repeated testing.
