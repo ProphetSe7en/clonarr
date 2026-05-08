@@ -2942,7 +2942,7 @@ export default {
     },
 
     qsResetDrag() {
-      this.qualityStructureDrag = { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null };
+      this.qualityStructureDrag = { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null, dropMemberGroup: null, dropMemberGap: null };
     },
 
     // Shared qs editor state (editMode / expanded / renaming) is used by BOTH the Builder's
@@ -3067,6 +3067,49 @@ export default {
             },
             onCancel: null,
           };
+        }
+      }
+      this.qsResetDrag();
+    },
+
+    // Drop on a gap BETWEEN members inside a group → reorder member position,
+    // move from another group, or insert a top-level single as a member at
+    // that position. groupIdx = group's top-level index; gapIdx = position
+    // in group.items (0 = before first, items.length = after last).
+    qsHandleDropOnMemberGap(groupIdx, gapIdx, target = 'edit') {
+      const d = this.qualityStructureDrag;
+      const arr = this._qsArr(target);
+      const grp = arr[groupIdx];
+      if (!grp || !grp.items) { this.qsResetDrag(); return; }
+      if (d.kind === 'member' && d.srcGroup === groupIdx) {
+        // Reorder within same group
+        if (d.srcMember === gapIdx || d.srcMember === gapIdx - 1) { this.qsResetDrag(); return; }
+        const memberName = grp.items.splice(d.srcMember, 1)[0];
+        const insertAt = d.srcMember < gapIdx ? gapIdx - 1 : gapIdx;
+        grp.items.splice(insertAt, 0, memberName);
+      } else if (d.kind === 'member') {
+        // Move member from a different group into this group at position
+        const oldGroup = arr[d.srcGroup];
+        if (!oldGroup || !oldGroup.items) { this.qsResetDrag(); return; }
+        const memberName = oldGroup.items.splice(d.srcMember, 1)[0];
+        let realGroupIdx = groupIdx;
+        if (oldGroup.items.length === 0) {
+          arr.splice(d.srcGroup, 1);
+          if (d.srcGroup < realGroupIdx) realGroupIdx -= 1;
+        }
+        if (arr[realGroupIdx] && arr[realGroupIdx].items) {
+          arr[realGroupIdx].items.splice(gapIdx, 0, memberName);
+        }
+      } else if (d.kind === 'top') {
+        // Top-level row → add as member at position (singles only; group→group
+        // member-merge is ambiguous so we delegate to drop-on-row instead).
+        const srcItem = arr[d.src];
+        if (!srcItem || srcItem.items) { this.qsResetDrag(); return; }
+        arr.splice(d.src, 1);
+        let realGroupIdx = groupIdx;
+        if (d.src < realGroupIdx) realGroupIdx -= 1;
+        if (arr[realGroupIdx] && arr[realGroupIdx].items) {
+          arr[realGroupIdx].items.splice(gapIdx, 0, srcItem.name);
         }
       }
       this.qsResetDrag();

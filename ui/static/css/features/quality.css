@@ -41,3 +41,10 @@
   .qs-tiny-x { background: transparent; border: 1px solid var(--accent-red); color: var(--accent-red); padding: 0 5px; font-size:11px; border-radius: 3px; cursor: pointer; line-height: 14px; }
   .qs-tiny-x:hover { background: var(--accent-red); color: var(--bg-page); }
   .qs-empty-group { font-style: italic; color: var(--text-muted); font-size:12px; }
+
+  /* Member-level drop gap inside an expanded group. Same idle-thin/hover-blue
+     pattern as .qs-drop-gap but tighter spacing to fit between member pills. */
+  .qs-member-gap { position: relative; height: 3px; margin: 0; border-radius: 2px; transition: background 0.12s; }
+  .qs-member-gap.dnd-active { background: var(--alpha-blue); }
+  .qs-member-gap.dnd-hover  { background: var(--accent-blue); }
+  .qs-member-gap.dnd-active::before { content: ''; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }

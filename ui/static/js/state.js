@@ -139,7 +139,7 @@ export default function baseState() {
     qualityStructureEditMode: false,
     qualityStructureExpanded: {},
     qualityStructureRenaming: null,
-    qualityStructureDrag: { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null },
+    qualityStructureDrag: { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null, dropMemberGroup: null, dropMemberGap: null },
     _qsIdCounter: 0,
     _sbIdCounter: 0,
     extraCFs: {}, // { trashId: score } — extra CFs not in profile

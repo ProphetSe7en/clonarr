@@ -150,7 +150,7 @@
 
               <!-- Quality card. Spans full grid width when the items editor is open so
                    drag-drop has room (avoids column-count overflow in the narrow half-width). -->
-              <div class="pd-card pd-card-quality" :style="pb.qualityEditorOpen ? 'grid-column:1/-1' : ''">
+              <div class="pd-card pd-card-quality">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted)">
                   <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
                 </div>
@@ -190,7 +190,7 @@
                     </template>
                   </div>
                   <button class="btn" style="font-size:12px;padding:2px 10px;border-color:var(--accent-purple);color:var(--accent-purple)"
-                          @click="pb.qualityEditorOpen = !pb.qualityEditorOpen; if(pb.qualityEditorOpen) { if(pb.qualityItems.length === 0) pbInitQualityEditor(); pbEnsureQualityIds(); } else { qsCloseSharedState(); }"
+                          @click="if (pb.qualityEditorOpen) { pb.qualityEditorOpen = false; qsCloseSharedState(); } else { if(pb.qualityItems.length === 0) pbInitQualityEditor(); pbEnsureQualityIds(); pb.qualityEditorOpen = true; }"
                           x-text="pb.qualityEditorOpen ? '✓ Done' : 'Edit Quality Items'"></button>
                 </div>
                 <div x-show="pb.qualityAllowedNames && !pb.qualityEditorOpen" style="margin-top:8px;font-size:12px;color:var(--text-muted)">
@@ -227,122 +227,6 @@
                   </div>
                 </template>
 
-                <!-- Quality Items editor — shared markup with Edit view (profile-detail's Quality Overrides).
-                     Uses qs-* helpers with target='builder' so all drag-drop/rename/group operations
-                     mutate pb.qualityItems instead of qualityStructure. Edit Groups toggle + expanded +
-                     rename + drag state are shared (only one editor open at a time). -->
-                <div x-show="pb.qualityEditorOpen" x-cloak style="margin-top:12px;border-top:1px solid var(--bg-muted);padding-top:12px"
-                     :class="qualityStructureEditMode ? 'qs-edit-on' : ''">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-                    <div style="font-size:12px;color:var(--text-muted)" x-show="!qualityStructureEditMode">Toggle resolutions on/off. Qualities higher in the list are more preferred.</div>
-                    <div style="font-size:12px;color:var(--text-muted)" x-show="qualityStructureEditMode">Drag rows to reorder · drop on a row to merge · click group name to rename</div>
-                    <div style="flex:1"></div>
-                    <button class="btn" style="font-size:12px;padding:2px 10px"
-                            :style="qualityStructureEditMode ? 'background:var(--accent-green-strong);border-color:var(--accent-green-strong);color:var(--text-on-accent)' : ''"
-                            @click="qualityStructureEditMode = !qualityStructureEditMode; if (!qualityStructureEditMode) { qualityStructureExpanded = {}; qualityStructureRenaming = null; }">
-                      <span x-text="qualityStructureEditMode ? '✓ Done Editing Groups' : 'Edit Groups'"></span>
-                    </button>
-                    <button class="btn" style="font-size:12px;padding:2px 10px;border-color:var(--accent-orange);color:var(--accent-orange)"
-                            x-tt="'Clear quality items — re-apply a preset to repopulate'"
-                            @click="qsResetAll('builder')">Reset</button>
-                  </div>
-                  <div :style="'column-count:' + (pb.qualityItems.length > 12 ? 3 : pb.qualityItems.length > 6 ? 2 : 1) + ';column-gap:16px'">
-                    <template x-for="(item, idx) in pb.qualityItems" :key="item._id || ('pbqi-'+idx)">
-                      <div style="break-inside:avoid">
-                        <template x-if="idx === 0 && qualityStructureEditMode">
-                          <div class="qs-drop-gap"
-                               :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === 0 }"
-                               @dragover.prevent="qualityStructureDrag.dropGap = 0"
-                               @dragleave="qualityStructureDrag.dropGap = null"
-                               @drop.prevent="qsHandleDropOnGap(0, 'builder')"></div>
-                        </template>
-                        <div class="qs-row"
-                             :class="{
-                               'is-group': item.items && qualityStructureEditMode,
-                               'is-dragging': qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx,
-                               'dnd-merge-hover': qualityStructureDrag.dropMerge === idx
-                             }"
-                             :draggable="qualityStructureEditMode"
-                             @dragstart="if (qualityStructureEditMode) { event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx; }"
-                             @dragover.prevent="if (qualityStructureEditMode && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
-                             @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
-                             @drop.prevent="qsHandleDropOnRow(idx, 'builder')"
-                             @dragend="qsResetDrag()">
-                          <span class="qs-handle" x-show="qualityStructureEditMode" x-tt="'Drag to reorder · drop on another row to merge'">⋮⋮</span>
-                          <template x-if="qualityStructureEditMode">
-                            <template x-if="item.items">
-                              <span class="qs-chevron"
-                                    :class="{ open: qualityStructureExpanded[item._id] }"
-                                    @click="qualityStructureExpanded[item._id] = !qualityStructureExpanded[item._id]">&#9654;</span>
-                            </template>
-                          </template>
-                          <template x-if="qualityStructureEditMode && !item.items">
-                            <span style="width:10px;display:inline-block"></span>
-                          </template>
-                          <label class="toggle toggle-sm" style="flex-shrink:0">
-                            <!-- Same pattern as qualityStructure toggle (line 3615): reassign
-                                 pb.qualityItems by spread so x-effect on the cutoff select
-                                 (populatePBCutoffSelect) re-runs. Plain x-model mutates in
-                                 place; Alpine's reactivity through function-argument arrays
-                                 doesn't always propagate to the cutoff select without a
-                                 top-level reference change. -->
-                            <input type="checkbox"
-                                   :checked="item.allowed"
-                                   @change="item.allowed = $event.target.checked; pb.qualityItems = pb.qualityItems.slice()">
-                            <span class="slider"></span>
-                          </label>
-                          <template x-if="qualityStructureRenaming !== item._id">
-                            <span class="qs-name"
-                                  :class="(qualityStructureEditMode && item.items) ? 'editable' : ''"
-                                  :style="item.allowed ? 'color:var(--text-primary)' : 'color:var(--text-muted)'"
-                                  @click="if (qualityStructureEditMode && item.items) qsStartRename(item)"
-                                  x-text="item.name"></span>
-                          </template>
-                          <template x-if="qualityStructureRenaming === item._id">
-                            <input class="qs-rename-input"
-                                   x-model="item.name"
-                                   @blur="qualityStructureRenaming = null"
-                                   @keyup.enter="qualityStructureRenaming = null"
-                                   @keyup.escape="qualityStructureRenaming = null"
-                                   x-init="$nextTick(() => $el.focus())">
-                          </template>
-                          <span x-show="item.items" class="qs-badge" x-text="item.items?.length"></span>
-                          <button x-show="qualityStructureEditMode && item.items" class="qs-tiny-x"
-                                  style="font-size:11px;padding:0 6px"
-                                  @click="qsDeleteGroup(idx, 'builder')" x-tt="'Delete group (members become individual singles)'">× delete</button>
-                        </div>
-                        <div class="qs-group-members"
-                             x-show="item.items && qualityStructureEditMode && qualityStructureExpanded[item._id]"
-                             x-cloak
-                             :class="{ 'dnd-merge-hover': qualityStructureDrag.dropMerge === idx && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) }"
-                             @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
-                             @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
-                             @drop.prevent.stop="qsHandleDropOnRow(idx, 'builder')">
-                          <template x-for="(m, mIdx) in item.items" :key="'pbqsm-'+item._id+'-'+m+'-'+mIdx">
-                            <div class="qs-member"
-                                 :class="{ 'is-dragging': qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx && qualityStructureDrag.srcMember === mIdx }">
-                              <span class="qs-pill"
-                                    draggable="true"
-                                    @dragstart.stop="event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'member'; qualityStructureDrag.srcGroup = idx; qualityStructureDrag.srcMember = mIdx"
-                                    @dragend="qsResetDrag()"
-                                    x-text="m"></span>
-                              <div style="flex:1"></div>
-                              <button class="qs-tiny-x" @click="qsUngroupMember(idx, mIdx, 'builder')" x-tt="'Remove from group (back to single)'">×</button>
-                            </div>
-                          </template>
-                          <div class="qs-empty-group" x-show="item.items?.length === 0">empty group — drag a member here or click × delete</div>
-                        </div>
-                        <template x-if="qualityStructureEditMode">
-                          <div class="qs-drop-gap"
-                               :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === idx + 1 }"
-                               @dragover.prevent="qualityStructureDrag.dropGap = idx + 1"
-                               @dragleave="qualityStructureDrag.dropGap = null"
-                               @drop.prevent="qsHandleDropOnGap(idx + 1, 'builder')"></div>
-                        </template>
-                      </div>
-                    </template>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -602,6 +486,133 @@
         </template>
       </div>
     </div>
+
+    <!-- Quality Items editor modal — same layout as Profile Detail's modal,
+         but bound to pb.qualityItems via target='builder' on the qs-* helpers. -->
+    <template x-if="pb.qualityEditorOpen">
+      <div x-cloak
+           @click.self="pb.qualityEditorOpen = false; qsCloseSharedState();"
+           style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:1000;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:8px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
+          <!-- Modal header: title + close -->
+          <div style="padding:14px 18px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:10px">
+            <div style="font-size:15px;font-weight:600;color:var(--text-primary)">Edit Quality Items</div>
+            <div style="font-size:12px;color:var(--text-secondary)">— toggle on/off · drag to reorder · drop on a row to merge · ▶ to expand · click group name to rename</div>
+            <button @click="pb.qualityEditorOpen = false; qsCloseSharedState();"
+                    x-tt="'Close (changes stay in builder state until Save)'"
+                    style="margin-left:auto;background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;padding:0 6px;line-height:1">&times;</button>
+          </div>
+          <!-- Modal body (scrollable) -->
+          <div style="padding:16px 18px;overflow-y:auto;flex:1">
+            <!-- Reset row -->
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+              <div style="flex:1"></div>
+              <button class="btn" style="font-size:12px;padding:2px 10px;border-color:var(--accent-orange);color:var(--accent-orange)"
+                      x-tt="'Clear quality items — re-apply a preset to repopulate'"
+                      @click="qsResetAll('builder')">Reset</button>
+            </div>
+            <div :style="'column-count:' + (pb.qualityItems.length > 12 ? 3 : pb.qualityItems.length > 6 ? 2 : 1) + ';column-gap:16px'">
+              <template x-for="(item, idx) in pb.qualityItems" :key="item._id || ('pbqi-'+idx)">
+                <div style="break-inside:avoid">
+                  <template x-if="idx === 0">
+                    <div class="qs-drop-gap"
+                         :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === 0 }"
+                         @dragover.prevent="qualityStructureDrag.dropGap = 0"
+                         @dragleave="qualityStructureDrag.dropGap = null"
+                         @drop.prevent="qsHandleDropOnGap(0, 'builder')"></div>
+                  </template>
+                  <div class="qs-row"
+                       :class="{
+                         'is-group': item.items,
+                         'is-dragging': qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx,
+                         'dnd-merge-hover': qualityStructureDrag.dropMerge === idx
+                       }"
+                       :draggable="true"
+                       @dragstart="event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx;"
+                       @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                       @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
+                       @drop.prevent="qsHandleDropOnRow(idx, 'builder')"
+                       @dragend="qsResetDrag()">
+                    <span class="qs-handle" x-tt="'Drag to reorder · drop on another row to merge'">⋮⋮</span>
+                    <template x-if="item.items">
+                      <span class="qs-chevron"
+                            :class="{ open: qualityStructureExpanded[item._id] }"
+                            @click="qualityStructureExpanded[item._id] = !qualityStructureExpanded[item._id]">&#9654;</span>
+                    </template>
+                    <template x-if="!item.items">
+                      <span style="width:10px;display:inline-block"></span>
+                    </template>
+                    <label class="toggle toggle-sm" style="flex-shrink:0">
+                      <input type="checkbox"
+                             :checked="item.allowed"
+                             @change="item.allowed = $event.target.checked; pb.qualityItems = pb.qualityItems.slice()">
+                      <span class="slider"></span>
+                    </label>
+                    <template x-if="qualityStructureRenaming !== item._id">
+                      <span class="qs-name"
+                            :class="item.items ? 'editable' : ''"
+                            :style="item.allowed ? 'color:var(--text-primary)' : 'color:var(--text-muted)'"
+                            @click="if (item.items) qsStartRename(item)"
+                            x-text="item.name"></span>
+                    </template>
+                    <template x-if="qualityStructureRenaming === item._id">
+                      <input class="qs-rename-input"
+                             x-model="item.name"
+                             @blur="qualityStructureRenaming = null"
+                             @keyup.enter="qualityStructureRenaming = null"
+                             @keyup.escape="qualityStructureRenaming = null"
+                             x-init="$nextTick(() => $el.focus())">
+                    </template>
+                    <span x-show="item.items" class="qs-badge" x-text="item.items?.length"></span>
+                    <button x-show="item.items" class="qs-tiny-x"
+                            style="font-size:11px;padding:0 6px"
+                            @click="qsDeleteGroup(idx, 'builder')" x-tt="'Delete group (members become individual singles)'">× delete</button>
+                  </div>
+                  <div class="qs-group-members"
+                       x-show="item.items && qualityStructureExpanded[item._id]"
+                       x-cloak
+                       :class="{ 'dnd-merge-hover': qualityStructureDrag.dropMerge === idx && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) }"
+                       @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                       @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
+                       @drop.prevent.stop="qsHandleDropOnRow(idx, 'builder')">
+                    <template x-for="(m, mIdx) in item.items" :key="'pbqsm-'+item._id+'-'+m+'-'+mIdx">
+                      <div>
+                        <div class="qs-member-gap"
+                             :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropMemberGroup === idx && qualityStructureDrag.dropMemberGap === mIdx }"
+                             @dragover.prevent.stop="qualityStructureDrag.dropMemberGroup = idx; qualityStructureDrag.dropMemberGap = mIdx"
+                             @dragleave="if (qualityStructureDrag.dropMemberGroup === idx && qualityStructureDrag.dropMemberGap === mIdx) { qualityStructureDrag.dropMemberGroup = null; qualityStructureDrag.dropMemberGap = null; }"
+                             @drop.prevent.stop="qsHandleDropOnMemberGap(idx, mIdx, 'builder')"></div>
+                        <div class="qs-member"
+                             :class="{ 'is-dragging': qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx && qualityStructureDrag.srcMember === mIdx }">
+                          <span class="qs-pill"
+                                draggable="true"
+                                @dragstart.stop="event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'member'; qualityStructureDrag.srcGroup = idx; qualityStructureDrag.srcMember = mIdx"
+                                @dragend="qsResetDrag()"
+                                x-text="m"></span>
+                          <div style="flex:1"></div>
+                          <button class="qs-tiny-x" @click="qsUngroupMember(idx, mIdx, 'builder')" x-tt="'Remove from group (back to single)'">×</button>
+                        </div>
+                      </div>
+                    </template>
+                    <div class="qs-member-gap"
+                         :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropMemberGroup === idx && qualityStructureDrag.dropMemberGap === (item.items?.length || 0) }"
+                         @dragover.prevent.stop="qualityStructureDrag.dropMemberGroup = idx; qualityStructureDrag.dropMemberGap = (item.items?.length || 0)"
+                         @dragleave="if (qualityStructureDrag.dropMemberGroup === idx && qualityStructureDrag.dropMemberGap === (item.items?.length || 0)) { qualityStructureDrag.dropMemberGroup = null; qualityStructureDrag.dropMemberGap = null; }"
+                         @drop.prevent.stop="qsHandleDropOnMemberGap(idx, item.items?.length || 0, 'builder')"></div>
+                    <div class="qs-empty-group" x-show="item.items?.length === 0">empty group — drag a member here or click × delete</div>
+                  </div>
+                  <div class="qs-drop-gap"
+                       :class="{ 'dnd-active': qualityStructureDrag.kind, 'dnd-hover': qualityStructureDrag.dropGap === idx + 1 }"
+                       @dragover.prevent="qualityStructureDrag.dropGap = idx + 1"
+                       @dragleave="qualityStructureDrag.dropGap = null"
+                       @drop.prevent="qsHandleDropOnGap(idx + 1, 'builder')"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 
 {{end}}
