@@ -741,7 +741,15 @@ function registerClonarr() {
       el.removeEventListener('mouseleave', onLeave);
       el.removeEventListener('focusin', onEnter);
       el.removeEventListener('focusout', onLeave);
+      // If this directive owned the visible tooltip, hide it before
+      // releasing ownership. Otherwise the tooltip element lingers in
+      // the DOM when the host gets ripped out by an x-if / x-for change
+      // mid-hover (e.g. clicking a button that empties the surrounding
+      // template — the host vanishes before mouseleave fires).
       if (activeTooltipOwner === tooltipOwner) {
+        if (activeTooltipData && activeTooltipData.hideTooltip) {
+          activeTooltipData.hideTooltip();
+        }
         activeTooltipData = null;
         activeTooltipOwner = null;
       }
