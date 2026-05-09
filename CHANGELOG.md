@@ -49,8 +49,18 @@ modal fix.
   fix, those 9 CFs were silently reset to a score of 0 in your
   Radarr/Sonarr profile, letting through low-quality releases you
   had previously blocked. Your custom score overrides and any extra
-  CFs you've added are preserved. If you were affected, the next
-  pull after upgrade restores everything automatically.
+  CFs you've added are preserved going forward.
+
+  **Already affected by the May 8 reset?** If you saw the "9 scores
+  reset to 0" notification on your French profiles before upgrading,
+  the auto-recovery does not kick in retroactively (the broken sync
+  already wrote the new commit hash to the rule, so a re-pull won't
+  re-evaluate). To restore your blocking scores: open each affected
+  sync rule (e.g. on Radarr's `[French MULTi.VF] HD Bluray + WEB`),
+  toggle the new `[Unwanted] Unwanted Formats French` cf-group ON,
+  and click Save & Sync. Your -10000 scores come back via the new
+  group. From then on the fix prevents recurrence on future TRaSH
+  changes.
 
 - **Streaming Services HD/UHD boost** is now correctly enabled by
   default on WEB-1080p / WEB-2160p / Base Profile — TRaSH marks it
