@@ -946,8 +946,8 @@
                 <div class="section-desc" x-show="detailSections.core">
                   Required for this profile. Always included when syncing.
                 </div>
-                <div x-show="detailSections.core" style="padding:14px 20px"
-                     :style="'column-count:' + (profileDetail.detail.formatItemNames.length > 20 ? 3 : profileDetail.detail.formatItemNames.length > 10 ? 2 : 1) + ';column-gap:24px'">
+                <div x-show="detailSections.core"
+                     :style="'padding:14px 20px;column-count:' + (profileDetail.detail.formatItemNames.length > 20 ? 3 : profileDetail.detail.formatItemNames.length > 10 ? 2 : 1) + ';column-gap:24px'">
                   <template x-for="fi in profileDetail.detail.formatItemNames" :key="fi.trashId">
                     <div class="cf-row" style="padding:2px 0;break-inside:avoid">
                       <div class="cf-name" style="font-size:12px;color:var(--text-muted)" x-text="fi.name"></div>

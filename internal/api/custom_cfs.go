@@ -319,6 +319,18 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 			skippedCollisions = append(skippedCollisions, acf.Name)
 			continue
 		}
+		// Strip Radarr/Sonarr UI-hint metadata (label/type/advanced/
+		// selectOptions/order/dividerAfter) from each spec's fields and
+		// store the condensed `{name: value}` object form. Functionally
+		// identical to the array form (sync engine + UI editor parse
+		// both), but a Language-spec CF goes from ~50 KB to ~50 bytes
+		// because Radarr embeds the full 60-language selectOptions list
+		// per field. See core.NormalizeSpecFields for details.
+		condensedSpecs := make([]arr.ArrSpecification, len(acf.Specifications))
+		for i, spec := range acf.Specifications {
+			condensedSpecs[i] = spec
+			condensedSpecs[i].Fields = core.NormalizeSpecFields(spec.Fields)
+		}
 		toImport = append(toImport, core.CustomCF{
 			ID:              core.GenerateCustomID(),
 			Name:            acf.Name,
@@ -326,7 +338,7 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 			Category:        category,
 			ArrID:           acf.ID,
 			IncludeInRename: acf.IncludeCustomFormatWhenRenaming,
-			Specifications:  acf.Specifications,
+			Specifications:  condensedSpecs,
 			SourceInstance:  inst.Name,
 			ImportedAt:      now,
 		})

@@ -74,6 +74,12 @@ func main() {
 	customCFsStore := core.NewCustomCFStore(filepath.Join(configDir, "custom", "json"))
 	customCFsStore.MigrateFromFlatDir(filepath.Join(configDir, "custom-cfs"))
 	customCFsStore.MigrateFilenames()
+	// One-shot normalization: pre-fix imports stored Radarr's full UI-hint
+	// metadata (label/type/advanced/selectOptions) per spec field, which
+	// bloated Language-spec CFs to ~50 KB each. Reduce to condensed
+	// `{name: value}` object form. Idempotent — already-condensed fields
+	// are left alone.
+	customCFsStore.NormalizeStoredFields()
 	cfGroupsStore := core.NewCFGroupStore(filepath.Join(configDir, "custom", "json"))
 	cfGroupsStore.MigrateFilenames()
 

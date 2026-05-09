@@ -80,6 +80,111 @@ func (cs *CustomCFStore) MigrateFilenames() {
 	}
 }
 
+// NormalizeSpecFields takes a json.RawMessage that may be either Arr's
+// array form (with full UI metadata: order/label/type/advanced/selectOptions
+// per field) or already-condensed object form ({name: value, ...}), and
+// returns the condensed object form. Idempotent — already-object input
+// is returned unchanged.
+//
+// Arr's API returns each spec's fields as an array of UI-hint objects,
+// e.g. for a LanguageSpecification:
+//
+//	[{"order":0,"name":"value","label":"Language","value":12,"type":"select",
+//	  "advanced":false,"selectOptions":[{"value":-1,"name":"Any",...}, ... 60 entries ...]},
+//	 {"order":1,"name":"exceptLanguage","label":"Except Language","value":false,
+//	  "type":"checkbox","advanced":false,"selectOptions":[]}]
+//
+// The condensed form drops everything except name → value, producing:
+//
+//	{"value":12,"exceptLanguage":false}
+//
+// Functionally identical (sync engine + UI editor parse both forms via
+// arrSpecToEditorSpec on the frontend), but ~50KB → ~50 bytes for
+// LanguageSpecifications because of the embedded selectOptions list.
+//
+// On any parse failure or unrecognized shape, returns the input as-is —
+// safe fallback that preserves data.
+func NormalizeSpecFields(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	// Try array form first.
+	var asArray []map[string]any
+	if err := json.Unmarshal(raw, &asArray); err == nil {
+		condensed := make(map[string]any, len(asArray))
+		for _, f := range asArray {
+			name, ok := f["name"].(string)
+			if !ok || name == "" {
+				continue
+			}
+			condensed[name] = f["value"]
+		}
+		out, err := json.Marshal(condensed)
+		if err != nil {
+			return raw
+		}
+		return out
+	}
+	// Already object form (or some other shape) — return unchanged.
+	return raw
+}
+
+// NormalizeStoredFields scans every custom CF on disk and rewrites any
+// specification's `fields` from Arr-array form to condensed object form.
+// One-shot migration — idempotent (already-object fields are no-ops).
+//
+// Logs a single summary line per app-type when changes happen, silent
+// when everything is already normalized.
+func (cs *CustomCFStore) NormalizeStoredFields() {
+	for appType, store := range cs.stores {
+		if store == nil {
+			continue
+		}
+		all := store.List("")
+		var changedCFs, totalSavedBytes int
+		for _, cf := range all {
+			specs := cf.Specifications
+			anyChange := false
+			oldSize := 0
+			newSize := 0
+			for i := range specs {
+				before := specs[i].Fields
+				oldSize += len(before)
+				after := NormalizeSpecFields(before)
+				newSize += len(after)
+				if !bytesEqual(before, after) {
+					specs[i].Fields = after
+					anyChange = true
+				}
+			}
+			if anyChange {
+				cf.Specifications = specs
+				if err := store.Update(cf); err != nil {
+					log.Printf("custom-cf: normalize %s/%s — save failed: %v", appType, cf.Name, err)
+					continue
+				}
+				changedCFs++
+				totalSavedBytes += oldSize - newSize
+			}
+		}
+		if changedCFs > 0 {
+			log.Printf("custom-cf: normalized fields on %d %s custom CF(s) — saved %d bytes", changedCFs, appType, totalSavedBytes)
+		}
+	}
+}
+
+func bytesEqual(a, b json.RawMessage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func GenerateCustomID() string {
 	b := make([]byte, 12)
 	if _, err := rand.Read(b); err != nil {
