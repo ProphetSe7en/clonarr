@@ -9,6 +9,8 @@ Polish for the Compare view.
 - **Compare → Sync selected now respects unchecked rows.** Settings, Quality items, and "Extra in Arr" toggles flow through the dry-run; the banner shows what will actually happen.
 - **Cutoff (Upgrade Until)** appears under Quality in the dry-run banner — matches where it sits in the diff table.
 - **Sonarr quality items nested inside parent groups** (e.g. HDTV-2160p / SDTV in a "WEB 1080p" group) now show up in the dry-run banner like flat items do.
+- **Apply on the dry-run banner works for the global "Sync selected" path** (was only working for per-card sync) — no more "No dry-run to apply" toast.
+- **Compare diff table refreshes after Apply** so rows reflect the just-pushed state instead of looking stale.
 
 ## v2.5.6
 

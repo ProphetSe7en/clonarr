@@ -1062,10 +1062,25 @@ export default {
     // quick-sync modal with section/inst/cr preserved then runs mode='sync'.
     async compareApplyFromDryRun() {
       const ctx = this.compareLastDryRunContext;
-      if (!ctx) { this.showToast('No dry-run to apply', 'error', 5000); return; }
-      this.compareQuickSync = { show: true, inst: ctx.inst, cr: ctx.cr, section: ctx.section, title: '', summary: '', running: false };
-      await this.compareQuickSyncRun('sync');
-      this.compareLastDryRunContext = null;
+      if (ctx) {
+        // Per-card "Sync selected" path — dry-run was scoped to one
+        // section (settings / requiredCfs / groups / extras) via
+        // compareQuickSyncRun, so apply runs the same scoped flow.
+        this.compareQuickSync = { show: true, inst: ctx.inst, cr: ctx.cr, section: ctx.section, title: '', summary: '', running: false };
+        await this.compareQuickSyncRun('sync');
+        this.compareLastDryRunContext = null;
+        return;
+      }
+      // Global "Sync selected (X CFs + Y settings)" path — dry-run came
+      // from startDryRun which only populates syncForm + syncPlan. Route
+      // through startApply: it reads buildSyncBody (which already honours
+      // _fromCompare's overrides + keepArrCFIDs) and chains the post-
+      // apply extras-remove from syncForm._pendingExtrasRemove.
+      if (this.syncForm && this.syncForm._fromCompare && this.syncForm.instanceId) {
+        await this.startApply();
+        return;
+      }
+      this.showToast('No dry-run to apply', 'error', 5000);
     },
 
     async compareQuickSyncRun(mode) {
@@ -2017,6 +2032,19 @@ export default {
               if (inst) this.instRemoveSelected = {...this.instRemoveSelected, [inst.id]: {}};
             }
           } catch (e) { console.error('pending-extras remove:', e); }
+        }
+        // Refresh the Compare view so the diff table reflects the just-applied
+        // state. Without this the user lands back on Compare with stale rows
+        // still showing as "differ" even though Apply already pushed the
+        // changes to Arr. The per-card compareQuickSyncRun path already does
+        // this; the global startApply path needs it too.
+        if (this.syncForm._fromCompare && !hadErrors) {
+          const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
+          const arrId = this.syncForm._compareArrProfileId || parseInt(this.syncForm.arrProfileId) || 0;
+          const trashId = this.syncForm.profileTrashId;
+          if (inst && arrId > 0 && trashId) {
+            await this.runProfileCompare(inst, arrId, trashId);
+          }
         }
       } catch (e) {
         console.error('apply:', e);
