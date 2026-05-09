@@ -167,6 +167,12 @@ function inertModalBackground(el) {
         child === branch
         || child.tagName === 'SCRIPT'
         || child.tagName === 'STYLE'
+        // Peer modal-overlays manage their own trap+inert lifecycle. If we
+        // mark them inert here, a stacked modal opening on top inherits the
+        // inert state and its buttons become unclickable (only ESC works,
+        // since that's bound to window). cleanupResult → confirm-dialog
+        // Delete-flow is the canonical repro.
+        || (child instanceof Element && child.classList.contains('modal-overlay'))
         || child.contains(layer)
         || layer.contains(child)
       ) continue;

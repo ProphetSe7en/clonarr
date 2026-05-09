@@ -2,20 +2,22 @@
 
 ## v2.5.6
 
-Two follow-up fixes after v2.5.5. Thanks to **btTeddy** for reporting both.
+Follow-up fixes after v2.5.5. Thanks to **btTeddy** for reporting all
+three.
 
 ### Fixed
 
-- **Imported Custom Formats no longer bloat your config.** Importing CFs
-  from a Radarr/Sonarr instance was storing the full API response per
-  field — including the entire dropdown options list (e.g. all 60
-  languages embedded inside every Language CF). A Language CF was
-  ~12 KB on disk; now it's ~1 KB. Functionally identical, just compact.
-  Existing CFs are normalized once on first startup after upgrade.
+- **Imported Custom Formats no longer bloat your config.** CFs imported
+  from a Radarr/Sonarr instance are now stored in compact form. Existing
+  CFs are cleaned up once on first startup after upgrade.
 
 - **Required CFs card padding** in the Profile sync view. Values were
-  rendering flush against the card edges; now there's the same breathing
-  room as the Overridden Scores card.
+  flush against the card edges; now matches the Overridden Scores card.
+
+- **Maintenance two-step confirm popups respond to Cancel and Delete
+  again.** Flows like *Delete All Custom Formats → Scan → Delete →
+  confirm* had unclickable buttons in the second popup — only ESC closed
+  it. Now fixed for every two-step confirm in Maintenance.
 
 ## v2.5.5
 
