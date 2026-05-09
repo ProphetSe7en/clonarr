@@ -2,24 +2,13 @@
 
 ## v2.5.6
 
-Follow-up fixes after v2.5.5.
+Three small fixes after v2.5.5.
 
 ### Fixed
 
-- **Imported Custom Formats no longer bloat your config.** CFs imported
-  from a Radarr/Sonarr instance are now stored in compact form. Existing
-  CFs are cleaned up once on first startup after upgrade. Reported by
-  **btTeddy**.
-
-- **Required CFs card padding** in the Profile sync view. Values were
-  flush against the card edges; now matches the Overridden Scores card.
-  Reported by **btTeddy**.
-
-- **Maintenance two-step confirm popups respond to Cancel and Delete
-  again.** Flows like *Delete All Custom Formats → Scan → Delete →
-  confirm* had unclickable buttons in the second popup — only ESC closed
-  it. Now fixed for every two-step confirm in Maintenance. Reported by
-  **Stupifier**.
+- **Imported Custom Formats no longer bloat your config.** Existing CFs auto-cleaned on first startup after upgrade. — btTeddy
+- **Required CFs card padding** in the Profile sync view. — btTeddy
+- **Maintenance two-step confirm popups respond to Cancel and Delete again** (e.g. *Delete All Custom Formats → Scan → Delete → confirm*). Only ESC closed them before. — Stupifier
 
 ## v2.5.5
 
