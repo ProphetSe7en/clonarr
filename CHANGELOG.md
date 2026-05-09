@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.5.6
+
+Two follow-up fixes after v2.5.5. Thanks to **btTeddy** for reporting both.
+
+### Fixed
+
+- **Imported Custom Formats no longer bloat your config.** Importing CFs
+  from a Radarr/Sonarr instance was storing the full API response per
+  field — including the entire dropdown options list (e.g. all 60
+  languages embedded inside every Language CF). A Language CF was
+  ~12 KB on disk; now it's ~1 KB. Functionally identical, just compact.
+  Existing CFs are normalized once on first startup after upgrade.
+
+- **Required CFs card padding** in the Profile sync view. Values were
+  rendering flush against the card edges; now there's the same breathing
+  room as the Overridden Scores card.
+
 ## v2.5.5
 
 A big update: better keyboard and screen-reader support, a redesigned
