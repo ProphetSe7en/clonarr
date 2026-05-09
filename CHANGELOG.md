@@ -1,5 +1,72 @@
 # Changelog
 
+## v2.5.5
+
+A big update: better keyboard and screen-reader support, a redesigned
+File Naming page, smarter Scoring Sandbox, simpler Quality editor, and
+an important fix that prevents your CF scores from being reset to zero
+when TRaSH reorganizes their guides.
+
+Thanks to **@ColeSpringer** for the accessibility work and the cleanup
+modal fix.
+
+### New
+
+- **Better keyboard and screen-reader support.** You can now navigate
+  the whole app with the keyboard, and assistive tech sees proper
+  labels and roles throughout. (PR #44 by Cole)
+
+- **File Naming page redesigned.** Each section (Movie / Episode /
+  Folder etc.) now has its own Plex / Emby / Jellyfin tabs, schemes
+  collapse into clean cards, and the Compare modal can apply changes
+  straight from the comparison.
+
+- **Scoring Sandbox is smarter.**
+  - Releases sort the way Sonarr/Radarr actually pick them — quality
+    first, score within quality. PASS/FAIL is shown clearly.
+  - Search and bulk parse can now handle up to 1000 releases at a
+    time (was 200).
+  - Prowlarr search has a 2-minute cooldown so you don't hammer your
+    indexers.
+  - When a release matches lots of CFs, the list collapses with
+    click-to-expand instead of stretching the row.
+  - The Clear button is now red, asks for confirmation, and properly
+    resets active filters.
+
+- **Quality editor is simpler.** The separate "Edit Groups" mode is
+  gone — drag-to-merge, click-to-expand, rename, and delete work all
+  the time. You can also drag items within or between groups. The
+  editor inside Profile Builder now opens as a popup, like it does
+  in Profile Detail.
+
+### Fixed
+
+- **Important: TRaSH guide restructures no longer reset your CF
+  scores.** When TRaSH reorganizes their guides — for example the
+  May 8 change that moved 9 Custom Formats out of every French
+  profile into a new "Unwanted Formats French" group — Clonarr now
+  recognizes the move and keeps your sync state intact. Before this
+  fix, those 9 CFs were silently reset to a score of 0 in your
+  Radarr/Sonarr profile, letting through low-quality releases you
+  had previously blocked. Your custom score overrides and any extra
+  CFs you've added are preserved. If you were affected, the next
+  pull after upgrade restores everything automatically.
+
+- **Streaming Services HD/UHD boost** is now correctly enabled by
+  default on WEB-1080p / WEB-2160p / Base Profile — TRaSH marks it
+  default-on, but Clonarr was incorrectly disabling it.
+
+- **"Plex Edition Alternative"** is the proper name for the two
+  Plex naming schemes that strip the `edition-` prefix. They were
+  previously labelled with our own description.
+
+- **Tooltips no longer linger** on screen after clicking a button
+  that removes its own row or section.
+
+### Under the hood
+
+- Go toolchain bumped to 1.25.10 (security advisories).
+
 ## v2.5.4
 
 A polish-and-fixes release. Light theme support, smarter tooltips, a
