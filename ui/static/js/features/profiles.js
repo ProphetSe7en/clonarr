@@ -1996,6 +1996,17 @@ export default {
           ? this.autoSyncRules.find(r => r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrId)
           : null;
         if (existingRule && !hadErrors) {
+          // Persist keepArrCFIDs from Compare flow's "leave this extra alone"
+          // picks. Without this, the next Sync All re-runs the rule without
+          // the keep-list, hits ResetMode='reset_to_zero', and wipes every
+          // Arr-only custom CF the user explicitly opted to keep
+          // (FLUX / SiC / MainFrame / 126811 release-group customs in the
+          // canonical bug repro). Save & Sync from profile-detail leaves
+          // syncForm._keepArrCFIDs empty — falls through to existingRule's
+          // value via the spread above, no behaviour change for that flow.
+          const compareKeepArrCFIDs = (this.syncForm._fromCompare && Array.isArray(this.syncForm._keepArrCFIDs))
+            ? this.syncForm._keepArrCFIDs
+            : (existingRule.keepArrCFIDs || null);
           const updated = {
             ...existingRule,
             selectedCFs: this.getAllSelectedCFIds(),
@@ -2004,7 +2015,8 @@ export default {
             overrides: syncBody.overrides || null,
             scoreOverrides: syncBody.scoreOverrides || null,
             qualityOverrides: syncBody.qualityOverrides || null,
-            qualityStructure: syncBody.qualityStructure || null
+            qualityStructure: syncBody.qualityStructure || null,
+            keepArrCFIDs: compareKeepArrCFIDs,
           };
           try {
             await fetch(`/api/auto-sync/rules/${existingRule.id}`, {
@@ -2083,6 +2095,11 @@ export default {
         importedProfileId,
         arrProfileId: sh.arrProfileId,
         selectedCFs,
+        // keepArrCFIDs is rule-only — sync history doesn't carry it.
+        // Empty for rules created before this field existed (omitempty
+        // on backend means absent → empty list → reset_to_zero behaves
+        // exactly as before for those rules).
+        keepArrCFIDs: (rule && rule.keepArrCFIDs) || null,
         scoreOverrides: (rule && rule.scoreOverrides) || sh.scoreOverrides || null,
         qualityOverrides: (rule && rule.qualityOverrides) || sh.qualityOverrides || null,
         qualityStructure: (rule && rule.qualityStructure) || sh.qualityStructure || null,

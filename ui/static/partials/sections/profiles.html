@@ -309,19 +309,19 @@
                                   <span x-text="new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})"></span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-green);color:var(--accent-green)" x-text="entry.changes.cfDetails.length"></span>
+                                  <span x-show="entry.changes.cfDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-green);color:var(--accent-green)" x-text="entry.changes.cfDetails?.length"></span>
                                   <span x-show="!entry.changes.cfDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.scoreDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange)" x-text="entry.changes.scoreDetails.length"></span>
+                                  <span x-show="entry.changes.scoreDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange)" x-text="entry.changes.scoreDetails?.length"></span>
                                   <span x-show="!entry.changes.scoreDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.qualityDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-purple);color:var(--accent-purple)" x-text="entry.changes.qualityDetails.length"></span>
+                                  <span x-show="entry.changes.qualityDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--alpha-purple);color:var(--accent-purple)" x-text="entry.changes.qualityDetails?.length"></span>
                                   <span x-show="!entry.changes.qualityDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="width:70px;flex-shrink:0;text-align:center">
-                                  <span x-show="entry.changes.settingsDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-blue-soft);color:var(--accent-blue)" x-text="entry.changes.settingsDetails.length"></span>
+                                  <span x-show="entry.changes.settingsDetails?.length > 0" style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-blue-soft);color:var(--accent-blue)" x-text="entry.changes.settingsDetails?.length"></span>
                                   <span x-show="!entry.changes.settingsDetails?.length" style="color:var(--border-subtle)">—</span>
                                 </span>
                                 <span style="flex:1"></span>

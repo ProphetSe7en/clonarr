@@ -12,6 +12,8 @@ Polish for the Compare view.
 - **Apply on the dry-run banner works for the global "Sync selected" path** (was only working for per-card sync) — no more "No dry-run to apply" toast.
 - **Compare diff table refreshes after Apply** so rows reflect the just-pushed state instead of looking stale.
 - **Default-on CFs in default-enabled groups now show as diffs** when you haven't activated them yet. Affects e.g. AV1 / BR-DISK / Extras / LQ / Upscaled in the Unwanted Formats group — these are `default:true required:false`, and Compare was treating them as "user hasn't picked → fine" instead of "TRaSH would activate this in a fresh sync → diff".
+- **"Extra in Arr" picks survive Sync All.** Customs you opted to keep in Compare (FLUX / SiC / user-imported release-group CFs etc.) were getting zeroed by the next Sync All because the rule didn't persist that choice. Sync rules now carry a `keepArrCFIDs` field that propagates through scheduled auto-sync and manual Sync All.
+- **Console-spam on expanded sync-history entries.** Four `x-text` bindings on the change-count badges were missing optional chaining, throwing `Cannot read properties of undefined (reading 'length')` whenever a sync had no CF/Score/Quality/Settings details. Cosmetic only — the badges were correctly hidden — but spammed the console.
 
 ## v2.5.6
 

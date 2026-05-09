@@ -194,6 +194,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		ProfileTrashID:   rule.TrashProfileID,
 		ArrProfileID:     rule.ArrProfileID,
 		SelectedCFs:      expandedCFs,
+		KeepArrCFIDs:     rule.KeepArrCFIDs,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
 		QualityStructure: rule.QualityStructure,

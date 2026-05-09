@@ -92,6 +92,13 @@ type AutoSyncRule struct {
 	ImportedProfileID string          `json:"importedProfileId,omitempty"`
 	ArrProfileID      int             `json:"arrProfileId"`               // target Arr profile to update
 	SelectedCFs       []string        `json:"selectedCFs,omitempty"`      // user's optional CF selections
+	// KeepArrCFIDs lists Arr CF IDs that must NOT be zeroed by ResetMode='reset_to_zero'.
+	// Populated by Compare-flow apply when the user opts to keep CFs in the "Extra in Arr"
+	// section (Arr-only customs not in any TRaSH cf-group, e.g. user-imported release-group
+	// CFs like FLUX / SiC). Without this, Sync All would zero them on every run.
+	// Empty for rules created via Save & Sync from profile-detail editor — that flow
+	// uses scoreOverrides/extraCFs (trash-id keyed) which doesn't apply to Arr-only CFs.
+	KeepArrCFIDs      []int           `json:"keepArrCFIDs,omitempty"`
 	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
 	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
 	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
