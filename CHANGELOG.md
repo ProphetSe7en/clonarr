@@ -11,6 +11,7 @@ Polish for the Compare view.
 - **Sonarr quality items nested inside parent groups** (e.g. HDTV-2160p / SDTV in a "WEB 1080p" group) now show up in the dry-run banner like flat items do.
 - **Apply on the dry-run banner works for the global "Sync selected" path** (was only working for per-card sync) — no more "No dry-run to apply" toast.
 - **Compare diff table refreshes after Apply** so rows reflect the just-pushed state instead of looking stale.
+- **Default-on CFs in default-enabled groups now show as diffs** when you haven't activated them yet. Affects e.g. AV1 / BR-DISK / Extras / LQ / Upscaled in the Unwanted Formats group — these are `default:true required:false`, and Compare was treating them as "user hasn't picked → fine" instead of "TRaSH would activate this in a fresh sync → diff".
 
 ## v2.5.6
 

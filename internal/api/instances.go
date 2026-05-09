@@ -1644,9 +1644,17 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 					trackedArrIDs[arrCF.ID] = true
 					// CF is "in use" if:
 					// - it has non-zero score (user actively scored it), OR
-					// - it's required in a default group (expected to be there), OR
-					// - it was synced via Clonarr (in sync history, even with score 0)
-					ccf.InUse = ccf.CurrentScore != 0 || (group.DefaultEnabled && cf.Required) || syncedCFSet[cf.TrashID]
+					// - it's expected by TRaSH defaults — required OR default-on
+					//   in a default-enabled group. A fresh sync via Profiles →
+					//   Save & Sync would activate both required AND default-on
+					//   members of default-enabled groups (the Unwanted Formats
+					//   group is the canonical example: most members have
+					//   required=false but default=true, so a clean install
+					//   blocks them at -10000). Compare must show those as
+					//   diffs when the user hasn't activated them yet.
+					// - OR it was synced via Clonarr (in sync history, even with score 0)
+					expectedByTrash := group.DefaultEnabled && (cf.Required || cf.Default)
+					ccf.InUse = ccf.CurrentScore != 0 || expectedByTrash || syncedCFSet[cf.TrashID]
 
 					if ccf.InUse {
 						// CF is actively scored by user — verify score matches TRaSH
@@ -1662,13 +1670,18 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 						ccf.ScoreMatch = true // not an error
 					}
 				} else {
-					// CF doesn't exist in Arr
-					if group.DefaultEnabled && cf.Required && !group.Exclusive {
-						// Required CF in default group is genuinely missing
-						// (exclusive groups counted separately — only need ONE)
+					// CF doesn't exist in Arr at all
+					if group.DefaultEnabled && (cf.Required || cf.Default) && !group.Exclusive {
+						// CF is expected by TRaSH defaults (required OR
+						// default-on in a default-enabled group) but missing
+						// from the Arr catalogue. A fresh sync would create
+						// it. Exclusive groups counted separately — only need
+						// ONE pick, not all members.
 						cg.Missing++
 					}
-					// Optional/non-default CFs not in Arr = fine, user didn't want them
+					// Truly optional CFs (default-off in a default-on group, or
+					// any CF in a default-off group) not in Arr = fine, user
+					// didn't want them.
 				}
 				cg.CFs = append(cg.CFs, ccf)
 				// Populate cfStates for syncSingleCF backward compat
