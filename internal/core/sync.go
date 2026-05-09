@@ -114,6 +114,11 @@ type SyncRequest struct {
 	ArrProfileID      int             `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
 	ProfileName       string          `json:"profileName"`                 // custom name for new profile (optional)
 	SelectedCFs       []string        `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
+	// KeepArrCFIDs lists Arr CF IDs that must NOT be zeroed by ResetMode='reset_to_zero'.
+	// Used by Compare flow when the user unchecks an "Extra in Arr" row (= keep at current score).
+	// Backend treats these as if they were part of the synced set during the reset loop.
+	// Save & Sync flow leaves this empty — it relies on scoreOverrides + extraCFs (trash-id keyed).
+	KeepArrCFIDs      []int           `json:"keepArrCFIDs,omitempty"`
 	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
 	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
 	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
@@ -442,6 +447,12 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 					}
 				}
 			}
+			// User-pinned Arr CFs (Compare flow's "leave this extra alone") count
+			// as synced for the reset pass — same effect as if they were in the
+			// trash set, but addressed by Arr CF ID since extras may have no trashId.
+			for _, id := range req.KeepArrCFIDs {
+				syncedArrIDs[id] = true
+			}
 			for _, fi := range targetProfile.FormatItems {
 				if fi.Score != 0 && !syncedArrIDs[fi.Format] {
 					plan.ScoreActions = append(plan.ScoreActions, ScoreAction{
@@ -568,22 +579,38 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			desiredCutoffName = *req.Overrides.CutoffQuality
 		}
 		if desiredCutoffName != "" && prevCutoffName != desiredCutoffName {
-			plan.SettingsPreview = append(plan.SettingsPreview, fmt.Sprintf("Upgrade Until: %s → %s", prevCutoffName, desiredCutoffName))
+			// Cutoff (Upgrade Until) is categorized as Quality in the UI's diff
+			// table, so the dry-run banner must use QualityPreview to match —
+			// otherwise the same field shows up under "Settings:" in the
+			// banner but under "Quality" in the table, which is confusing.
+			plan.QualityPreview = append(plan.QualityPreview, fmt.Sprintf("Upgrade Until: %s → %s", prevCutoffName, desiredCutoffName))
 		}
 
 		// --- Preview: quality item changes ---
 		if len(desiredItems) > 0 {
-			// Build old allowed map
+			// Build old allowed map. Sonarr profiles nest quality items inside
+			// quality groups (e.g. HDTV-2160p / SDTV may live inside a parent
+			// "WEB 1080p" group), so a flat iteration would miss them and the
+			// preview would silently drop legitimate Enabled→Disabled changes
+			// for nested items even though the comparison table shows them
+			// (handleCompareProfile recurses, this loop must too).
 			oldAllowed := make(map[string]bool)
-			for _, item := range targetProfile.Items {
-				name := item.Name
-				if name == "" && item.Quality != nil {
-					name = item.Quality.Name
-				}
-				if name != "" {
-					oldAllowed[name] = item.Allowed
+			var collectOldAllowed func(items []arr.ArrQualityItem)
+			collectOldAllowed = func(items []arr.ArrQualityItem) {
+				for _, item := range items {
+					name := item.Name
+					if name == "" && item.Quality != nil {
+						name = item.Quality.Name
+					}
+					if name != "" {
+						oldAllowed[name] = item.Allowed
+					}
+					if len(item.Items) > 0 {
+						collectOldAllowed(item.Items)
+					}
 				}
 			}
+			collectOldAllowed(targetProfile.Items)
 			// Resolve desired quality items to get Allowed state
 			qualityDefs, err := client.ListQualityDefinitions()
 			if err == nil {
@@ -1202,6 +1229,12 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 						syncedArrIDs[arrID] = true
 					}
 				}
+			}
+			// User-pinned Arr CFs (Compare flow's "leave this extra alone") count
+			// as synced for the reset pass — same effect as if they were in the
+			// trash set, but addressed by Arr CF ID since extras may have no trashId.
+			for _, id := range req.KeepArrCFIDs {
+				syncedArrIDs[id] = true
 			}
 			for i := range targetProfile.FormatItems {
 				fi := &targetProfile.FormatItems[i]

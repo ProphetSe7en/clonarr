@@ -582,7 +582,7 @@
                                                      x-text="dryrunDetailsOpen ? '▾ Hide details' : '▸ Show details'"></a>
                                                   <div x-show="dryrunDetailsOpen" style="margin-top:4px;font-size:12px;color:var(--text-body);line-height:1.6">
                                                     <template x-for="s in (syncPlan.settingsPreview || [])" :key="s">
-                                                      <div><span style="color:var(--accent-blue)">Settings:</span> <span x-text="s"></span></div>
+                                                      <div><span style="color:var(--accent-blue)">General:</span> <span x-text="s"></span></div>
                                                     </template>
                                                     <template x-for="q in (syncPlan.qualityPreview || [])" :key="q">
                                                       <div><span style="color:var(--accent-orange)">Quality:</span> <span x-text="q"></span></div>
@@ -691,7 +691,7 @@
                                                       <template x-if="!sd.match">
                                                         <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareSettingsSelected[iid] || {})[sd.name] !== false"
-                                                               @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}">
+                                                               @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}; invalidateCompareDryRun()">
                                                       </template>
                                                     </td>
                                                     <td class="name" x-text="sd.name === 'Min Format Score' ? 'Min Score' : sd.name === 'Min Upgrade Format Score' ? 'Min Upgrade Score' : sd.name === 'Cutoff Format Score' ? 'Cutoff Score' : sd.name === 'Upgrade Allowed' ? 'Upgrades Allowed' : sd.name"></td>
@@ -711,7 +711,7 @@
                                                       <template x-if="!sd.match">
                                                         <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareSettingsSelected[iid] || {})[sd.name] !== false"
-                                                               @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}">
+                                                               @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}; invalidateCompareDryRun()">
                                                       </template>
                                                     </td>
                                                     <td class="name">Cutoff</td>
@@ -727,7 +727,7 @@
                                                       <template x-if="!qd.match">
                                                         <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
                                                                :checked="(instCompareQualitySelected[iid] || {})[qd.name] !== false"
-                                                               @change="if (!instCompareQualitySelected[iid]) instCompareQualitySelected[iid] = {}; instCompareQualitySelected[iid][qd.name] = $event.target.checked; instCompareQualitySelected = {...instCompareQualitySelected}">
+                                                               @change="if (!instCompareQualitySelected[iid]) instCompareQualitySelected[iid] = {}; instCompareQualitySelected[iid][qd.name] = $event.target.checked; instCompareQualitySelected = {...instCompareQualitySelected}; invalidateCompareDryRun()">
                                                       </template>
                                                     </td>
                                                     <td class="name" x-text="qd.name"></td>

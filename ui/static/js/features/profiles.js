@@ -677,7 +677,7 @@ export default {
       this.syncPlan = null;
       this.compareLastDryRunContext = null;
       if (this.syncForm && this.syncForm._fromCompare) {
-        this.syncForm = {...this.syncForm, _fromCompare: false, _pendingExtrasRemove: [], _compareArrProfileId: undefined};
+        this.syncForm = {...this.syncForm, _fromCompare: false, _pendingExtrasRemove: [], _keepArrCFIDs: [], _compareArrProfileId: undefined};
       }
       this.instCompareTrashId = {...this.instCompareTrashId, [inst.id]: trashProfileId};
       if (!trashProfileId) {
@@ -759,6 +759,21 @@ export default {
       return (this.trashProfiles[appType] || []).filter(p => (p.groupName || 'Other') === groupName);
     },
 
+    // Clears the orange dry-run banner when the user changes any compare
+    // selection after a dry-run has populated it. Banner shows the
+    // backend-computed plan from when "Sync selected" was last clicked;
+    // toggling a row afterward leaves NEW-column cells correct but the
+    // banner stale (it lists changes for items the user just unchecked).
+    // User must click "Sync selected" again for a fresh banner — the
+    // table itself remains the live source of truth.
+    invalidateCompareDryRun() {
+      if (this.syncForm && this.syncForm._fromCompare) {
+        this.syncPlan = null;
+        this.syncForm = {...this.syncForm, _fromCompare: false};
+        this.compareLastDryRunContext = null;
+      }
+    },
+
     toggleCompareSelect(instId, trashId, checked) {
       const sel = {...(this.instCompareSelected[instId] || {})};
       const result = this.instCompareResult[instId];
@@ -800,6 +815,7 @@ export default {
         }
       }
       this.instCompareSelected = {...this.instCompareSelected, [instId]: sel};
+      this.invalidateCompareDryRun();
     },
 
     toggleAllCompareSection(instId, section) {
@@ -863,6 +879,7 @@ export default {
       const sel = {...(this.instRemoveSelected[instId] || {})};
       sel[arrCfId] = checked;
       this.instRemoveSelected = {...this.instRemoveSelected, [instId]: sel};
+      this.invalidateCompareDryRun();
     },
 
     getCompareSelectedCount(instId) {
@@ -999,6 +1016,7 @@ export default {
     resetCompareToDefault(inst, cr) {
       if (!cr) return;
       this.compareApplyDefaultSelections(cr, inst.id);
+      this.invalidateCompareDryRun();
     },
 
     // Per-card Quick Sync — opens simplified confirm dialog scoped to one card. Only applies
@@ -1237,10 +1255,15 @@ export default {
       }
 
       // Collect extras the user marked for removal — chained after the sync completes in startApply.
+      // Also collect extras the user kept (unchecked) so the dry-run reset pass leaves them alone.
+      // Without keepArrCFIDs, ResetMode='reset_to_zero' would zero every extra (since they're not
+      // in the TRaSH-id-keyed selectedCFs set), even ones the user explicitly opted to keep.
       const extraRemoveSel = this.instRemoveSelected[inst.id] || {};
       const pendingExtras = [];
+      const keepArrCFIDs = [];
       for (const ecf of (comparison.extraCFs || [])) {
         if (extraRemoveSel[ecf.format]) pendingExtras.push(ecf.format);
+        else keepArrCFIDs.push(ecf.format);
       }
 
       this.syncForm = {
@@ -1257,6 +1280,7 @@ export default {
         qualityOverrides: Object.keys(qualityOverrides).length > 0 ? qualityOverrides : undefined,
         _fromCompare: true,
         _pendingExtrasRemove: pendingExtras,
+        _keepArrCFIDs: keepArrCFIDs,
         _compareArrProfileId: comparison.arrProfileId,
       };
       this.resyncTargetArrProfileId = comparison.arrProfileId;
@@ -1675,39 +1699,65 @@ export default {
       if (this.syncMode === 'create') {
         body.profileName = this.syncForm.newProfileName;
       }
-      // Build overrides from pdOverrides values. Persistence is data-driven —
-      // values that match the profile default are filtered out below, so the
-      // saved sync rule only carries true overrides. The pdOverridesEnabled
-      // toggle gates the EDITOR UI (whether the override cards render at all),
-      // not the payload — when the user disables the toggle, pdDisableOverrides
-      // explicitly clears the maps so the next sync sends a clean body.
-      const ov = this.pdOverrides;
-      const p = this.profileDetail?.detail?.profile || {};
-      const overrides = {};
-      let hasOverrides = false;
-      if (this.activeAppType === 'radarr' && ov.language.value !== (p.language || 'Original')) { overrides.language = ov.language.value; hasOverrides = true; }
-      const upVal = ov.upgradeAllowed.value === true || ov.upgradeAllowed.value === 'true';
-      if (upVal !== (p.upgradeAllowed ?? true)) { overrides.upgradeAllowed = upVal; hasOverrides = true; }
-      if (ov.minFormatScore.value !== (p.minFormatScore ?? 0)) { overrides.minFormatScore = ov.minFormatScore.value; hasOverrides = true; }
-      if (ov.minUpgradeFormatScore.value !== (p.minUpgradeFormatScore ?? 1)) { overrides.minUpgradeFormatScore = ov.minUpgradeFormatScore.value; hasOverrides = true; }
-      if (ov.cutoffFormatScore.value !== (p.cutoffFormatScore || p.cutoffScore || 10000)) { overrides.cutoffFormatScore = ov.cutoffFormatScore.value; hasOverrides = true; }
-      const defaultCutoff = p.cutoff || '';
-      if (ov.cutoffQuality && ov.cutoffQuality !== defaultCutoff) { overrides.cutoffQuality = ov.cutoffQuality; hasOverrides = true; }
-      if (hasOverrides) body.overrides = overrides;
-      // Per-CF score overrides + extra CFs scores
+      // Compare flow stores its toggle-derived overrides on syncForm
+      // directly (see syncFromCompare). pdOverrides reflects the
+      // profile-detail page editor, which compare doesn't touch — using
+      // it here would drop every Setting/Quality override the user just
+      // unchecked in the compare table and the dry-run would come back
+      // showing changes for rows the user explicitly opted out of.
+      if (this.syncForm._fromCompare) {
+        if (this.syncForm.overrides && Object.keys(this.syncForm.overrides).length > 0) {
+          body.overrides = this.syncForm.overrides;
+        }
+        if (this.syncForm.qualityOverrides && Object.keys(this.syncForm.qualityOverrides).length > 0) {
+          body.qualityOverrides = this.syncForm.qualityOverrides;
+        }
+        // Pin user-kept extras (unchecked rows in "Extra in Arr") so the
+        // backend reset_to_zero pass leaves them untouched. Checked extras
+        // are removed by the post-apply chain (_pendingExtrasRemove).
+        if (Array.isArray(this.syncForm._keepArrCFIDs) && this.syncForm._keepArrCFIDs.length > 0) {
+          body.keepArrCFIDs = this.syncForm._keepArrCFIDs;
+        }
+      } else {
+        // Build overrides from pdOverrides values. Persistence is data-driven —
+        // values that match the profile default are filtered out below, so the
+        // saved sync rule only carries true overrides. The pdOverridesEnabled
+        // toggle gates the EDITOR UI (whether the override cards render at all),
+        // not the payload — when the user disables the toggle, pdDisableOverrides
+        // explicitly clears the maps so the next sync sends a clean body.
+        const ov = this.pdOverrides;
+        const p = this.profileDetail?.detail?.profile || {};
+        const overrides = {};
+        let hasOverrides = false;
+        if (this.activeAppType === 'radarr' && ov.language.value !== (p.language || 'Original')) { overrides.language = ov.language.value; hasOverrides = true; }
+        const upVal = ov.upgradeAllowed.value === true || ov.upgradeAllowed.value === 'true';
+        if (upVal !== (p.upgradeAllowed ?? true)) { overrides.upgradeAllowed = upVal; hasOverrides = true; }
+        if (ov.minFormatScore.value !== (p.minFormatScore ?? 0)) { overrides.minFormatScore = ov.minFormatScore.value; hasOverrides = true; }
+        if (ov.minUpgradeFormatScore.value !== (p.minUpgradeFormatScore ?? 1)) { overrides.minUpgradeFormatScore = ov.minUpgradeFormatScore.value; hasOverrides = true; }
+        if (ov.cutoffFormatScore.value !== (p.cutoffFormatScore || p.cutoffScore || 10000)) { overrides.cutoffFormatScore = ov.cutoffFormatScore.value; hasOverrides = true; }
+        const defaultCutoff = p.cutoff || '';
+        if (ov.cutoffQuality && ov.cutoffQuality !== defaultCutoff) { overrides.cutoffQuality = ov.cutoffQuality; hasOverrides = true; }
+        if (hasOverrides) body.overrides = overrides;
+      }
+      // Per-CF score overrides + extra CFs scores. Always read from
+      // this.cfScoreOverrides — compare flow already populated it via
+      // syncFromCompare, Save & Sync flow populates it from the editor.
       const allScoreOverrides = { ...this.cfScoreOverrides };
       for (const [tid, score] of Object.entries(this.extraCFs)) allScoreOverrides[tid] = score;
       if (Object.keys(allScoreOverrides).length > 0) body.scoreOverrides = allScoreOverrides;
-      // Quality overrides: structure (new) trumps flat map (legacy). Skip
-      // sending qualityStructure when it exactly mirrors profile defaults —
-      // otherwise just OPENING the Quality Items editor (which auto-inits
-      // qualityStructure from defaults so drag-drop works) would persist a
-      // phantom override on Save & Sync. Filter is symmetric with the
-      // pdOverrides values check above: only send what actually differs.
-      if (this.qualityStructure.length > 0 && !this.qualityStructureMatchesDefaults()) {
-        body.qualityStructure = this.qsForBackend();
-      } else if (Object.keys(this.qualityOverrides).length > 0) {
-        body.qualityOverrides = this.qualityOverrides;
+      // Quality overrides: in Save & Sync flow, structure (new) trumps flat
+      // map (legacy). Skip sending qualityStructure when it exactly mirrors
+      // profile defaults — otherwise just OPENING the Quality Items editor
+      // (which auto-inits qualityStructure from defaults so drag-drop works)
+      // would persist a phantom override on Save & Sync. Compare flow has
+      // already filled body.qualityOverrides above and doesn't touch
+      // qualityStructure, so this branch is skipped there.
+      if (!this.syncForm._fromCompare) {
+        if (this.qualityStructure.length > 0 && !this.qualityStructureMatchesDefaults()) {
+          body.qualityStructure = this.qsForBackend();
+        } else if (Object.keys(this.qualityOverrides).length > 0) {
+          body.qualityOverrides = this.qualityOverrides;
+        }
       }
       // Sync behavior rules
       if (this.syncForm.behavior) body.behavior = this.syncForm.behavior;
@@ -2669,6 +2719,7 @@ export default {
         for (const id of ids) sel[id] = !allChecked;
         this.instRemoveSelected = {...this.instRemoveSelected, [iid]: sel};
       }
+      this.invalidateCompareDryRun();
     },
 
     // Reset all per-group expand states in the Extra CFs picker. Called

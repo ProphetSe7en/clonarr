@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.5.7
+
+Polish for the Compare view.
+
+### Fixed
+
+- **Compare → Sync selected now respects unchecked rows.** Settings, Quality items, and "Extra in Arr" toggles flow through the dry-run; the banner shows what will actually happen.
+- **Cutoff (Upgrade Until)** appears under Quality in the dry-run banner — matches where it sits in the diff table.
+- **Sonarr quality items nested inside parent groups** (e.g. HDTV-2160p / SDTV in a "WEB 1080p" group) now show up in the dry-run banner like flat items do.
+
 ## v2.5.6
 
 Three small fixes after v2.5.5.
