@@ -55,6 +55,7 @@
   --fill-blue-dark: #0d2240;
   --fill-green-soft: #0d2f1a;
   --fill-orange-soft: #3d2800;
+  --fill-purple-soft: #2a1a47;
   --fill-radarr: #2d1f00;
 
   /* Alpha fills */
@@ -169,6 +170,7 @@
   --fill-blue-dark: #b6e3ff;
   --fill-green-soft: #dafbe1;
   --fill-orange-soft: #fff8c5;
+  --fill-purple-soft: #f0e7ff;
   --fill-radarr: #fff1c2;
 
   /* Alpha overlays — invert to dark-on-light */

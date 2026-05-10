@@ -128,6 +128,15 @@
                                       x-tt="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
                                       x-text="(_so + _qo + _oo) + ' override' + ((_so + _qo + _oo) !== 1 ? 's' : '')"></span>
                               </template>
+                              <!-- Optional CFs badge intentionally NOT shown here.
+                                   Computing it accurately requires per-rule profile-
+                                   detail data (which cf-groups the profile includes
+                                   + per-CF default flags). The naive global lookup
+                                   over-counts for rules with Additional CFs from
+                                   non-included groups. Backend pre-compute on rule
+                                   save is the proper fix — defer until that lands.
+                                   For now: open the profile editor to see exact
+                                   Optional CFs count. -->
                             </span>
                             <span style="color:var(--text-muted);flex-shrink:0" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
                             <span style="color:var(--text-muted);flex-shrink:0" x-text="timeAgo(sh.lastSync)"></span>
@@ -538,6 +547,14 @@
                                           <span x-show="((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) > 0"
                                                 style="color:var(--accent-orange);font-size:13px;font-weight:500;margin-left:8px"
                                                 x-text="'\u26A0 ' + ((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) + ' diffs — see filter below for details'"></span>
+                                          <!-- Optional CFs surface separately in blue. Distinguishes
+                                               'intentionally customized within TRaSH spec' from 'out
+                                               of sync' — these aren't problems, just choices. -->
+                                          <template x-if="compareAdjustedCounts(cr).optional > 0">
+                                            <span style="color:var(--accent-purple);font-size:13px;font-weight:500;margin-left:8px"
+                                                  x-tt="'TRaSH-blessed optional CFs activated outside profile defaults — filter by Optional below to see them.'"
+                                                  x-text="'\u25CF ' + compareAdjustedCounts(cr).optional + ' optional CFs activated'"></span>
+                                          </template>
                                           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
                                             <!-- Edit & Sync — opens the profile editor pre-loaded with
                                                  your current Arr state captured as overrides. You inspect,
@@ -558,6 +575,7 @@
                                           <button type="button" class="compare-chip compare-chip-wrong" :class="compareFilter === 'wrong' ? 'active' : ''" :aria-pressed="compareFilter === 'wrong'" @click="compareFilter = 'wrong'" x-text="'⚠ Wrong score (' + compareAdjustedCounts(cr).wrong + ')'"></button>
                                           <button type="button" class="compare-chip compare-chip-missing" :class="compareFilter === 'missing' ? 'active' : ''" :aria-pressed="compareFilter === 'missing'" @click="compareFilter = 'missing'" x-tt="'Golden Rule groups count as 1 item — pick 1 of the available variants'" x-text="'✗ Missing (' + compareAdjustedCounts(cr).missing + ')'"></button>
                                           <button type="button" class="compare-chip compare-chip-extra" :class="compareFilter === 'extra' ? 'active' : ''" :aria-pressed="compareFilter === 'extra'" @click="compareFilter = 'extra'" x-text="'+ Extra (' + compareAdjustedCounts(cr).extra + ')'"></button>
+                                          <button type="button" class="compare-chip compare-chip-optional" :class="compareFilter === 'optional' ? 'active' : ''" :aria-pressed="compareFilter === 'optional'" @click="compareFilter = 'optional'" x-tt="'TRaSH-blessed optional CFs activated outside the profile defaults — Reset to Profile Default would clear these.'" x-text="'⬢ Optional (' + compareAdjustedCounts(cr).optional + ')'"></button>
                                           <button type="button" class="compare-chip compare-chip-match" :class="compareFilter === 'match' ? 'active' : ''" :aria-pressed="compareFilter === 'match'" @click="compareFilter = 'match'" x-text="'✓ Matching (' + compareAdjustedCounts(cr).matching + ')'"></button>
                                         </div>
 
@@ -761,6 +779,13 @@
                                                           </template>
                                                           <span x-show="row.group.wrongScore > 0" style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.wrongScore + ' wrong score'"></span>
                                                           <span x-show="row.group.missing > 0" style="color:var(--accent-red);background:var(--accent-red-bg);padding:1px 6px;border-radius:8px;text-transform:none;letter-spacing:0" x-text="row.group.missing + ' missing'"></span>
+                                                          <!-- Blue dot — visible when this group has any optional CFs
+                                                               activated outside profile defaults. Drill-down marker for
+                                                               the summary-bar Optional total. -->
+                                                          <template x-if="compareGroupOptionalCount(row.group) > 0">
+                                                            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent-purple);align-self:center;flex-shrink:0;margin-left:4px"
+                                                                  x-tt="compareGroupOptionalCount(row.group) + ' optional CF' + (compareGroupOptionalCount(row.group) === 1 ? '' : 's') + ' activated outside profile defaults'"></span>
+                                                          </template>
                                                         </span>
                                                       </td>
                                                     </template>

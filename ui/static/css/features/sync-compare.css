@@ -107,6 +107,7 @@
   .compare-chip-wrong.active { background: var(--accent-orange); border-color: var(--accent-orange); }
   .compare-chip-missing.active { background: var(--accent-red); border-color: var(--accent-red); color: var(--text-on-accent); }
   .compare-chip-extra.active { background: var(--accent-blue); border-color: var(--accent-blue); color: var(--bg-page); }
+  .compare-chip-optional.active { background: var(--accent-purple); border-color: var(--accent-purple); color: var(--bg-page); }
   .compare-chip-match.active { background: var(--accent-green); border-color: var(--accent-green); color: var(--bg-page); }
   .compare-cf-check { display: flex; align-items: center; margin-right: 8px; }
   .compare-cf-check input { width: 14px; height: 14px; accent-color: var(--accent-blue); cursor: pointer; }

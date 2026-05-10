@@ -2191,6 +2191,60 @@ export default {
       }
     },
 
+    // Per-rule optional-CF count for the sync rules table.
+    //
+    // Walks rule.selectedCFs and matches each entry against cf-groups data
+    // to determine if it's a TRaSH-blessed customization (non-default
+    // activation). Returns 0 when cf-groups data isn't loaded yet — badge
+    // hidden in that case until user visits Custom Formats tab and the
+    // browse data populates. Approximation note: a single trash_id can
+    // theoretically appear in multiple cf-groups with different default
+    // flags; this picks the first-found and accepts that limitation.
+    ruleOptionalCount(rule, appType) {
+      if (!rule || !appType || !Array.isArray(rule.selectedCFs)) return 0;
+      const groupsData = this.cfBrowseData?.[appType]?.groups || [];
+      if (groupsData.length === 0) return 0;
+      // Build trash_id → { groupDefault, cfDefault, cfRequired, hasOptionalMembers }
+      const cfInfo = {};
+      for (const g of groupsData) {
+        const cfList = g.custom_formats || g.cfs || [];
+        const hasOptionalMembers = cfList.some(c => !c.required);
+        const groupDefault = !!(g.default ?? g.defaultEnabled);
+        for (const cf of cfList) {
+          const tid = cf.trash_id || cf.trashId;
+          if (!tid || cfInfo[tid]) continue;
+          cfInfo[tid] = {
+            cfDefault: !!cf.default,
+            cfRequired: !!cf.required,
+            groupDefault,
+            hasOptionalMembers,
+            groupName: g.name,
+          };
+        }
+      }
+      const ruleSet = new Set(rule.selectedCFs);
+      let n = 0;
+      const groupCountedOnce = new Set();
+      for (const tid of ruleSet) {
+        const info = cfInfo[tid];
+        if (!info) continue;
+        if (info.cfRequired) {
+          // Required CFs don't count individually. But if their group has
+          // no optional members AND group is default-OFF, the group toggle
+          // is the only signal — count once per such group.
+          if (!info.groupDefault && !info.hasOptionalMembers && !groupCountedOnce.has(info.groupName)) {
+            n++;
+            groupCountedOnce.add(info.groupName);
+          }
+          continue;
+        }
+        // Non-required CF: count if its activation differs from default.
+        const def = info.groupDefault ? info.cfDefault : false;
+        if (true !== def) n++;
+      }
+      return n;
+    },
+
     // Count how many General fields differ from TRaSH defaults.
     pdGeneralChangeCount() {
       const p = this.profileDetail?.detail?.profile || {};
@@ -2224,29 +2278,62 @@ export default {
       const quality = this.pdQualityChangeCount() + this.pdQualityItemsChangeCount();
       const cfScores = Object.keys(this.cfScoreOverrides).length;
       const extraCFs = Object.keys(this.extraCFs).length;
-      const groups = this.pdGroupsChangeCount();
-      return { general, quality, cfScores, extraCFs, groups, total: general + quality + cfScores + extraCFs + groups };
+      const optional = this.pdOptionalCount();
+      // total = overrides only (profile-level settings the user changed).
+      // optional = separate count of TRaSH-blessed optional CFs / groups
+      //   activated outside the profile's defaults — semantically distinct
+      //   from overrides (overrides change WHAT the rule does; optional
+      //   activations change WHAT'S in the profile within the TRaSH spec).
+      // Both are reset by pdDisableOverrides; the UI shows them as two
+      // separate badges so the user understands the category of change.
+      return {
+        general, quality, cfScores, extraCFs, optional,
+        total: general + quality + cfScores + extraCFs,
+      };
     },
 
-    // Count CF-group divergences from TRaSH defaults: a group is "changed"
-    // when its effective on/off state differs from defaultEnabled, or when
-    // any optional (non-required) member CF's selected state differs from
-    // its cf.default flag. Required CFs are owned by the group toggle, so
-    // they don't add to the count separately.
-    pdGroupsChangeCount() {
+    // Count of TRaSH-blessed optional CFs and groups activated outside the
+    // profile's defaults. A group counts when its effective on/off state
+    // differs from defaultEnabled. A non-required CF counts when its
+    // selected state differs from cf.default (or differs from false when
+    // the parent group is default-OFF). Required CFs are owned by the
+    // group toggle and don't add to the count separately.
+    pdOptionalCount() {
       const sel = this.selectedOptionalCFs || {};
       const groups = this.profileDetail?.detail?.trashGroups || [];
       let n = 0;
       for (const group of groups) {
+        n += this.pdGroupOptionalCount(group, sel);
+      }
+      return n;
+    },
+
+    // Per-group optional-customization count.
+    //
+    // Counts non-required CFs whose selected state diverges from cf.default
+    // (or from false when the group is default-OFF). For groups that have
+    // optional members (any cf.required === false), the group toggle is NOT
+    // counted separately — toggling the group on/off is implicit in the
+    // per-CF count, so adding it would double-count. For groups whose only
+    // members are REQUIRED (e.g. HDR Formats HDR / HDR Formats DV Boost,
+    // single-CF groups marked required), the per-CF loop skips everything,
+    // so the group toggle becomes the only signal: count it when divergent
+    // from defaultEnabled. This makes HDR Formats DV Boost → 1 instead of 0
+    // when activated, while keeping Optional Movie Versions at 11 (not 12).
+    pdGroupOptionalCount(group, sel) {
+      sel = sel || this.selectedOptionalCFs || {};
+      let n = 0;
+      for (const cf of (group.cfs || [])) {
+        if (cf.required) continue;
+        const cur = !!sel[cf.trashId];
+        const def = group.defaultEnabled ? !!cf.default : false;
+        if (cur !== def) n++;
+      }
+      const hasOptionalMembers = (group.cfs || []).some(cf => !cf.required);
+      if (!hasOptionalMembers) {
         const grpKey = '__grp_' + group.name;
         const grpOn = sel[grpKey] !== undefined ? sel[grpKey] : group.defaultEnabled;
         if (grpOn !== group.defaultEnabled) n++;
-        for (const cf of (group.cfs || [])) {
-          if (cf.required) continue;
-          const cur = !!sel[cf.trashId];
-          const def = group.defaultEnabled ? !!cf.default : false;
-          if (cur !== def) n++;
-        }
       }
       return n;
     },
@@ -2267,13 +2354,18 @@ export default {
 
     // Compare filter visibility predicates. Called from x-show on CF rows in every diff section.
     compareRowVisible(status) {
-      // status: 'match' | 'wrong' | 'missing' | 'extra'
+      // status: 'match' | 'wrong' | 'missing' | 'extra' | 'optional'
+      // 'optional' = TRaSH-blessed activation outside profile defaults
+      // (default-OFF group toggled on, or default:false CF activated in
+      // default-ON group). Visible under 'all', 'diff' (it IS a diff vs
+      // profile-default), and the dedicated 'optional' chip.
       switch (this.compareFilter) {
         case 'all': return true;
         case 'diff': return status !== 'match';
         case 'wrong': return status === 'wrong';
         case 'missing': return status === 'missing';
         case 'extra': return status === 'extra';
+        case 'optional': return status === 'optional';
         case 'match': return status === 'match';
         default: return true;
       }
@@ -2322,9 +2414,18 @@ export default {
         const anyInUse = (group.cfs || []).some(c => c.exists && c.inUse);
         if (!anyInUse) return 'missing';
       }
-      if (cf.exists && cf.inUse && cf.scoreMatch) return 'match';
       if (cf.exists && cf.inUse && !cf.scoreMatch) return 'wrong';
       if (!cf.exists && group.defaultEnabled && cf.required) return 'missing';
+      if (cf.exists && cf.inUse && cf.scoreMatch) {
+        // Active CF that matches profile-spec score. Classify as
+        // 'optional' (= TRaSH-blessed customization) when its activation
+        // diverges from the profile defaults: either the parent group is
+        // default-OFF (any member counts) or the CF is `default:false`
+        // inside a default-ON group. Otherwise it's a plain 'match'.
+        if (!group.defaultEnabled) return 'optional';
+        if (!cf.required && !cf.default) return 'optional';
+        return 'match';
+      }
       return 'match'; // not-in-use / non-required-missing — not a diff for filter purposes
     },
 
@@ -2349,8 +2450,29 @@ export default {
       const settings = s.settingsDiffs || 0;
       const quality = s.qualityDiffs || 0;
       const matching = s.matching || 0;
-      const diffs = wrong + missing + extra + settings + quality;
-      return { missing, wrong, extra, settings, quality, matching, diffs, all: matching + diffs };
+      // 'optional' is derived frontend-side from groups + cf flags since
+      // the backend summary doesn't separate it from 'matching' yet.
+      let optional = 0;
+      for (const g of (cr?.groups || [])) {
+        for (const cf of (g.cfs || [])) {
+          if (this.compareGroupCFStatus(cf, g) === 'optional') optional++;
+        }
+      }
+      const diffs = wrong + missing + extra + settings + quality + optional;
+      return { missing, wrong, extra, settings, quality, matching, optional, diffs, all: matching + diffs };
+    },
+
+    // Per-group count of optional CFs activated outside profile defaults.
+    // Mirror of pdGroupOptionalCount but reads from compare-result group
+    // structure (cf.inUse / cf.required / cf.default + group.defaultEnabled)
+    // instead of editor state. Used for the small blue dot on each group
+    // sub-header in the Compare's Groups table.
+    compareGroupOptionalCount(group) {
+      let n = 0;
+      for (const cf of (group?.cfs || [])) {
+        if (this.compareGroupCFStatus(cf, group) === 'optional') n++;
+      }
+      return n;
     },
 
 
@@ -2438,16 +2560,27 @@ export default {
     // and disables silently — nothing to lose.
     pdConfirmDisable() {
       const s = this.pdOverrideSummary();
-      if (s.total === 0) {
+      if (s.total === 0 && s.optional === 0) {
         this.pdDisableOverrides();
         return;
       }
-      const breakdown = `General: ${s.general}, Quality: ${s.quality}, Overridden Scores: ${s.cfScores}, Extras: ${s.extraCFs}, Groups: ${s.groups}`;
-      const plural = s.total === 1 ? '' : 's';
+      const overridesParts = [];
+      if (s.general > 0) overridesParts.push(`General: ${s.general}`);
+      if (s.quality > 0) overridesParts.push(`Quality: ${s.quality}`);
+      if (s.cfScores > 0) overridesParts.push(`Overridden Scores: ${s.cfScores}`);
+      if (s.extraCFs > 0) overridesParts.push(`Additional CFs: ${s.extraCFs}`);
+      const lines = [];
+      if (s.total > 0) {
+        lines.push(`${s.total} override${s.total === 1 ? '' : 's'}: ${overridesParts.join(', ')}`);
+      }
+      if (s.optional > 0) {
+        lines.push(`${s.optional} optional CF activation${s.optional === 1 ? '' : 's'} across the TRaSH groups`);
+      }
+      const breakdown = lines.join('\n');
       this.confirmModal = {
         show: true,
         title: 'Reset profile to defaults?',
-        message: `Your ${s.total} override${plural} will be cleared (${breakdown}).\n\nOn the next Save & Sync, this profile will revert to profile defaults in your Arr instance.\n\n⚠ This action is permanent. The only way to recover these overrides is to roll back from this profile sync history.`,
+        message: `The following will be cleared:\n\n${breakdown}\n\nOn the next Save & Sync, this profile will revert to profile defaults in your Arr instance.\n\n⚠ This action is permanent. The only way to recover is to roll back from this profile's sync history.`,
         confirmLabel: 'Reset to profile defaults',
         onConfirm: () => this.pdDisableOverrides(),
         onCancel: () => {},

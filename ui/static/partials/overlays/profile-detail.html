@@ -172,7 +172,7 @@
               <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:13px">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0">
                 <span style="color:var(--accent-orange);font-weight:600"
-                      x-text="pdOverrideSummary().total === 0
+                      x-text="pdOverrideSummary().total === 0 && pdOverrideSummary().optional === 0
                                 ? 'Override mode — no changes yet'
                                 : 'Override mode &middot; ' + pdOverrideSummary().total + ' change' + (pdOverrideSummary().total === 1 ? '' : 's')"></span>
                 <template x-if="pdOverrideSummary().general > 0">
@@ -186,6 +186,16 @@
                 </template>
                 <template x-if="pdOverrideSummary().extraCFs > 0">
                   <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="'Additional CFs: ' + pdOverrideSummary().extraCFs"></span>
+                </template>
+                <!-- Optional CFs — separate blue badge, semantically distinct
+                     from overrides. Counts TRaSH-blessed optional CFs / groups
+                     activated outside the profile's defaults. Reset clears
+                     these too, but they aren't "overrides" — they're
+                     customizations within TRaSH's spec. -->
+                <template x-if="pdOverrideSummary().optional > 0">
+                  <span style="font-size:11px;color:var(--accent-purple);background:var(--fill-purple-soft);padding:1px 7px;border-radius:10px"
+                        x-tt="'TRaSH-blessed optional CFs and groups activated outside the profile defaults. Hover the purple dots on each group below to see which.'"
+                        x-text="'Optional CFs: ' + pdOverrideSummary().optional"></span>
                 </template>
               </div>
               <button class="btn"
@@ -992,6 +1002,15 @@
                     <span x-show="group.defaultEnabled" style="font-size:11px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 5px;border-radius:3px">default</span>
                     <span style="font-size:13px;color:var(--text-muted);margin-left:8px"
                           x-text="(() => { const on = selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled; if (!on) return '0/' + group.cfs.length; return group.cfs.filter(cf => cf.required || selectedOptionalCFs[cf.trashId]).length + '/' + group.cfs.length; })()"></span>
+                    <!-- Blue dot — visible when this group has any
+                         optional CFs activated outside the profile's
+                         defaults (group toggle flipped, or non-default
+                         members enabled). Drill-down marker for the
+                         status-bar Optional CFs total. -->
+                    <template x-if="pdGroupOptionalCount(group) > 0">
+                      <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent-purple);margin-left:2px;flex-shrink:0"
+                            x-tt="pdGroupOptionalCount(group) + ' optional CF' + (pdGroupOptionalCount(group) === 1 ? '' : 's') + ' activated outside profile defaults'"></span>
+                    </template>
                     <template x-if="group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
                       <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 5px;border-radius:3px;margin-right:auto"
                             x-text="group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length + ' override' + (group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length !== 1 ? 's' : '')"></span>
