@@ -2194,7 +2194,7 @@ export default {
     // Per-rule optional-CF count for the sync rules table.
     //
     // Walks rule.selectedCFs and matches each entry against cf-groups data
-    // to determine if it's a TRaSH-blessed customization (non-default
+    // to determine if it's a TRaSH customization (non-default
     // activation). Returns 0 when cf-groups data isn't loaded yet — badge
     // hidden in that case until user visits Custom Formats tab and the
     // browse data populates. Approximation note: a single trash_id can
@@ -2280,7 +2280,7 @@ export default {
       const extraCFs = Object.keys(this.extraCFs).length;
       const optional = this.pdOptionalCount();
       // total = overrides only (profile-level settings the user changed).
-      // optional = separate count of TRaSH-blessed optional CFs / groups
+      // optional = separate count of TRaSH optional CFs / groups
       //   activated outside the profile's defaults — semantically distinct
       //   from overrides (overrides change WHAT the rule does; optional
       //   activations change WHAT'S in the profile within the TRaSH spec).
@@ -2292,7 +2292,7 @@ export default {
       };
     },
 
-    // Count of TRaSH-blessed optional CFs and groups activated outside the
+    // Count of TRaSH optional CFs and groups activated outside the
     // profile's defaults. A group counts when its effective on/off state
     // differs from defaultEnabled. A non-required CF counts when its
     // selected state differs from cf.default (or differs from false when
@@ -2355,7 +2355,7 @@ export default {
     // Compare filter visibility predicates. Called from x-show on CF rows in every diff section.
     compareRowVisible(status) {
       // status: 'match' | 'wrong' | 'missing' | 'extra' | 'optional'
-      // 'optional' = TRaSH-blessed activation outside profile defaults
+      // 'optional' = TRaSH activation outside profile defaults
       // (default-OFF group toggled on, or default:false CF activated in
       // default-ON group). Visible under 'all', 'diff' (it IS a diff vs
       // profile-default), and the dedicated 'optional' chip.
@@ -2415,10 +2415,18 @@ export default {
         if (!anyInUse) return 'missing';
       }
       if (cf.exists && cf.inUse && !cf.scoreMatch) return 'wrong';
-      if (!cf.exists && group.defaultEnabled && cf.required) return 'missing';
+      // Mirror backend's expectedByTrash logic (instances.go:1656): a CF
+      // missing from Arr counts as 'missing' when it's expected by TRaSH
+      // defaults — required OR default-on in a default-enabled group.
+      // Without `|| cf.default` here, default:true optional CFs (e.g.
+      // Bad Dual Groups / Black and White Editions / Generated Dynamic
+      // HDR / Upscaled in Unwanted Formats SQP) would never surface as
+      // diff rows when missing from Arr — backend's cg.Missing tag
+      // showed the count but the user couldn't drill down to see which.
+      if (!cf.exists && group.defaultEnabled && (cf.required || cf.default)) return 'missing';
       if (cf.exists && cf.inUse && cf.scoreMatch) {
         // Active CF that matches profile-spec score. Classify as
-        // 'optional' (= TRaSH-blessed customization) when its activation
+        // 'optional' (= TRaSH customization) when its activation
         // diverges from the profile defaults: either the parent group is
         // default-OFF (any member counts) or the CF is `default:false`
         // inside a default-ON group. Otherwise it's a plain 'match'.

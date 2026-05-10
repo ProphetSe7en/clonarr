@@ -188,13 +188,13 @@
                   <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="'Additional CFs: ' + pdOverrideSummary().extraCFs"></span>
                 </template>
                 <!-- Optional CFs — separate blue badge, semantically distinct
-                     from overrides. Counts TRaSH-blessed optional CFs / groups
+                     from overrides. Counts TRaSH optional CFs / groups
                      activated outside the profile's defaults. Reset clears
                      these too, but they aren't "overrides" — they're
                      customizations within TRaSH's spec. -->
                 <template x-if="pdOverrideSummary().optional > 0">
                   <span style="font-size:11px;color:var(--accent-purple);background:var(--fill-purple-soft);padding:1px 7px;border-radius:10px"
-                        x-tt="'TRaSH-blessed optional CFs and groups activated outside the profile defaults. Hover the purple dots on each group below to see which.'"
+                        x-tt="'TRaSH optional CFs and groups activated outside the profile defaults. Hover the purple dots on each group below to see which.'"
                         x-text="'Optional CFs: ' + pdOverrideSummary().optional"></span>
                 </template>
               </div>
