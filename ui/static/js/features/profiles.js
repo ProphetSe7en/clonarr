@@ -3252,13 +3252,10 @@ export default {
     nextPullTime() {
       void this._nowTick;
       const interval = this.config.pullInterval;
-      const lastPull = this.trashStatus?.lastPull;
-      if (!interval || interval === 'off' || !lastPull) return '';
-      const match = interval.match(/^(\d+)(m|h)$/);
-      if (!match) return '';
-      const ms = parseInt(match[1]) * (match[2] === 'h' ? 3600000 : 60000);
-      const next = new Date(lastPull).getTime() + ms;
-      const diff = next - Date.now();
+      if (!interval || interval === '0') return '';
+      const nextPull = this.trashStatus?.nextPull;
+      if (!nextPull) return '';
+      const diff = new Date(nextPull).getTime() - Date.now();
       if (diff <= 0) return 'soon';
       const mins = Math.floor(diff / 60000);
       if (mins < 60) return mins + 'm';

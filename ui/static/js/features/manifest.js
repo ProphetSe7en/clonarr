@@ -17,6 +17,7 @@ const EMPTY_MANIFEST = {
   authModes: [],
   authRequiredModes: [],
   pullIntervalPresets: [],
+  pullScheduleModes: [],
   sessionTtlBounds: { min: 1, max: 365 },
   cfCategories: [],
   profileGroups: [],

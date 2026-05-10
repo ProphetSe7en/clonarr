@@ -614,6 +614,7 @@ export function clonarr() {
         const r = await fetch('/api/config');
         if (!r.ok) return;
         this.config = await r.json();
+        this.config.pullSchedule = Object.assign({ mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, this.config.pullSchedule || {});
         // Ensure prowlarr config object exists
         if (!this.config.prowlarr) this.config.prowlarr = { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] };
         // Back-fill missing arrays for configs saved before category overrides existed.
@@ -631,11 +632,112 @@ export function clonarr() {
       } catch (e) { console.error('loadConfig:', e); }
     },
 
+    // The API stores scheduled pull times as 24-hour HH:MM. These dropdowns
+    // follow the browser's hour cycle; the backend still schedules in container time.
+    pullScheduleTimeParts() {
+      const time = this.config?.pullSchedule?.time || '03:00';
+      const match = time.match(/^(\d{2}):(\d{2})$/);
+      if (!match) return { hour: 3, minute: 0 };
+      const hour = Math.max(0, Math.min(23, parseInt(match[1], 10)));
+      const minute = Math.max(0, Math.min(59, parseInt(match[2], 10)));
+      return { hour, minute };
+    },
+
+    pullScheduleUses12Hour() {
+      if (this._pullScheduleUses12Hour !== undefined) return this._pullScheduleUses12Hour;
+      const opts = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions();
+      this._pullScheduleUses12Hour = opts.hourCycle
+        ? opts.hourCycle === 'h11' || opts.hourCycle === 'h12'
+        : new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).formatToParts(new Date(2020, 0, 1, 13, 0)).some(p => p.type === 'dayPeriod');
+      return this._pullScheduleUses12Hour;
+    },
+
+    pullScheduleHourOptions() {
+      if (this.pullScheduleUses12Hour()) {
+        return Array.from({ length: 12 }, (_, i) => {
+          const value = i + 1;
+          return { value, label: String(value) };
+        });
+      }
+      return Array.from({ length: 24 }, (_, i) => ({ value: i, label: String(i).padStart(2, '0') }));
+    },
+
+    pullScheduleMinuteOptions() {
+      if (this._pullScheduleMinuteOptions) return this._pullScheduleMinuteOptions;
+      this._pullScheduleMinuteOptions = Array.from({ length: 60 }, (_, i) => ({ value: i, label: String(i).padStart(2, '0') }));
+      return this._pullScheduleMinuteOptions;
+    },
+
+    pullSchedulePeriodOptions() {
+      if (this._pullSchedulePeriodOptions) return this._pullSchedulePeriodOptions;
+      const labelFor = (hour, fallback) => {
+        const parts = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).formatToParts(new Date(2020, 0, 1, hour, 0));
+        return parts.find(p => p.type === 'dayPeriod')?.value || fallback;
+      };
+      this._pullSchedulePeriodOptions = [
+        { value: 'AM', label: labelFor(9, 'AM') },
+        { value: 'PM', label: labelFor(21, 'PM') },
+      ];
+      return this._pullSchedulePeriodOptions;
+    },
+
+    pullScheduleHourValue() {
+      const { hour } = this.pullScheduleTimeParts();
+      if (!this.pullScheduleUses12Hour()) return hour;
+      const h = hour % 12;
+      return h === 0 ? 12 : h;
+    },
+
+    pullScheduleMinuteValue() {
+      return this.pullScheduleTimeParts().minute;
+    },
+
+    pullSchedulePeriodValue() {
+      return this.pullScheduleTimeParts().hour < 12 ? 'AM' : 'PM';
+    },
+
+    setPullScheduleTime(hour, minute) {
+      const h = Math.max(0, Math.min(23, Number(hour) || 0));
+      const m = Math.max(0, Math.min(59, Number(minute) || 0));
+      const next = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      const changed = this.config.pullSchedule.time !== next;
+      this.config.pullSchedule.time = next;
+      return changed;
+    },
+
+    setPullScheduleHour(value) {
+      const { hour, minute } = this.pullScheduleTimeParts();
+      let nextHour = Number(value);
+      if (this.pullScheduleUses12Hour()) {
+        const period = hour < 12 ? 'AM' : 'PM';
+        if (nextHour === 12) nextHour = 0;
+        if (period === 'PM') nextHour += 12;
+      }
+      return this.setPullScheduleTime(nextHour, minute);
+    },
+
+    setPullScheduleMinute(value) {
+      const { hour } = this.pullScheduleTimeParts();
+      return this.setPullScheduleTime(hour, Number(value));
+    },
+
+    setPullSchedulePeriod(value) {
+      const { hour, minute } = this.pullScheduleTimeParts();
+      const isPM = value === 'PM';
+      let nextHour = hour % 12;
+      if (isPM) nextHour += 12;
+      return this.setPullScheduleTime(nextHour, minute);
+    },
+
     async saveConfig(fields) {
       try {
         const body = {};
         if (!fields || fields.includes('trashRepo')) body.trashRepo = this.config.trashRepo;
-        if (fields && fields.includes('pullInterval')) body.pullInterval = this.config.pullInterval;
+        if (fields && fields.includes('pullInterval')) {
+          body.pullInterval = this.config.pullInterval;
+          if (this.config.pullInterval === 'specific') body.pullSchedule = this.config.pullSchedule;
+        }
+        if (fields && fields.includes('pullSchedule')) body.pullSchedule = this.config.pullSchedule;
         if (fields && fields.includes('devMode')) body.devMode = this.config.devMode;
         if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;

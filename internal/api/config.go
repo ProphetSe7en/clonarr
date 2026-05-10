@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,6 +42,39 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	}{cfg, s.Core.Version, s.Core.DevFeatures})
 }
 
+func validatePullSchedule(sched core.PullSchedule) error {
+	// Keep API validation in step with the scheduler. Bad saved schedules would
+	// otherwise turn into a disabled timer with only a log line as a clue.
+	if !core.IsValidEnumValue(core.PullScheduleModes, sched.Mode) {
+		return fmt.Errorf("pullSchedule.mode must be one of: %s", strings.Join(core.EnumValues(core.PullScheduleModes), ", "))
+	}
+	if !validScheduleClock(sched.Time) {
+		return fmt.Errorf("pullSchedule.time must be HH:MM in 24-hour format")
+	}
+	if sched.Mode == "weekly" && (sched.DayOfWeek < 0 || sched.DayOfWeek > 6) {
+		return fmt.Errorf("pullSchedule.dayOfWeek must be 0..6")
+	}
+	if sched.Mode == "monthly" && (sched.DayOfMonth < 1 || sched.DayOfMonth > 28) {
+		return fmt.Errorf("pullSchedule.dayOfMonth must be 1..28")
+	}
+	return nil
+}
+
+func validScheduleClock(s string) bool {
+	if len(s) != 5 || s[2] != ':' {
+		return false
+	}
+	hour, err := strconv.Atoi(s[:2])
+	if err != nil {
+		return false
+	}
+	minute, err := strconv.Atoi(s[3:])
+	if err != nil {
+		return false
+	}
+	return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59
+}
+
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	s.updateConfigMu.Lock()
 	defer s.updateConfigMu.Unlock()
@@ -56,6 +90,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TrashRepo              *core.TrashRepo      `json:"trashRepo,omitempty"`
 		PullInterval           *string              `json:"pullInterval,omitempty"`
+		PullSchedule           *core.PullSchedule   `json:"pullSchedule,omitempty"`
 		DevMode                *bool                `json:"devMode,omitempty"`
 		TrashSchemaFields      *bool                `json:"trashSchemaFields,omitempty"`
 		DebugLogging           *bool                `json:"debugLogging"`
@@ -142,6 +177,29 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Validate the merged config, not just the fields in this request. Settings
+	// saves are partial, and a scheduled pull is only valid as interval+schedule pair.
+	existingCfg := s.Core.Config.Get()
+	effectiveInterval := existingCfg.PullInterval
+	if req.PullInterval != nil {
+		effectiveInterval = *req.PullInterval
+	}
+	effectiveSchedule := existingCfg.PullSchedule
+	if req.PullSchedule != nil {
+		sched := *req.PullSchedule
+		effectiveSchedule = &sched
+	}
+	if effectiveInterval == "specific" {
+		if effectiveSchedule == nil {
+			writeError(w, 400, "pullSchedule is required when pullInterval is specific")
+			return
+		}
+		if err := validatePullSchedule(*effectiveSchedule); err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+	}
+
 	// Any save that sets authentication=none requires the current admin password.
 	if req.Authentication != nil && *req.Authentication == "none" && s.AuthStore != nil {
 		if confirm.ConfirmPassword == "" {
@@ -155,6 +213,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pullChanged := false
+	scheduleChanged := false
 	authChanged := false
 	err := s.Core.Config.Update(func(cfg *core.Config) {
 		if req.TrashRepo != nil {
@@ -168,6 +227,11 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		if req.PullInterval != nil {
 			cfg.PullInterval = *req.PullInterval
 			pullChanged = true
+		}
+		if req.PullSchedule != nil && effectiveInterval == "specific" {
+			sched := *req.PullSchedule
+			cfg.PullSchedule = &sched
+			scheduleChanged = true
 		}
 		if req.DevMode != nil {
 			cfg.DevMode = *req.DevMode
@@ -215,11 +279,11 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify pull goroutine of schedule change
-	if pullChanged {
-		cfg := s.Core.Config.Get()
+	// Wake the scheduler after persistence. It re-reads ConfigStore so rapid
+	// partial saves cannot leave it running from stale request data.
+	if pullChanged || scheduleChanged {
 		select {
-		case s.Core.PullUpdateCh <- cfg.PullInterval:
+		case s.Core.PullUpdateCh <- "":
 		default:
 		}
 	}

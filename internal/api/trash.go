@@ -6,12 +6,19 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"time"
 )
 
 // --- TRaSH ---
 
 func (s *Server) handleTrashStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.Core.Trash.Status())
+	st := s.Core.Trash.Status()
+	// Keep countdown math on the server side so browser timezone settings do not
+	// drift from the container's TZ.
+	if next := s.Core.GetNextPullAt(); !next.IsZero() {
+		st.NextPull = next.Format(time.RFC3339)
+	}
+	writeJSON(w, st)
 }
 
 func (s *Server) handleTrashPull(w http.ResponseWriter, r *http.Request) {
