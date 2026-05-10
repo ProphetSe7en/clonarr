@@ -3255,13 +3255,36 @@ export default {
       if (!interval || interval === '0') return '';
       const nextPull = this.trashStatus?.nextPull;
       if (!nextPull) return '';
-      const diff = new Date(nextPull).getTime() - Date.now();
+      const nextPullMs = new Date(nextPull).getTime();
+      const serverNowMs = new Date(this.trashStatus?.serverNow || '').getTime();
+      const fetchedAt = this._trashStatusFetchedAt || Date.now();
+      const elapsed = Math.max(0, Date.now() - fetchedAt);
+      const nowMs = Number.isFinite(serverNowMs) ? serverNowMs + elapsed : Date.now();
+      const diff = nextPullMs - nowMs;
       if (diff <= 0) return 'soon';
-      const mins = Math.floor(diff / 60000);
+      const mins = Math.ceil(diff / 60000);
       if (mins < 60) return mins + 'm';
       const hours = Math.floor(mins / 60);
       const remMins = mins % 60;
       return remMins > 0 ? hours + 'h ' + remMins + 'm' : hours + 'h';
+    },
+
+    nextPullClockLabel() {
+      const serverClock = this.formatScheduleClockValue(this.trashStatus?.nextPullClock);
+      if (!serverClock) return '';
+      const serverLabel = this.config.serverTimeZone || '';
+      const serverText = serverLabel ? serverClock + ' ' + serverLabel : serverClock;
+      if (!this.scheduleTimeZoneMismatch()) return serverText;
+      const localClock = this.formatLocalClock(this.trashStatus?.nextPull);
+      return localClock ? serverText + ' / ' + localClock + ' local' : serverText;
+    },
+
+    nextPullLabel() {
+      const remaining = this.nextPullTime();
+      if (!remaining) return '';
+      const clock = this.nextPullClockLabel();
+      const suffix = clock ? ' (' + clock + ')' : '';
+      return remaining === 'soon' ? 'next pull soon' + suffix : 'next pull in ' + remaining + suffix;
     },
 
     formatCommitDate(dateStr) {

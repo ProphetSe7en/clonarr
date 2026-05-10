@@ -632,8 +632,8 @@ export function clonarr() {
       } catch (e) { console.error('loadConfig:', e); }
     },
 
-    // The API stores scheduled pull times as 24-hour HH:MM. These dropdowns
-    // follow the browser's hour cycle; the backend still schedules in container time.
+    // The API stores scheduled pull times as container-local HH:MM. The
+    // dropdown labels follow the browser's 12h/24h preference only for display.
     pullScheduleTimeParts() {
       const time = this.config?.pullSchedule?.time || '03:00';
       const match = time.match(/^(\d{2}):(\d{2})$/);
@@ -650,6 +650,33 @@ export function clonarr() {
         ? opts.hourCycle === 'h11' || opts.hourCycle === 'h12'
         : new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).formatToParts(new Date(2020, 0, 1, 13, 0)).some(p => p.type === 'dayPeriod');
       return this._pullScheduleUses12Hour;
+    },
+
+    browserTimeZoneName() {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+    },
+
+    browserTimeZoneOffset() {
+      return -new Date().getTimezoneOffset() * 60;
+    },
+
+    serverTimeZoneDisplay() {
+      const zone = this.config?.serverTimeZone || 'container local time';
+      if (!this.config?.serverTimeZoneConfigured && zone === 'UTC') return 'UTC (default)';
+      return zone;
+    },
+
+    scheduleTimeZoneMismatch() {
+      return Number.isFinite(this.config?.serverTimeZoneOffset) &&
+        this.config.serverTimeZoneOffset !== this.browserTimeZoneOffset();
+    },
+
+    scheduleTimeZoneHelperText() {
+      const server = this.serverTimeZoneDisplay();
+      if (!this.scheduleTimeZoneMismatch()) return 'Schedules use container time: ' + server + '.';
+      const browser = this.browserTimeZoneName();
+      const setTZ = browser && browser !== 'local' ? ' Set TZ=' + browser + ' to schedule in your browser timezone.' : ' Set TZ to your local timezone to schedule in browser time.';
+      return 'Schedules use container time: ' + server + '. Your browser time is ' + browser + '.' + setTZ;
     },
 
     pullScheduleHourOptions() {
@@ -696,6 +723,25 @@ export function clonarr() {
       return this.pullScheduleTimeParts().hour < 12 ? 'AM' : 'PM';
     },
 
+    formatPullScheduleClock(hour, minute) {
+      return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(2020, 0, 1, hour, minute));
+    },
+
+    formatScheduleClockValue(value) {
+      const match = String(value || '').match(/^(\d{2}):(\d{2})$/);
+      if (!match) return '';
+      return this.formatPullScheduleClock(parseInt(match[1], 10), parseInt(match[2], 10));
+    },
+
+    formatLocalClock(isoString) {
+      if (!isoString) return '';
+      try {
+        return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      } catch {
+        return '';
+      }
+    },
+
     setPullScheduleTime(hour, minute) {
       const h = Math.max(0, Math.min(23, Number(hour) || 0));
       const m = Math.max(0, Math.min(59, Number(minute) || 0));
@@ -732,6 +778,7 @@ export function clonarr() {
     async saveConfig(fields) {
       try {
         const body = {};
+        const pullScheduleChanged = fields && (fields.includes('pullInterval') || fields.includes('pullSchedule'));
         if (!fields || fields.includes('trashRepo')) body.trashRepo = this.config.trashRepo;
         if (fields && fields.includes('pullInterval')) {
           body.pullInterval = this.config.pullInterval;
@@ -743,11 +790,12 @@ export function clonarr() {
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
         // 401 handled centrally by the fetch wrapper.
-        await fetch('/api/config', {
+        const r = await fetch('/api/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
+        if (r.ok && pullScheduleChanged) await this.loadTrashStatus();
       } catch (e) { console.error('saveConfig:', e); }
     },
 
@@ -756,6 +804,7 @@ export function clonarr() {
         const r = await fetch('/api/trash/status');
         if (!r.ok) return;
         this.trashStatus = await r.json();
+        this._trashStatusFetchedAt = Date.now();
       } catch (e) { console.error('loadTrashStatus:', e); }
     },
 

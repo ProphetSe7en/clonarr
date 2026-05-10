@@ -9,7 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
+	"os"
 	"strings"
 	"time"
 )
@@ -32,14 +32,52 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	for i, a := range cfg.AutoSync.NotificationAgents {
 		cfg.AutoSync.NotificationAgents[i].Config = maskAgentConfig(a.Type, a.Config)
 	}
+	timeInfo := serverTimeInfoAt(time.Now(), os.Getenv("TZ") != "")
+
 	// Wrap config with version + devFeatures for frontend.
 	// devFeatures is env-only (CLONARR_DEV_FEATURES), not persisted to clonarr.json,
 	// so it's exposed alongside the config rather than as part of it.
 	writeJSON(w, struct {
 		core.Config
-		Version     string `json:"version"`
-		DevFeatures bool   `json:"devFeatures"`
-	}{cfg, s.Core.Version, s.Core.DevFeatures})
+		Version                  string `json:"version"`
+		DevFeatures              bool   `json:"devFeatures"`
+		ServerTimeZone           string `json:"serverTimeZone"`
+		ServerTimeZoneOffset     int    `json:"serverTimeZoneOffset"`
+		ServerTimeZoneConfigured bool   `json:"serverTimeZoneConfigured"`
+		ServerNow                string `json:"serverNow"`
+	}{
+		Config:                   cfg,
+		Version:                  s.Core.Version,
+		DevFeatures:              s.Core.DevFeatures,
+		ServerTimeZone:           timeInfo.ServerTimeZone,
+		ServerTimeZoneOffset:     timeInfo.ServerTimeZoneOffset,
+		ServerTimeZoneConfigured: timeInfo.ServerTimeZoneConfigured,
+		ServerNow:                timeInfo.ServerNow,
+	})
+}
+
+func serverTimeZoneLabel(t time.Time) string {
+	return serverTimeInfoAt(t, false).ServerTimeZone
+}
+
+type serverTimeInfo struct {
+	ServerTimeZone           string
+	ServerTimeZoneOffset     int
+	ServerTimeZoneConfigured bool
+	ServerNow                string
+}
+
+func serverTimeInfoAt(t time.Time, configured bool) serverTimeInfo {
+	name, offset := t.Zone()
+	if name == "" {
+		name = "Local"
+	}
+	return serverTimeInfo{
+		ServerTimeZone:           name,
+		ServerTimeZoneOffset:     offset,
+		ServerTimeZoneConfigured: configured,
+		ServerNow:                t.Format(time.RFC3339),
+	}
 }
 
 func validatePullSchedule(sched core.PullSchedule) error {
@@ -48,7 +86,7 @@ func validatePullSchedule(sched core.PullSchedule) error {
 	if !core.IsValidEnumValue(core.PullScheduleModes, sched.Mode) {
 		return fmt.Errorf("pullSchedule.mode must be one of: %s", strings.Join(core.EnumValues(core.PullScheduleModes), ", "))
 	}
-	if !validScheduleClock(sched.Time) {
+	if _, _, ok := core.ParsePullScheduleClock(sched.Time); !ok {
 		return fmt.Errorf("pullSchedule.time must be HH:MM in 24-hour format")
 	}
 	if sched.Mode == "weekly" && (sched.DayOfWeek < 0 || sched.DayOfWeek > 6) {
@@ -58,21 +96,6 @@ func validatePullSchedule(sched core.PullSchedule) error {
 		return fmt.Errorf("pullSchedule.dayOfMonth must be 1..28")
 	}
 	return nil
-}
-
-func validScheduleClock(s string) bool {
-	if len(s) != 5 || s[2] != ':' {
-		return false
-	}
-	hour, err := strconv.Atoi(s[:2])
-	if err != nil {
-		return false
-	}
-	minute, err := strconv.Atoi(s[3:])
-	if err != nil {
-		return false
-	}
-	return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +305,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	// Wake the scheduler after persistence. It re-reads ConfigStore so rapid
 	// partial saves cannot leave it running from stale request data.
 	if pullChanged || scheduleChanged {
+		s.Core.SetNextPullAt(nextPullAfterConfigSave(s.Core.Config.Get()))
 		select {
 		case s.Core.PullUpdateCh <- "":
 		default:

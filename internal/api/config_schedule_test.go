@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func setupConfigScheduleServer(t *testing.T, cfg *core.Config) (*Server, *core.App) {
@@ -22,11 +23,75 @@ func setupConfigScheduleServer(t *testing.T, cfg *core.Config) (*Server, *core.A
 	}
 	app := &core.App{
 		Config:       store,
+		Trash:        core.NewTrashStore(tempDir),
 		DebugLog:     core.NewDebugLogger(tempDir),
 		ActivityLog:  core.NewActivityLogger(tempDir),
 		PullUpdateCh: make(chan string, 1),
 	}
 	return &Server{Core: app}, app
+}
+
+func TestServerTimeInfoAt(t *testing.T) {
+	utc := time.Date(2026, time.May, 10, 12, 0, 0, 0, time.UTC)
+	info := serverTimeInfoAt(utc, false)
+	if info.ServerTimeZone != "UTC" {
+		t.Fatalf("ServerTimeZone = %q, want UTC", info.ServerTimeZone)
+	}
+	if label := serverTimeZoneLabel(utc); label != "UTC" {
+		t.Fatalf("serverTimeZoneLabel = %q, want UTC", label)
+	}
+	if info.ServerTimeZoneOffset != 0 {
+		t.Fatalf("ServerTimeZoneOffset = %d, want 0", info.ServerTimeZoneOffset)
+	}
+	if info.ServerTimeZoneConfigured {
+		t.Fatalf("ServerTimeZoneConfigured = true, want false")
+	}
+	if info.ServerNow != "2026-05-10T12:00:00Z" {
+		t.Fatalf("ServerNow = %q, want RFC3339 UTC time", info.ServerNow)
+	}
+
+	loc := time.FixedZone("CDT", -5*60*60)
+	local := time.Date(2026, time.May, 10, 9, 30, 0, 0, loc)
+	info = serverTimeInfoAt(local, true)
+	if info.ServerTimeZone != "CDT" {
+		t.Fatalf("ServerTimeZone = %q, want CDT", info.ServerTimeZone)
+	}
+	if info.ServerTimeZoneOffset != -5*60*60 {
+		t.Fatalf("ServerTimeZoneOffset = %d, want -18000", info.ServerTimeZoneOffset)
+	}
+	if !info.ServerTimeZoneConfigured {
+		t.Fatalf("ServerTimeZoneConfigured = false, want true")
+	}
+	if info.ServerNow != "2026-05-10T09:30:00-05:00" {
+		t.Fatalf("ServerNow = %q, want RFC3339 CDT time", info.ServerNow)
+	}
+}
+
+func TestTrashStatusIncludesServerTiming(t *testing.T) {
+	server, app := setupConfigScheduleServer(t, core.DefaultConfig())
+	next := time.Date(2026, time.May, 10, 12, 0, 0, 0, time.UTC)
+	app.SetNextPullAt(next)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/trash/status", nil)
+	w := httptest.NewRecorder()
+	server.handleTrashStatus(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var st core.TrashStatus
+	if err := json.NewDecoder(w.Body).Decode(&st); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if st.ServerNow == "" {
+		t.Fatalf("ServerNow missing")
+	}
+	if st.NextPull == "" {
+		t.Fatalf("NextPull missing")
+	}
+	if st.NextPullClock != "12:00" {
+		t.Fatalf("NextPullClock = %q, want 12:00", st.NextPullClock)
+	}
 }
 
 func putConfigSchedule(t *testing.T, server *Server, body string) *httptest.ResponseRecorder {

@@ -84,7 +84,8 @@
               <select class="input" style="width:130px"
                       x-show="config.pullInterval === 'specific'"
                       x-model="config.pullSchedule.mode"
-                      @change="saveConfig(['pullInterval'])">
+                      @change="saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull mode">
                 <template x-for="opt in (manifest.pullScheduleModes || [])" :key="opt.value">
                   <option :value="opt.value" x-text="opt.label"></option>
                 </template>
@@ -141,7 +142,8 @@
               <span x-show="config.pullInterval !== 'specific'"
                     style="font-size:12px;color:var(--text-muted)">Auto-pull TRaSH data at this interval</span>
               <span x-show="config.pullInterval === 'specific'"
-                    style="flex-basis:100%;font-size:12px;color:var(--text-secondary);font-style:italic">Next refresh starts on the next occurrence of this time</span>
+                    style="flex-basis:100%;font-size:12px;color:var(--text-secondary);font-style:italic"
+                    x-text="scheduleTimeZoneHelperText()"></span>
             </div>
           </div>
           <div class="setting-row">

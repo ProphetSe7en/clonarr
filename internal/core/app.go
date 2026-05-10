@@ -98,7 +98,9 @@ func ParsePullInterval(s string) time.Duration {
 	return d
 }
 
-func parsePullScheduleClock(s string) (int, int, bool) {
+// ParsePullScheduleClock parses the persisted HH:MM schedule clock.
+// It is shared by API validation and scheduler math so they accept the same format.
+func ParsePullScheduleClock(s string) (int, int, bool) {
 	if len(s) != 5 || s[2] != ':' {
 		return 0, 0, false
 	}
@@ -120,7 +122,7 @@ func parsePullScheduleClock(s string) (int, int, bool) {
 // It always returns a time after now; exact equality rolls to the next period.
 // Invalid or empty schedules return the zero time.
 func nextPullTimeAt(sched PullSchedule, now time.Time) time.Time {
-	hour, minute, ok := parsePullScheduleClock(sched.Time)
+	hour, minute, ok := ParsePullScheduleClock(sched.Time)
 	if !ok {
 		return time.Time{}
 	}

@@ -429,21 +429,23 @@ type ChangelogSection struct {
 
 // Status returns repo status for the API.
 type TrashStatus struct {
-	LastPull     string             `json:"lastPull"`
-	NextPull     string             `json:"nextPull,omitempty"` // server-authoritative next automatic pull time
-	CommitHash   string             `json:"commitHash"`
-	CommitDate   string             `json:"commitDate,omitempty"`
-	LastDiff     *PullDiff          `json:"lastDiff,omitempty"`  // what changed in last pull
-	Changelog    []ChangelogSection `json:"changelog,omitempty"` // recent updates from updates.txt
-	RadarrCFs    int                `json:"radarrCFs"`
-	SonarrCFs    int                `json:"sonarrCFs"`
-	RadarrGroups int                `json:"radarrGroups"`
-	SonarrGroups int                `json:"sonarrGroups"`
-	RadarrProfs  int                `json:"radarrProfiles"`
-	SonarrProfs  int                `json:"sonarrProfiles"`
-	Cloned       bool               `json:"cloned"`
-	PullError    string             `json:"pullError,omitempty"`
-	Pulling      bool               `json:"pulling"`
+	LastPull      string             `json:"lastPull"`
+	NextPull      string             `json:"nextPull,omitempty"` // server-authoritative next automatic pull time
+	NextPullClock string             `json:"nextPullClock,omitempty"`
+	ServerNow     string             `json:"serverNow"`
+	CommitHash    string             `json:"commitHash"`
+	CommitDate    string             `json:"commitDate,omitempty"`
+	LastDiff      *PullDiff          `json:"lastDiff,omitempty"`  // what changed in last pull
+	Changelog     []ChangelogSection `json:"changelog,omitempty"` // recent updates from updates.txt
+	RadarrCFs     int                `json:"radarrCFs"`
+	SonarrCFs     int                `json:"sonarrCFs"`
+	RadarrGroups  int                `json:"radarrGroups"`
+	SonarrGroups  int                `json:"sonarrGroups"`
+	RadarrProfs   int                `json:"radarrProfiles"`
+	SonarrProfs   int                `json:"sonarrProfiles"`
+	Cloned        bool               `json:"cloned"`
+	PullError     string             `json:"pullError,omitempty"`
+	Pulling       bool               `json:"pulling"`
 }
 
 func (ts *TrashStore) Status() TrashStatus {
