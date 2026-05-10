@@ -61,6 +61,22 @@ func (s *Server) handleDryRun(w http.ResponseWriter, r *http.Request) {
 		}
 		imported = &p
 	}
+	// Mirror handleApply's brand-new-group expansion when ExpandRule is set
+	// (Sync All path). Read-only here — we don't persist the expanded set
+	// back to the rule, just feed it into BuildSyncPlan so the dry-run
+	// preview's "scores zeroed" count matches what apply will actually do.
+	// Without this, Sync All's dry-run would report N zeroed CFs but the
+	// subsequent apply would zero fewer (because expansion includes them in
+	// the synced set), leaving the user staring at a misleading preview.
+	if req.ExpandRule && ad != nil && req.ArrProfileID > 0 && req.ProfileTrashID != "" {
+		for _, r := range s.Core.Config.Get().AutoSync.Rules {
+			if r.InstanceID == req.InstanceID && r.ArrProfileID == req.ArrProfileID && r.Enabled && r.OrphanedAt == "" {
+				expandedCFs, _ := core.ExpandSelectedCFsForBrandNewGroups(r, ad)
+				req.SelectedCFs = expandedCFs
+				break
+			}
+		}
+	}
 	customCFs := s.Core.CustomCFs.List(inst.Type)
 	lastSyncedCFs := s.Core.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
 	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient, nil)
@@ -143,6 +159,31 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		imported = &p
+	}
+	// Brand-new-group expansion for the manual Sync All path (req.ExpandRule).
+	// runAutoSyncRule already does this on the scheduled cron; without this
+	// branch the manual Sync All button bypasses expansion and ResetMode=
+	// reset_to_zero zeroes CFs that TRaSH moved into a brand-new default-on
+	// group since the rule was last synced. Opt-in: every other caller of
+	// /api/sync/apply leaves req.ExpandRule unset, so they're unaffected.
+	if req.ExpandRule && ad != nil && req.ArrProfileID > 0 && req.ProfileTrashID != "" {
+		var rule *core.AutoSyncRule
+		for _, r := range s.Core.Config.Get().AutoSync.Rules {
+			if r.InstanceID == req.InstanceID && r.ArrProfileID == req.ArrProfileID && r.Enabled && r.OrphanedAt == "" {
+				ruleCopy := r
+				rule = &ruleCopy
+				break
+			}
+		}
+		if rule != nil {
+			expandedCFs, expansionAdded := core.ExpandSelectedCFsForBrandNewGroups(*rule, ad)
+			if len(expansionAdded) > 0 {
+				s.Core.UpdateAutoSyncRuleSelectedCFs(rule.ID, expandedCFs)
+				req.SelectedCFs = expandedCFs
+				log.Printf("Sync All: rule %s — auto-included %d CF(s) from new default-on cf-group(s) (TRaSH restructure detection)", rule.ID, len(expansionAdded))
+				s.Core.DebugLog.Logf(core.LogAutoSync, "Sync All: rule %s expanded selectedCFs by %d CF(s)", rule.ID, len(expansionAdded))
+			}
+		}
 	}
 	customCFs := s.Core.CustomCFs.List(inst.Type)
 	lastSyncedCFs := s.Core.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
@@ -275,6 +316,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		QualityStructure:  req.QualityStructure,
 		Overrides:         req.Overrides,
 		Behavior:          req.Behavior,
+		KeepArrCFIDs:      req.KeepArrCFIDs,
 		CFsCreated:        result.CFsCreated,
 		CFsUpdated:        result.CFsUpdated,
 		ScoresUpdated:     result.ScoresUpdated,
@@ -385,6 +427,15 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 				cfg.AutoSync.Rules[i].QualityStructure = req.QualityStructure
 				cfg.AutoSync.Rules[i].Behavior = req.Behavior
 				cfg.AutoSync.Rules[i].Overrides = req.Overrides
+				// Persist KeepArrCFIDs alongside the other request fields.
+				// Without this, the Compare flow's "leave this extra alone"
+				// list lived only on the request — frontend follows up with
+				// a separate PUT to the rule, but if that PUT failed
+				// (network blip), apply ran with the new keep-list while
+				// the rule kept the old → next Sync All used stale data
+				// and zeroed the just-preserved customs. Now request and
+				// rule stay atomically in sync within the same handler.
+				cfg.AutoSync.Rules[i].KeepArrCFIDs = req.KeepArrCFIDs
 				// Clean sync — clear any LastSyncError set by a previous
 				// failed attempt so the error badge disappears in the UI
 				// once the user has actually fixed the bad config.
@@ -401,6 +452,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 			ImportedProfileID: req.ImportedProfileID,
 			ArrProfileID:      arrID,
 			SelectedCFs:       req.SelectedCFs,
+			KeepArrCFIDs:      req.KeepArrCFIDs,
 			ScoreOverrides:    req.ScoreOverrides,
 			QualityOverrides:  req.QualityOverrides,
 			QualityStructure:  req.QualityStructure,

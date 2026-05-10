@@ -364,6 +364,18 @@ export default {
       for (const item of items) {
         if (item.name !== trashDefault) options.push({ value: item.name, name: item.name });
       }
+      // If the saved cutoff override points to a quality not in the
+      // TRaSH-spec items list (user added it via override, imported
+      // from Arr, etc.) inject it as a plain option so the dropdown
+      // displays it. Without this, el.value never matches any <option>
+      // and the browser silently falls back to the first option (TRaSH
+      // default), making it look like the override was lost — even
+      // though pdOverrides.cutoffQuality still holds the right value
+      // and Save & Sync will persist it correctly. No suffix label —
+      // it's a legitimate user override, treat it like any other.
+      if (selectedValue && selectedValue !== '__skip__' && !options.some(o => o.value === selectedValue)) {
+        options.push({ value: selectedValue, name: selectedValue });
+      }
       // Skip option
       options.push({ value: '__skip__', name: '— Don\'t sync cutoff —' });
       // Rebuild options

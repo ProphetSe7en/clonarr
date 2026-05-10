@@ -207,6 +207,13 @@ type SyncHistoryEntry struct {
 	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
 	Overrides         *SyncOverrides  `json:"overrides,omitempty"`
 	Behavior          *SyncBehavior   `json:"behavior,omitempty"`
+	// KeepArrCFIDs mirrors the rule's pinned-extras list. Snapshotted on
+	// every sync so a rerun from sync history (e.g. when the user has
+	// deleted the rule, or for orphaned profiles) can still preserve the
+	// Arr-only customs that were preserved on the original sync. Without
+	// this snapshot, sync-history rerun would fall back to nil and the
+	// reset_to_zero pass would wipe every pinned extra.
+	KeepArrCFIDs []int `json:"keepArrCFIDs,omitempty"`
 	CFsCreated        int             `json:"cfsCreated"`
 	CFsUpdated        int             `json:"cfsUpdated"`
 	ScoresUpdated     int             `json:"scoresUpdated"`

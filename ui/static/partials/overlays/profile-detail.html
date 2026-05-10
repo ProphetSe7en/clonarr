@@ -398,7 +398,7 @@
                         <select class="pb-input pd-input"
                                 :style="'width:150px;max-width:150px;flex-shrink:0;' + (pdOverrides.cutoffQuality && pdOverrides.cutoffQuality !== (profileDetail?.detail?.profile?.cutoff || '') ? 'border-color:var(--accent-orange)' : '')"
                                 x-effect="populateCutoffSelect($el, qualityStructure, profileDetail?.detail?.profile, pdOverrides.cutoffQuality, qualityOverrides)"
-                                @change="pdOverrides.cutoffQuality = $el.value">
+                                @change="pdOverrides.cutoffQuality = $el.value; if (qualityStructure.length === 0) qsInitFromProfile()">
                         </select>
                       </div>
                     </template>

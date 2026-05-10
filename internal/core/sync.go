@@ -114,6 +114,16 @@ type SyncRequest struct {
 	ArrProfileID      int             `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
 	ProfileName       string          `json:"profileName"`                 // custom name for new profile (optional)
 	SelectedCFs       []string        `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
+	// ExpandRule, when true, tells handleApply to look up the auto-sync rule
+	// for (instanceId, arrProfileId), run ExpandSelectedCFsForBrandNewGroups
+	// to auto-include CFs from brand-new default-on TRaSH cf-groups, and
+	// persist the expanded set back to the rule before building the plan.
+	// This brings manual Sync All into parity with scheduled auto-sync — the
+	// scheduled cron already runs this expansion via runAutoSyncRule, but
+	// the manual Sync All path (frontend quickSync → /api/sync/apply) didn't.
+	// Default false: every other caller of /api/sync/apply (Profile Sync's
+	// Save & Sync, Compare apply, sync-history rerun, etc.) is unaffected.
+	ExpandRule        bool            `json:"expandRule,omitempty"`
 	// KeepArrCFIDs lists Arr CF IDs that must NOT be zeroed by ResetMode='reset_to_zero'.
 	// Used by Compare flow when the user unchecks an "Extra in Arr" row (= keep at current score).
 	// Backend treats these as if they were part of the synced set during the reset loop.
@@ -1258,17 +1268,30 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 				for i := range qualityDefs {
 					qualityByName[qualityDefs[i].Quality.Name] = &qualityDefs[i]
 				}
-				// Build old allowed map for comparison
+				// Build old allowed map for comparison. Recurses into nested
+				// quality groups (Sonarr profiles often nest items inside
+				// parent groups, e.g. HDTV-2160p / SDTV inside a "WEB 1080p"
+				// parent). Symmetric with BuildSyncPlan's collectOldAllowed —
+				// if dry-run preview reports a per-item change, the apply
+				// must record the same change in QualityDetails or the
+				// sync-history rendering diverges from what the user saw.
 				oldAllowed := make(map[string]bool)
-				for _, item := range targetProfile.Items {
-					name := item.Name
-					if name == "" && item.Quality != nil {
-						name = item.Quality.Name
-					}
-					if name != "" {
-						oldAllowed[name] = item.Allowed
+				var collectOldAllowed func(items []arr.ArrQualityItem)
+				collectOldAllowed = func(items []arr.ArrQualityItem) {
+					for _, item := range items {
+						name := item.Name
+						if name == "" && item.Quality != nil {
+							name = item.Quality.Name
+						}
+						if name != "" {
+							oldAllowed[name] = item.Allowed
+						}
+						if len(item.Items) > 0 {
+							collectOldAllowed(item.Items)
+						}
 					}
 				}
+				collectOldAllowed(targetProfile.Items)
 
 				// Source: structure override trumps TRaSH items.
 				itemsSource := profile.Items
@@ -1418,7 +1441,12 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 						targetProfile.Cutoff = cid
 						updated = true
 						if prevCutoffName != cutoffName {
-							result.SettingsDetails = append(result.SettingsDetails,
+							// Cutoff is a Quality concept (categorized under
+							// Quality in the diff table + dry-run banner).
+							// BuildSyncPlan emits this same delta to
+							// QualityPreview; mirror that here so sync history
+							// rendering matches what the dry-run banner showed.
+							result.QualityDetails = append(result.QualityDetails,
 								fmt.Sprintf("Upgrade Until: %s → %s", prevCutoffName, cutoffName))
 						}
 					}
@@ -1883,7 +1911,17 @@ func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*arr
 				Allowed: ti.Allowed,
 			})
 		} else {
-			// Quality group — resolve each sub-item, skip unknowns
+			// Quality group — resolve each sub-item, skip unknowns.
+			// Children inherit the group's Allowed state. Hardcoding true
+			// here (the previous behavior) left every member of an off-by-
+			// default group (e.g. SQP-5 "WEB 720p" / "WEB 480p") with
+			// allowed=true on the Arr side while the group itself sat at
+			// allowed=false. Radarr's UI evaluates the group level so it
+			// "looked" right, but ungrouping any member (drag it out via
+			// the UI editor) would suddenly turn it on, and downstream
+			// readers comparing per-item allowed against the spec would
+			// flag drift forever. Inheriting from ti.Allowed makes the
+			// stored state match what the user sees in the editor.
 			nested := make([]arr.ArrQualityItem, 0, len(ti.Items))
 			for _, subName := range ti.Items {
 				def, ok := qualityByName[subName]
@@ -1900,7 +1938,7 @@ func resolveQualityItems(trashItems []QualityItem, qualityByName map[string]*arr
 						Modifier:   def.Quality.Modifier,
 					},
 					Items:   []arr.ArrQualityItem{},
-					Allowed: true,
+					Allowed: ti.Allowed,
 				})
 			}
 			// Reverse so first-in-clonarr-UI (top of group) ends up last in Arr API.

@@ -125,6 +125,13 @@ func (s *Server) handleCreateAutoSyncRule(w http.ResponseWriter, r *http.Request
 }
 
 // handleUpdateAutoSyncRule updates an existing auto-sync rule.
+//
+// Takes the per-instance sync mutex before mutating so a concurrent
+// /api/sync/apply on the same instance can't race the rule update. Without
+// this, the Edit-&-Sync flow's post-apply PUT could land between two Sync
+// All operations and leave rule.SelectedCFs out of step with the body the
+// just-completed Sync All persisted — next Sync All would then re-apply a
+// stale set and zero customs the user just preserved.
 func (s *Server) handleUpdateAutoSyncRule(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -134,6 +141,20 @@ func (s *Server) handleUpdateAutoSyncRule(w http.ResponseWriter, r *http.Request
 		return
 	}
 	rule.ID = id
+
+	// Gate on the same per-instance sync mutex /api/sync/apply uses. The
+	// rule's InstanceID comes from the request body (frontend echoes the
+	// existing rule's instanceId verbatim — there is no UI to move a rule
+	// between instances). If a sync is in flight, return 409 so the client
+	// can retry; this matches the contract of /api/sync/apply.
+	if rule.InstanceID != "" {
+		mu := s.Core.GetSyncMutex(rule.InstanceID)
+		if !mu.TryLock() {
+			writeError(w, 409, "Sync in progress for this instance — try again in a moment")
+			return
+		}
+		defer mu.Unlock()
+	}
 
 	found := false
 	if err := s.Core.Config.Update(func(cfg *core.Config) {

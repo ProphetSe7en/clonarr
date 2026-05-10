@@ -6,6 +6,17 @@
       <h2 id="modal-title-confirm-dialog" class="modal-title" x-text="confirmModal.title"></h2>
       <div style="font-size:13px;color:var(--text-muted);white-space:pre-line;line-height:1.6" x-show="!confirmModal.html" x-text="confirmModal.message"></div>
       <div style="font-size:13px;color:var(--text-muted);line-height:1.6" x-show="confirmModal.html" x-html="confirmModal.message"></div>
+      <!-- Optional scrollable details list for actions whose preview can grow
+           arbitrarily long (e.g. rollback affecting 70+ CFs). Caller passes
+           confirmModal.details as a string array; each entry renders on its
+           own line. Box scrolls within itself so the modal frame stays inside
+           the viewport even with hundreds of items. -->
+      <div x-show="Array.isArray(confirmModal.details) && confirmModal.details.length > 0"
+           style="margin-top:10px;max-height:240px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:6px;padding:8px 10px;background:var(--bg-page);font-size:12px;color:var(--text-body);line-height:1.5;font-family:monospace">
+        <template x-for="(d, i) in (confirmModal.details || [])" :key="i">
+          <div x-text="d"></div>
+        </template>
+      </div>
       <div class="modal-actions">
         <!-- hideCancel hides the Cancel button entirely — used by info-only
              modals (e.g. naming Compare) that have a single "Close" primary

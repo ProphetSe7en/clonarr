@@ -422,6 +422,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		QualityStructure:  rule.QualityStructure,
 		Overrides:         rule.Overrides,
 		Behavior:          rule.Behavior,
+		KeepArrCFIDs:      rule.KeepArrCFIDs,
 		CFsCreated:        result.CFsCreated,
 		CFsUpdated:        result.CFsUpdated,
 		ScoresUpdated:     result.ScoresUpdated,

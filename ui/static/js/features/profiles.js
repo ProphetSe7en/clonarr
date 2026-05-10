@@ -399,10 +399,129 @@ export default {
         this.initSelectedCFs(detail);
         // Reset profile-detail override state on every load so stale state from a prior
         // profile doesn't leak. pdInitOverrides then seeds pdOverrides from the new profile's
-        // defaults; restoreFromSyncHistory (called later) re-enables overrides if persisted.
+        // defaults; the rule-restore branch below re-enables overrides if persisted.
         this.pdResetDetailState();
         this.pdInitOverrides(detail.profile || null);
+        // If a saved sync rule exists for this (instance, TRaSH profile), pre-fill
+        // the editor with its persisted state. Without this, opening a profile
+        // that already has a sync rule shows TRaSH defaults — and the user's
+        // next Save & Sync silently wipes their previously-saved extras /
+        // overrides because buildSyncBody reads from this.extraCFs (empty)
+        // instead of the rule's saved scoreOverrides. Repro: add 19 extras
+        // via Customize → Save & Sync (creates them in Arr + persists rule)
+        // → reopen profile → Save & Sync again → rule.SelectedCFs / .ScoreOverrides
+        // get overwritten with the smaller in-editor set → next Sync All
+        // zeroes the dropped extras. This block makes the editor show the
+        // rule's current state on open, so Save & Sync is idempotent unless
+        // the user actually edited something.
+        const matchingRules = (this.autoSyncRules || []).filter(rl =>
+          rl.instanceId === inst.id &&
+          rl.trashProfileId === profile.trashId &&
+          !rl.orphanedAt
+        );
+        if (matchingRules.length === 1) {
+          this.applyRuleStateToEditor(matchingRules[0], detail);
+        }
+        // Multiple rules for the same TRaSH profile (different Arr profiles)
+        // are not auto-restored — ambiguous which to load. User reaches the
+        // specific rule via Sync History → resyncProfile in that case.
       } catch (e) { console.error('loadProfileDetail:', e); }
+    },
+
+    // Mirror the rule's persisted state into the profile-detail editor's
+    // working maps. Called from openProfileDetail when exactly one rule
+    // exists for the (instance, TRaSH profile) pair, so the editor opens
+    // showing the user's actual current sync configuration rather than
+    // TRaSH defaults. Same restoration shape as resyncProfile's inline
+    // logic but operates directly on rule data (no sync-history hop).
+    applyRuleStateToEditor(rule, detail) {
+      if (!rule || !detail) return;
+      // Lock subsequent Save & Sync to this Arr profile.
+      this.profileDetail._arrProfileName = this.resolveArrProfileName(rule.instanceId, rule.arrProfileId) || null;
+      this.profileDetail._editLockedArrProfileId = rule.arrProfileId;
+      // Build the in-profile trashID set so we can split scoreOverrides
+      // into base-profile overrides vs Additional CFs (extras).
+      const inProfile = new Set();
+      for (const fi of (detail.formatItemNames || [])) inProfile.add(fi.trashId);
+      for (const g of (detail.trashGroups || [])) {
+        for (const cf of (g.cfs || [])) inProfile.add(cf.trashId);
+      }
+      // selectedCFs → selectedOptionalCFs map. Picks up exactly what the
+      // rule has tracked, so optional-group CFs (default-off members user
+      // explicitly added via Additional CFs picker) come back into the
+      // editor.
+      const selOpt = { ...(this.selectedOptionalCFs || {}) };
+      for (const tid of (rule.selectedCFs || [])) selOpt[tid] = true;
+      // Reconstruct group on/off flags from rule membership. Without this,
+      // editor renders default-off groups (e.g. Optional Movie Versions)
+      // as toggled OFF even when the rule clearly wants them on (members
+      // present in selectedCFs). User-visible symptom: editor reports "0
+      // overrides", but Reset-to-Profile-Default still produces a long
+      // diff because reset clears the per-CF entries and the next Save &
+      // Sync drops every member of the (apparently-off) group.
+      // Algorithm: if ANY CF from a default-off group is in selectedCFs,
+      // mark the group toggle on; if NO CF from a default-on group is in
+      // selectedCFs, mark the group toggle off. Otherwise leave alone
+      // (matches default).
+      const ruleSet = new Set(rule.selectedCFs || []);
+      for (const g of (detail.trashGroups || [])) {
+        const cfTids = (g.cfs || []).map(cf => cf.trashId);
+        const anyInRule = cfTids.some(tid => ruleSet.has(tid));
+        const grpKey = '__grp_' + g.name;
+        if (!g.defaultEnabled && anyInRule) {
+          selOpt[grpKey] = true;
+        } else if (g.defaultEnabled && !anyInRule && cfTids.length > 0) {
+          selOpt[grpKey] = false;
+        }
+      }
+      this.selectedOptionalCFs = selOpt;
+      // scoreOverrides split: in-profile → cfScoreOverrides, out-of-profile → extraCFs.
+      const extras = {};
+      const baseOv = { ...(this.cfScoreOverrides || {}) };
+      if (rule.scoreOverrides) {
+        for (const [tid, v] of Object.entries(rule.scoreOverrides)) {
+          if (inProfile.has(tid)) {
+            baseOv[tid] = v;
+          } else {
+            extras[tid] = v;
+          }
+        }
+      }
+      this.cfScoreOverrides = baseOv;
+      if (Object.keys(extras).length > 0) {
+        this.extraCFs = { ...(this.extraCFs || {}), ...extras };
+        if (this.profileDetail?.instance?.type) this.loadExtraCFList();
+      }
+      // qualityOverrides + qualityStructure passthrough.
+      if (rule.qualityStructure && rule.qualityStructure.length > 0) {
+        this.qualityStructure = rule.qualityStructure.map(it => ({
+          _id: ++this._qsIdCounter,
+          name: it.name,
+          allowed: !!it.allowed,
+          ...(it.items && it.items.length > 0 ? { items: [...it.items] } : {}),
+        }));
+      } else if (rule.qualityOverrides && Object.keys(rule.qualityOverrides).length > 0) {
+        this.qualityOverrides = { ...(this.qualityOverrides || {}), ...rule.qualityOverrides };
+      }
+      // Settings overrides → pdOverrides + pdOverridesEnabled flag.
+      let anyOverride = Object.keys(extras).length > 0
+        || (rule.qualityStructure && rule.qualityStructure.length > 0)
+        || (rule.qualityOverrides && Object.keys(rule.qualityOverrides).length > 0);
+      if (rule.overrides) {
+        const ov = rule.overrides;
+        if (ov.language !== undefined)              { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; anyOverride = true; }
+        if (ov.minFormatScore !== undefined)        { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; anyOverride = true; }
+        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; anyOverride = true; }
+        if (ov.cutoffFormatScore !== undefined)     { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; anyOverride = true; }
+        if (ov.upgradeAllowed !== undefined)        { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; anyOverride = true; }
+        if (ov.cutoffQuality !== undefined)         { this.pdOverrides.cutoffQuality = ov.cutoffQuality; anyOverride = true; }
+      }
+      if (rule.behavior) {
+        this.syncForm.behavior = { ...(this.syncForm.behavior || {}), ...rule.behavior };
+      }
+      if (anyOverride || (rule.selectedCFs && rule.selectedCFs.length > 0)) {
+        this.pdOverridesEnabled = true;
+      }
     },
 
     initDetailSections(detail) {
@@ -669,16 +788,6 @@ export default {
 
     async runProfileCompare(inst, arrProfileId, trashProfileId) {
       this.debugLog('UI', `Compare: arr profile ${arrProfileId} vs TRaSH "${trashProfileId}" on ${inst.name}`);
-      // Clear stale banner state from a previous Compare run — syncResult/syncPlan banners were
-      // pinned to the prior profile via syncForm._fromCompare, and compareLastDryRunContext
-      // captured the old (inst, cr, section). Without clearing, switching profile/instance
-      // leaves those banners pointing at the previous target → Apply could sync the wrong profile.
-      this.syncResult = null;
-      this.syncPlan = null;
-      this.compareLastDryRunContext = null;
-      if (this.syncForm && this.syncForm._fromCompare) {
-        this.syncForm = {...this.syncForm, _fromCompare: false, _pendingExtrasRemove: [], _keepArrCFIDs: [], _compareArrProfileId: undefined};
-      }
       this.instCompareTrashId = {...this.instCompareTrashId, [inst.id]: trashProfileId};
       if (!trashProfileId) {
         this.instCompareResult = {...this.instCompareResult, [inst.id]: null};
@@ -693,54 +802,12 @@ export default {
         }
         const result = await r.json();
         this.instCompareResult = {...this.instCompareResult, [inst.id]: result};
-        if (!result.error) this.compareApplyDefaultSelections(result, inst.id);
       } catch (e) {
         console.error('runProfileCompare:', e);
         this.instCompareResult = {...this.instCompareResult, [inst.id]: {error: e.message}};
       } finally {
         this.instCompareLoading = {...this.instCompareLoading, [inst.id]: false};
       }
-    },
-
-    // Initial selection state for a compare result — represents "sync this to match TRaSH completely".
-    // Called by runProfileCompare on first load and by the Reset-to-default button.
-    // - formatItems (Required CFs): select all missing + wrong-score rows
-    // - Non-exclusive groups: select required-missing + wrong-score rows
-    // - Exclusive required groups (Golden Rule): pre-pick in-use variant, else TRaSH default; else leave empty (user is prompted via picker on sync)
-    // - All Extra in Arr: pre-marked for removal
-    // - Settings/Quality: maps cleared. The x-bind checkboxes default to true for diffs via `!== false` logic, so empty map == everything pre-checked.
-    compareApplyDefaultSelections(result, instId) {
-      const sel = {};
-      for (const fi of (result.formatItems || [])) {
-        if (!fi.exists || !fi.scoreMatch) sel[fi.trashId] = true;
-      }
-      for (const group of (result.groups || [])) {
-        if (group.exclusive && group.defaultEnabled) {
-          // Exclusive required: always pick exactly one variant. Priority:
-          //  1. In-use variant (preserve user's existing choice)
-          //  2. TRaSH-recommended (cf.default && cf.required)
-          //  3. TRaSH-recommended (cf.default alone)
-          //  4. First variant in group (fallback — should never be needed)
-          // Guarantee: group always has exactly one picked, so no picker modal needed.
-          const inUseCF = group.cfs.find(cf => cf.exists && cf.inUse);
-          const defaultCF = group.cfs.find(cf => cf.default && cf.required) || group.cfs.find(cf => cf.default);
-          const pick = inUseCF || defaultCF || group.cfs[0];
-          if (pick) sel[pick.trashId] = true;
-          continue;
-        }
-        for (const cf of group.cfs) {
-          if (!cf.exists && group.defaultEnabled && cf.required) sel[cf.trashId] = true;
-          else if (cf.exists && !cf.scoreMatch) sel[cf.trashId] = true;
-        }
-      }
-      this.instCompareSelected = {...this.instCompareSelected, [instId]: sel};
-      // All extras in Arr: pre-marked for removal (match-TRaSH default)
-      const extraSel = {};
-      for (const ecf of (result.extraCFs || [])) extraSel[ecf.format] = true;
-      this.instRemoveSelected = {...this.instRemoveSelected, [instId]: extraSel};
-      // Settings/quality "keep-as-override" flags reset: empty map => every diff checkbox defaults to true
-      this.instCompareSettingsSelected = {...this.instCompareSettingsSelected, [instId]: {}};
-      this.instCompareQualitySelected = {...this.instCompareQualitySelected, [instId]: {}};
     },
 
     getTrashProfileGroups(appType) {
@@ -757,552 +824,6 @@ export default {
 
     getTrashProfilesByGroup(appType, groupName) {
       return (this.trashProfiles[appType] || []).filter(p => (p.groupName || 'Other') === groupName);
-    },
-
-    // Clears the orange dry-run banner when the user changes any compare
-    // selection after a dry-run has populated it. Banner shows the
-    // backend-computed plan from when "Sync selected" was last clicked;
-    // toggling a row afterward leaves NEW-column cells correct but the
-    // banner stale (it lists changes for items the user just unchecked).
-    // User must click "Sync selected" again for a fresh banner — the
-    // table itself remains the live source of truth.
-    invalidateCompareDryRun() {
-      if (this.syncForm && this.syncForm._fromCompare) {
-        this.syncPlan = null;
-        this.syncForm = {...this.syncForm, _fromCompare: false};
-        this.compareLastDryRunContext = null;
-      }
-    },
-
-    toggleCompareSelect(instId, trashId, checked) {
-      const sel = {...(this.instCompareSelected[instId] || {})};
-      const result = this.instCompareResult[instId];
-      // Exclusive required groups other than Golden Rule: block unchecking the last variant.
-      // Golden Rule is now optional — a profile may legitimately have no HD or UHD variant active.
-      // Matches Profile Edit (imported-profile flow) and Profile Builder (variantGoldenRule: 'none').
-      // "Never both" is still enforced below when checking — so user can end with one or none,
-      // but never both active simultaneously.
-      if (!checked && result) {
-        for (const group of (result.groups || [])) {
-          if (!group.exclusive || !group.defaultEnabled) continue;
-          // Golden Rule is optional — allow unchecking the last variant.
-          if ((group.name || '').toLowerCase().includes('golden rule')) continue;
-          const cfsInGroup = group.cfs.map(c => c.trashId);
-          if (cfsInGroup.includes(trashId)) {
-            const otherSelected = cfsInGroup.some(tid => tid !== trashId && sel[tid]);
-            if (!otherSelected) {
-              this.showToast(`"${group.name}" needs one variant picked — pick the other one first to switch`, 'error', 6000);
-              // Force Alpine to re-render the checkbox back to its stored state. Without this
-              // the browser's native toggle leaves the checkbox visually unchecked even though
-              // our data still says checked. Re-assigning the map triggers :checked re-bind.
-              this.instCompareSelected = {...this.instCompareSelected, [instId]: sel};
-              return;
-            }
-          }
-        }
-      }
-      sel[trashId] = checked;
-      // For exclusive groups: deselect other CFs in the same group when one is checked
-      if (checked && result) {
-        for (const group of (result.groups || [])) {
-          if (!group.exclusive) continue;
-          const cfsInGroup = group.cfs.map(c => c.trashId);
-          if (cfsInGroup.includes(trashId)) {
-            for (const otherTid of cfsInGroup) {
-              if (otherTid !== trashId) sel[otherTid] = false;
-            }
-          }
-        }
-      }
-      this.instCompareSelected = {...this.instCompareSelected, [instId]: sel};
-      this.invalidateCompareDryRun();
-    },
-
-    toggleAllCompareSection(instId, section) {
-      const result = this.instCompareResult[instId];
-      if (!result) return;
-      if (section === 'extra') {
-        const sel = {...(this.instRemoveSelected[instId] || {})};
-        const ids = (result.extraCFs || []).map(e => e.format);
-        const allChecked = ids.every(id => sel[id]);
-        for (const id of ids) { sel[id] = !allChecked; }
-        this.instRemoveSelected = {...this.instRemoveSelected, [instId]: sel};
-      } else if (section === 'formatItems') {
-        const sel = {...(this.instCompareSelected[instId] || {})};
-        const ids = (result.formatItems || []).filter(fi => !fi.exists || !fi.scoreMatch).map(fi => fi.trashId);
-        const allChecked = ids.every(id => sel[id]);
-        for (const id of ids) { sel[id] = !allChecked; }
-        this.instCompareSelected = {...this.instCompareSelected, [instId]: sel};
-      } else {
-        // 'all' or other — select all genuine errors across formatItems + groups
-        const sel = {...(this.instCompareSelected[instId] || {})};
-        const ids = [];
-        for (const fi of (result.formatItems || [])) {
-          if (!fi.exists || !fi.scoreMatch) ids.push(fi.trashId);
-        }
-        for (const group of (result.groups || [])) {
-          if (group.exclusive && group.defaultEnabled) {
-            // Pick exactly one variant: prefer in-use, fall back to TRaSH default
-            const inUse = group.cfs.find(cf => cf.exists && cf.inUse);
-            const def = group.cfs.find(cf => cf.default && cf.required);
-            const pick = inUse || def;
-            if (pick) ids.push(pick.trashId);
-            continue;
-          }
-          for (const cf of group.cfs) {
-            if (!cf.exists && group.defaultEnabled && cf.required) ids.push(cf.trashId);
-            else if (cf.exists && cf.inUse && !cf.scoreMatch) ids.push(cf.trashId);
-          }
-        }
-        const allChecked = ids.every(id => sel[id]);
-        for (const id of ids) { sel[id] = !allChecked; }
-        this.instCompareSelected = {...this.instCompareSelected, [instId]: sel};
-      }
-    },
-
-    isOptGroupMarkedForRemoval(instId, trashId) {
-      return !!(this.instRemoveSelected[instId] || {})[trashId + '_grp'];
-    },
-
-    toggleOptGroupRemove(instId, oc, markForRemoval) {
-      const sel = {...(this.instRemoveSelected[instId] || {})};
-      sel[oc.trashId + '_grp'] = markForRemoval;
-      if (markForRemoval) {
-        sel['_arrId_' + oc.trashId] = oc.arrId;
-      } else {
-        delete sel['_arrId_' + oc.trashId];
-      }
-      this.instRemoveSelected = {...this.instRemoveSelected, [instId]: sel};
-    },
-
-    toggleRemoveSelect(instId, arrCfId, checked) {
-      const sel = {...(this.instRemoveSelected[instId] || {})};
-      sel[arrCfId] = checked;
-      this.instRemoveSelected = {...this.instRemoveSelected, [instId]: sel};
-      this.invalidateCompareDryRun();
-    },
-
-    getCompareSelectedCount(instId) {
-      return Object.values(this.instCompareSelected[instId] || {}).filter(v => v).length;
-    },
-
-    getCompareSettingsCount(instId, cr) {
-      let count = 0;
-      const settingSel = this.instCompareSettingsSelected[instId] || {};
-      for (const sd of (cr?.settingsDiffs || [])) {
-        if (!sd.match && settingSel[sd.name] !== false) count++;
-      }
-      const qualitySel = this.instCompareQualitySelected[instId] || {};
-      for (const qd of (cr?.qualityDiffs || [])) {
-        if (!qd.match && qualitySel[qd.name] !== false) count++;
-      }
-      return count;
-    },
-
-    getRemoveSelectedCount(instId) {
-      const sel = this.instRemoveSelected[instId] || {};
-      // Count entries that are actual selections (not _arrId_ metadata keys)
-      return Object.entries(sel).filter(([k, v]) => v && !k.startsWith('_arrId_')).length;
-    },
-
-    getTrashCFName(appType, trashId) {
-      // Look up CF name from loaded TRaSH browse data
-      const data = this.cfBrowseData[appType];
-      if (data) {
-        // Check individual CFs
-        for (const cf of (data.cfs || [])) {
-          if (cf.trash_id === trashId) return cf.name;
-        }
-        // Check CF groups
-        for (const g of (data.groups || [])) {
-          for (const cf of (g.custom_formats || [])) {
-            if (cf.trash_id === trashId) return cf.name;
-          }
-        }
-      }
-      return trashId.substring(0, 8) + '...';
-    },
-
-    async removeFromProfile(inst, comparison) {
-      const sel = this.instRemoveSelected[inst.id] || {};
-      // Collect Arr CF IDs from extra CFs (format is the Arr ID)
-      const cfIds = [];
-      const names = [];
-      // Extra CFs in Arr profile
-      for (const ecf of (comparison.extraCFs || [])) {
-        if (sel[ecf.format]) {
-          cfIds.push(ecf.format);
-          names.push(ecf.name);
-        }
-      }
-      // Optional group CFs marked for removal (key: trashId_grp, arrId stored separately)
-      for (const [key, val] of Object.entries(sel)) {
-        if (key.endsWith('_grp') && val) {
-          const trashId = key.slice(0, -4);
-          const arrId = sel['_arrId_' + trashId];
-          if (arrId) {
-            cfIds.push(arrId);
-            // Find name from groups or cfStates
-            const state = (comparison.cfStates || {})[trashId];
-            if (state?.trashName) { names.push(state.trashName); }
-            else {
-              for (const g of (comparison.groups || [])) {
-                const cf = g.cfs.find(c => c.trashId === trashId);
-                if (cf) { names.push(cf.name); break; }
-              }
-            }
-          }
-        }
-      }
-      if (!cfIds.length) return;
-      this.confirmModal = {
-        show: true,
-        title: 'Remove CF Scores',
-        message: `Remove ${cfIds.length} CF score(s) from profile?\n\n${names.join(', ')}\n\nScores will be set to 0.`,
-        onConfirm: async () => {
-          try {
-            const r = await fetch(`/api/instances/${inst.id}/profile-cfs/remove`, {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ arrProfileId: comparison.arrProfileId, cfIds })
-            });
-            if (!r.ok) { const e = await r.json(); this.showToast(e.error || 'Failed', 'error', 8000); return; }
-            const result = await r.json();
-            this.instRemoveSelected = {...this.instRemoveSelected, [inst.id]: {}};
-            this.runProfileCompare(inst, comparison.arrProfileId, comparison.trashProfileId);
-          } catch (e) { this.showToast('Error: ' + e.message, 'error', 8000); }
-        }
-      };
-    },
-
-    async syncSingleCF(inst, trashId, score, arrProfileId) {
-      try {
-        const r = await fetch(`/api/instances/${inst.id}/profile-cfs/sync-one`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ arrProfileId, trashId, score })
-        });
-        if (!r.ok) { const e = await r.json(); this.showToast(e.error || 'Failed', 'error', 8000); return; }
-        const result = await r.json();
-        // Deselect this CF
-        if (this.instCompareSelected[inst.id]) {
-          delete this.instCompareSelected[inst.id][trashId];
-          this.instCompareSelected = {...this.instCompareSelected};
-        }
-        // Re-run compare to refresh
-        const comp = this.instCompareResult[inst.id];
-        if (comp) this.runProfileCompare(inst, comp.arrProfileId, comp.trashProfileId);
-      } catch (e) { this.showToast('Error: ' + e.message, 'error', 8000); }
-    },
-
-    async removeSingleCF(inst, arrCfId, arrProfileId) {
-      if (!arrCfId || !arrProfileId) return;
-      try {
-        const r = await fetch(`/api/instances/${inst.id}/profile-cfs/remove`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ arrProfileId, cfIds: [arrCfId] })
-        });
-        if (!r.ok) { const e = await r.json(); this.showToast(e.error || 'Failed', 'error', 8000); return; }
-        // Re-run compare to refresh
-        const comp = this.instCompareResult[inst.id];
-        if (comp) this.runProfileCompare(inst, comp.arrProfileId, comp.trashProfileId);
-      } catch (e) { this.showToast('Error: ' + e.message, 'error', 8000); }
-    },
-
-    // Re-applies the initial "match TRaSH" selection state — undoes any manual unchecks/changes
-    // the user has made since loading Compare. Cheap: no API call, just re-runs the default logic
-    // against the already-fetched result.
-    resetCompareToDefault(inst, cr) {
-      if (!cr) return;
-      this.compareApplyDefaultSelections(cr, inst.id);
-      this.invalidateCompareDryRun();
-    },
-
-    // Per-card Quick Sync — opens simplified confirm dialog scoped to one card. Only applies
-    // the diffs visible in that card; other cards' diffs are treated as "keep as override".
-    compareQuickSyncOpen(inst, cr, section) {
-      const sel = this.instCompareSelected[inst.id] || {};
-      const settingSel = this.instCompareSettingsSelected[inst.id] || {};
-      const qualSel = this.instCompareQualitySelected[inst.id] || {};
-      const removeSel = this.instRemoveSelected[inst.id] || {};
-      let title = '', summary = '';
-      if (section === 'settings') {
-        const g = (cr.settingsDiffs || []).filter(s => !s.match && ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name) && settingSel[s.name] !== false).length;
-        const q = (cr.settingsDiffs || []).filter(s => !s.match && s.name === 'Cutoff' && settingSel[s.name] !== false).length;
-        const qi = (cr.qualityDiffs || []).filter(qd => !qd.match && qualSel[qd.name] !== false).length;
-        title = 'Sync Profile Settings';
-        summary = [
-          g > 0 ? `${g} general setting${g === 1 ? '' : 's'}` : '',
-          q > 0 ? `cutoff quality` : '',
-          qi > 0 ? `${qi} quality item${qi === 1 ? '' : 's'}` : '',
-        ].filter(Boolean).join(', ') || 'no changes';
-      } else if (section === 'requiredCfs') {
-        const n = (cr.formatItems || []).filter(fi => (!fi.exists || !fi.scoreMatch) && sel[fi.trashId]).length;
-        title = 'Sync Required CFs';
-        summary = n > 0 ? `${n} CF${n === 1 ? '' : 's'}` : 'no changes';
-      } else if (section === 'groups') {
-        let n = 0;
-        for (const g of (cr.groups || [])) {
-          for (const cf of g.cfs) {
-            if (sel[cf.trashId] && ((cf.exists && !cf.scoreMatch) || (!cf.exists && g.defaultEnabled && cf.required) || (g.exclusive && g.defaultEnabled))) n++;
-          }
-        }
-        title = 'Sync CF Groups';
-        summary = n > 0 ? `${n} CF${n === 1 ? '' : 's'} across groups` : 'no changes';
-      } else if (section === 'extras') {
-        const n = (cr.extraCFs || []).filter(e => removeSel[e.format]).length;
-        title = 'Remove Extras';
-        summary = n > 0 ? `${n} extra CF${n === 1 ? '' : 's'} — scores will be set to 0 in Arr` : 'no changes';
-      }
-      this.compareQuickSync = { show: true, inst, cr, section, title, summary, running: false };
-    },
-
-    // Apply the sync that was just dry-run from Compare, using the stored context. Re-opens the
-    // quick-sync modal with section/inst/cr preserved then runs mode='sync'.
-    async compareApplyFromDryRun() {
-      const ctx = this.compareLastDryRunContext;
-      if (ctx) {
-        // Per-card "Sync selected" path — dry-run was scoped to one
-        // section (settings / requiredCfs / groups / extras) via
-        // compareQuickSyncRun, so apply runs the same scoped flow.
-        this.compareQuickSync = { show: true, inst: ctx.inst, cr: ctx.cr, section: ctx.section, title: '', summary: '', running: false };
-        await this.compareQuickSyncRun('sync');
-        this.compareLastDryRunContext = null;
-        return;
-      }
-      // Global "Sync selected (X CFs + Y settings)" path — dry-run came
-      // from startDryRun which only populates syncForm + syncPlan. Route
-      // through startApply: it reads buildSyncBody (which already honours
-      // _fromCompare's overrides + keepArrCFIDs) and chains the post-
-      // apply extras-remove from syncForm._pendingExtrasRemove.
-      if (this.syncForm && this.syncForm._fromCompare && this.syncForm.instanceId) {
-        await this.startApply();
-        return;
-      }
-      this.showToast('No dry-run to apply', 'error', 5000);
-    },
-
-    async compareQuickSyncRun(mode) {
-      const q = this.compareQuickSync;
-      if (!q.show) return;
-      q.running = true;
-      try {
-        const { inst, cr, section } = q;
-        if (section === 'extras') {
-          const removeSel = this.instRemoveSelected[inst.id] || {};
-          const cfIds = (cr.extraCFs || []).filter(e => removeSel[e.format]).map(e => e.format);
-          if (cfIds.length === 0) { this.compareQuickSync = { show: false }; return; }
-          if (mode === 'dryrun') { this.showToast(`Dry-run: ${cfIds.length} extra CF score${cfIds.length === 1 ? '' : 's'} would be set to 0`, 'info', 8000); return; }
-          const r = await fetch(`/api/instances/${inst.id}/profile-cfs/remove`, {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ arrProfileId: cr.arrProfileId, cfIds })
-          });
-          if (!r.ok) { const e = await r.json().catch(()=>({})); this.showToast('Remove failed: ' + (e.error || r.statusText), 'error', 8000); return; }
-          this.instRemoveSelected = {...this.instRemoveSelected, [inst.id]: {}};
-          this.showToast(`Removed ${cfIds.length} extra CF score${cfIds.length === 1 ? '' : 's'}`, 'info', 6000);
-          this.runProfileCompare(inst, cr.arrProfileId, cr.trashProfileId);
-          return;
-        }
-        const sel = this.instCompareSelected[inst.id] || {};
-        const settingSel = this.instCompareSettingsSelected[inst.id] || {};
-        const qualSel = this.instCompareQualitySelected[inst.id] || {};
-        const selectedCFs = [];
-        for (const fi of (cr.formatItems || [])) {
-          if (fi.exists && fi.scoreMatch) selectedCFs.push(fi.trashId);
-          else if (section === 'requiredCfs' && sel[fi.trashId]) selectedCFs.push(fi.trashId);
-          else if (fi.exists) selectedCFs.push(fi.trashId);
-        }
-        for (const g of (cr.groups || [])) {
-          for (const cf of g.cfs) {
-            if (cf.exists && cf.inUse) selectedCFs.push(cf.trashId);
-            else if (section === 'groups' && sel[cf.trashId]) selectedCFs.push(cf.trashId);
-          }
-        }
-        const overrides = {};
-        const qualityOverrides = {};
-        const preserveAsOverride = (sd) => {
-          if (sd.name === 'Min Format Score') overrides.minFormatScore = parseInt(sd.current) || 0;
-          else if (sd.name === 'Cutoff Format Score') overrides.cutoffFormatScore = parseInt(sd.current) || 0;
-          else if (sd.name === 'Min Upgrade Format Score') overrides.minUpgradeFormatScore = parseInt(sd.current) || 0;
-          else if (sd.name === 'Cutoff') overrides.cutoffQuality = sd.current;
-          else if (sd.name === 'Language') overrides.language = sd.current;
-          else if (sd.name === 'Upgrade Allowed') overrides.upgradeAllowed = sd.current === 'true' || sd.current === true;
-        };
-        for (const sd of (cr.settingsDiffs || [])) {
-          if (sd.match) continue;
-          if (section !== 'settings') { preserveAsOverride(sd); continue; }
-          if (settingSel[sd.name] === false) preserveAsOverride(sd);
-        }
-        for (const qd of (cr.qualityDiffs || [])) {
-          if (qd.match) continue;
-          if (section !== 'settings') { qualityOverrides[qd.name] = qd.currentAllowed; continue; }
-          if (qualSel[qd.name] === false) qualityOverrides[qd.name] = qd.currentAllowed;
-        }
-        // scoreOverrides: for non-target sections we preserve every existing CF's current Arr
-        // score so the backend's sync-all doesn't "fix" scores outside the target scope.
-        // For the target section, explicitly set the TRaSH desired score for diff CFs the user
-        // kept checked (uncheck → preserve as current).
-        const scoreOverrides = {};
-        for (const fi of (cr.formatItems || [])) {
-          if (!fi.exists) continue;
-          const picked = sel[fi.trashId] === true;
-          const isTarget = section === 'requiredCfs';
-          if (isTarget && picked && !fi.scoreMatch) scoreOverrides[fi.trashId] = fi.desiredScore;
-          else scoreOverrides[fi.trashId] = fi.currentScore;
-        }
-        for (const g of (cr.groups || [])) {
-          for (const cf of g.cfs) {
-            if (!cf.exists) continue;
-            const picked = sel[cf.trashId] === true;
-            const isTarget = section === 'groups';
-            if (isTarget && picked && !cf.scoreMatch) scoreOverrides[cf.trashId] = cf.desiredScore;
-            else scoreOverrides[cf.trashId] = cf.currentScore;
-          }
-        }
-
-        // Per-section behavior. For settings-only sync, tell backend NOT to add CFs and NOT to
-        // overwrite existing CF scores — only profile-level settings + quality items change.
-        // For CF-touching sections, use normal behavior so new CFs are added and scores set.
-        const behavior = section === 'settings'
-          ? { addMode: 'do_not_add', removeMode: 'allow_custom', resetMode: 'reset_to_zero' }
-          : { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' };
-        const body = {
-          instanceId: inst.id,
-          profileTrashId: cr.trashProfileId,
-          arrProfileId: cr.arrProfileId,
-          selectedCFs,
-          scoreOverrides: Object.keys(scoreOverrides).length > 0 ? scoreOverrides : undefined,
-          behavior,
-          overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
-          qualityOverrides: Object.keys(qualityOverrides).length > 0 ? qualityOverrides : undefined,
-        };
-        const url = mode === 'dryrun' ? '/api/sync/dry-run' : '/api/sync/apply';
-        const r = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) { this.showToast((data && data.error) || 'Failed', 'error', 8000); return; }
-        if (mode === 'dryrun') {
-          this.syncPlan = data;
-          this.syncForm = {...(this.syncForm || {}), _fromCompare: true, profileName: cr.trashProfileName, instanceId: inst.id};
-          this.dryrunDetailsOpen = false;
-          // Save context so Apply-from-banner can re-run the same scoped sync without reopening modal
-          this.compareLastDryRunContext = { inst, cr, section };
-          this.showToast('Dry-run complete — see banner in Compare', 'info', 5000);
-        } else {
-          this.syncResult = data;
-          this.syncForm = {...(this.syncForm || {}), _fromCompare: true, profileName: cr.trashProfileName, instanceId: inst.id, arrProfileName: cr.arrProfileName};
-          this.syncPlan = null;
-          this.syncResultDetailsOpen = false;
-          this.showToast('Sync complete', 'info', 5000);
-          await this.loadSyncHistory(inst.id);
-          this.runProfileCompare(inst, cr.arrProfileId, cr.trashProfileId);
-        }
-      } catch (e) {
-        console.error('compareQuickSyncRun:', e);
-        this.showToast('Error: ' + e.message, 'error', 8000);
-      } finally {
-        this.compareQuickSync = { show: false };
-      }
-    },
-
-    async syncFromCompare(inst, comparison) {
-      this.debugLog('UI', `Sync from Compare: "${comparison.trashProfileName}" on ${inst.name}`);
-      // Find the TRaSH profile and open sync modal with pre-filled data
-      const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === comparison.trashProfileId);
-      if (!profile) { this.showToast('TRaSH profile not found', 'error', 8000); return; }
-      // Build selectedOptionalCFs from compare data:
-      // Include CFs user actively has (inUse) + CFs user checked for sync (instCompareSelected)
-      const sel = {};
-      const checked = this.instCompareSelected[inst.id] || {};
-      for (const group of (comparison.groups || [])) {
-        let groupActive = false;
-        for (const cf of group.cfs) {
-          if (cf.inUse || checked[cf.trashId]) {
-            sel[cf.trashId] = true;
-            groupActive = true;
-          }
-        }
-        if (groupActive) {
-          sel['__grp_' + group.name] = true;
-        }
-      }
-      this.selectedOptionalCFs = sel;
-      // Build per-CF score overrides: preserve current Arr score for every diff CF the user did
-      // NOT check. Backend's sync-all would otherwise apply TRaSH's desired score to all inUse
-      // CFs, ignoring the checkbox state. buildSyncBody picks these up via this.cfScoreOverrides.
-      const compareScoreOverrides = {};
-      for (const fi of (comparison.formatItems || [])) {
-        if (!fi.exists || fi.scoreMatch) continue;
-        if (checked[fi.trashId] !== true) compareScoreOverrides[fi.trashId] = fi.currentScore;
-      }
-      for (const group of (comparison.groups || [])) {
-        for (const cf of group.cfs) {
-          if (!cf.exists || cf.scoreMatch) continue;
-          if (checked[cf.trashId] !== true) compareScoreOverrides[cf.trashId] = cf.currentScore;
-        }
-      }
-      this.cfScoreOverrides = compareScoreOverrides;
-      // Build overrides from unchecked settings (keep Arr value)
-      const overrides = {};
-      const settingSel = this.instCompareSettingsSelected[inst.id] || {};
-      const settingsMap = {};
-      for (const sd of (comparison.settingsDiffs || [])) {
-        if (!sd.match) settingsMap[sd.name] = sd;
-      }
-      if (settingSel['Min Format Score'] === false && settingsMap['Min Format Score'])
-        overrides.minFormatScore = parseInt(settingsMap['Min Format Score'].current) || 0;
-      if (settingSel['Cutoff Format Score'] === false && settingsMap['Cutoff Format Score'])
-        overrides.cutoffFormatScore = parseInt(settingsMap['Cutoff Format Score'].current) || 0;
-      if (settingSel['Min Upgrade Format Score'] === false && settingsMap['Min Upgrade Format Score'])
-        overrides.minUpgradeFormatScore = parseInt(settingsMap['Min Upgrade Format Score'].current) || 0;
-      if (settingSel['Cutoff'] === false && settingsMap['Cutoff'])
-        overrides.cutoffQuality = settingsMap['Cutoff'].current;
-      if (settingSel['Language'] === false && settingsMap['Language'])
-        overrides.language = settingsMap['Language'].current;
-
-      // Build quality overrides from unchecked quality items (keep Arr value)
-      const qualityOverrides = {};
-      const qualitySel = this.instCompareQualitySelected[inst.id] || {};
-      for (const qd of (comparison.qualityDiffs || [])) {
-        if (!qd.match && qualitySel[qd.name] === false) {
-          qualityOverrides[qd.name] = qd.currentAllowed;
-        }
-      }
-
-      // Collect extras the user marked for removal — chained after the sync completes in startApply.
-      // Also collect extras the user kept (unchecked) so the dry-run reset pass leaves them alone.
-      // Without keepArrCFIDs, ResetMode='reset_to_zero' would zero every extra (since they're not
-      // in the TRaSH-id-keyed selectedCFs set), even ones the user explicitly opted to keep.
-      const extraRemoveSel = this.instRemoveSelected[inst.id] || {};
-      const pendingExtras = [];
-      const keepArrCFIDs = [];
-      for (const ecf of (comparison.extraCFs || [])) {
-        if (extraRemoveSel[ecf.format]) pendingExtras.push(ecf.format);
-        else keepArrCFIDs.push(ecf.format);
-      }
-
-      this.syncForm = {
-        instanceId: inst.id,
-        instanceName: inst.name,
-        appType: inst.type,
-        profileTrashId: comparison.trashProfileId,
-        profileName: comparison.trashProfileName,
-        arrProfileId: '0',
-        newProfileName: comparison.trashProfileName,
-        importedProfileId: '',
-        behavior: { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' },
-        overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
-        qualityOverrides: Object.keys(qualityOverrides).length > 0 ? qualityOverrides : undefined,
-        _fromCompare: true,
-        _pendingExtrasRemove: pendingExtras,
-        _keepArrCFIDs: keepArrCFIDs,
-        _compareArrProfileId: comparison.arrProfileId,
-      };
-      this.resyncTargetArrProfileId = comparison.arrProfileId;
-      this.syncMode = 'update';
-      this.syncPreview = null;
-      await this._loadSyncInstanceData(inst.id, comparison.trashProfileId);
-      this.showSyncModal = true;
     },
 
     getSyncOptionalBreakdown() {
@@ -1714,65 +1235,50 @@ export default {
       if (this.syncMode === 'create') {
         body.profileName = this.syncForm.newProfileName;
       }
-      // Compare flow stores its toggle-derived overrides on syncForm
-      // directly (see syncFromCompare). pdOverrides reflects the
-      // profile-detail page editor, which compare doesn't touch — using
-      // it here would drop every Setting/Quality override the user just
-      // unchecked in the compare table and the dry-run would come back
-      // showing changes for rows the user explicitly opted out of.
-      if (this.syncForm._fromCompare) {
-        if (this.syncForm.overrides && Object.keys(this.syncForm.overrides).length > 0) {
-          body.overrides = this.syncForm.overrides;
+      // Build overrides from pdOverrides values. Persistence is data-driven —
+      // values that match the profile default are filtered out below, so the
+      // saved sync rule only carries true overrides. The pdOverridesEnabled
+      // toggle gates the EDITOR UI (whether the override cards render at all),
+      // not the payload — when the user disables the toggle, pdDisableOverrides
+      // explicitly clears the maps so the next sync sends a clean body.
+      const ov = this.pdOverrides;
+      const p = this.profileDetail?.detail?.profile || {};
+      const overrides = {};
+      let hasOverrides = false;
+      if (this.activeAppType === 'radarr' && ov.language.value !== (p.language || 'Original')) { overrides.language = ov.language.value; hasOverrides = true; }
+      const upVal = ov.upgradeAllowed.value === true || ov.upgradeAllowed.value === 'true';
+      if (upVal !== (p.upgradeAllowed ?? true)) { overrides.upgradeAllowed = upVal; hasOverrides = true; }
+      if (ov.minFormatScore.value !== (p.minFormatScore ?? 0)) { overrides.minFormatScore = ov.minFormatScore.value; hasOverrides = true; }
+      if (ov.minUpgradeFormatScore.value !== (p.minUpgradeFormatScore ?? 1)) { overrides.minUpgradeFormatScore = ov.minUpgradeFormatScore.value; hasOverrides = true; }
+      if (ov.cutoffFormatScore.value !== (p.cutoffFormatScore || p.cutoffScore || 10000)) { overrides.cutoffFormatScore = ov.cutoffFormatScore.value; hasOverrides = true; }
+      const defaultCutoff = p.cutoff || '';
+      if (ov.cutoffQuality && ov.cutoffQuality !== defaultCutoff) { overrides.cutoffQuality = ov.cutoffQuality; hasOverrides = true; }
+      if (hasOverrides) body.overrides = overrides;
+      // Carry the rule's persisted KeepArrCFIDs through. Without this echo,
+      // opening an existing rule via Profile Detail and clicking Save & Sync
+      // would silently zero every Arr-only custom CF the user previously
+      // pinned (rule has the list, but body didn't, so backend's
+      // reset_to_zero treated them as unsynced).
+      const arrIdForRule = parseInt(this.syncForm.arrProfileId) || 0;
+      if (arrIdForRule > 0) {
+        const existingRule = this.autoSyncRules.find(r => r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrIdForRule);
+        if (existingRule && Array.isArray(existingRule.keepArrCFIDs) && existingRule.keepArrCFIDs.length > 0) {
+          body.keepArrCFIDs = existingRule.keepArrCFIDs;
         }
-        if (this.syncForm.qualityOverrides && Object.keys(this.syncForm.qualityOverrides).length > 0) {
-          body.qualityOverrides = this.syncForm.qualityOverrides;
-        }
-        // Pin user-kept extras (unchecked rows in "Extra in Arr") so the
-        // backend reset_to_zero pass leaves them untouched. Checked extras
-        // are removed by the post-apply chain (_pendingExtrasRemove).
-        if (Array.isArray(this.syncForm._keepArrCFIDs) && this.syncForm._keepArrCFIDs.length > 0) {
-          body.keepArrCFIDs = this.syncForm._keepArrCFIDs;
-        }
-      } else {
-        // Build overrides from pdOverrides values. Persistence is data-driven —
-        // values that match the profile default are filtered out below, so the
-        // saved sync rule only carries true overrides. The pdOverridesEnabled
-        // toggle gates the EDITOR UI (whether the override cards render at all),
-        // not the payload — when the user disables the toggle, pdDisableOverrides
-        // explicitly clears the maps so the next sync sends a clean body.
-        const ov = this.pdOverrides;
-        const p = this.profileDetail?.detail?.profile || {};
-        const overrides = {};
-        let hasOverrides = false;
-        if (this.activeAppType === 'radarr' && ov.language.value !== (p.language || 'Original')) { overrides.language = ov.language.value; hasOverrides = true; }
-        const upVal = ov.upgradeAllowed.value === true || ov.upgradeAllowed.value === 'true';
-        if (upVal !== (p.upgradeAllowed ?? true)) { overrides.upgradeAllowed = upVal; hasOverrides = true; }
-        if (ov.minFormatScore.value !== (p.minFormatScore ?? 0)) { overrides.minFormatScore = ov.minFormatScore.value; hasOverrides = true; }
-        if (ov.minUpgradeFormatScore.value !== (p.minUpgradeFormatScore ?? 1)) { overrides.minUpgradeFormatScore = ov.minUpgradeFormatScore.value; hasOverrides = true; }
-        if (ov.cutoffFormatScore.value !== (p.cutoffFormatScore || p.cutoffScore || 10000)) { overrides.cutoffFormatScore = ov.cutoffFormatScore.value; hasOverrides = true; }
-        const defaultCutoff = p.cutoff || '';
-        if (ov.cutoffQuality && ov.cutoffQuality !== defaultCutoff) { overrides.cutoffQuality = ov.cutoffQuality; hasOverrides = true; }
-        if (hasOverrides) body.overrides = overrides;
       }
-      // Per-CF score overrides + extra CFs scores. Always read from
-      // this.cfScoreOverrides — compare flow already populated it via
-      // syncFromCompare, Save & Sync flow populates it from the editor.
+      // Per-CF score overrides + extra CFs scores.
       const allScoreOverrides = { ...this.cfScoreOverrides };
       for (const [tid, score] of Object.entries(this.extraCFs)) allScoreOverrides[tid] = score;
       if (Object.keys(allScoreOverrides).length > 0) body.scoreOverrides = allScoreOverrides;
-      // Quality overrides: in Save & Sync flow, structure (new) trumps flat
-      // map (legacy). Skip sending qualityStructure when it exactly mirrors
-      // profile defaults — otherwise just OPENING the Quality Items editor
-      // (which auto-inits qualityStructure from defaults so drag-drop works)
-      // would persist a phantom override on Save & Sync. Compare flow has
-      // already filled body.qualityOverrides above and doesn't touch
-      // qualityStructure, so this branch is skipped there.
-      if (!this.syncForm._fromCompare) {
-        if (this.qualityStructure.length > 0 && !this.qualityStructureMatchesDefaults()) {
-          body.qualityStructure = this.qsForBackend();
-        } else if (Object.keys(this.qualityOverrides).length > 0) {
-          body.qualityOverrides = this.qualityOverrides;
-        }
+      // Quality overrides: structure (new) trumps flat map (legacy). Skip
+      // sending qualityStructure when it exactly mirrors profile defaults —
+      // otherwise just OPENING the Quality Items editor (which auto-inits
+      // qualityStructure from defaults so drag-drop works) would persist a
+      // phantom override on Save & Sync.
+      if (this.qualityStructure.length > 0 && !this.qualityStructureMatchesDefaults()) {
+        body.qualityStructure = this.qsForBackend();
+      } else if (Object.keys(this.qualityOverrides).length > 0) {
+        body.qualityOverrides = this.qualityOverrides;
       }
       // Sync behavior rules
       if (this.syncForm.behavior) body.behavior = this.syncForm.behavior;
@@ -1827,17 +1333,11 @@ export default {
           this.showToast(data.error || 'Dry-run failed', 'error', 8000);
           return;
         }
-        if (this.syncForm._fromCompare) {
-          // Compare flow: close modal, stay in Compare tab. syncPlan is set below and rendered
-          // as a .dryrun-bar inside the Compare section (same style as TRaSH Sync's banner).
-          this.showSyncModal = false;
-        } else {
-          this.showSyncModal = false;
-          if (!this.profileDetail && !this.syncForm.importedProfileId) {
-            const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
-            const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === this.syncForm.profileTrashId);
-            if (inst && profile) await this.openProfileDetail(inst, profile);
-          }
+        this.showSyncModal = false;
+        if (!this.profileDetail && !this.syncForm.importedProfileId) {
+          const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
+          const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === this.syncForm.profileTrashId);
+          if (inst && profile) await this.openProfileDetail(inst, profile);
         }
         this.syncPlan = data;
         this.dryrunDetailsOpen = false;
@@ -1996,17 +1496,6 @@ export default {
           ? this.autoSyncRules.find(r => r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrId)
           : null;
         if (existingRule && !hadErrors) {
-          // Persist keepArrCFIDs from Compare flow's "leave this extra alone"
-          // picks. Without this, the next Sync All re-runs the rule without
-          // the keep-list, hits ResetMode='reset_to_zero', and wipes every
-          // Arr-only custom CF the user explicitly opted to keep
-          // (FLUX / SiC / MainFrame / 126811 release-group customs in the
-          // canonical bug repro). Save & Sync from profile-detail leaves
-          // syncForm._keepArrCFIDs empty — falls through to existingRule's
-          // value via the spread above, no behaviour change for that flow.
-          const compareKeepArrCFIDs = (this.syncForm._fromCompare && Array.isArray(this.syncForm._keepArrCFIDs))
-            ? this.syncForm._keepArrCFIDs
-            : (existingRule.keepArrCFIDs || null);
           const updated = {
             ...existingRule,
             selectedCFs: this.getAllSelectedCFIds(),
@@ -2016,7 +1505,15 @@ export default {
             scoreOverrides: syncBody.scoreOverrides || null,
             qualityOverrides: syncBody.qualityOverrides || null,
             qualityStructure: syncBody.qualityStructure || null,
-            keepArrCFIDs: compareKeepArrCFIDs,
+            // Echo whatever the sync body just sent (which is what the
+            // backend actually applied + persisted to the rule). Falls
+            // back to existingRule when buildSyncBody omitted the field
+            // (today: same value, since buildSyncBody itself reads from
+            // existingRule.keepArrCFIDs). Reading from syncBody first
+            // future-proofs the path: if Profile Detail ever gains UI to
+            // edit keepArrCFIDs, the user's change won't be silently
+            // dropped here.
+            keepArrCFIDs: (Array.isArray(syncBody.keepArrCFIDs) ? syncBody.keepArrCFIDs : existingRule.keepArrCFIDs) || null,
           };
           try {
             await fetch(`/api/auto-sync/rules/${existingRule.id}`, {
@@ -2026,37 +1523,6 @@ export default {
             });
             await this.loadAutoSyncRules();
           } catch (e) { console.error('updateAutoSyncRule:', e); }
-        }
-        // Chain extras removal from Compare flow (syncForm._pendingExtrasRemove was set by syncFromCompare)
-        if (Array.isArray(this.syncForm._pendingExtrasRemove) && this.syncForm._pendingExtrasRemove.length > 0) {
-          try {
-            const arrId = this.syncForm._compareArrProfileId || parseInt(this.syncForm.arrProfileId) || 0;
-            const r = await fetch(`/api/instances/${this.syncForm.instanceId}/profile-cfs/remove`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ arrProfileId: arrId, cfIds: this.syncForm._pendingExtrasRemove }),
-            });
-            if (!r.ok) {
-              const e = await r.json().catch(() => ({}));
-              this.showToast('Extras removal failed: ' + (e.error || r.statusText), 'error', 8000);
-            } else {
-              const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
-              if (inst) this.instRemoveSelected = {...this.instRemoveSelected, [inst.id]: {}};
-            }
-          } catch (e) { console.error('pending-extras remove:', e); }
-        }
-        // Refresh the Compare view so the diff table reflects the just-applied
-        // state. Without this the user lands back on Compare with stale rows
-        // still showing as "differ" even though Apply already pushed the
-        // changes to Arr. The per-card compareQuickSyncRun path already does
-        // this; the global startApply path needs it too.
-        if (this.syncForm._fromCompare && !hadErrors) {
-          const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
-          const arrId = this.syncForm._compareArrProfileId || parseInt(this.syncForm.arrProfileId) || 0;
-          const trashId = this.syncForm.profileTrashId;
-          if (inst && arrId > 0 && trashId) {
-            await this.runProfileCompare(inst, arrId, trashId);
-          }
         }
       } catch (e) {
         console.error('apply:', e);
@@ -2072,10 +1538,18 @@ export default {
 
     // --- Quick Sync ---
 
-    async quickSync(inst, sh, silent = false) {
+    async quickSync(inst, sh, silent = false, useHistoryOnly = false) {
       // Look up the rule once — used for importedProfileId fallback AND
       // for the SelectedCFs source-of-truth lookup below.
-      const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+      // useHistoryOnly bypasses rule lookup entirely: required for rollback
+      // so prevEntry is the strict source of truth. Without this, rollback
+      // would build the body from the (already-modified-by-the-just-undone-
+      // sync) rule, push the current state to Arr, and produce a no-op —
+      // user sees rollback succeed but next reset-to-default has nothing
+      // to change because the profile was never actually rolled back.
+      const rule = useHistoryOnly
+        ? null
+        : this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
       // Fallback: check auto-sync rule for importedProfileId if missing from history (pre-1.7.1 migration)
       let importedProfileId = sh.importedProfileId || '';
       if (!importedProfileId && rule?.importedProfileId) {
@@ -2095,11 +1569,20 @@ export default {
         importedProfileId,
         arrProfileId: sh.arrProfileId,
         selectedCFs,
-        // keepArrCFIDs is rule-only — sync history doesn't carry it.
-        // Empty for rules created before this field existed (omitempty
-        // on backend means absent → empty list → reset_to_zero behaves
-        // exactly as before for those rules).
-        keepArrCFIDs: (rule && rule.keepArrCFIDs) || null,
+        // Prefer the live rule when present; fall back to the sync-history
+        // snapshot for orphaned-profile reruns (rule may have been deleted
+        // since the original sync, but the snapshot still holds the keep
+        // list so reset_to_zero doesn't wipe pinned customs). Empty / nil
+        // for rules and entries created before this field existed →
+        // omitempty on backend → reset_to_zero behaves exactly as before.
+        keepArrCFIDs: (rule && rule.keepArrCFIDs) || sh.keepArrCFIDs || null,
+        // expandRule: true tells the backend to run brand-new-group
+        // expansion (ExpandSelectedCFsForBrandNewGroups) before building
+        // the plan. Set when this is a Sync All path with a real rule
+        // backing it, so manual Sync All matches scheduled auto-sync's
+        // TRaSH-restructure handling. Skip when no rule (orphaned
+        // sync-history rerun) or imported-profile case.
+        expandRule: !!(rule && rule.id && !rule.importedProfileId),
         scoreOverrides: (rule && rule.scoreOverrides) || sh.scoreOverrides || null,
         qualityOverrides: (rule && rule.qualityOverrides) || sh.qualityOverrides || null,
         qualityStructure: (rule && rule.qualityStructure) || sh.qualityStructure || null,
@@ -2234,6 +1717,10 @@ export default {
       // execute current intent, not replay broken attempts.
       const rules = this.autoSyncRules.filter(r => {
         if (r.instanceId !== inst.id || !r.enabled) return false;
+        // Skip soft-tombstoned rules — their target Arr profile no longer
+        // resolves, so the sync would 404/500. Restore-flow gating uses
+        // the same predicate; Sync All shouldn't try harder than Restore.
+        if (r.orphanedAt) return false;
         return builderOnly ? r.profileSource === 'imported' : r.profileSource !== 'imported';
       });
       if (!rules.length) {
@@ -2489,15 +1976,25 @@ export default {
     },
 
     async removeSyncHistory(instanceId, arrProfileId) {
+      // Build a descriptive message — name the instance + Arr profile + ID
+      // so the user can tell which rule they're about to delete (especially
+      // important when multiple rules exist for the same TRaSH profile
+      // across instances).
+      const inst = this.instances.find(i => i.id === instanceId);
+      const instName = (inst && inst.name) || 'instance';
+      const arrName = this.resolveArrProfileName(instanceId, arrProfileId) || `profile #${arrProfileId}`;
+      const rule = this.autoSyncRules.find(r => r.instanceId === instanceId && r.arrProfileId === arrProfileId);
+      const ruleSuffix = rule ? '' : ' (no active rule — only the history entry will be deleted)';
+      const message = `Delete the sync rule for "${arrName}" (#${arrProfileId}) on ${instName}, plus its sync history entry?${ruleSuffix}\n\nThis does NOT delete the profile from ${instName}.`;
       const confirmed = await new Promise(resolve => {
-        this.confirmModal = { show: true, title: 'Remove Sync Entry', message: 'Remove this sync history entry and its auto-sync rule?', confirmLabel: 'Remove', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+        this.confirmModal = { show: true, title: 'Remove Sync Rule', message, confirmLabel: 'Remove', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
       });
       if (!confirmed) return;
       try {
-        const r = await fetch(`/api/instances/${instanceId}/sync-history/${arrProfileId}`, { method: 'DELETE' });
-        if (!r.ok) { console.error('removeSyncHistory: HTTP', r.status); }
-        // Also remove associated auto-sync rule
-        const rule = this.autoSyncRules.find(r => r.instanceId === instanceId && r.arrProfileId === arrProfileId);
+        const resp = await fetch(`/api/instances/${instanceId}/sync-history/${arrProfileId}`, { method: 'DELETE' });
+        if (!resp.ok) { console.error('removeSyncHistory: HTTP', resp.status); }
+        // Also remove associated auto-sync rule (looked up above for the
+        // confirm-message; reuse it here so we don't double-find).
         if (rule) {
           await fetch(`/api/auto-sync/rules/${rule.id}`, { method: 'DELETE' });
           await this.loadAutoSyncRules();
@@ -2630,22 +2127,25 @@ export default {
       }
       const date = new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
       const prevDate = new Date(prevEntry.appliedAt || prevEntry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
-      // Build summary of what will be undone
+      // Full list of changes to be reversed, grouped by category so the
+      // user sees the real magnitude of the rollback. Rendered in the
+      // confirm modal's scrollable details box (no truncation).
       const changes = entry.changes || {};
-      const summary = [
-        ...(changes.cfDetails || []).slice(0, 5),
-        ...(changes.scoreDetails || []).slice(0, 5),
-        ...(changes.qualityDetails || []).slice(0, 3),
-        ...(changes.settingsDetails || []).slice(0, 3),
+      const details = [
+        ...(changes.cfDetails || []),
+        ...(changes.scoreDetails || []),
+        ...(changes.qualityDetails || []),
+        ...(changes.settingsDetails || []),
       ];
-      const summaryText = summary.length > 0
-        ? '\n\nChanges that will be reversed:\n' + summary.slice(0, 8).join('\n') + (summary.length > 8 ? `\n...and ${summary.length - 8} more` : '')
+      const headline = details.length > 0
+        ? `\n\n${details.length} change${details.length === 1 ? '' : 's'} will be reversed:`
         : '';
       const confirmed = await new Promise(resolve => {
         this.confirmModal = {
           show: true,
           title: 'Rollback Profile',
-          message: `Undo the changes from ${date} and restore "${entry.arrProfileName}" to the state from ${prevDate}?\n\nAuto-sync will be disabled to prevent it from overwriting the rollback.${summaryText}`,
+          message: `Undo the changes from ${date} and restore "${entry.arrProfileName}" to the state from ${prevDate}?\n\nAuto-sync will be disabled to prevent it from overwriting the rollback.${headline}`,
+          details,
           confirmLabel: 'Rollback',
           onConfirm: () => resolve(true),
           onCancel: () => resolve(false),
@@ -2653,7 +2153,11 @@ export default {
       });
       if (!confirmed) return;
       this.showToast(`Rolling back "${entry.arrProfileName}" to ${prevDate}...`, 'info', 3000);
-      const result = await this.quickSync(inst, prevEntry, true);
+      // useHistoryOnly=true: rebuild the request strictly from prevEntry's
+      // snapshot. The rule's current state reflects the just-completed sync
+      // we're trying to undo — falling through to it would no-op the
+      // rollback (push current rule state == post-undo state).
+      const result = await this.quickSync(inst, prevEntry, true, true);
       if (result.ok) {
         const rule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === entry.arrProfileId);
         if (rule && rule.enabled) {
@@ -2720,51 +2224,31 @@ export default {
       const quality = this.pdQualityChangeCount() + this.pdQualityItemsChangeCount();
       const cfScores = Object.keys(this.cfScoreOverrides).length;
       const extraCFs = Object.keys(this.extraCFs).length;
-      return { general, quality, cfScores, extraCFs, total: general + quality + cfScores + extraCFs };
+      const groups = this.pdGroupsChangeCount();
+      return { general, quality, cfScores, extraCFs, groups, total: general + quality + cfScores + extraCFs + groups };
     },
 
-    // Toggle-all helper for a Compare card section. If all diffs in the section are currently
-    // checked, unchecks them all; otherwise checks them all. Golden Rule variants are preserved
-    // (the always-one-picked invariant is never broken).
-    toggleAllInCompareSection(iid, cr, section) {
-      if (section === 'settings') {
-        const sMap = {...(this.instCompareSettingsSelected[iid] || {})};
-        const qMap = {...(this.instCompareQualitySelected[iid] || {})};
-        const sdDiffs = (cr.settingsDiffs || []).filter(s => !s.match);
-        const qdDiffs = (cr.qualityDiffs || []).filter(q => !q.match);
-        // Checked means sMap[name] !== false. All currently checked?
-        const allChecked = sdDiffs.every(sd => sMap[sd.name] !== false) && qdDiffs.every(qd => qMap[qd.name] !== false);
-        for (const sd of sdDiffs) sMap[sd.name] = !allChecked;
-        for (const qd of qdDiffs) qMap[qd.name] = !allChecked;
-        this.instCompareSettingsSelected = {...this.instCompareSettingsSelected, [iid]: sMap};
-        this.instCompareQualitySelected = {...this.instCompareQualitySelected, [iid]: qMap};
-      } else if (section === 'requiredCfs') {
-        const sel = {...(this.instCompareSelected[iid] || {})};
-        const diffs = (cr.formatItems || []).filter(fi => !fi.exists || !fi.scoreMatch);
-        const allChecked = diffs.every(fi => sel[fi.trashId] === true);
-        for (const fi of diffs) sel[fi.trashId] = !allChecked;
-        this.instCompareSelected = {...this.instCompareSelected, [iid]: sel};
-      } else if (section === 'groups') {
-        const sel = {...(this.instCompareSelected[iid] || {})};
-        const diffs = [];
-        for (const g of (cr.groups || [])) {
-          if (g.exclusive && g.defaultEnabled) continue; // skip Golden Rule — preserve invariant
-          for (const cf of g.cfs) {
-            if (!cf.exists && g.defaultEnabled && cf.required) diffs.push(cf.trashId);
-            else if (cf.exists && cf.inUse && !cf.scoreMatch) diffs.push(cf.trashId);
-          }
+    // Count CF-group divergences from TRaSH defaults: a group is "changed"
+    // when its effective on/off state differs from defaultEnabled, or when
+    // any optional (non-required) member CF's selected state differs from
+    // its cf.default flag. Required CFs are owned by the group toggle, so
+    // they don't add to the count separately.
+    pdGroupsChangeCount() {
+      const sel = this.selectedOptionalCFs || {};
+      const groups = this.profileDetail?.detail?.trashGroups || [];
+      let n = 0;
+      for (const group of groups) {
+        const grpKey = '__grp_' + group.name;
+        const grpOn = sel[grpKey] !== undefined ? sel[grpKey] : group.defaultEnabled;
+        if (grpOn !== group.defaultEnabled) n++;
+        for (const cf of (group.cfs || [])) {
+          if (cf.required) continue;
+          const cur = !!sel[cf.trashId];
+          const def = group.defaultEnabled ? !!cf.default : false;
+          if (cur !== def) n++;
         }
-        const allChecked = diffs.every(tid => sel[tid] === true);
-        for (const tid of diffs) sel[tid] = !allChecked;
-        this.instCompareSelected = {...this.instCompareSelected, [iid]: sel};
-      } else if (section === 'extras') {
-        const sel = {...(this.instRemoveSelected[iid] || {})};
-        const ids = (cr.extraCFs || []).map(e => e.format);
-        const allChecked = ids.every(id => sel[id]);
-        for (const id of ids) sel[id] = !allChecked;
-        this.instRemoveSelected = {...this.instRemoveSelected, [iid]: sel};
       }
-      this.invalidateCompareDryRun();
+      return n;
     },
 
     // Reset all per-group expand states in the Extra CFs picker. Called
@@ -2842,6 +2326,16 @@ export default {
       if (cf.exists && cf.inUse && !cf.scoreMatch) return 'wrong';
       if (!cf.exists && group.defaultEnabled && cf.required) return 'missing';
       return 'match'; // not-in-use / non-required-missing — not a diff for filter purposes
+    },
+
+    // Does this exclusive group have any variant with a diff? Used in CF Groups
+    // table to force ALL variants visible when one has a diff — Golden Rule HD/UHD
+    // groups are "pick one of the two", and hiding the matching variant in
+    // 'Only diffs' lets the user activate the wrong-score variant without
+    // realising they need to deactivate the other to keep the exclusive
+    // invariant. Showing both rows preserves the constraint visually.
+    compareGroupHasDiff(group) {
+      return (group?.cfs || []).some(cf => this.compareGroupCFStatus(cf, group) !== 'match');
     },
 
     // Returns compare summary counts for filter chips. Backend already augments Missing with
@@ -2948,7 +2442,7 @@ export default {
         this.pdDisableOverrides();
         return;
       }
-      const breakdown = `General: ${s.general}, Quality: ${s.quality}, Overridden Scores: ${s.cfScores}, Extras: ${s.extraCFs}`;
+      const breakdown = `General: ${s.general}, Quality: ${s.quality}, Overridden Scores: ${s.cfScores}, Extras: ${s.extraCFs}, Groups: ${s.groups}`;
       const plural = s.total === 1 ? '' : 's';
       this.confirmModal = {
         show: true,
@@ -2961,9 +2455,11 @@ export default {
     },
 
     // Disable the Profile Detail overrides toggle. Clears all override state
-    // (general, quality, scores, extras) so the next Save & Sync sends a clean
-    // body that reverts the rule to profile defaults. Caller (pdConfirmDisable)
-    // is responsible for showing the confirm modal first.
+    // (general, quality, scores, extras) AND resets CF-group state
+    // (selectedOptionalCFs) so the next Save & Sync sends a clean body that
+    // reverts the rule to profile defaults — equivalent to creating a fresh
+    // sync from scratch. Caller (pdConfirmDisable) is responsible for
+    // showing the confirm modal first.
     pdDisableOverrides() {
       this.pdOverridesEnabled = false;
       // Re-seed pdOverrides from profile defaults so input fields show clean
@@ -2977,6 +2473,15 @@ export default {
       this.qualityStructureExpanded = {};
       this.qualityStructureRenaming = null;
       this.extraCFs = {};
+      // Re-seed CF-group state from TRaSH defaults: every default-enabled
+      // group is on (with its default-on optional CFs selected), every
+      // default-disabled group is off (no per-CF toggles set). Without this
+      // call, a user who'd toggled "Optional Movie Versions" on or
+      // "Unwanted Formats" off would see those decisions persist past
+      // Reset — exactly the divergence the button is meant to undo.
+      const detail = this.profileDetail?.detail;
+      if (detail) this.initSelectedCFs(detail);
+      else this.selectedOptionalCFs = {};
     },
 
     // Seed pdOverrides from a profile's TRaSH defaults (or global defaults if no profile).
@@ -2990,6 +2495,182 @@ export default {
         cutoffFormatScore: { enabled: true, value: p.cutoffFormatScore || p.cutoffScore || 10000 },
         cutoffQuality: p.cutoff || '',
       };
+    },
+
+    // Compare convergence entry point. Opens Profile Detail overlay with the
+    // user's saved sync rule pre-loaded (via applyRuleStateToEditor) AND
+    // comparison-derived overrides layered on top (via
+    // prefillOverridesFromCompare). The user then edits in the same UI as
+    // a normal Profile Sync — buildSyncBody / startApply / handleApply all
+    // run identical code to Profile Sync's Save & Sync, so the rule and
+    // Sync All stay consistent.
+    async openCompareEditor(inst, arrProfileId, trashProfileId) {
+      const arrIdNum = parseInt(arrProfileId, 10);
+      if (!arrIdNum) { this.showToast('Pick an Arr profile first', 'error', 5000); return; }
+      const trashProfile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === trashProfileId);
+      if (!trashProfile) { this.showToast('TRaSH profile not found', 'error', 5000); return; }
+      const comparison = this.instCompareResult[inst.id];
+      if (!comparison || comparison.trashProfileId !== trashProfileId || comparison.arrProfileId !== arrIdNum) {
+        this.showToast('Run compare first', 'error', 5000);
+        return;
+      }
+      this.activeAppType = inst.type;
+      await this.openProfileDetail(inst, trashProfile);
+      // Lock subsequent Save & Sync to the Arr profile we're editing.
+      this.profileDetail._arrProfileName = comparison.arrProfileName || this.resolveArrProfileName(inst.id, arrIdNum) || null;
+      this.profileDetail._editLockedArrProfileId = arrIdNum;
+      this.resyncTargetArrProfileId = arrIdNum;
+      // Wait for the all-CFs lookup table to load before prefilling — without it,
+      // comparison.extraCFs (which carry only name + arrCFID, no trashID) can't
+      // be mapped to the editor's trashID-keyed extraCFs map. Without this step,
+      // user customs like "!PL Tier 02" / "Dubs Only" / "2.0 Stereo" appear in
+      // Compare's All/Only-diffs view but vanish from Edit & Sync's Additional CFs.
+      await this.loadExtraCFList();
+      // applyRuleStateToEditor already ran via openProfileDetail's auto-restore
+      // path if exactly one rule matches (instance + trashProfile). Layer the
+      // compare-derived overrides on top so Arr-state-vs-TRaSH-default deltas
+      // surface in the editor too.
+      this.prefillOverridesFromCompare(comparison);
+    },
+
+
+    // Compare → Override-editor translation. Walks a /api/instances/X/compare
+    // response and populates the same state tree the profile-detail override
+    // editor uses (pdOverrides, qualityOverrides, cfScoreOverrides,
+    // selectedOptionalCFs, plus a transient list of Arr-only extras).
+    //
+    // Caller pattern:
+    //   await this.openProfileDetail(inst, profile);  // seeds profile defaults
+    //   this.prefillOverridesFromCompare(comparison); // overlays Arr's current
+    //                                                 // state as overrides
+    //
+    // Arr-only extras (CFs in Arr but not in any TRaSH cf-group, e.g. user-
+    // imported release-group customs) live in this._compareArrOnlyExtras —
+    // they can't live in pdOverrides.extraCFs (trash-id-keyed) until those
+    // CFs are imported as clonarr custom CFs first.
+    prefillOverridesFromCompare(comparison) {
+      if (!comparison) return false;
+      let anyOverride = false;
+
+      // --- General settings overrides ---
+      for (const sd of (comparison.settingsDiffs || [])) {
+        if (sd.match) continue;
+        switch (sd.name) {
+          case 'Language':
+            this.pdOverrides.language.enabled = false;
+            this.pdOverrides.language.value = sd.current;
+            anyOverride = true;
+            break;
+          case 'Upgrade Allowed':
+            this.pdOverrides.upgradeAllowed.enabled = false;
+            this.pdOverrides.upgradeAllowed.value = sd.current === 'true' || sd.current === true;
+            anyOverride = true;
+            break;
+          case 'Min Format Score':
+            this.pdOverrides.minFormatScore.enabled = false;
+            this.pdOverrides.minFormatScore.value = parseInt(sd.current) || 0;
+            anyOverride = true;
+            break;
+          case 'Min Upgrade Format Score':
+            this.pdOverrides.minUpgradeFormatScore.enabled = false;
+            this.pdOverrides.minUpgradeFormatScore.value = parseInt(sd.current) || 1;
+            anyOverride = true;
+            break;
+          case 'Cutoff Format Score':
+            this.pdOverrides.cutoffFormatScore.enabled = false;
+            this.pdOverrides.cutoffFormatScore.value = parseInt(sd.current) || 10000;
+            anyOverride = true;
+            break;
+          case 'Cutoff':
+            this.pdOverrides.cutoffQuality = sd.current;
+            anyOverride = true;
+            break;
+        }
+      }
+
+      // --- Quality items overrides (Cutoff lives in settingsDiffs above) ---
+      // Uses the legacy flat qualityOverrides map; profile-detail's editor
+      // can promote to qualityStructure later if user reorders.
+      for (const qd of (comparison.qualityDiffs || [])) {
+        if (qd.match) continue;
+        this.qualityOverrides[qd.name] = qd.currentAllowed;
+        anyOverride = true;
+      }
+
+      // --- CF score overrides (formatItems + group CFs) ---
+      // For every diff CF that exists in Arr but with a non-TRaSH score,
+      // record current score as an override. The override editor's
+      // "Overridden Scores" card surfaces these.
+      for (const fi of (comparison.formatItems || [])) {
+        if (!fi.exists || fi.scoreMatch) continue;
+        this.cfScoreOverrides[fi.trashId] = fi.currentScore;
+        anyOverride = true;
+      }
+      for (const group of (comparison.groups || [])) {
+        for (const cf of group.cfs) {
+          if (!cf.exists || cf.scoreMatch) continue;
+          this.cfScoreOverrides[cf.trashId] = cf.currentScore;
+          anyOverride = true;
+        }
+      }
+
+      // --- Group activation state ---
+      // Whatever's inUse on Arr right now becomes the set we're syncing.
+      // Required CFs in default-enabled groups are implicitly tracked via
+      // group.defaultEnabled and don't need explicit selectedOptionalCFs
+      // entries unless the user opted out.
+      for (const group of (comparison.groups || [])) {
+        let anyInUse = false;
+        for (const cf of group.cfs) {
+          if (cf.inUse) {
+            this.selectedOptionalCFs[cf.trashId] = true;
+            anyInUse = true;
+          }
+        }
+        // Track group on/off state when it diverges from default.
+        if (anyInUse && !group.defaultEnabled) {
+          this.selectedOptionalCFs['__grp_' + group.name] = true;
+        } else if (!anyInUse && group.defaultEnabled) {
+          this.selectedOptionalCFs['__grp_' + group.name] = false;
+        }
+      }
+
+      // --- Additional CFs (CFs in Arr profile but not in any TRaSH cf-group
+      // for this profile). These carry name + arrCFID + score in the
+      // comparison response — no trashID. To surface them in the editor's
+      // Additional CFs card (which is keyed by trashID), look up name in
+      // extraCFAllCFs (loaded by loadExtraCFList in openCompareEditor) and
+      // populate this.extraCFs by the resolved trashID. Includes:
+      //   - User-created clonarr custom CFs (synthetic trashID like
+      //     custom:abc123, e.g. "!PL Tier 02", "Dubs Only", "2.0 Stereo").
+      //   - TRaSH CFs the user added to their profile but that aren't in
+      //     a cf-group included by this profile (e.g. user manually
+      //     scored "Hybrid" via direct API edit on a profile that doesn't
+      //     include the [Optional] Movie Versions group).
+      // Anything we can't resolve by name (truly Arr-only, no TRaSH or
+      // custom CF backing it) drops into _compareArrOnlyExtras for
+      // possible future Arr-only-customs UI.
+      const nameToTrashId = {};
+      for (const cf of (this.extraCFAllCFs || [])) {
+        if (cf && cf.name && cf.trashId) nameToTrashId[cf.name] = cf.trashId;
+      }
+      const extras = { ...(this.extraCFs || {}) };
+      const unresolved = [];
+      for (const ecf of (comparison.extraCFs || [])) {
+        const tid = nameToTrashId[ecf.name];
+        if (tid) {
+          extras[tid] = ecf.score;
+        } else {
+          unresolved.push({ arrCFID: ecf.format, name: ecf.name, currentScore: ecf.score });
+        }
+      }
+      this.extraCFs = extras;
+      this._compareArrOnlyExtras = unresolved;
+
+      if (anyOverride || (this._compareArrOnlyExtras && this._compareArrOnlyExtras.length > 0)) {
+        this.pdOverridesEnabled = true;
+      }
+      return anyOverride;
     },
 
     // ======================================================================

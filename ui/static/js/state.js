@@ -123,12 +123,6 @@ export default function baseState() {
     // Compare-tab filter: 'all' shows everything, 'diff' hides rows that match (default),
     // 'wrong'/'missing'/'extra'/'match' restricts to one status class.
     compareFilter: 'diff',
-    // Per-card Quick Sync — lightweight modal with Sync/Dry Run/Cancel, no dropdowns.
-    // Shape: { show, inst, cr, section, title, summary, running }
-    compareQuickSync: { show: false },
-    // Stored context from the last Compare dry-run so the banner's "Apply" button can re-run
-    // the same scoped sync without reopening the quick-sync modal.
-    compareLastDryRunContext: null,
     cfScoreOverrides: {}, // per-CF score overrides { trashId: score }
     qualityOverrides: {}, // legacy flat overrides { name: allowed(bool) } — kept for backwards compat
     qualityOverrideActive: false, // Quality Items editor modal-open flag (NOT a persistence gate)
@@ -143,6 +137,12 @@ export default function baseState() {
     _qsIdCounter: 0,
     _sbIdCounter: 0,
     extraCFs: {}, // { trashId: score } — extra CFs not in profile
+    // Compare → override-editor convergence (Phase 1): list of Arr CFs not in
+    // any TRaSH cf-group for the compared profile. Populated by
+    // prefillOverridesFromCompare; rendered in a Phase 2 UI sub-section that
+    // mirrors Additional CFs but writes to rule.keepArrCFIDs on save.
+    // [{ arrCFID, name, currentScore }] or [] when not in compare flow.
+    _compareArrOnlyExtras: [],
     extraCFSearch: '',
     extraCFAllCFs: [], // flat list of all TRaSH CFs (for filtering)
     extraCFGroups: [], // { name, cfs[] } — TRaSH groups + ungrouped "Other"
@@ -182,10 +182,6 @@ export default function baseState() {
     instCompareTrashId: {},     // instanceId → trashProfileId (selected)
     instCompareResult: {},      // instanceId → ProfileComparison
     instCompareLoading: {},     // instanceId → bool
-    instCompareSelected: {},    // instanceId → { trashId: bool } for selective sync
-    instCompareSettingsSelected: {}, // instanceId → { settingName: bool } for settings sync (checked = sync to TRaSH value)
-    instCompareQualitySelected: {},  // instanceId → { qualityName: bool } for quality sync
-    instRemoveSelected: {},     // instanceId → { arrCfId: bool } for removal
     showProfileInfo: false,
 
     // Sync history

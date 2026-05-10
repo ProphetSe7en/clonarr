@@ -456,7 +456,8 @@
               </template>
               <template x-if="getCompareInstance(activeAppType) && instProfiles[getCompareInstance(activeAppType)?.id]">
                 <button class="btn btn-sm" style="font-size:11px;padding:3px 8px"
-                        @click="loadInstanceProfiles(getCompareInstance(activeAppType))" x-tt="'Refresh Arr profile list'">⟳</button>
+                        @click="(() => { const ci = getCompareInstance(activeAppType); if (!ci) return; const arrId = instCompareProfile[ci.id]; const trashId = instCompareTrashId[ci.id]; if (arrId && trashId) { runProfileCompare(ci, arrId, trashId); } else { loadInstanceProfiles(ci); } })()"
+                        x-tt="(() => { const ci = getCompareInstance(activeAppType); if (!ci) return 'Refresh'; const arrId = instCompareProfile[ci?.id]; const trashId = instCompareTrashId[ci?.id]; return (arrId && trashId) ? 'Re-run comparison with current selection (re-fetches both Arr and TRaSH state)' : 'Refresh Arr profile list'; })()">⟳</button>
               </template>
             </div>
           </div>
@@ -524,89 +525,6 @@
                                     <template x-if="!instCompareResult[getCompareInstance(activeAppType)?.id].error">
                                       <div x-data="{ get cr() { return instCompareResult[getCompareInstance(activeAppType)?.id] }, get iid() { return getCompareInstance(activeAppType)?.id }, get inst() { return getCompareInstance(activeAppType) } }">
 
-                                        <!-- Sync result banner (mirrors TRaSH Sync's banner). Only rendered in Compare when the sync came FROM Compare (_fromCompare flag). -->
-                                        <template x-if="syncResult && syncForm._fromCompare">
-                                          <div class="result-banner" :class="syncResult.errors?.length ? 'error' : 'success'">
-                                            <div class="result-title" x-text="syncResult.errors?.length ? 'Sync completed with errors' : 'Sync completed successfully'"></div>
-                                            <div class="result-detail">
-                                              <template x-if="syncResult.profileCreated">
-                                                <span>Profile created: <strong x-text="syncResult.arrProfileName"></strong> — </span>
-                                              </template>
-                                              Created: <span x-text="syncResult.cfsCreated || 0"></span> CFs,
-                                              Updated: <span x-text="syncResult.cfsUpdated || 0"></span> CFs,
-                                              Scores: <span x-text="syncResult.scoresUpdated || 0"></span> updated,
-                                              Settings: <span x-text="(syncResult.settingsDetails || []).length"></span> changed,
-                                              Quality: <span x-text="(syncResult.qualityDetails || []).length"></span> changes
-                                              <template x-if="syncResult.errors?.length">
-                                                <span> — <span x-text="syncResult.errors.length"></span> errors</span>
-                                              </template>
-                                            </div>
-                                            <template x-if="[...(syncResult.cfDetails || []), ...(syncResult.scoreDetails || []), ...(syncResult.qualityDetails || []), ...(syncResult.settingsDetails || [])].length > 0">
-                                              <div style="margin-top:6px">
-                                                <a style="font-size:12px;color:var(--accent-blue);cursor:pointer;user-select:none" @click="syncResultDetailsOpen = !syncResultDetailsOpen"
-                                                   x-text="syncResultDetailsOpen ? '▾ Hide details' : '▸ Show details (' + [...(syncResult.cfDetails || []), ...(syncResult.scoreDetails || []), ...(syncResult.qualityDetails || []), ...(syncResult.settingsDetails || [])].length + ' changes)'"></a>
-                                                <div x-show="syncResultDetailsOpen" style="margin-top:4px;font-size:13px;color:var(--text-muted)">
-                                                  <template x-for="(d, i) in [...(syncResult.cfDetails || []), ...(syncResult.scoreDetails || []), ...(syncResult.qualityDetails || []), ...(syncResult.settingsDetails || [])]" :key="i">
-                                                    <div style="padding:1px 0" x-text="d"></div>
-                                                  </template>
-                                                </div>
-                                              </div>
-                                            </template>
-                                            <template x-if="syncResult.errors?.length">
-                                              <div style="margin-top:8px;font-size:13px">
-                                                <template x-for="(err, i) in syncResult.errors" :key="i">
-                                                  <div style="color:var(--accent-orange-bright);padding:2px 0" x-text="err"></div>
-                                                </template>
-                                              </div>
-                                            </template>
-                                          </div>
-                                        </template>
-
-                                        <!-- Dry-run banner — identical structure/classes to TRaSH Sync's. Apply button is a flex sibling of .text, not nested at the bottom. -->
-                                        <template x-if="syncPlan && syncForm._fromCompare">
-                                          <div class="dryrun-bar">
-                                            <div class="text">
-                                              <strong>Dry-run results:</strong>
-                                              <span x-text="syncPlan.summary.cfsToCreate"></span> to create,
-                                              <span x-text="syncPlan.summary.cfsToUpdate"></span> to update,
-                                              <span x-text="syncPlan.summary.cfsUnchanged"></span> unchanged
-                                              <template x-if="syncPlan.summary.scoresToSet > 0">
-                                                <span> — <span x-text="syncPlan.summary.scoresToSet"></span> scores to set</span>
-                                              </template>
-                                              <template x-if="syncPlan.summary.scoresToZero > 0">
-                                                <span style="color:var(--accent-orange)"> — <span x-text="syncPlan.summary.scoresToZero"></span> extra scores zeroed</span>
-                                              </template>
-                                              <template x-if="(syncPlan.settingsPreview || []).length > 0 || (syncPlan.qualityPreview || []).length > 0 || (syncPlan.cfActions || []).some(a => a.action !== 'unchanged') || (syncPlan.scoreActions || []).some(a => a.action !== 'unchanged')">
-                                                <div style="margin-top:6px">
-                                                  <a style="font-size:12px;color:var(--accent-blue);cursor:pointer;user-select:none" @click="dryrunDetailsOpen = !dryrunDetailsOpen"
-                                                     x-text="dryrunDetailsOpen ? '▾ Hide details' : '▸ Show details'"></a>
-                                                  <div x-show="dryrunDetailsOpen" style="margin-top:4px;font-size:12px;color:var(--text-body);line-height:1.6">
-                                                    <template x-for="s in (syncPlan.settingsPreview || [])" :key="s">
-                                                      <div><span style="color:var(--accent-blue)">General:</span> <span x-text="s"></span></div>
-                                                    </template>
-                                                    <template x-for="q in (syncPlan.qualityPreview || [])" :key="q">
-                                                      <div><span style="color:var(--accent-orange)">Quality:</span> <span x-text="q"></span></div>
-                                                    </template>
-                                                    <template x-for="a in (syncPlan.cfActions || []).filter(a => a.action === 'create')" :key="'cf-'+a.name">
-                                                      <div><span style="color:var(--accent-green)">Create CF:</span> <span x-text="a.name"></span></div>
-                                                    </template>
-                                                    <template x-for="a in (syncPlan.cfActions || []).filter(a => a.action === 'update')" :key="'cfu-'+a.name">
-                                                      <div><span style="color:var(--accent-blue)">Update CF:</span> <span x-text="a.name"></span></div>
-                                                    </template>
-                                                    <template x-for="a in (syncPlan.scoreActions || []).filter(a => a.action !== 'unchanged')" :key="'sc-'+a.cfName">
-                                                      <div><span style="color:var(--accent-orange)">Score:</span> <span x-text="a.cfName + ': ' + a.oldScore + ' → ' + a.newScore"></span></div>
-                                                    </template>
-                                                  </div>
-                                                </div>
-                                              </template>
-                                            </div>
-                                            <button class="btn btn-primary" @click="compareApplyFromDryRun()" :disabled="syncing">
-                                              <span x-show="syncing" class="spinner"></span>
-                                              <span x-show="!syncing">Apply to <span x-text="cr.arrProfileName"></span></span>
-                                            </button>
-                                          </div>
-                                        </template>
-
                                         <!-- Summary bar — single-row: profile identity + status + Sync All Fixes.
                                              Diff counts intentionally removed; the filter chip bar below is the single source of truth for counts.
                                              NOTE: :style uses object form so it MERGES with the base style attribute. A string form would replace it entirely. -->
@@ -621,17 +539,14 @@
                                                 style="color:var(--accent-orange);font-size:13px;font-weight:500;margin-left:8px"
                                                 x-text="'\u26A0 ' + ((cr.summary?.wrongScore||0) + (cr.summary?.missing||0) + (cr.summary?.extra||0) + (cr.summary?.settingsDiffs||0) + (cr.summary?.qualityDiffs||0)) + ' diffs — see filter below for details'"></span>
                                           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
-                                            <!-- Reset to default — re-applies the initial "match TRaSH" selection state. -->
-                                            <button class="btn btn-sm" style="font-size:12px;padding:3px 10px;color:var(--text-secondary);border-color:var(--border-subtle)"
-                                                    x-show="compareAdjustedCounts(cr).diffs > 0"
-                                                    x-tt="'Undo any manual changes — restore the match-TRaSH default selection'"
-                                                    @click="resetCompareToDefault(inst, cr)">&#8634; Reset to default</button>
-                                            <!-- Sync selected — applies whatever is currently checked. If any exclusive required group has no pick, the Golden Rule picker opens first. -->
+                                            <!-- Edit & Sync — opens the profile editor pre-loaded with
+                                                 your current Arr state captured as overrides. You inspect,
+                                                 keep what you want, revert what you don't, then Save & Sync.
+                                                 Goes through the same engine path as Profile Sync. -->
                                             <button class="btn btn-sm btn-primary" style="font-size:12px;padding:3px 10px"
-                                                    x-show="getCompareSelectedCount(iid) > 0 || getCompareSettingsCount(iid, cr) > 0 || getRemoveSelectedCount(iid) > 0"
-                                                    @click="syncFromCompare(inst, cr)">
-                                              <span x-text="(() => { const parts = []; const cfs = getCompareSelectedCount(iid); if (cfs > 0) parts.push(cfs + ' CFs'); const s = getCompareSettingsCount(iid, cr); if (s > 0) parts.push(s + ' settings'); const r = getRemoveSelectedCount(iid); if (r > 0) parts.push(r + ' remove'); return 'Sync selected (' + parts.join(' + ') + ')'; })()"></span>
-                                            </button>
+                                                    x-show="compareAdjustedCounts(cr).diffs > 0"
+                                                    x-tt="'Open the profile editor — review the differences and adjust which to keep as overrides before applying.'"
+                                                    @click="openCompareEditor(inst, cr.arrProfileId, cr.trashProfileId)">Edit &amp; Sync &rarr;</button>
                                           </div>
                                         </div>
 
@@ -647,98 +562,101 @@
                                         </div>
 
                                         <!-- Profile Settings — one card with a 4-column table (Setting | Current | TRaSH | Sync) and sub-header rows for General / Quality / Quality Items. Rows filtered by compareFilter. Entire card hidden if filter yields 0 visible rows. Matches clonarr-compare-redesign-v3.html mockup. -->
-                                        <template x-if="(cr.settingsDiffs || []).some(s => compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'wrong' && !s.match) || (compareFilter === 'match' && s.match)) || (cr.qualityDiffs || []).some(q => compareFilter === 'all' || (compareFilter === 'diff' && !q.match) || (compareFilter === 'wrong' && !q.match) || (compareFilter === 'match' && q.match))">
-                                          <div class="card" style="margin-bottom:10px;overflow:hidden">
-                                            <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
-                                              <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
-                                                    :style="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
-                                                    x-text="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match) ? '⚠' : '✓'"></span>
-                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Profile Settings</span>
-                                              <span style="display:flex;gap:4px;align-items:center;font-size:11px;margin-left:8px">
-                                                <template x-if="(cr.settingsDiffs || []).filter(s => !s.match).length > 0">
-                                                  <span style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px" x-text="(cr.settingsDiffs || []).filter(s => !s.match).length + ' differ'"></span>
-                                                </template>
-                                                <template x-if="(cr.qualityDiffs || []).filter(q => !q.match).length > 0">
-                                                  <span style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px" x-text="(cr.qualityDiffs || []).filter(q => !q.match).length + ' quality'"></span>
-                                                </template>
-                                              </span>
-                                              <div style="flex:1"></div>
-                                              <button type="button" class="compare-section-toggle"
-                                                      x-show="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match)"
-                                                      @click.stop="toggleAllInCompareSection(iid, cr, 'settings')">toggle all</button>
-                                              <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
-                                                      x-show="(cr.settingsDiffs || []).some(s => !s.match) || (cr.qualityDiffs || []).some(q => !q.match)"
-                                                      @click="compareQuickSyncOpen(inst, cr, 'settings')">Sync selected</button>
-                                            </div>
-                                            <table class="cmp-settings-table">
-                                              <thead>
-                                                <tr>
-                                                  <th class="cb"></th>
-                                                  <th class="col-name">Setting</th>
-                                                  <th class="col-value">Current</th>
-                                                  <th class="col-value">TRaSH</th>
-                                                  <th class="col-new">New</th>
-                                                </tr>
-                                              </thead>
-                                              <tbody>
-                                                <!-- General section -->
-                                                <template x-if="(cr.settingsDiffs || []).some(s => ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name) && (compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'wrong' && !s.match) || (compareFilter === 'match' && s.match)))">
-                                                  <tr class="sub-header"><td colspan="5">General</td></tr>
-                                                </template>
-                                                <template x-for="sd in (cr.settingsDiffs || []).filter(s => ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name))" :key="'g-'+sd.name">
-                                                  <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !sd.match) || (compareFilter === 'wrong' && !sd.match) || (compareFilter === 'match' && sd.match)">
-                                                    <td class="cb">
-                                                      <template x-if="!sd.match">
-                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
-                                                               :checked="(instCompareSettingsSelected[iid] || {})[sd.name] !== false"
-                                                               @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}; invalidateCompareDryRun()">
-                                                      </template>
-                                                    </td>
-                                                    <td class="name" x-text="sd.name === 'Min Format Score' ? 'Min Score' : sd.name === 'Min Upgrade Format Score' ? 'Min Upgrade Score' : sd.name === 'Cutoff Format Score' ? 'Cutoff Score' : sd.name === 'Upgrade Allowed' ? 'Upgrades Allowed' : sd.name"></td>
-                                                    <td class="current" x-text="sd.current"></td>
-                                                    <td :class="sd.match ? 'target-match' : 'target-diff'" x-text="sd.desired"></td>
-                                                    <td :class="sd.match ? 'target-match' : ((instCompareSettingsSelected[iid] || {})[sd.name] !== false ? 'new-fixed' : 'new-unchanged')"
-                                                        x-text="sd.match ? sd.current : ((instCompareSettingsSelected[iid] || {})[sd.name] !== false ? sd.desired : sd.current)"></td>
-                                                  </tr>
-                                                </template>
-                                                <!-- Quality section -->
-                                                <template x-if="((cr.settingsDiffs || []).some(s => s.name === 'Cutoff' && (compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'wrong' && !s.match) || (compareFilter === 'match' && s.match))) || (cr.qualityDiffs || []).some(q => compareFilter === 'all' || (compareFilter === 'diff' && !q.match) || (compareFilter === 'wrong' && !q.match) || (compareFilter === 'match' && q.match)))">
-                                                  <tr class="sub-header"><td colspan="5">Quality</td></tr>
-                                                </template>
-                                                <template x-for="sd in (cr.settingsDiffs || []).filter(s => s.name === 'Cutoff')" :key="'q-'+sd.name">
-                                                  <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !sd.match) || (compareFilter === 'wrong' && !sd.match) || (compareFilter === 'match' && sd.match)">
-                                                    <td class="cb">
-                                                      <template x-if="!sd.match">
-                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
-                                                               :checked="(instCompareSettingsSelected[iid] || {})[sd.name] !== false"
-                                                               @change="if (!instCompareSettingsSelected[iid]) instCompareSettingsSelected[iid] = {}; instCompareSettingsSelected[iid][sd.name] = $event.target.checked; instCompareSettingsSelected = {...instCompareSettingsSelected}; invalidateCompareDryRun()">
-                                                      </template>
-                                                    </td>
-                                                    <td class="name">Cutoff</td>
-                                                    <td class="current" x-text="sd.current"></td>
-                                                    <td :class="sd.match ? 'target-match' : 'target-diff'" x-text="sd.desired"></td>
-                                                    <td :class="sd.match ? 'target-match' : ((instCompareSettingsSelected[iid] || {})[sd.name] !== false ? 'new-fixed' : 'new-unchanged')"
-                                                        x-text="sd.match ? sd.current : ((instCompareSettingsSelected[iid] || {})[sd.name] !== false ? sd.desired : sd.current)"></td>
-                                                  </tr>
-                                                </template>
-                                                <template x-for="qd in (cr.qualityDiffs || [])" :key="'qi-'+qd.name">
-                                                  <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !qd.match) || (compareFilter === 'wrong' && !qd.match) || (compareFilter === 'match' && qd.match)">
-                                                    <td class="cb">
-                                                      <template x-if="!qd.match">
-                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
-                                                               :checked="(instCompareQualitySelected[iid] || {})[qd.name] !== false"
-                                                               @change="if (!instCompareQualitySelected[iid]) instCompareQualitySelected[iid] = {}; instCompareQualitySelected[iid][qd.name] = $event.target.checked; instCompareQualitySelected = {...instCompareQualitySelected}; invalidateCompareDryRun()">
-                                                      </template>
-                                                    </td>
-                                                    <td class="name" x-text="qd.name"></td>
-                                                    <td class="current" :style="qd.currentAllowed ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="qd.currentAllowed ? 'Enabled' : 'Disabled'"></td>
-                                                    <td :style="qd.desiredAllowed ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="qd.desiredAllowed ? 'Enabled' : 'Disabled'"></td>
-                                                    <td :style="(() => { const willSync = (instCompareQualitySelected[iid] || {})[qd.name] !== false; if (qd.match) return qd.currentAllowed ? 'color:var(--accent-green)' : 'color:var(--text-secondary)'; const finalVal = willSync ? qd.desiredAllowed : qd.currentAllowed; return finalVal ? (willSync ? 'color:var(--accent-green);font-weight:600' : 'color:var(--accent-green)') : (willSync ? 'color:var(--accent-red);font-weight:600' : 'color:var(--text-muted-secondary);font-style:italic'); })()"
-                                                        x-text="(() => { const willSync = (instCompareQualitySelected[iid] || {})[qd.name] !== false; const finalVal = (qd.match || willSync) ? qd.desiredAllowed : qd.currentAllowed; return finalVal ? 'Enabled' : 'Disabled'; })()"></td>
-                                                  </tr>
-                                                </template>
-                                              </tbody>
-                                            </table>
+                                        <!-- General + Quality split into two side-by-side cards (was a single
+                                             "Profile Settings" card with sub-headers). Card titles align with
+                                             profile-detail.html's pd-card-general / pd-card-quality. Each card
+                                             keeps a flat table view (no collapse). Both cards still drive the
+                                             same 'settings' section in JS handlers — visual split only. -->
+                                        <template x-if="['all','diff','match'].includes(compareFilter) && ((cr.settingsDiffs || []).some(s => compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'match' && s.match)) || (cr.qualityDiffs || []).some(q => compareFilter === 'all' || (compareFilter === 'diff' && !q.match) || (compareFilter === 'match' && q.match)))">
+                                          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+
+                                            <!-- ===== General card ===== -->
+                                            <template x-if="(cr.settingsDiffs || []).some(s => ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name) && (compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'match' && s.match))) || compareFilter === 'all' || compareFilter === 'match'">
+                                              <div class="card" style="flex:1;min-width:340px;overflow:hidden">
+                                                <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
+                                                  <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
+                                                        :style="(cr.settingsDiffs || []).some(s => !s.match && ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name)) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
+                                                        x-text="(cr.settingsDiffs || []).some(s => !s.match && ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name)) ? '⚠' : '✓'"></span>
+                                                  <span style="font-size:14px;font-weight:600;color:var(--text-body)">General</span>
+                                                  <template x-if="(cr.settingsDiffs || []).filter(s => !s.match && ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name)).length > 0">
+                                                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px;margin-left:4px"
+                                                          x-text="(cr.settingsDiffs || []).filter(s => !s.match && ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name)).length + ' differ'"></span>
+                                                  </template>
+                                                  <div style="flex:1"></div>
+                                                </div>
+                                                <table class="cmp-settings-table">
+                                                  <thead>
+                                                    <tr>
+                                                      <th class="col-name">Setting</th>
+                                                      <th class="col-value">Current</th>
+                                                      <th class="col-value">Profile</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    <template x-for="sd in (cr.settingsDiffs || []).filter(s => ['Language','Upgrade Allowed','Min Format Score','Min Upgrade Format Score','Cutoff Format Score'].includes(s.name))" :key="'g-'+sd.name">
+                                                      <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !sd.match) || (compareFilter === 'match' && sd.match)">
+                                                        <td class="name" x-text="sd.name === 'Min Format Score' ? 'Min Score' : sd.name === 'Min Upgrade Format Score' ? 'Min Upgrade Score' : sd.name === 'Cutoff Format Score' ? 'Cutoff Score' : sd.name === 'Upgrade Allowed' ? 'Upgrades Allowed' : sd.name"></td>
+                                                        <td class="current" x-text="sd.current"></td>
+                                                        <td :class="sd.match ? 'target-match' : 'target-diff'" x-text="sd.desired"></td>
+                                                      </tr>
+                                                    </template>
+                                                    <!-- Score Set — read-only row to mirror profile-detail's General card.
+                                                         Shown only on All/Match filters; always a "match" since
+                                                         compare doesn't expose score-set as a writable diff. -->
+                                                    <tr x-show="compareFilter === 'all' || compareFilter === 'match'">
+                                                      <td class="name">Score Set</td>
+                                                      <td class="current target-match"
+                                                          x-text="((trashProfiles[inst.type] || []).find(p => p.trashId === cr.trashProfileId)?.trashScoreSet) || 'default'"></td>
+                                                      <td class="target-match"
+                                                          x-text="((trashProfiles[inst.type] || []).find(p => p.trashId === cr.trashProfileId)?.trashScoreSet) || 'default'"></td>
+                                                    </tr>
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </template>
+
+                                            <!-- ===== Quality card ===== -->
+                                            <template x-if="((cr.settingsDiffs || []).some(s => s.name === 'Cutoff' && (compareFilter === 'all' || (compareFilter === 'diff' && !s.match) || (compareFilter === 'match' && s.match))) || (cr.qualityDiffs || []).some(q => compareFilter === 'all' || (compareFilter === 'diff' && !q.match) || (compareFilter === 'match' && q.match)))">
+                                              <div class="card" style="flex:1;min-width:340px;overflow:hidden">
+                                                <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
+                                                  <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
+                                                        :style="((cr.settingsDiffs || []).some(s => s.name === 'Cutoff' && !s.match) || (cr.qualityDiffs || []).some(q => !q.match)) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
+                                                        x-text="((cr.settingsDiffs || []).some(s => s.name === 'Cutoff' && !s.match) || (cr.qualityDiffs || []).some(q => !q.match)) ? '⚠' : '✓'"></span>
+                                                  <span style="font-size:14px;font-weight:600;color:var(--text-body)">Quality</span>
+                                                  <template x-if="(cr.qualityDiffs || []).filter(q => !q.match).length > 0 || (cr.settingsDiffs || []).some(s => s.name === 'Cutoff' && !s.match)">
+                                                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px;margin-left:4px"
+                                                          x-text="((cr.qualityDiffs || []).filter(q => !q.match).length + ((cr.settingsDiffs || []).some(s => s.name === 'Cutoff' && !s.match) ? 1 : 0)) + ' differ'"></span>
+                                                  </template>
+                                                  <div style="flex:1"></div>
+                                                </div>
+                                                <table class="cmp-settings-table">
+                                                  <thead>
+                                                    <tr>
+                                                      <th class="col-name">Setting</th>
+                                                      <th class="col-value">Current</th>
+                                                      <th class="col-value">Profile</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    <template x-for="sd in (cr.settingsDiffs || []).filter(s => s.name === 'Cutoff')" :key="'q-'+sd.name">
+                                                      <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !sd.match) || (compareFilter === 'match' && sd.match)">
+                                                        <td class="name">Cutoff</td>
+                                                        <td class="current" x-text="sd.current"></td>
+                                                        <td :class="sd.match ? 'target-match' : 'target-diff'" x-text="sd.desired"></td>
+                                                      </tr>
+                                                    </template>
+                                                    <template x-for="qd in (cr.qualityDiffs || [])" :key="'qi-'+qd.name">
+                                                      <tr x-show="compareFilter === 'all' || (compareFilter === 'diff' && !qd.match) || (compareFilter === 'match' && qd.match)">
+                                                        <td class="name" x-text="qd.name"></td>
+                                                        <td class="current" :style="qd.currentAllowed ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="qd.currentAllowed ? 'Enabled' : 'Disabled'"></td>
+                                                        <td :style="qd.desiredAllowed ? 'color:var(--accent-green)' : 'color:var(--accent-red)'" x-text="qd.desiredAllowed ? 'Enabled' : 'Disabled'"></td>
+                                                      </tr>
+                                                    </template>
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </template>
+
                                           </div>
                                         </template>
 
@@ -756,33 +674,18 @@
                                                 <span x-show="cr.formatItems.some(fi => !fi.exists)" style="color:var(--accent-red);background:var(--accent-red-bg);padding:1px 6px;border-radius:8px" x-text="cr.formatItems.filter(fi => !fi.exists).length + ' missing'"></span>
                                               </span>
                                               <div style="flex:1"></div>
-                                              <button type="button" class="compare-section-toggle"
-                                                      x-show="cr.formatItems.some(fi => !fi.exists || !fi.scoreMatch)"
-                                                      @click.stop="toggleAllInCompareSection(iid, cr, 'requiredCfs')">toggle all</button>
-                                              <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
-                                                      x-show="cr.formatItems.some(fi => !fi.exists || !fi.scoreMatch)"
-                                                      @click="compareQuickSyncOpen(inst, cr, 'requiredCfs')">Sync selected</button>
                                             </div>
                                             <table class="cmp-settings-table">
                                               <thead>
                                                 <tr>
-                                                  <th class="cb"></th>
                                                   <th class="col-name">Custom Format</th>
                                                   <th class="col-value">Current</th>
-                                                  <th class="col-value">TRaSH</th>
-                                                  <th class="col-new">New</th>
+                                                  <th class="col-value">Profile</th>
                                                 </tr>
                                               </thead>
                                               <tbody>
                                                 <template x-for="fi in cr.formatItems" :key="fi.trashId">
                                                   <tr x-show="compareRowVisible(compareFormatItemStatus(fi))">
-                                                    <td class="cb">
-                                                      <template x-if="!fi.exists || !fi.scoreMatch">
-                                                        <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
-                                                               :checked="(instCompareSelected[iid] || {})[fi.trashId]"
-                                                               @change="toggleCompareSelect(iid, fi.trashId, $event.target.checked)">
-                                                      </template>
-                                                    </td>
                                                     <td class="name">
                                                       <span style="margin-right:4px"
                                                             :style="fi.exists && fi.scoreMatch ? 'color:var(--accent-green)' : fi.exists ? 'color:var(--accent-orange)' : 'color:var(--accent-red)'"
@@ -802,8 +705,6 @@
                                                     </td>
                                                     <td :class="fi.scoreMatch ? 'target-match' : 'target-diff'"
                                                         x-text="(fi.desiredScore > 0 ? '+' : '') + fi.desiredScore"></td>
-                                                    <td :class="(() => { if (fi.scoreMatch && fi.exists) return 'target-match'; const picked = (instCompareSelected[iid] || {})[fi.trashId]; return picked ? 'new-fixed' : 'new-unchanged'; })()"
-                                                        x-text="(() => { if (fi.scoreMatch && fi.exists) return (fi.desiredScore > 0 ? '+' : '') + fi.desiredScore; const picked = (instCompareSelected[iid] || {})[fi.trashId]; if (picked) return (fi.desiredScore > 0 ? '+' : '') + fi.desiredScore; return fi.exists ? ((fi.currentScore > 0 ? '+' : '') + fi.currentScore) : '—'; })()"></td>
                                                   </tr>
                                                 </template>
                                               </tbody>
@@ -811,14 +712,14 @@
                                           </div>
                                         </template>
 
-                                        <!-- CF Groups — flat table. No outer collapse, no per-group collapse. Each group is a subsection header + its CFs listed directly below. Filter predicates hide individual rows AND entire groups when all rows are filtered. -->
+                                        <!-- Groups — flat table. No outer collapse, no per-group collapse. Each group is a subsection header + its CFs listed directly below. Filter predicates hide individual rows AND entire groups when all rows are filtered. Card title aligned with profile-detail.html (was "CF Groups"). -->
                                         <template x-if="(cr.groups || []).filter(g => g.cfs.some(cf => compareRowVisible(compareGroupCFStatus(cf, g)))).length > 0">
                                           <div class="card" style="margin-bottom:10px;overflow:hidden">
                                             <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
                                               <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0"
                                                     :style="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0) ? 'color:var(--accent-orange)' : 'color:var(--accent-green)'"
                                                     x-text="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0) ? '⚠' : '✓'"></span>
-                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">CF Groups</span>
+                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Groups</span>
                                               <span style="display:flex;gap:4px;align-items:center;font-size:11px;margin-left:8px">
                                                 <span style="color:var(--accent-green);background:var(--fill-green-soft);padding:1px 6px;border-radius:8px" x-text="cr.groups.length + ' groups'"></span>
                                                 <span x-show="cr.groups.some(g => g.wrongScore > 0)" style="color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 6px;border-radius:8px"
@@ -827,29 +728,21 @@
                                                       x-text="cr.groups.reduce((n,g) => n + g.missing, 0) + ' missing'"></span>
                                               </span>
                                               <div style="flex:1"></div>
-                                              <button type="button" class="compare-section-toggle"
-                                                      x-show="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0)"
-                                                      @click.stop="toggleAllInCompareSection(iid, cr, 'groups')">toggle all</button>
-                                              <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
-                                                      x-show="cr.groups.some(g => g.wrongScore > 0 || g.missing > 0)"
-                                                      @click="compareQuickSyncOpen(inst, cr, 'groups')">Sync selected</button>
                                             </div>
                                             <table class="cmp-settings-table">
                                               <thead>
                                                 <tr>
-                                                  <th class="cb"></th>
                                                   <th class="col-name">Custom Format</th>
                                                   <th class="col-value">Current</th>
-                                                  <th class="col-value">TRaSH</th>
-                                                  <th class="col-new">New</th>
+                                                  <th class="col-value">Profile</th>
                                                 </tr>
                                               </thead>
                                               <tbody>
                                                 <template x-for="row in flatCompareGroupRows(cr)" :key="row.key">
                                                   <tr :class="(row.type === 'sub' || row.type === 'multi') ? 'sub-header' : ''"
-                                                      x-show="row.type !== 'cf' || compareRowVisible(compareGroupCFStatus(row.cf, row.group))">
+                                                      x-show="row.type !== 'cf' || (row.group.exclusive && compareGroupHasDiff(row.group) && compareFilter !== 'match' && compareFilter !== 'matching') || compareRowVisible(compareGroupCFStatus(row.cf, row.group))">
                                                     <template x-if="row.type === 'sub'">
-                                                      <td colspan="5">
+                                                      <td colspan="3">
                                                         <template x-if="row.isGolden">
                                                           <span x-tt="stripHtml(row.group.trashDescription) || 'Exclusive required group — pick one variant'"
                                                                 style="color:var(--accent-red);font-size:14px;margin-right:6px;cursor:help">&#9888;</span>
@@ -872,16 +765,7 @@
                                                       </td>
                                                     </template>
                                                     <template x-if="row.type === 'multi'">
-                                                      <td colspan="5" style="color:var(--accent-orange);background:var(--accent-orange-bg)">&#9888; Multiple CFs scored — TRaSH recommends only one with a non-zero score</td>
-                                                    </template>
-                                                    <template x-if="row.type === 'cf'">
-                                                      <td class="cb">
-                                                        <template x-if="(row.group.exclusive && row.group.defaultEnabled) || (row.cf.exists && row.cf.inUse && !row.cf.scoreMatch) || (!row.cf.exists && row.group.defaultEnabled && row.cf.required)">
-                                                          <input type="checkbox" style="margin:0;accent-color:var(--accent-orange)"
-                                                                 :checked="(instCompareSelected[iid] || {})[row.cf.trashId]"
-                                                                 @change="toggleCompareSelect(iid, row.cf.trashId, $event.target.checked)">
-                                                        </template>
-                                                      </td>
+                                                      <td colspan="3" style="color:var(--accent-orange);background:var(--accent-orange-bg)">&#9888; Multiple CFs scored — TRaSH recommends only one with a non-zero score</td>
                                                     </template>
                                                     <template x-if="row.type === 'cf'">
                                                       <td class="name">
@@ -914,10 +798,6 @@
                                                       <td :class="row.cf.scoreMatch && row.cf.exists ? 'target-match' : 'target-diff'"
                                                           x-text="(row.cf.desiredScore > 0 ? '+' : '') + row.cf.desiredScore"></td>
                                                     </template>
-                                                    <template x-if="row.type === 'cf'">
-                                                      <td :class="(() => { if (row.cf.scoreMatch && row.cf.exists && row.cf.inUse) return 'target-match'; const picked = (instCompareSelected[iid] || {})[row.cf.trashId]; return picked ? 'new-fixed' : 'new-unchanged'; })()"
-                                                          x-text="(() => { if (row.cf.scoreMatch && row.cf.exists && row.cf.inUse) return (row.cf.desiredScore > 0 ? '+' : '') + row.cf.desiredScore; const picked = (instCompareSelected[iid] || {})[row.cf.trashId]; if (picked) return (row.cf.desiredScore > 0 ? '+' : '') + row.cf.desiredScore; return row.cf.exists ? ((row.cf.currentScore > 0 ? '+' : '') + row.cf.currentScore) : '—'; })()"></td>
-                                                    </template>
                                                   </tr>
                                                 </template>
                                               </tbody>
@@ -925,45 +805,26 @@
                                           </div>
                                         </template>
 
-                                        <!-- Extra in Arr — flat table, no collapse. Hidden when compareFilter excludes 'extra'. -->
+                                        <!-- Additional CFs — flat table, no collapse. Hidden when compareFilter excludes 'extra'. CFs in user's Arr profile but not in any TRaSH cf-group for the compared profile. Card title aligned with profile-detail.html (was "Extra in Arr"). -->
                                         <template x-if="cr.summary?.extra > 0 && compareRowVisible('extra')">
                                           <div class="card" style="margin-bottom:10px;overflow:hidden">
                                             <div style="padding:10px 14px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
                                               <span style="font-size:13px;width:14px;text-align:center;flex-shrink:0;color:var(--accent-blue)">&#9432;</span>
-                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Extra in Arr</span>
+                                              <span style="font-size:14px;font-weight:600;color:var(--text-body)">Additional CFs</span>
                                               <span style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 6px;border-radius:8px;margin-left:8px" x-text="cr.summary.extra + ' CFs'"></span>
                                               <div style="flex:1"></div>
-                                              <button type="button" class="compare-section-toggle" @click.stop="toggleAllInCompareSection(iid, cr, 'extras')">toggle all</button>
-                                              <button class="btn btn-sm btn-primary" style="font-size:11px;padding:2px 10px;margin-left:8px"
-                                                      x-show="getRemoveSelectedCount(iid) > 0"
-                                                      @click="compareQuickSyncOpen(inst, cr, 'extras')">Remove selected</button>
                                             </div>
                                             <div>
                                             <div style="font-size:12px;color:var(--text-muted);padding:6px 14px 2px">
-                                              CFs scored in your Arr profile but not part of this TRaSH profile. Selecting and removing will reset their score to 0.
+                                              CFs scored in your Arr profile but not part of this profile. Use Edit &amp; Sync to adjust which extras to keep.
                                             </div>
                                             <template x-for="ecf in (cr.extraCFs || [])" :key="ecf.format">
                                               <div class="compare-cf-row">
-                                                <label class="compare-cf-check">
-                                                  <input type="checkbox"
-                                                         :checked="(instRemoveSelected[iid] || {})[ecf.format]"
-                                                         @change="toggleRemoveSelect(iid, ecf.format, $event.target.checked)">
-                                                </label>
                                                 <div class="compare-cf-name">
-                                                  <span x-text="ecf.name"
-                                                        :style="(instRemoveSelected[iid] || {})[ecf.format] ? 'color:var(--accent-red-soft);text-decoration:line-through' : 'color:var(--text-muted)'"></span>
-                                                  <template x-if="(instRemoveSelected[iid] || {})[ecf.format]">
-                                                    <span class="compare-action-label remove">will be removed</span>
-                                                  </template>
+                                                  <span style="color:var(--text-muted)" x-text="ecf.name"></span>
                                                 </div>
                                                 <div class="compare-cf-scores">
                                                   <span style="color:var(--text-muted)" x-text="'score: ' + ecf.score"></span>
-                                                </div>
-                                                <div class="compare-cf-actions">
-                                                  <template x-if="(instRemoveSelected[iid] || {})[ecf.format]">
-                                                    <button class="btn btn-sm" style="padding:1px 5px;font-size:11px;white-space:nowrap;background:var(--accent-red-bg);color:var(--accent-red-soft);border-color:color-mix(in srgb, var(--accent-red-soft) 27%, transparent)"
-                                                            @click.stop="removeSingleCF(inst, ecf.format, cr.arrProfileId)">Remove</button>
-                                                  </template>
                                                 </div>
                                               </div>
                                             </template>
@@ -974,8 +835,8 @@
                                         <!-- Action buttons moved to the top summary bar. -->
                                         <!-- Empty state when filter yields no rows in any section -->
                                         <template x-if="compareFilter !== 'all' &&
-                                                        !(cr.settingsDiffs || []).some(s => compareFilter === 'diff' ? !s.match : compareFilter === 'wrong' ? !s.match : compareFilter === 'match' ? s.match : false) &&
-                                                        !(cr.qualityDiffs || []).some(q => compareFilter === 'diff' ? !q.match : compareFilter === 'wrong' ? !q.match : compareFilter === 'match' ? q.match : false) &&
+                                                        !(cr.settingsDiffs || []).some(s => compareFilter === 'diff' ? !s.match : compareFilter === 'match' ? s.match : false) &&
+                                                        !(cr.qualityDiffs || []).some(q => compareFilter === 'diff' ? !q.match : compareFilter === 'match' ? q.match : false) &&
                                                         !(cr.formatItems || []).some(fi => compareRowVisible(compareFormatItemStatus(fi))) &&
                                                         !(cr.groups || []).some(g => g.cfs.some(cf => compareRowVisible(compareGroupCFStatus(cf, g)))) &&
                                                         !(compareFilter === 'extra' && cr.summary?.extra > 0)">

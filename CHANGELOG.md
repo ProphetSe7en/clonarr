@@ -2,18 +2,26 @@
 
 ## v2.5.7
 
-Polish for the Compare view.
+### Compare tab redesigned
 
-### Fixed
+The Compare tab is now a read-only view that highlights differences
+between your Arr profile and the TRaSH profile. To act on what you see,
+click **Edit & Sync →** — it opens the standard profile editor with
+the differences pre-loaded as overrides, so you can review and adjust
+before applying. Compare and Profile Sync now share the same code
+path, so they always produce the same result for the same intent.
 
-- **Compare → Sync selected now respects unchecked rows.** Settings, Quality items, and "Extra in Arr" toggles flow through the dry-run; the banner shows what will actually happen.
-- **Cutoff (Upgrade Until)** appears under Quality in the dry-run banner — matches where it sits in the diff table.
-- **Sonarr quality items nested inside parent groups** (e.g. HDTV-2160p / SDTV in a "WEB 1080p" group) now show up in the dry-run banner like flat items do.
-- **Apply on the dry-run banner works for the global "Sync selected" path** (was only working for per-card sync) — no more "No dry-run to apply" toast.
-- **Compare diff table refreshes after Apply** so rows reflect the just-pushed state instead of looking stale.
-- **Default-on CFs in default-enabled groups now show as diffs** when you haven't activated them yet. Affects e.g. AV1 / BR-DISK / Extras / LQ / Upscaled in the Unwanted Formats group — these are `default:true required:false`, and Compare was treating them as "user hasn't picked → fine" instead of "TRaSH would activate this in a fresh sync → diff".
-- **"Extra in Arr" picks survive Sync All.** Customs you opted to keep in Compare (FLUX / SiC / user-imported release-group CFs etc.) were getting zeroed by the next Sync All because the rule didn't persist that choice. Sync rules now carry a `keepArrCFIDs` field that propagates through scheduled auto-sync and manual Sync All.
-- **Console-spam on expanded sync-history entries.** Four `x-text` bindings on the change-count badges were missing optional chaining, throwing `Cannot read properties of undefined (reading 'length')` whenever a sync had no CF/Score/Quality/Settings details. Cosmetic only — the badges were correctly hidden — but spammed the console.
+Filter chips (Wrong score / Missing / Extra) apply only to CFs —
+General and Quality cards stay hidden under those filters since they
+aren't score concepts.
+
+### Editor improvements
+
+- **Reset to Profile Defaults** now also resets CF Groups (was leaving
+  toggled-on optional groups and per-CF picks untouched).
+- **Sync Profile** preview list scrolls inside the modal frame so the
+  Apply / Dry Run / Cancel buttons stay visible with long change
+  lists.
 
 ## v2.5.6
 
