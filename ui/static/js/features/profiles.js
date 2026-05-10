@@ -642,19 +642,62 @@ export default {
       el.innerHTML = sanitizeHTML(text);
       el.style.display = 'block';
       const rect = event.target.getBoundingClientRect();
-      // Position to the right of the icon, vertically centered
+      // UI Scale fix: getBoundingClientRect() returns post-zoom actual
+      // pixels, but style.left/top is interpreted as CSS pixels and then
+      // zoom-scaled by the browser. Divide every actual-pixel measurement
+      // by the computed zoom so values round-trip back to the same
+      // physical position. Mirrors main.js's showTooltip x-tt directive.
+      const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      // Group-fixed X anchoring: find the rightmost .cf-info icon in the
+      // SAME COLUMN as the hovered icon. Without this, tooltip X shifts
+      // per CF (icons sit inline after CF name → X varies with name
+      // length) and the user can't slide the mouse straight down to the
+      // next ⓘ because the wider tooltip overlaps shorter rows' icons.
+      //
+      // Multi-column awareness: groups with 10+ CFs render in 2 columns,
+      // 30+ in 3 columns (custom-formats.html grid layout). Anchoring to
+      // the rightmost icon across ALL columns would push the tooltip for
+      // a left-column CF all the way over to the right column. Filter
+      // icons by "same column" using rect.left clustering (~80px band
+      // around the hovered icon's left edge).
+      //
+      // Walk up parents until we find the first ancestor containing >1
+      // .cf-info — that's the group container.
+      let anchorRight = rect.right;
+      let parent = event.target.parentElement;
+      while (parent) {
+        const siblings = parent.querySelectorAll('.cf-info');
+        if (siblings.length > 1) {
+          const hoverLeft = rect.left;
+          let maxRight = 0;
+          for (const s of siblings) {
+            const r = s.getBoundingClientRect();
+            // Same-column filter: ⓘ rects vary in left because name length
+            // varies, but column boundaries are ~hundreds of pixels apart
+            // in grid layouts. 80px band is loose enough to cover varied
+            // names within a column, tight enough to exclude other columns.
+            if (Math.abs(r.left - hoverLeft) > 80) continue;
+            if (r.right > maxRight) maxRight = r.right;
+          }
+          if (maxRight > 0) anchorRight = maxRight;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      const rTop = rect.top / zoom;
+      const rLeft = rect.left / zoom;
+      const aRight = anchorRight / zoom;
+      const viewportW = window.innerWidth / zoom;
+      const viewportH = window.innerHeight / zoom;
+      // Position to the right of the rightmost icon in the group, vertically
+      // aligned to the hovered row's top.
       const w = el.offsetWidth || 340;
       const h = el.offsetHeight;
-      let x = rect.right + 12;
-      // If not enough space on the right, try left
-      if (x + w > window.innerWidth - 8) {
-        x = rect.left - w - 12;
-      }
+      let x = aRight + 12;
+      if (x + w > viewportW - 8) x = rLeft - w - 12;
       x = Math.max(8, x);
-      let y = rect.top - 8;
-      if (y + h > window.innerHeight - 8) {
-        y = Math.max(8, window.innerHeight - h - 8);
-      }
+      let y = rTop - 8;
+      if (y + h > viewportH - 8) y = Math.max(8, viewportH - h - 8);
       el.style.left = x + 'px';
       el.style.top = y + 'px';
     },
