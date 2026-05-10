@@ -3,8 +3,10 @@ package core
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -45,21 +47,43 @@ type App struct {
 	HTTPClient     *http.Client // shared HTTP client for Arr/Prowlarr API calls
 	NotifyClient   *http.Client // shared HTTP client for Discord/Gotify notifications
 	SafeClient     *http.Client // shared HTTP client with SSRF blocklist (Pushover, Discord)
-	PullUpdateCh   chan string  // send new interval string to reschedule pull
+	PullUpdateCh   chan string  // wake the scheduler; payload is ignored so config stays authoritative
+	NextPullAt     atomic.Value // time.Time; zero means no automatic pull is armed
 	CleanupEvents  []CleanupEvent
 	CleanupMu      sync.Mutex
 	AutoSyncEvents []AutoSyncEvent
 	AutoSyncMu     sync.Mutex
 }
 
-// parsePullInterval parses a pull interval string. Supports Go duration (1h, 30m, 24h).
-// Returns 0 to disable. Defaults to 24h if empty.
+// SetNextPullAt records the next automatic TRaSH pull time for /api/trash/status.
+func (a *App) SetNextPullAt(t time.Time) {
+	if a == nil {
+		return
+	}
+	a.NextPullAt.Store(t)
+}
+
+// GetNextPullAt returns the next automatic TRaSH pull time, if one is armed.
+func (a *App) GetNextPullAt() time.Time {
+	if a == nil {
+		return time.Time{}
+	}
+	v := a.NextPullAt.Load()
+	if t, ok := v.(time.Time); ok {
+		return t
+	}
+	return time.Time{}
+}
+
+// ParsePullInterval parses fixed-duration pull intervals such as "1h" or "30m".
+// "0" and "specific" return 0; the scheduler handles wall-clock schedules separately.
+// Empty values keep the historical 24h default.
 func ParsePullInterval(s string) time.Duration {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 24 * time.Hour
 	}
-	if s == "0" {
+	if s == "0" || s == "specific" {
 		return 0
 	}
 	d, err := time.ParseDuration(s)
@@ -72,4 +96,69 @@ func ParsePullInterval(s string) time.Duration {
 		return time.Minute
 	}
 	return d
+}
+
+// ParsePullScheduleClock parses the persisted HH:MM schedule clock.
+// It is shared by API validation and scheduler math so they accept the same format.
+func ParsePullScheduleClock(s string) (int, int, bool) {
+	if len(s) != 5 || s[2] != ':' {
+		return 0, 0, false
+	}
+	hour, err := strconv.Atoi(s[:2])
+	if err != nil {
+		return 0, 0, false
+	}
+	minute, err := strconv.Atoi(s[3:])
+	if err != nil {
+		return 0, 0, false
+	}
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return 0, 0, false
+	}
+	return hour, minute, true
+}
+
+// nextPullTimeAt computes the next wall-clock fire time in now's location.
+// It always returns a time after now; exact equality rolls to the next period.
+// Invalid or empty schedules return the zero time.
+func nextPullTimeAt(sched PullSchedule, now time.Time) time.Time {
+	hour, minute, ok := ParsePullScheduleClock(sched.Time)
+	if !ok {
+		return time.Time{}
+	}
+
+	switch sched.Mode {
+	case "daily":
+		next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+		if !next.After(now) {
+			next = next.AddDate(0, 0, 1)
+		}
+		return next
+	case "weekly":
+		if sched.DayOfWeek < 0 || sched.DayOfWeek > 6 {
+			return time.Time{}
+		}
+		daysUntil := (sched.DayOfWeek - int(now.Weekday()) + 7) % 7
+		next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location()).AddDate(0, 0, daysUntil)
+		if !next.After(now) {
+			next = next.AddDate(0, 0, 7)
+		}
+		return next
+	case "monthly":
+		if sched.DayOfMonth < 1 || sched.DayOfMonth > 28 {
+			return time.Time{}
+		}
+		next := time.Date(now.Year(), now.Month(), sched.DayOfMonth, hour, minute, 0, 0, now.Location())
+		if !next.After(now) {
+			next = next.AddDate(0, 1, 0)
+		}
+		return next
+	default:
+		return time.Time{}
+	}
+}
+
+// NextPullTime returns the next wall-clock fire time using the process local timezone.
+func NextPullTime(sched PullSchedule) time.Time {
+	return nextPullTimeAt(sched, time.Now())
 }

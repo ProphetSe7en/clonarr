@@ -107,6 +107,15 @@ var PullIntervalPresets = []EnumValue{
 	{Value: "6h", Label: "Every 6 hours"},
 	{Value: "12h", Label: "Every 12 hours"},
 	{Value: "24h", Label: "Every 24 hours"},
+	{Value: "specific", Label: "Scheduled"},
+}
+
+// PullScheduleModes lists the schedule choices shown after selecting the
+// "Scheduled" pull interval preset.
+var PullScheduleModes = []EnumValue{
+	{Value: "daily", Label: "Daily"},
+	{Value: "weekly", Label: "Weekly"},
+	{Value: "monthly", Label: "Monthly"},
 }
 
 // SessionTTLBounds is the accepted range for Authentication > Session TTL (days).

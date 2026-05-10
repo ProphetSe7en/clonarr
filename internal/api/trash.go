@@ -6,12 +6,51 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"time"
 )
 
 // --- TRaSH ---
 
 func (s *Server) handleTrashStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.Core.Trash.Status())
+	st := s.Core.Trash.Status()
+	now := time.Now()
+	st.ServerNow = now.Format(time.RFC3339)
+	// Keep countdown math on the server side so browser timezone settings do not
+	// drift from the container's TZ.
+	if next := s.nextPullForStatus(); !next.IsZero() {
+		st.NextPull = next.Format(time.RFC3339)
+		st.NextPullClock = next.Format("15:04")
+	}
+	writeJSON(w, st)
+}
+
+func (s *Server) nextPullForStatus() time.Time {
+	cfg := s.Core.Config.Get()
+	if cfg.PullInterval == "specific" {
+		return nextSpecificPull(cfg)
+	}
+	if cfg.PullInterval == "0" {
+		return time.Time{}
+	}
+	return s.Core.GetNextPullAt()
+}
+
+func nextPullAfterConfigSave(cfg core.Config) time.Time {
+	if cfg.PullInterval == "specific" {
+		return nextSpecificPull(cfg)
+	}
+	interval := core.ParsePullInterval(cfg.PullInterval)
+	if interval <= 0 {
+		return time.Time{}
+	}
+	return time.Now().Add(interval)
+}
+
+func nextSpecificPull(cfg core.Config) time.Time {
+	if cfg.PullSchedule == nil {
+		return time.Time{}
+	}
+	return core.NextPullTime(*cfg.PullSchedule)
 }
 
 func (s *Server) handleTrashPull(w http.ResponseWriter, r *http.Request) {

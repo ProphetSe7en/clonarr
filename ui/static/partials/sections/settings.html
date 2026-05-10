@@ -75,13 +75,75 @@
           </div>
           <div class="setting-row">
             <div class="setting-label">Pull Interval</div>
-            <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <select class="input" style="width:180px" x-model="config.pullInterval" @change="saveConfig(['pullInterval'])">
                 <template x-for="opt in (manifest.pullIntervalPresets || [])" :key="opt.value">
                   <option :value="opt.value" x-text="opt.label"></option>
                 </template>
               </select>
-              <span style="font-size:12px;color:var(--text-muted)">Auto-pull TRaSH data at this interval</span>
+              <select class="input" style="width:130px"
+                      x-show="config.pullInterval === 'specific'"
+                      x-model="config.pullSchedule.mode"
+                      @change="saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull mode">
+                <template x-for="opt in (manifest.pullScheduleModes || [])" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+              <select class="input" style="width:140px"
+                      x-show="config.pullInterval === 'specific' && config.pullSchedule.mode === 'weekly'"
+                      x-model.number="config.pullSchedule.dayOfWeek"
+                      @change="saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull day of week">
+                <template x-for="d in [{v:0,l:'Sunday'},{v:1,l:'Monday'},{v:2,l:'Tuesday'},{v:3,l:'Wednesday'},{v:4,l:'Thursday'},{v:5,l:'Friday'},{v:6,l:'Saturday'}]" :key="d.v">
+                  <option :value="d.v" x-text="d.l"></option>
+                </template>
+              </select>
+              <select class="input" style="width:100px"
+                      x-show="config.pullInterval === 'specific' && config.pullSchedule.mode === 'monthly'"
+                      x-model.number="config.pullSchedule.dayOfMonth"
+                      @change="saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull day of month">
+                <template x-for="d in Array.from({length:28},(_,i)=>i+1)" :key="d">
+                  <option :value="d" x-text="d"></option>
+                </template>
+              </select>
+              <span style="font-size:13px;color:var(--text-muted)"
+                    x-show="config.pullInterval === 'specific'">at</span>
+              <select class="input" style="width:72px"
+                      x-show="config.pullInterval === 'specific'"
+                      :value="pullScheduleHourValue()"
+                      @change="setPullScheduleHour($event.target.value); saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull hour">
+                <template x-for="h in pullScheduleHourOptions()" :key="h.value">
+                  <option :value="h.value" x-text="h.label"></option>
+                </template>
+              </select>
+              <span style="font-size:13px;color:var(--text-muted)"
+                    x-show="config.pullInterval === 'specific'">:</span>
+              <select class="input" style="width:70px"
+                      x-show="config.pullInterval === 'specific'"
+                      :value="pullScheduleMinuteValue()"
+                      @change="setPullScheduleMinute($event.target.value); saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull minute">
+                <template x-for="m in pullScheduleMinuteOptions()" :key="m.value">
+                  <option :value="m.value" x-text="m.label"></option>
+                </template>
+              </select>
+              <select class="input" style="width:76px"
+                      x-show="config.pullInterval === 'specific' && pullScheduleUses12Hour()"
+                      :value="pullSchedulePeriodValue()"
+                      @change="setPullSchedulePeriod($event.target.value); saveConfig(['pullInterval'])"
+                      aria-label="Scheduled pull period">
+                <template x-for="p in pullSchedulePeriodOptions()" :key="p.value">
+                  <option :value="p.value" x-text="p.label"></option>
+                </template>
+              </select>
+              <span x-show="config.pullInterval !== 'specific'"
+                    style="font-size:12px;color:var(--text-muted)">Auto-pull TRaSH data at this interval</span>
+              <span x-show="config.pullInterval === 'specific'"
+                    style="flex-basis:100%;font-size:12px;color:var(--text-secondary);font-style:italic"
+                    x-text="scheduleTimeZoneHelperText()"></span>
             </div>
           </div>
           <div class="setting-row">

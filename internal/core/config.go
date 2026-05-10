@@ -15,7 +15,8 @@ import (
 type Config struct {
 	Instances            []Instance                       `json:"instances"`
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
-	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h", "0" to disable)
+	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
+	PullSchedule         *PullSchedule                    `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
 	DevMode              bool                             `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
 	TrashSchemaFields    bool                             `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
 	DebugLogging         bool                             `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
@@ -34,6 +35,15 @@ type Config struct {
 	TrustedProxies         string `json:"trustedProxies,omitempty"`         // comma-separated IPs — reverse-proxy deployments
 	TrustedNetworks        string `json:"trustedNetworks,omitempty"`        // comma-separated IPs/CIDRs for local-bypass; empty = Radarr-parity default
 	SessionTTLDays         int    `json:"sessionTtlDays,omitempty"`         // default 30
+}
+
+// PullSchedule holds the wall-clock pull schedule used when PullInterval is "specific".
+// The scheduler interprets Time in the process local timezone (the container's TZ).
+type PullSchedule struct {
+	Mode       string `json:"mode"`       // "daily", "weekly", "monthly"
+	Time       string `json:"time"`       // "HH:MM" (24h format)
+	DayOfWeek  int    `json:"dayOfWeek"`  // 0=Sunday..6=Saturday (weekly)
+	DayOfMonth int    `json:"dayOfMonth"` // 1-28 (monthly)
 }
 
 // ProwlarrConfig holds Prowlarr connection settings for the Scoring Sandbox.
@@ -84,29 +94,29 @@ type NotificationConfig = agents.Config
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
-	ID                string          `json:"id"`
-	Enabled           bool            `json:"enabled"`
-	InstanceID        string          `json:"instanceId"`
-	ProfileSource     string          `json:"profileSource"` // "trash" or "imported"
-	TrashProfileID    string          `json:"trashProfileId,omitempty"`
-	ImportedProfileID string          `json:"importedProfileId,omitempty"`
-	ArrProfileID      int             `json:"arrProfileId"`               // target Arr profile to update
-	SelectedCFs       []string        `json:"selectedCFs,omitempty"`      // user's optional CF selections
+	ID                string   `json:"id"`
+	Enabled           bool     `json:"enabled"`
+	InstanceID        string   `json:"instanceId"`
+	ProfileSource     string   `json:"profileSource"` // "trash" or "imported"
+	TrashProfileID    string   `json:"trashProfileId,omitempty"`
+	ImportedProfileID string   `json:"importedProfileId,omitempty"`
+	ArrProfileID      int      `json:"arrProfileId"`          // target Arr profile to update
+	SelectedCFs       []string `json:"selectedCFs,omitempty"` // user's optional CF selections
 	// KeepArrCFIDs lists Arr CF IDs that must NOT be zeroed by ResetMode='reset_to_zero'.
 	// Populated by Compare-flow apply when the user opts to keep CFs in the "Extra in Arr"
 	// section (Arr-only customs not in any TRaSH cf-group, e.g. user-imported release-group
 	// CFs like FLUX / SiC). Without this, Sync All would zero them on every run.
 	// Empty for rules created via Save & Sync from profile-detail editor — that flow
 	// uses scoreOverrides/extraCFs (trash-id keyed) which doesn't apply to Arr-only CFs.
-	KeepArrCFIDs      []int           `json:"keepArrCFIDs,omitempty"`
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
-	Behavior          *SyncBehavior   `json:"behavior,omitempty"`         // sync behavior rules (nil = defaults)
-	Overrides         *SyncOverrides  `json:"overrides,omitempty"`        // user overrides (min score, language, cutoff, etc.)
-	LastSyncCommit    string          `json:"lastSyncCommit,omitempty"`
-	LastSyncTime      string          `json:"lastSyncTime,omitempty"`
-	LastSyncError     string          `json:"lastSyncError,omitempty"`
+	KeepArrCFIDs     []int           `json:"keepArrCFIDs,omitempty"`
+	ScoreOverrides   map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
+	QualityOverrides map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
+	Behavior         *SyncBehavior   `json:"behavior,omitempty"`         // sync behavior rules (nil = defaults)
+	Overrides        *SyncOverrides  `json:"overrides,omitempty"`        // user overrides (min score, language, cutoff, etc.)
+	LastSyncCommit   string          `json:"lastSyncCommit,omitempty"`
+	LastSyncTime     string          `json:"lastSyncTime,omitempty"`
+	LastSyncError    string          `json:"lastSyncError,omitempty"`
 	// PriorAvailableGroups is a snapshot of which cf-groups were available
 	// for this rule's profile at last successful sync. Map of
 	// group_trash_id → was_default_enabled_at_last_sync. Used to detect
@@ -213,10 +223,10 @@ type SyncHistoryEntry struct {
 	// Arr-only customs that were preserved on the original sync. Without
 	// this snapshot, sync-history rerun would fall back to nil and the
 	// reset_to_zero pass would wipe every pinned extra.
-	KeepArrCFIDs []int `json:"keepArrCFIDs,omitempty"`
-	CFsCreated        int             `json:"cfsCreated"`
-	CFsUpdated        int             `json:"cfsUpdated"`
-	ScoresUpdated     int             `json:"scoresUpdated"`
+	KeepArrCFIDs  []int `json:"keepArrCFIDs,omitempty"`
+	CFsCreated    int   `json:"cfsCreated"`
+	CFsUpdated    int   `json:"cfsUpdated"`
+	ScoresUpdated int   `json:"scoresUpdated"`
 	// LastSync bumps on every sync attempt for this profile (including no-op
 	// auto-syncs) so callers can show "last activity" per profile. UI surfaces
 	// it in the TRaSH Sync tab's per-profile row.
@@ -353,6 +363,10 @@ func (cs *ConfigStore) Get() Config {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	cfg := *cs.config
+	if cs.config.PullSchedule != nil {
+		ps := *cs.config.PullSchedule
+		cfg.PullSchedule = &ps
+	}
 	cfg.Instances = make([]Instance, len(cs.config.Instances))
 	copy(cfg.Instances, cs.config.Instances)
 	cfg.SyncHistory = make([]SyncHistoryEntry, len(cs.config.SyncHistory))

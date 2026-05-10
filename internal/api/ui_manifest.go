@@ -22,17 +22,18 @@ import (
 // uses them to render <option> lists, set CSS custom properties for
 // category colors, and lay out the notification-agent modal generically.
 type UIManifest struct {
-	AppTypes              []core.EnumValue       `json:"appTypes"`
-	SyncBehaviorAddModes  []core.EnumValue       `json:"syncBehaviorAddModes"`
-	SyncBehaviorRemoveModes []core.EnumValue     `json:"syncBehaviorRemoveModes"`
-	SyncBehaviorResetModes []core.EnumValue      `json:"syncBehaviorResetModes"`
-	AuthModes             []core.EnumValue       `json:"authModes"`
-	AuthRequiredModes     []core.EnumValue       `json:"authRequiredModes"`
-	PullIntervalPresets   []core.EnumValue       `json:"pullIntervalPresets"`
-	SessionTTLBounds      core.IntBounds         `json:"sessionTtlBounds"`
-	CFCategories          []core.CategoryMeta    `json:"cfCategories"`
-	ProfileGroups         []core.CategoryMeta    `json:"profileGroups"`
-	NotificationAgents    []agents.AgentTypeMeta `json:"notificationAgents"`
+	AppTypes                []core.EnumValue       `json:"appTypes"`
+	SyncBehaviorAddModes    []core.EnumValue       `json:"syncBehaviorAddModes"`
+	SyncBehaviorRemoveModes []core.EnumValue       `json:"syncBehaviorRemoveModes"`
+	SyncBehaviorResetModes  []core.EnumValue       `json:"syncBehaviorResetModes"`
+	AuthModes               []core.EnumValue       `json:"authModes"`
+	AuthRequiredModes       []core.EnumValue       `json:"authRequiredModes"`
+	PullIntervalPresets     []core.EnumValue       `json:"pullIntervalPresets"`
+	PullScheduleModes       []core.EnumValue       `json:"pullScheduleModes"`
+	SessionTTLBounds        core.IntBounds         `json:"sessionTtlBounds"`
+	CFCategories            []core.CategoryMeta    `json:"cfCategories"`
+	ProfileGroups           []core.CategoryMeta    `json:"profileGroups"`
+	NotificationAgents      []agents.AgentTypeMeta `json:"notificationAgents"`
 }
 
 // handleGetUIManifest returns the static UI manifest.
@@ -51,6 +52,7 @@ func (s *Server) handleGetUIManifest(w http.ResponseWriter, r *http.Request) {
 		AuthModes:               core.AuthModes,
 		AuthRequiredModes:       core.AuthRequiredModes,
 		PullIntervalPresets:     core.PullIntervalPresets,
+		PullScheduleModes:       core.PullScheduleModes,
 		SessionTTLBounds:        core.SessionTTLBounds,
 		CFCategories:            core.CFCategories,
 		ProfileGroups:           core.ProfileGroups,

@@ -156,8 +156,8 @@ func main() {
 			repoCloned = true
 		}
 
-		if cfg.PullInterval == "0" && repoCloned {
-			log.Printf("Startup TRaSH pull skipped (interval disabled) — loading existing repo")
+		if (cfg.PullInterval == "0" || cfg.PullInterval == "specific") && repoCloned {
+			log.Printf("Startup TRaSH pull skipped (interval=%s) — loading existing repo", cfg.PullInterval)
 			if err := trashStore.LoadFromDisk(); err != nil {
 				log.Printf("Startup TRaSH load failed: %v", err)
 				return
@@ -175,54 +175,111 @@ func main() {
 		}
 	})
 
-	// Scheduled TRaSH pull
+	// Scheduled TRaSH pull. One goroutine owns either a fixed-interval ticker
+	// or a one-shot wall-clock timer; config changes wake it to rebuild from
+	// the saved config.
 	utils.SafeGo("trash-pull-scheduler", func() {
-		cfg := cfgStore.Get()
-		interval := core.ParsePullInterval(cfg.PullInterval)
 		var ticker *time.Ticker
 		var tickCh <-chan time.Time
+		var timer *time.Timer
+		var timerCh <-chan time.Time
+		var currentInterval time.Duration
 
-		setTicker := func(d time.Duration) {
+		stopSchedule := func() {
 			if ticker != nil {
 				ticker.Stop()
-			}
-			if d > 0 {
-				ticker = time.NewTicker(d)
-				tickCh = ticker.C
-				log.Printf("Scheduled TRaSH pull every %s", d)
-			} else {
 				ticker = nil
-				tickCh = nil
-				log.Printf("Scheduled TRaSH pull disabled")
 			}
+			tickCh = nil
+			if timer != nil {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer = nil
+			}
+			timerCh = nil
+			currentInterval = 0
+			app.SetNextPullAt(time.Time{})
 		}
-		setTicker(interval)
+
+		runScheduledPull := func() {
+			cfg := cfgStore.Get()
+			prevCommit := trashStore.CurrentCommit()
+			log.Printf("Scheduled TRaSH pull starting...")
+			if err := trashStore.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
+				log.Printf("Scheduled TRaSH pull failed: %v", err)
+				return
+			}
+
+			newCommit := trashStore.CurrentCommit()
+			if prevCommit != "" && newCommit != prevCommit {
+				log.Printf("TRaSH repo updated: %s → %s", prevCommit, newCommit)
+				app.NotifyRepoUpdate(prevCommit, newCommit)
+			} else {
+				log.Printf("Scheduled TRaSH pull completed (no changes)")
+			}
+			server.AutoSyncQualitySizes()
+			app.AutoSyncAfterPull(core.SourceAutoPullInterval)
+		}
+
+		armFromConfig := func() {
+			stopSchedule()
+
+			cfg := cfgStore.Get()
+			if cfg.PullInterval == "specific" {
+				if cfg.PullSchedule == nil {
+					log.Printf("Scheduled TRaSH pull disabled (specific schedule missing)")
+					return
+				}
+				next := core.NextPullTime(*cfg.PullSchedule)
+				if next.IsZero() {
+					log.Printf("Scheduled TRaSH pull disabled (invalid specific schedule)")
+					return
+				}
+				delay := time.Until(next)
+				if delay <= 0 {
+					delay = time.Millisecond
+				}
+				timer = time.NewTimer(delay)
+				timerCh = timer.C
+				app.SetNextPullAt(next)
+				log.Printf("Scheduled TRaSH pull at %s", next.Format(time.RFC3339))
+				return
+			}
+
+			interval := core.ParsePullInterval(cfg.PullInterval)
+			if interval > 0 {
+				ticker = time.NewTicker(interval)
+				tickCh = ticker.C
+				currentInterval = interval
+				next := time.Now().Add(interval)
+				app.SetNextPullAt(next)
+				log.Printf("Scheduled TRaSH pull every %s (next at %s)", interval, next.Format(time.RFC3339))
+				return
+			}
+
+			log.Printf("Scheduled TRaSH pull disabled")
+		}
+		armFromConfig()
 
 		for {
 			select {
-			case <-tickCh:
-				cfg := cfgStore.Get()
-				prevCommit := trashStore.CurrentCommit()
-				log.Printf("Scheduled TRaSH pull starting...")
-				if err := trashStore.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
-					log.Printf("Scheduled TRaSH pull failed: %v", err)
-				} else {
-					newCommit := trashStore.CurrentCommit()
-					if prevCommit != "" && newCommit != prevCommit {
-						log.Printf("TRaSH repo updated: %s → %s", prevCommit, newCommit)
-						app.NotifyRepoUpdate(prevCommit, newCommit)
-					} else {
-						log.Printf("Scheduled TRaSH pull completed (no changes)")
-					}
-					server.AutoSyncQualitySizes()
-					app.AutoSyncAfterPull(core.SourceAutoPullInterval)
+			case tickAt := <-tickCh:
+				runScheduledPull()
+				if currentInterval > 0 {
+					// Ticker values are scheduled times, so this avoids drifting by the pull duration.
+					app.SetNextPullAt(tickAt.Add(currentInterval))
 				}
-			case newInterval := <-app.PullUpdateCh:
-				setTicker(core.ParsePullInterval(newInterval))
+			case <-timerCh:
+				runScheduledPull()
+				armFromConfig()
+			case <-app.PullUpdateCh:
+				armFromConfig()
 			case <-ctx.Done():
-				if ticker != nil {
-					ticker.Stop()
-				}
+				stopSchedule()
 				return
 			}
 		}

@@ -41,10 +41,10 @@ type CFSpecification struct {
 
 // TrashCFGroup bundles related CFs for profiles.
 type TrashCFGroup struct {
-	Name             string         `json:"name"`
-	TrashID          string         `json:"trash_id"`
-	TrashDescription string         `json:"trash_description"`
-	Default          string         `json:"default"`
+	Name             string `json:"name"`
+	TrashID          string `json:"trash_id"`
+	TrashDescription string `json:"trash_description"`
+	Default          string `json:"default"`
 	// Group drives sort order across cf-group display sites. Lower value sorts
 	// earlier; ties break alphabetically. Pointer + omitempty so absent JSON
 	// stays absent on round-trip and zero is distinguishable from unset.
@@ -429,20 +429,23 @@ type ChangelogSection struct {
 
 // Status returns repo status for the API.
 type TrashStatus struct {
-	LastPull     string             `json:"lastPull"`
-	CommitHash   string             `json:"commitHash"`
-	CommitDate   string             `json:"commitDate,omitempty"`
-	LastDiff     *PullDiff          `json:"lastDiff,omitempty"`  // what changed in last pull
-	Changelog    []ChangelogSection `json:"changelog,omitempty"` // recent updates from updates.txt
-	RadarrCFs    int                `json:"radarrCFs"`
-	SonarrCFs    int                `json:"sonarrCFs"`
-	RadarrGroups int                `json:"radarrGroups"`
-	SonarrGroups int                `json:"sonarrGroups"`
-	RadarrProfs  int                `json:"radarrProfiles"`
-	SonarrProfs  int                `json:"sonarrProfiles"`
-	Cloned       bool               `json:"cloned"`
-	PullError    string             `json:"pullError,omitempty"`
-	Pulling      bool               `json:"pulling"`
+	LastPull      string             `json:"lastPull"`
+	NextPull      string             `json:"nextPull,omitempty"` // server-authoritative next automatic pull time
+	NextPullClock string             `json:"nextPullClock,omitempty"`
+	ServerNow     string             `json:"serverNow"`
+	CommitHash    string             `json:"commitHash"`
+	CommitDate    string             `json:"commitDate,omitempty"`
+	LastDiff      *PullDiff          `json:"lastDiff,omitempty"`  // what changed in last pull
+	Changelog     []ChangelogSection `json:"changelog,omitempty"` // recent updates from updates.txt
+	RadarrCFs     int                `json:"radarrCFs"`
+	SonarrCFs     int                `json:"sonarrCFs"`
+	RadarrGroups  int                `json:"radarrGroups"`
+	SonarrGroups  int                `json:"sonarrGroups"`
+	RadarrProfs   int                `json:"radarrProfiles"`
+	SonarrProfs   int                `json:"sonarrProfiles"`
+	Cloned        bool               `json:"cloned"`
+	PullError     string             `json:"pullError,omitempty"`
+	Pulling       bool               `json:"pulling"`
 }
 
 func (ts *TrashStore) Status() TrashStatus {
@@ -1355,13 +1358,13 @@ type CategorizedCF struct {
 
 // CFPickerGroup is a CF group within a picker category, carrying group metadata + all score contexts.
 type CFPickerGroup struct {
-	Name             string          `json:"name"`
-	ShortName        string          `json:"shortName"`
-	GroupTrashID     string          `json:"groupTrashId"`
-	TrashDescription string          `json:"trashDescription,omitempty"`
-	DefaultEnabled   bool            `json:"defaultEnabled"`
-	Exclusive        bool            `json:"exclusive"`
-	IncludeProfiles  []string        `json:"includeProfiles,omitempty"`
+	Name             string   `json:"name"`
+	ShortName        string   `json:"shortName"`
+	GroupTrashID     string   `json:"groupTrashId"`
+	TrashDescription string   `json:"trashDescription,omitempty"`
+	DefaultEnabled   bool     `json:"defaultEnabled"`
+	Exclusive        bool     `json:"exclusive"`
+	IncludeProfiles  []string `json:"includeProfiles,omitempty"`
 	// Group drives sort order across cf-group display sites — see CompareCFGroups.
 	// Populated from the TRaSH cf-group JSON's `group` field (or user-authored CFGroup
 	// for custom groups). Pointer + omitempty so absent stays absent over JSON.
@@ -1741,9 +1744,9 @@ type ProfileCFGroupEntry struct {
 
 // ProfileCFGroup is a CF group linked to a profile via quality_profiles.include.
 type ProfileCFGroup struct {
-	Name             string                `json:"name"`
-	TrashDescription string                `json:"trashDescription"`
-	Required         bool                  `json:"required"` // true if all CFs in group have required=true
+	Name             string `json:"name"`
+	TrashDescription string `json:"trashDescription"`
+	Required         bool   `json:"required"` // true if all CFs in group have required=true
 	// Group drives sort order — see CompareCFGroups. Populated from the
 	// source cf-group JSON's `group` field (or absent if the source has none).
 	Group *int                  `json:"group,omitempty"`
@@ -1856,13 +1859,13 @@ func ProfileCFGroups(ad *AppData, profileTrashID string) (required []ProfileCFGr
 
 // CategoryCFGroup is a CF group with its category parsed from the name prefix.
 type CategoryCFGroup struct {
-	Name             string                `json:"name"`      // "[Audio] Audio Formats"
-	ShortName        string                `json:"shortName"` // "Audio Formats"
-	Category         string                `json:"category"`  // "Audio"
-	TrashID          string                `json:"trashId"`   // matches CFGroup.TrashID — used by frontend to look up rule.priorAvailableGroups for new-vs-existing classification
-	TrashDescription string                `json:"trashDescription"`
-	DefaultEnabled   bool                  `json:"defaultEnabled"` // group.Default == "true"
-	Exclusive        bool                  `json:"exclusive"`      // only one CF can be active (Golden Rule)
+	Name             string `json:"name"`      // "[Audio] Audio Formats"
+	ShortName        string `json:"shortName"` // "Audio Formats"
+	Category         string `json:"category"`  // "Audio"
+	TrashID          string `json:"trashId"`   // matches CFGroup.TrashID — used by frontend to look up rule.priorAvailableGroups for new-vs-existing classification
+	TrashDescription string `json:"trashDescription"`
+	DefaultEnabled   bool   `json:"defaultEnabled"` // group.Default == "true"
+	Exclusive        bool   `json:"exclusive"`      // only one CF can be active (Golden Rule)
 	// Group drives sort order — see CompareCFGroups. Populated from the source
 	// cf-group JSON's `group` field. Absent (nil) on cf-groups that don't carry
 	// the field (TRaSH groups pre-rollout, user-authored groups left empty).

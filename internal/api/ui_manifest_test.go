@@ -42,6 +42,9 @@ func TestHandleGetUIManifest(t *testing.T) {
 	if len(m.AuthModes) != 3 {
 		t.Errorf("AuthModes: want 3, got %d", len(m.AuthModes))
 	}
+	if len(m.PullScheduleModes) != 3 {
+		t.Errorf("PullScheduleModes: want 3, got %d", len(m.PullScheduleModes))
+	}
 
 	// Bounds must be non-zero.
 	if m.SessionTTLBounds.Max <= m.SessionTTLBounds.Min {
@@ -84,5 +87,10 @@ func TestUIManifestEnumValuesValidate(t *testing.T) {
 	}
 	if !core.IsValidEnumValue(core.SyncBehaviorResetModes, d.ResetMode) {
 		t.Errorf("default ResetMode %q not in SyncBehaviorResetModes", d.ResetMode)
+	}
+	for _, mode := range []string{"daily", "weekly", "monthly"} {
+		if !core.IsValidEnumValue(core.PullScheduleModes, mode) {
+			t.Errorf("pull schedule mode %q not in PullScheduleModes", mode)
+		}
 	}
 }

@@ -79,7 +79,7 @@ export default function baseState() {
     cfgbSavingOk: false,                     // whether cfgbSavingMsg is success (green) or error (red)
     cfgbDeleting: false,                     // guard against double-fire on Delete → Confirm (modal's onConfirm could run twice under fast clicks)
     profileTab: 'trash-sync',    // NEW — simple variable replacing per-app profileTabs: 'trash-sync', 'compare'
-    config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
+    config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', pullSchedule: { mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
     trashStatus: {},
     _nowTick: Date.now(),
     trashProfiles: { radarr: [], sonarr: [] },

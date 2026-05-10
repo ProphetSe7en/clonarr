@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -31,14 +32,70 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	for i, a := range cfg.AutoSync.NotificationAgents {
 		cfg.AutoSync.NotificationAgents[i].Config = maskAgentConfig(a.Type, a.Config)
 	}
+	timeInfo := serverTimeInfoAt(time.Now(), os.Getenv("TZ") != "")
+
 	// Wrap config with version + devFeatures for frontend.
 	// devFeatures is env-only (CLONARR_DEV_FEATURES), not persisted to clonarr.json,
 	// so it's exposed alongside the config rather than as part of it.
 	writeJSON(w, struct {
 		core.Config
-		Version     string `json:"version"`
-		DevFeatures bool   `json:"devFeatures"`
-	}{cfg, s.Core.Version, s.Core.DevFeatures})
+		Version                  string `json:"version"`
+		DevFeatures              bool   `json:"devFeatures"`
+		ServerTimeZone           string `json:"serverTimeZone"`
+		ServerTimeZoneOffset     int    `json:"serverTimeZoneOffset"`
+		ServerTimeZoneConfigured bool   `json:"serverTimeZoneConfigured"`
+		ServerNow                string `json:"serverNow"`
+	}{
+		Config:                   cfg,
+		Version:                  s.Core.Version,
+		DevFeatures:              s.Core.DevFeatures,
+		ServerTimeZone:           timeInfo.ServerTimeZone,
+		ServerTimeZoneOffset:     timeInfo.ServerTimeZoneOffset,
+		ServerTimeZoneConfigured: timeInfo.ServerTimeZoneConfigured,
+		ServerNow:                timeInfo.ServerNow,
+	})
+}
+
+func serverTimeZoneLabel(t time.Time) string {
+	return serverTimeInfoAt(t, false).ServerTimeZone
+}
+
+type serverTimeInfo struct {
+	ServerTimeZone           string
+	ServerTimeZoneOffset     int
+	ServerTimeZoneConfigured bool
+	ServerNow                string
+}
+
+func serverTimeInfoAt(t time.Time, configured bool) serverTimeInfo {
+	name, offset := t.Zone()
+	if name == "" {
+		name = "Local"
+	}
+	return serverTimeInfo{
+		ServerTimeZone:           name,
+		ServerTimeZoneOffset:     offset,
+		ServerTimeZoneConfigured: configured,
+		ServerNow:                t.Format(time.RFC3339),
+	}
+}
+
+func validatePullSchedule(sched core.PullSchedule) error {
+	// Keep API validation in step with the scheduler. Bad saved schedules would
+	// otherwise turn into a disabled timer with only a log line as a clue.
+	if !core.IsValidEnumValue(core.PullScheduleModes, sched.Mode) {
+		return fmt.Errorf("pullSchedule.mode must be one of: %s", strings.Join(core.EnumValues(core.PullScheduleModes), ", "))
+	}
+	if _, _, ok := core.ParsePullScheduleClock(sched.Time); !ok {
+		return fmt.Errorf("pullSchedule.time must be HH:MM in 24-hour format")
+	}
+	if sched.Mode == "weekly" && (sched.DayOfWeek < 0 || sched.DayOfWeek > 6) {
+		return fmt.Errorf("pullSchedule.dayOfWeek must be 0..6")
+	}
+	if sched.Mode == "monthly" && (sched.DayOfMonth < 1 || sched.DayOfMonth > 28) {
+		return fmt.Errorf("pullSchedule.dayOfMonth must be 1..28")
+	}
+	return nil
 }
 
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
@@ -56,6 +113,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TrashRepo              *core.TrashRepo      `json:"trashRepo,omitempty"`
 		PullInterval           *string              `json:"pullInterval,omitempty"`
+		PullSchedule           *core.PullSchedule   `json:"pullSchedule,omitempty"`
 		DevMode                *bool                `json:"devMode,omitempty"`
 		TrashSchemaFields      *bool                `json:"trashSchemaFields,omitempty"`
 		DebugLogging           *bool                `json:"debugLogging"`
@@ -142,6 +200,29 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Validate the merged config, not just the fields in this request. Settings
+	// saves are partial, and a scheduled pull is only valid as interval+schedule pair.
+	existingCfg := s.Core.Config.Get()
+	effectiveInterval := existingCfg.PullInterval
+	if req.PullInterval != nil {
+		effectiveInterval = *req.PullInterval
+	}
+	effectiveSchedule := existingCfg.PullSchedule
+	if req.PullSchedule != nil {
+		sched := *req.PullSchedule
+		effectiveSchedule = &sched
+	}
+	if effectiveInterval == "specific" {
+		if effectiveSchedule == nil {
+			writeError(w, 400, "pullSchedule is required when pullInterval is specific")
+			return
+		}
+		if err := validatePullSchedule(*effectiveSchedule); err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+	}
+
 	// Any save that sets authentication=none requires the current admin password.
 	if req.Authentication != nil && *req.Authentication == "none" && s.AuthStore != nil {
 		if confirm.ConfirmPassword == "" {
@@ -155,6 +236,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pullChanged := false
+	scheduleChanged := false
 	authChanged := false
 	err := s.Core.Config.Update(func(cfg *core.Config) {
 		if req.TrashRepo != nil {
@@ -168,6 +250,11 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		if req.PullInterval != nil {
 			cfg.PullInterval = *req.PullInterval
 			pullChanged = true
+		}
+		if req.PullSchedule != nil && effectiveInterval == "specific" {
+			sched := *req.PullSchedule
+			cfg.PullSchedule = &sched
+			scheduleChanged = true
 		}
 		if req.DevMode != nil {
 			cfg.DevMode = *req.DevMode
@@ -215,11 +302,12 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify pull goroutine of schedule change
-	if pullChanged {
-		cfg := s.Core.Config.Get()
+	// Wake the scheduler after persistence. It re-reads ConfigStore so rapid
+	// partial saves cannot leave it running from stale request data.
+	if pullChanged || scheduleChanged {
+		s.Core.SetNextPullAt(nextPullAfterConfigSave(s.Core.Config.Get()))
 		select {
-		case s.Core.PullUpdateCh <- cfg.PullInterval:
+		case s.Core.PullUpdateCh <- "":
 		default:
 		}
 	}
