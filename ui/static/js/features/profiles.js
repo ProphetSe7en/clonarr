@@ -140,7 +140,9 @@ export default {
           if (g.groupTrashId) {
             // category passed through so getCategoryClass() can paint the
             // left-border color the same way the main Groups section does.
-            groups.push({ name: g.name, category: c.category, cfs: g.cfs });
+            // trashDescription forwarded so the picker shows the same
+            // group-blurb the main Groups section does on expand.
+            groups.push({ name: g.name, category: c.category, trashDescription: g.trashDescription, cfs: g.cfs });
           } else {
             for (const cf of g.cfs) {
               if (cf.isCustom) customCFs.push(cf);

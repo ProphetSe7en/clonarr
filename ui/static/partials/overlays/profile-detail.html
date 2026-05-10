@@ -731,6 +731,7 @@
                             </label>
                             <div class="cf-name">
                               <span style="color:var(--accent-orange);font-weight:500" x-text="cf.name"></span>
+                              <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
                             </div>
                             <input type="number" class="pb-score-input overridden" :value="extraCFs[cf.trashId]"
                                    @change="extraCFs = {...extraCFs, [cf.trashId]: parseInt($event.target.value)||0}"
@@ -772,6 +773,12 @@
                   </label>
                 </div>
                 <div x-show="detailSections['extra_'+group.name]">
+                  <!-- Group description — same italic gray blurb the main Groups section
+                       shows on expand. Lets the user read TRaSH's purpose-of-the-group
+                       text in the picker too, so they can decide whether to add CFs from it. -->
+                  <div x-show="group.trashDescription" class="group-desc-html"
+                       style="padding:8px 16px;font-size:13px;color:var(--text-secondary);font-style:italic;line-height:1.5;border-bottom:1px solid var(--bg-muted)"
+                       x-html="sanitizeHTML(group.trashDescription)"></div>
                   <template x-for="cf in group.cfs" :key="'xa-'+cf.trashId">
                     <div class="cf-row"
                          x-show="!_extraInProfile(cf.trashId) && (!extraCFSearch || cf.name.toLowerCase().includes(extraCFSearch.toLowerCase()))"
@@ -783,6 +790,7 @@
                       </label>
                       <div class="cf-name">
                         <span :style="extraCFs[cf.trashId] !== undefined ? 'color:var(--accent-orange);font-weight:500' : ''" x-text="cf.name"></span>
+                        <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
                       </div>
                     </div>
                   </template>
