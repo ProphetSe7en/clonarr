@@ -323,11 +323,11 @@ export default {
         // Filter by variant dropdowns
         {
           if (this.pb.variantGoldenRule === 'HD') {
-            filtered = filtered.filter(g => g.name !== '[Required] Golden Rule UHD');
+            filtered = filtered.filter(g => g.name !== '[Optional] Golden Rule UHD');
           } else if (this.pb.variantGoldenRule === 'UHD') {
-            filtered = filtered.filter(g => g.name !== '[Required] Golden Rule HD');
+            filtered = filtered.filter(g => g.name !== '[Optional] Golden Rule HD');
           } else if (this.pb.variantGoldenRule === 'none') {
-            filtered = filtered.filter(g => g.name !== '[Required] Golden Rule HD' && g.name !== '[Required] Golden Rule UHD');
+            filtered = filtered.filter(g => g.name !== '[Optional] Golden Rule HD' && g.name !== '[Optional] Golden Rule UHD');
           }
           if (this.pb.variantMisc === 'Standard') {
             filtered = filtered.filter(g => g.name !== '[Optional] Miscellaneous SQP');
@@ -349,7 +349,7 @@ export default {
       for (const cat of this.pbCategories) {
         for (const g of cat.groups) names.add(g.name);
       }
-      return (names.has('[Required] Golden Rule HD') && names.has('[Required] Golden Rule UHD')) ||
+      return (names.has('[Optional] Golden Rule HD') && names.has('[Optional] Golden Rule UHD')) ||
              (names.has('[Optional] Miscellaneous') && names.has('[Optional] Miscellaneous SQP'));
     },
 
@@ -358,7 +358,7 @@ export default {
       for (const cat of this.pbCategories) {
         for (const g of cat.groups) names.add(g.name);
       }
-      if (type === 'Golden Rule') return names.has('[Required] Golden Rule HD') && names.has('[Required] Golden Rule UHD');
+      if (type === 'Golden Rule') return names.has('[Optional] Golden Rule HD') && names.has('[Optional] Golden Rule UHD');
       if (type === 'Miscellaneous') return names.has('[Optional] Miscellaneous') && names.has('[Optional] Miscellaneous SQP');
       return false;
     },
@@ -624,17 +624,25 @@ export default {
     },
 
     // Mirror of backend CompareCFGroups (internal/core/trash.go). Sorts
-    // cf-groups by the TRaSH-style `group` integer field. Tiers, applied in
-    // order:
-    //   1. Tier 3 (custom): user-authored groups always sort last
-    //   2. Tier 1 (has `group` set): sorts by integer, alphabetical tiebreak
-    //   3. Tier 2 (no `group`): alphabetical fallback
-    // Backend convention: 1-9 English public, 11-19 German, 21-29 French,
-    // 81-89 Anime, 91-99 SQP. `groupNum` may be null/undefined for cf-groups
-    // that don't carry the field (TRaSH pre-rollout, user groups left empty).
+    // cf-groups by category tier first, then by the TRaSH-style `group`
+    // integer field within tier:
+    //   Tier 0 — regular categories (alphabetical within tier)
+    //   Tier 1 — SQP-prefix categories (sort after Tier 0, before Custom)
+    //   Tier 3 — custom (user-authored, always last)
+    //
+    // Backend `group` convention: 1-9 English public, 11-19 German, 21-29
+    // French, 81-89 Anime, 91-99 SQP. `groupNum` may be null/undefined for
+    // cf-groups that don't carry the field (TRaSH pre-rollout, user groups
+    // left empty) — in that case alphabetical fallback inside the tier.
     _compareCFGroups(aName, aGroup, aCustom, bName, bGroup, bCustom) {
       // Tier 3: custom always last.
       if (aCustom !== bCustom) return aCustom ? 1 : -1;
+      // Tier 1: SQP-prefix groups sort after regular Tier 0. Detected from
+      // the display-name prefix (matches _categoryTier's regex).
+      const aSQP = /^SQP\b/i.test(aName || '');
+      const bSQP = /^SQP\b/i.test(bName || '');
+      if (aSQP !== bSQP) return aSQP ? 1 : -1;
+      // Within same tier: by `group` integer if both have one, else alpha.
       const aHas = aGroup !== null && aGroup !== undefined;
       const bHas = bGroup !== null && bGroup !== undefined;
       if (aHas && bHas) {
@@ -713,8 +721,8 @@ export default {
     pbApplyGoldenRule() {
       const grHDcf1 = 'dc98083864ea246d05a42df0d05f81cc';   // x265 (HD)
       const grUHDcf1 = '839bea857ed2c0a8e084f3cbdbd65ecb';  // x265 (no HDR/DV)
-      const grHDGroup = 'f8bf8eab4617f12dfdbd16303d8da245';  // [Required] Golden Rule HD group
-      const grUHDGroup = 'ff204bbcecdd487d1cefcefdbf0c278d'; // [Required] Golden Rule UHD group
+      const grHDGroup = 'f8bf8eab4617f12dfdbd16303d8da245';  // [Optional] Golden Rule HD group (TRaSH PR #2711 renamed from [Required])
+      const grUHDGroup = 'ff204bbcecdd487d1cefcefdbf0c278d'; // [Optional] Golden Rule UHD group
       const newSelected = {...this.pb.selectedCFs};
       const newEnabled = {...this.pb.enabledGroups};
       const variant = this.pb.variantGoldenRule;
@@ -1009,8 +1017,8 @@ export default {
               }
             }
           }
-          if (includedGroupNames.has('[Required] Golden Rule HD')) this.pb.variantGoldenRule = 'HD';
-          else if (includedGroupNames.has('[Required] Golden Rule UHD')) this.pb.variantGoldenRule = 'UHD';
+          if (includedGroupNames.has('[Optional] Golden Rule HD')) this.pb.variantGoldenRule = 'HD';
+          else if (includedGroupNames.has('[Optional] Golden Rule UHD')) this.pb.variantGoldenRule = 'UHD';
           else this.pb.variantGoldenRule = 'none';
           if (includedGroupNames.has('[Optional] Miscellaneous SQP')) this.pb.variantMisc = 'SQP';
           else if (includedGroupNames.has('[Optional] Miscellaneous')) this.pb.variantMisc = 'Standard';

@@ -46,9 +46,13 @@ export default {
             shortName = group.name.substring(idx + 1).trim();
           }
         }
-        // Remap prefixes
-        if (prefix === 'Required') prefix = 'Golden Rule';
-        if (prefix === 'SQP') prefix = 'Miscellaneous';
+        // No prefix remapping — bracket prefix from TRaSH cf-group JSON is
+        // the source of truth (mirrors backend's ParseCategoryPrefix). Earlier
+        // `Required → Golden Rule` and `SQP → Miscellaneous` remaps were
+        // removed: they pre-empted TRaSH's classification choices and broke
+        // when TRaSH started using prefixes for new purposes (e.g.
+        // `[Required] Repack/Proper`, `[Required] Anime Versions` are not
+        // Golden Rule groups).
         // Display name: use shortName if present, otherwise prefix, otherwise full name
         const displayName = shortName ? (prefix + ' — ' + shortName) : (prefix || group.name);
         // Category class uses the prefix for color matching

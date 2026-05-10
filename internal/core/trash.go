@@ -1896,22 +1896,19 @@ func ParseCategoryPrefix(name string) (string, string) {
 		shortName = category
 	}
 
-	// Remap categories for better UI organization
-	switch category {
-	case "Required":
-		category = "Golden Rule"
-	case "SQP":
-		// SQP-specific CFs (e.g. "Disable if one Radarr") belong in Miscellaneous
-		category = "Miscellaneous"
-	case "Optional":
-		// TRaSH PR #2711 renames Golden Rule groups from "[Required] Golden Rule HD/UHD"
-		// to "[Optional] Golden Rule HD/UHD" to signal they can legitimately be unset.
-		// Preserve the "Golden Rule" category so UI ordering and grouping don't break
-		// when the upstream rename lands.
-		if strings.HasPrefix(shortName, "Golden Rule") {
-			category = "Golden Rule"
-		}
-	}
+	// Category = bracket prefix verbatim. TRaSH's cf-group JSON files own
+	// the naming and categorization; clonarr should NOT second-guess via
+	// hardcoded remapping. Earlier remaps (`Required → Golden Rule`,
+	// `SQP → Miscellaneous`, `Optional → Golden Rule when shortName starts
+	// with "Golden Rule"`) were removed: they pre-empted TRaSH's own
+	// classification choices and broke when TRaSH started using prefixes
+	// for new purposes (`[Required] Repack/Proper`, `[Required] Anime
+	// Versions` are not Golden Rule groups). Sort order is driven by the
+	// cf-group's `group` integer field with alpha fallback (see
+	// CompareCFGroups). Visual styling per category comes from
+	// CFCategories — categories not in the list fall to "Other" gray.
+	// Exclusive ("pick one") behavior is detected from trash_description,
+	// not category name (see ProfileDetailData line ~2113).
 
 	return category, shortName
 }
@@ -1977,6 +1974,24 @@ func CompareCFGroups(aName string, aGroup *int, aCustom bool, bName string, bGro
 	// Tier 3: Custom always last.
 	if aCustom != bCustom {
 		if aCustom {
+			return 1
+		}
+		return -1
+	}
+
+	// Tier 1 (intermediate): SQP-prefix groups sort after regular Tier 0
+	// but before Custom. Detection accepts both full names with brackets
+	// (`[SQP] X`, used by ProfileDetailData line 2330) and bare strings
+	// starting with SQP. Within-category sort sites pass ShortName which
+	// never starts with SQP, so the tier check is a no-op there and the
+	// sort falls through to alpha — same outcome since all groups in that
+	// case share the same category.
+	aUpper := strings.ToUpper(aName)
+	bUpper := strings.ToUpper(bName)
+	aSQP := strings.HasPrefix(aUpper, "[SQP") || strings.HasPrefix(aUpper, "SQP")
+	bSQP := strings.HasPrefix(bUpper, "[SQP") || strings.HasPrefix(bUpper, "SQP")
+	if aSQP != bSQP {
+		if aSQP {
 			return 1
 		}
 		return -1

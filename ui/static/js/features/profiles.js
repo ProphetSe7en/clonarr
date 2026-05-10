@@ -377,8 +377,24 @@ export default {
 
     // --- Profile Detail ---
 
-    async openProfileDetail(inst, profile) {
-      this.debugLog('UI', `Profile opened: "${profile.name}" on ${inst.name}`);
+    // restoreFromRule controls auto-restore from existing sync rules:
+    //   false (default) — fresh TRaSH defaults. Use when user clicks a TRaSH
+    //     guide profile from Standard/German/French/Anime/SQP cards. Browse
+    //     mode: profile detail shows what TRaSH spec defines, not what an
+    //     existing rule may have customized.
+    //   true            — auto-restore from matching rule (selectedOptionalCFs
+    //     reconstructed, scoreOverrides + qualityStructure + overrides loaded,
+    //     edit-session lock set to that Arr profile). Use when user explicitly
+    //     opens an existing rule (Edit pencil from Sync rules card,
+    //     resyncProfile, Compare → Edit & Sync, post-sync land-on-profile).
+    //
+    // Earlier versions auto-restored unconditionally when matchingRules.length
+    // === 1. That broke the "create another sibling profile from the same
+    // TRaSH guide" workflow — clicking a guide profile would silently load
+    // the existing rule's customizations and lock Save & Sync to the
+    // existing Arr profile, instead of starting fresh.
+    async openProfileDetail(inst, profile, restoreFromRule = false) {
+      this.debugLog('UI', `Profile opened: "${profile.name}" on ${inst.name} (restoreFromRule=${restoreFromRule})`);
       this.syncPlan = null;
       this.syncResult = null;
       this.selectedOptionalCFs = {};
@@ -402,29 +418,21 @@ export default {
         // defaults; the rule-restore branch below re-enables overrides if persisted.
         this.pdResetDetailState();
         this.pdInitOverrides(detail.profile || null);
-        // If a saved sync rule exists for this (instance, TRaSH profile), pre-fill
-        // the editor with its persisted state. Without this, opening a profile
-        // that already has a sync rule shows TRaSH defaults — and the user's
-        // next Save & Sync silently wipes their previously-saved extras /
-        // overrides because buildSyncBody reads from this.extraCFs (empty)
-        // instead of the rule's saved scoreOverrides. Repro: add 19 extras
-        // via Customize → Save & Sync (creates them in Arr + persists rule)
-        // → reopen profile → Save & Sync again → rule.SelectedCFs / .ScoreOverrides
-        // get overwritten with the smaller in-editor set → next Sync All
-        // zeroes the dropped extras. This block makes the editor show the
-        // rule's current state on open, so Save & Sync is idempotent unless
-        // the user actually edited something.
-        const matchingRules = (this.autoSyncRules || []).filter(rl =>
-          rl.instanceId === inst.id &&
-          rl.trashProfileId === profile.trashId &&
-          !rl.orphanedAt
-        );
-        if (matchingRules.length === 1) {
-          this.applyRuleStateToEditor(matchingRules[0], detail);
+        // Auto-restore is opt-in via restoreFromRule. Only fires when the
+        // caller explicitly asked AND there's exactly one matching rule.
+        // Multiple rules for the same TRaSH profile (different Arr
+        // profiles) are not auto-restored — ambiguous which to load. User
+        // reaches the specific rule via Sync rules card's Edit button.
+        if (restoreFromRule) {
+          const matchingRules = (this.autoSyncRules || []).filter(rl =>
+            rl.instanceId === inst.id &&
+            rl.trashProfileId === profile.trashId &&
+            !rl.orphanedAt
+          );
+          if (matchingRules.length === 1) {
+            this.applyRuleStateToEditor(matchingRules[0], detail);
+          }
         }
-        // Multiple rules for the same TRaSH profile (different Arr profiles)
-        // are not auto-restored — ambiguous which to load. User reaches the
-        // specific rule via Sync History → resyncProfile in that case.
       } catch (e) { console.error('loadProfileDetail:', e); }
     },
 
@@ -1337,7 +1345,9 @@ export default {
         if (!this.profileDetail && !this.syncForm.importedProfileId) {
           const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
           const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === this.syncForm.profileTrashId);
-          if (inst && profile) await this.openProfileDetail(inst, profile);
+          // Post-dryrun land-on-profile: restore the rule whose dryrun we
+          // just ran so the editor reflects what was previewed.
+          if (inst && profile) await this.openProfileDetail(inst, profile, true);
         }
         this.syncPlan = data;
         this.dryrunDetailsOpen = false;
@@ -1448,7 +1458,9 @@ export default {
         if (!this.profileDetail && !this.syncForm.importedProfileId) {
           const inst = this.instances.find(i => i.id === this.syncForm.instanceId);
           const profile = (this.trashProfiles[inst.type] || []).find(p => p.trashId === this.syncForm.profileTrashId);
-          if (inst && profile) await this.openProfileDetail(inst, profile);
+          // Post-apply land-on-profile: restore the rule we just synced so
+          // the editor reflects the persisted state.
+          if (inst && profile) await this.openProfileDetail(inst, profile, true);
         }
         // Show toast for imported profiles (no profile detail view to show results)
         if (this.syncForm.importedProfileId) {
@@ -1817,7 +1829,9 @@ export default {
       }
       // Navigate to profile detail with defaults
       this.activeAppType = inst.type;
-      await this.openProfileDetail(inst, profile);
+      // restoreFromRule=true: this is the Edit-existing-rule entry point
+      // (sync rules card → Edit pencil), so auto-restore from matching rule.
+      await this.openProfileDetail(inst, profile, true);
       // Show which Arr profile this is synced to
       this.profileDetail._arrProfileName = sh.arrProfileName || null;
       // Lock the edit session to this Arr profile. resyncTargetArrProfileId
@@ -2656,7 +2670,11 @@ export default {
         return;
       }
       this.activeAppType = inst.type;
-      await this.openProfileDetail(inst, trashProfile);
+      // restoreFromRule=true: Compare → Edit & Sync is editing an existing
+      // rule for the Arr profile we ran compare against. Auto-restore loads
+      // the rule's saved state; prefillOverridesFromCompare below layers
+      // Arr-side drift on top.
+      await this.openProfileDetail(inst, trashProfile, true);
       // Lock subsequent Save & Sync to the Arr profile we're editing.
       this.profileDetail._arrProfileName = comparison.arrProfileName || this.resolveArrProfileName(inst.id, arrIdNum) || null;
       this.profileDetail._editLockedArrProfileId = arrIdNum;
