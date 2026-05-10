@@ -267,10 +267,11 @@ func main() {
 
 		for {
 			select {
-			case <-tickCh:
+			case tickAt := <-tickCh:
 				runScheduledPull()
 				if currentInterval > 0 {
-					app.SetNextPullAt(time.Now().Add(currentInterval))
+					// Ticker values are scheduled times, so this avoids drifting by the pull duration.
+					app.SetNextPullAt(tickAt.Add(currentInterval))
 				}
 			case <-timerCh:
 				runScheduledPull()
