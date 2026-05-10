@@ -128,15 +128,15 @@
                                       x-tt="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
                                       x-text="(_so + _qo + _oo) + ' override' + ((_so + _qo + _oo) !== 1 ? 's' : '')"></span>
                               </template>
-                              <!-- Optional CFs badge intentionally NOT shown here.
-                                   Computing it accurately requires per-rule profile-
-                                   detail data (which cf-groups the profile includes
-                                   + per-CF default flags). The naive global lookup
-                                   over-counts for rules with Additional CFs from
-                                   non-included groups. Backend pre-compute on rule
-                                   save is the proper fix — defer until that lands.
-                                   For now: open the profile editor to see exact
-                                   Optional CFs count. -->
+                              <!-- Optional CFs badge — backend lazy-computes
+                                   _rule.optionalCount via ComputeRuleCounts so it
+                                   always agrees with the editor's count for the
+                                   same rule (single source of truth). -->
+                              <template x-if="(_rule.optionalCount || 0) > 0">
+                                <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-purple-soft);color:var(--accent-purple);flex-shrink:0"
+                                      x-tt="'TRaSH-blessed optional CFs activated outside the profile defaults'"
+                                      x-text="_rule.optionalCount + ' optional'"></span>
+                              </template>
                             </span>
                             <span style="color:var(--text-muted);flex-shrink:0" x-text="(sh.syncedCFs?.length || 0) + ' CFs'"></span>
                             <span style="color:var(--text-muted);flex-shrink:0" x-text="timeAgo(sh.lastSync)"></span>

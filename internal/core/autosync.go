@@ -715,6 +715,110 @@ func IsConnectionError(err error) bool {
 // new group's required+default CFs are included so the sync output matches
 // pre-restructure behavior.
 //
+// ComputeRuleCounts derives the editor's "Override mode · N changes" +
+// "Optional CFs: M" totals for a rule. Lazy-computed at /api/auto-sync/
+// rules-fetch time so the sync-rules-list badge always agrees with what
+// the user sees in the Profile Detail editor for the same rule (single
+// source of truth — no stale-on-disk fields, no migration needed).
+//
+// Mirrors frontend's pdOverrideSummary + pdGroupOptionalCount:
+//
+//   - overrides = profile-level changes (general + quality + per-CF score
+//     overrides + extras). Walks rule.Overrides + rule.QualityStructure
+//     + rule.QualityOverrides + rule.ScoreOverrides directly.
+//   - optional  = TRaSH-blessed activations outside profile defaults.
+//     Walks the profile's cf-groups (via ProfileDetailData) and counts
+//     non-required CFs whose selected state diverges from cf.Default.
+//     For groups with no optional members (single-required-CF default-OFF
+//     groups like HDR Formats HDR / DV Boost), counts the group toggle
+//     as the only signal.
+//
+// detail may be nil when ProfileDetailData fails (missing profile in TRaSH
+// data); in that case optional = 0. overrides is always computable from
+// rule alone.
+func ComputeRuleCounts(rule AutoSyncRule, detail *ProfileDetailResult) (overrides, optional int) {
+	// --- Overrides ---
+	if rule.Overrides != nil {
+		ov := rule.Overrides
+		if ov.Language != nil {
+			overrides++
+		}
+		if ov.MinFormatScore != nil {
+			overrides++
+		}
+		if ov.MinUpgradeFormatScore != nil {
+			overrides++
+		}
+		if ov.CutoffFormatScore != nil {
+			overrides++
+		}
+		if ov.UpgradeAllowed != nil {
+			overrides++
+		}
+		if ov.CutoffQuality != nil && *ov.CutoffQuality != "" {
+			overrides++
+		}
+	}
+	overrides += len(rule.QualityStructure)
+	overrides += len(rule.QualityOverrides)
+	for tid := range rule.ScoreOverrides {
+		// Both TRaSH-base score overrides and Additional CFs (custom: prefix)
+		// count toward the total — matches frontend's general+quality+
+		// cfScores+extraCFs sum.
+		_ = tid
+		overrides++
+	}
+
+	// --- Optional ---
+	if detail == nil {
+		return overrides, 0
+	}
+	ruleSet := make(map[string]bool, len(rule.SelectedCFs))
+	for _, tid := range rule.SelectedCFs {
+		ruleSet[tid] = true
+	}
+	for _, group := range detail.Groups {
+		anyInRule := false
+		hasOptionalMembers := false
+		for _, cf := range group.CFs {
+			if !cf.Required {
+				hasOptionalMembers = true
+			}
+			if ruleSet[cf.TrashID] {
+				anyInRule = true
+			}
+		}
+		// Per-CF: count non-required CFs that diverge from default.
+		for _, cf := range group.CFs {
+			if cf.Required {
+				continue
+			}
+			cur := ruleSet[cf.TrashID]
+			def := false
+			if group.DefaultEnabled {
+				def = cf.Default
+			}
+			if cur != def {
+				optional++
+			}
+		}
+		// Group-toggle: only count when group has no optional members
+		// (otherwise per-CF count already reflects activation).
+		if !hasOptionalMembers {
+			grpOn := group.DefaultEnabled
+			if !group.DefaultEnabled && anyInRule {
+				grpOn = true
+			} else if group.DefaultEnabled && !anyInRule && len(group.CFs) > 0 {
+				grpOn = false
+			}
+			if grpOn != group.DefaultEnabled {
+				optional++
+			}
+		}
+	}
+	return overrides, optional
+}
+
 // The second return value is the list of newly-added CF trash_ids,
 // empty if no expansion was needed. Callers persist these back to
 // rule.SelectedCFs after a successful sync so subsequent syncs (when

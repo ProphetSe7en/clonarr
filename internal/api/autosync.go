@@ -52,9 +52,16 @@ func (s *Server) handleListAutoSyncRules(w http.ResponseWriter, r *http.Request)
 
 	type ruleResponse struct {
 		core.AutoSyncRule
-		InstanceName string `json:"instanceName"`
-		InstanceType string `json:"instanceType"`
+		InstanceName   string `json:"instanceName"`
+		InstanceType   string `json:"instanceType"`
+		OptionalCount  int    `json:"optionalCount"`
+		OverridesCount int    `json:"overridesCount"`
 	}
+
+	// Cache per (instanceType, trashProfileID) to avoid duplicate
+	// ProfileDetailData calls when many rules target the same profile.
+	type detailKey struct{ appType, trashID string }
+	detailCache := make(map[detailKey]*core.ProfileDetailResult)
 
 	rules := make([]ruleResponse, 0, len(cfg.AutoSync.Rules))
 	for _, rule := range cfg.AutoSync.Rules {
@@ -62,6 +69,21 @@ func (s *Server) handleListAutoSyncRules(w http.ResponseWriter, r *http.Request)
 		if inst, ok := s.Core.Config.GetInstance(rule.InstanceID); ok {
 			rr.InstanceName = inst.Name
 			rr.InstanceType = inst.Type
+			// Lazy-compute counts — mirrors what the Profile Detail editor
+			// shows in its status bar so the sync-rules-list badge always
+			// agrees with the editor for the same rule. Skipped for
+			// imported-profile rules (no TRaSH profile to derive groups
+			// from) and orphaned rules (would clutter the listing).
+			if rule.TrashProfileID != "" && rule.OrphanedAt == "" {
+				key := detailKey{inst.Type, rule.TrashProfileID}
+				detail, ok := detailCache[key]
+				if !ok {
+					ad := s.Core.Trash.GetAppData(inst.Type)
+					detail = core.ProfileDetailData(ad, rule.TrashProfileID)
+					detailCache[key] = detail
+				}
+				rr.OverridesCount, rr.OptionalCount = core.ComputeRuleCounts(rule, detail)
+			}
 		}
 		rules = append(rules, rr)
 	}
