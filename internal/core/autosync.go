@@ -94,6 +94,75 @@ func (app *App) AutoSyncAfterPull(trigger string) {
 	endResult = fmt.Sprintf("ok | %d changed, %d no-op, %d errors", changed, noChange, errorCount)
 }
 
+// ForceSyncAllRules runs sync on every active rule unconditionally, ignoring
+// the LastSyncCommit == currentCommit short-circuit that AutoSyncAfterPull
+// uses. Triggered by the SyncSchedule wall-clock timer; the point is to
+// catch Arr-side drift (a user editing scores in Sonarr/Radarr directly,
+// or another tool overwriting clonarr's settings) on a periodic cadence
+// without needing a passive drift detector. Rules that are paused,
+// orphaned, imported, or disabled are still skipped — same gates as the
+// pull-driven path.
+func (app *App) ForceSyncAllRules() {
+	app.CleanupStaleRules()
+	app.MigratePriorAvailableGroups()
+
+	cfg := app.Config.Get()
+	if cfg.AutoSync.Paused {
+		app.DebugLog.Logf(LogAutoSync, "Auto-sync paused globally — skipping ForceSyncAllRules")
+		return
+	}
+	if len(cfg.AutoSync.Rules) == 0 {
+		return
+	}
+
+	currentCommit := app.Trash.CurrentCommit()
+	if currentCommit == "" {
+		return
+	}
+
+	commitShort := currentCommit
+	if len(currentCommit) > 7 {
+		commitShort = currentCommit[:7]
+	}
+	tick := app.DebugLog.BeginOp(OpAutoSync, SourceAutoSyncSchedule, fmt.Sprintf("commit=%s rules=%d", commitShort, len(cfg.AutoSync.Rules)))
+	endResult := "ok | tick complete"
+	defer func() { tick.End(endResult) }()
+
+	var changed, noChange, errorCount int
+	var changedSummary []string
+	for _, rule := range cfg.AutoSync.Rules {
+		if !rule.Enabled {
+			continue
+		}
+		if rule.OrphanedAt != "" {
+			continue
+		}
+		if rule.ProfileSource == "imported" {
+			continue
+		}
+		// NOTE: deliberately skip the LastSyncCommit == currentCommit check
+		// here — the whole point of this scheduled run is to catch drift
+		// regardless of whether TRaSH had new commits.
+
+		outcome, summary := app.runAutoSyncRule(rule, currentCommit, tick)
+		switch outcome {
+		case outcomeChanged:
+			changed++
+			if summary != "" {
+				changedSummary = append(changedSummary, summary)
+			}
+		case outcomeNoChange:
+			noChange++
+		case outcomeError:
+			errorCount++
+		}
+	}
+	if len(changedSummary) > 0 {
+		tick.Logf("changed: %s", strings.Join(changedSummary, " | "))
+	}
+	endResult = fmt.Sprintf("ok | %d changed, %d no-op, %d errors", changed, noChange, errorCount)
+}
+
 // ruleOutcome describes the result classification of a single auto-sync
 // rule evaluation, used by AutoSyncAfterPull to compose the tick summary
 // without re-parsing log lines.
@@ -220,17 +289,24 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 	// Dry-run plan
 	customCFs := app.CustomCFs.List(inst.Type)
 	lastSyncedCFs := app.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
-	plan, err := BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.HTTPClient, op)
+	var plan *SyncPlan
+	err := app.runWithConnectionRetry(rule, inst.Name, "plan", func() error {
+		var planErr error
+		plan, planErr = BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, app.HTTPClient, op)
+		return planErr
+	})
 	if err != nil {
 		errMsg := fmt.Sprintf("plan failed: %v", err)
 		log.Printf("Auto-sync: rule %s — %s", rule.ID, errMsg)
 		app.DebugLog.Logf(LogError, "Auto-sync rule %s: plan failed: %s", rule.ID, errMsg)
 
-		// Connection error — instance unreachable: send user-friendly message (not internal stack trace)
+		// Connection error after retry chain exhausted (~10 minutes of
+		// attempts via runWithConnectionRetry). Genuinely unreachable —
+		// surface as error + notification.
 		if IsConnectionError(err) {
-			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
-			log.Printf("Auto-sync: rule %s — %s is not reachable", rule.ID, inst.Name)
-			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable: %v", rule.ID, inst.Name, err)
+			friendlyMsg := inst.Name + " is not reachable — gave up after retrying for 10 minutes; will retry on next sync"
+			log.Printf("Auto-sync: rule %s — %s still unreachable after retries", rule.ID, inst.Name)
+			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s unreachable after retry chain exhausted: %v", rule.ID, inst.Name, err)
 			app.UpdateAutoSyncRuleError(rule.ID, friendlyMsg)
 			profileName := rule.TrashProfileID
 			if p := findProfile(ad, rule.TrashProfileID); p != nil {
@@ -289,12 +365,17 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 	}
 
 	// Apply
-	result, err := ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.HTTPClient, op)
+	var result *SyncResult
+	err = app.runWithConnectionRetry(rule, inst.Name, "apply", func() error {
+		var applyErr error
+		result, applyErr = ExecuteSyncPlan(ad, inst, req, plan, imported, customCFs, ResolveSyncBehavior(req.Behavior), app.HTTPClient, op)
+		return applyErr
+	})
 	if err != nil {
 		if IsConnectionError(err) {
-			friendlyMsg := inst.Name + " is not reachable — will retry on next sync"
-			log.Printf("Auto-sync: rule %s apply — %s is not reachable", rule.ID, inst.Name)
-			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s is not reachable during apply: %v", rule.ID, inst.Name, err)
+			friendlyMsg := inst.Name + " is not reachable — gave up after retrying for 10 minutes; will retry on next sync"
+			log.Printf("Auto-sync: rule %s apply — %s still unreachable after retries", rule.ID, inst.Name)
+			app.DebugLog.Logf(LogAutoSync, "Rule %s: %s unreachable during apply after retry chain exhausted: %v", rule.ID, inst.Name, err)
 			app.UpdateAutoSyncRuleError(rule.ID, friendlyMsg)
 			app.NotifyAutoSync(rule, inst, plan.ProfileName, nil, fmt.Errorf("%s", friendlyMsg))
 			return outcomeError, ""
@@ -699,6 +780,60 @@ func IsConnectionError(err error) bool {
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "network is unreachable") ||
 		strings.Contains(msg, "dial tcp")
+}
+
+// autoSyncRetryDelays defines the wait pattern between retries when an
+// Arr instance is unreachable during auto-sync. Total wait ~10 minutes
+// (60s + 60s + 120s + 120s + 240s) — long enough to ride out a typical
+// container restart of Sonarr/Radarr without surfacing the transient
+// failure as a notification or auto-disable. Tuned to match the
+// reported pain-point: nightly backup windows that restart Arr-stack
+// containers around the same time the scheduled TRaSH pull tick fires.
+var autoSyncRetryDelays = []time.Duration{
+	60 * time.Second,
+	60 * time.Second,
+	120 * time.Second,
+	120 * time.Second,
+	240 * time.Second,
+}
+
+// runWithConnectionRetry wraps an Arr-bound operation (BuildSyncPlan,
+// ExecuteSyncPlan) with retry-on-connection-error logic. Returns the
+// final error after exhausting autoSyncRetryDelays, or nil/non-transient
+// error on success/permanent-failure (no retry on user-config errors,
+// 5xx, etc. — those are surfaced immediately like before).
+//
+// User-visible behaviour: a single Arr restart that takes 1-5 minutes
+// is invisible (sync just lands on a later attempt). An Arr that's
+// genuinely down for >10 minutes still surfaces as an error +
+// notification, but with one retry-chain log instead of immediate
+// alarm. The opName parameter ("plan" or "apply") helps log readers
+// identify which phase the retry covers.
+func (app *App) runWithConnectionRetry(rule AutoSyncRule, instName string, opName string, attempt func() error) error {
+	var err error
+	for i := 0; i <= len(autoSyncRetryDelays); i++ {
+		err = attempt()
+		if err == nil || !IsConnectionError(err) {
+			return err
+		}
+		if i == len(autoSyncRetryDelays) {
+			break // all retries exhausted
+		}
+		delay := autoSyncRetryDelays[i]
+		log.Printf("Auto-sync: rule %s %s — %s unreachable, retrying in %v (attempt %d of %d)",
+			rule.ID, opName, instName, delay, i+2, len(autoSyncRetryDelays)+1)
+		app.DebugLog.Logf(LogAutoSync, "Rule %s: %s on %s unreachable, retrying in %v (attempt %d/%d)",
+			rule.ID, opName, instName, delay, i+2, len(autoSyncRetryDelays)+1)
+		// Honor graceful shutdown so docker stop / container restart isn't
+		// blocked for up to 10 minutes by an in-flight retry chain.
+		select {
+		case <-time.After(delay):
+		case <-app.ShutdownCh:
+			log.Printf("Auto-sync: rule %s %s — shutdown signal received during retry wait, aborting", rule.ID, opName)
+			return err
+		}
+	}
+	return err
 }
 
 // ExpandSelectedCFsForBrandNewGroups returns rule.SelectedCFs augmented

@@ -43,6 +43,7 @@ const (
 	SourceAutoSync            = "auto-sync"
 	SourceAutoPullStartup     = "auto-pull-startup"
 	SourceAutoPullInterval    = "auto-pull-interval"
+	SourceAutoSyncSchedule    = "auto-sync-schedule"
 )
 
 // Operation types. Each maps to a class of user-visible action.

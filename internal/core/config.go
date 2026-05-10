@@ -17,6 +17,7 @@ type Config struct {
 	TrashRepo            TrashRepo                        `json:"trashRepo"`
 	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
 	PullSchedule         *PullSchedule                    `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
+	SyncSchedule         *SyncSchedule                    `json:"syncSchedule,omitempty"`         // nil unless an auto-sync schedule has been saved (default disabled even when present)
 	DevMode              bool                             `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
 	TrashSchemaFields    bool                             `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
 	DebugLogging         bool                             `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
@@ -44,6 +45,21 @@ type PullSchedule struct {
 	Time       string `json:"time"`       // "HH:MM" (24h format)
 	DayOfWeek  int    `json:"dayOfWeek"`  // 0=Sunday..6=Saturday (weekly)
 	DayOfMonth int    `json:"dayOfMonth"` // 1-28 (monthly)
+}
+
+// SyncSchedule holds the optional periodic force-sync schedule. When Enabled,
+// the scheduler runs a force-sync on every active rule at the wall-clock
+// time specified — regardless of whether TRaSH-Guides has new commits. This
+// catches Arr-side drift (a user editing scores directly in Sonarr/Radarr,
+// or another tool overwriting clonarr's settings) without needing a passive
+// drift detector. Independent of PullSchedule. Default disabled — preserves
+// existing "sync only follows pull" behaviour for users who don't enable it.
+type SyncSchedule struct {
+	Enabled    bool   `json:"enabled"`              // master on/off — default false
+	Mode       string `json:"mode"`                 // "daily", "weekly", "monthly"
+	Time       string `json:"time"`                 // "HH:MM" (24h format)
+	DayOfWeek  int    `json:"dayOfWeek"`            // 0=Sunday..6=Saturday (weekly)
+	DayOfMonth int    `json:"dayOfMonth"`           // 1-28 (monthly)
 }
 
 // ProwlarrConfig holds Prowlarr connection settings for the Scoring Sandbox.
@@ -305,6 +321,23 @@ func (cs *ConfigStore) Load() error {
 	}
 	cs.config = &cfg
 
+	// Defend against legacy or hand-edited configs where pullSchedule.dayOfMonth
+	// sits outside the API-validated 1..28 range. Without this, the scheduler
+	// would silently disable (returns zero from nextPullTimeAt), with no UI
+	// signal. Clamp to 28 + warn so the user gets a clue from the logs.
+	if cs.config.PullSchedule != nil {
+		if d := cs.config.PullSchedule.DayOfMonth; d < 1 || d > 28 {
+			log.Printf("config: pullSchedule.dayOfMonth=%d clamped to 28 (months with fewer days make 29-31 unreliable)", d)
+			cs.config.PullSchedule.DayOfMonth = 28
+		}
+	}
+	if cs.config.SyncSchedule != nil {
+		if d := cs.config.SyncSchedule.DayOfMonth; d < 1 || d > 28 {
+			log.Printf("config: syncSchedule.dayOfMonth=%d clamped to 28 (months with fewer days make 29-31 unreliable)", d)
+			cs.config.SyncSchedule.DayOfMonth = 28
+		}
+	}
+
 	// Migrate old flat notification fields to NotificationAgents slice.
 	// Safe to call under lock — migrateFlatNotifications reads cs.filePath directly.
 	cs.migrateFlatNotifications(data)
@@ -366,6 +399,10 @@ func (cs *ConfigStore) Get() Config {
 	if cs.config.PullSchedule != nil {
 		ps := *cs.config.PullSchedule
 		cfg.PullSchedule = &ps
+	}
+	if cs.config.SyncSchedule != nil {
+		ss := *cs.config.SyncSchedule
+		cfg.SyncSchedule = &ss
 	}
 	cfg.Instances = make([]Instance, len(cs.config.Instances))
 	copy(cfg.Instances, cs.config.Instances)

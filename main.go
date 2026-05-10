@@ -113,6 +113,7 @@ func main() {
 		NotifyClient: &http.Client{Timeout: 10 * time.Second},
 		SafeClient:   netsec.NewSafeHTTPClient(10*time.Second, nil),
 		PullUpdateCh: make(chan string, 1),
+		SyncUpdateCh: make(chan struct{}, 1),
 	}
 
 	// Wire up changelog notification callback
@@ -120,11 +121,18 @@ func main() {
 		app.NotifyChangelog(section)
 	})
 
-	// Startup: reset auto-sync commit hashes so all rules re-evaluate on next pull.
+	// Startup: clean up broken rules (arrProfileId=0). Historical builds
+	// also reset LastSyncCommit here to force every rule to re-evaluate at
+	// next pull, but that conflicts with the v2.5.8 intent of skipping
+	// auto-sync at restart — the next pull tick would otherwise full-sync
+	// every rule even when TRaSH has no new commits, defeating the point.
+	// Now: rules keep their LastSyncCommit across restarts. Sync triggers
+	// only when (a) TRaSH commit advances since last sync of that rule, or
+	// (b) the user enables SyncSchedule for periodic force-resync, or
+	// (c) the user runs a manual sync.
 	cfgStore.Update(func(cfg *core.Config) {
 		cleaned := make([]core.AutoSyncRule, 0, len(cfg.AutoSync.Rules))
 		for i := range cfg.AutoSync.Rules {
-			cfg.AutoSync.Rules[i].LastSyncCommit = ""
 			if cfg.AutoSync.Rules[i].ArrProfileID == 0 {
 				log.Printf("Removing broken auto-sync rule %s (arrProfileId=0)", cfg.AutoSync.Rules[i].ID)
 				continue
@@ -137,6 +145,7 @@ func main() {
 	// Context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	app.ShutdownCh = ctx.Done()
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()
@@ -156,22 +165,35 @@ func main() {
 			repoCloned = true
 		}
 
+		// Auto-sync at startup is skipped intentionally. It used to fire here
+		// (via app.AutoSyncAfterPull(SourceAutoPullStartup)) but caused
+		// 4-AM-Sunday-style collisions when Sonarr/Radarr restarted at the same
+		// time. Auto-sync now triggers ONLY on:
+		//   - Pull tick that finds new TRaSH commits (interval or scheduled mode)
+		//   - Manual user actions (Pull now, Sync All, Sync now, Save & Sync)
+		// CleanupStaleRules and MigratePriorAvailableGroups still run at startup
+		// since they're maintenance (read-only Arr probe + git history read);
+		// neither writes to Arr.
+		runStartupMaintenance := func() {
+			server.AutoSyncQualitySizes()
+			app.CleanupStaleRules()
+			app.MigratePriorAvailableGroups()
+		}
+
 		if (cfg.PullInterval == "0" || cfg.PullInterval == "specific") && repoCloned {
 			log.Printf("Startup TRaSH pull skipped (interval=%s) — loading existing repo", cfg.PullInterval)
 			if err := trashStore.LoadFromDisk(); err != nil {
 				log.Printf("Startup TRaSH load failed: %v", err)
 				return
 			}
-			server.AutoSyncQualitySizes()
-			app.AutoSyncAfterPull(core.SourceAutoPullStartup)
+			runStartupMaintenance()
 			return
 		}
 
 		if err := trashStore.CloneOrPull(cfg.TrashRepo.URL, cfg.TrashRepo.Branch); err != nil {
 			log.Printf("Startup TRaSH clone/pull failed: %v", err)
 		} else {
-			server.AutoSyncQualitySizes()
-			app.AutoSyncAfterPull(core.SourceAutoPullStartup)
+			runStartupMaintenance()
 		}
 	})
 
@@ -225,6 +247,10 @@ func main() {
 			app.AutoSyncAfterPull(core.SourceAutoPullInterval)
 		}
 
+		// Track whether we've already warned about the TZ-unset case, so the
+		// log doesn't spam on every config-change rearm.
+		tzUnsetWarned := false
+
 		armFromConfig := func() {
 			stopSchedule()
 
@@ -234,6 +260,15 @@ func main() {
 					log.Printf("Scheduled TRaSH pull disabled (specific schedule missing)")
 					return
 				}
+				// One-shot heads-up: if the user picks a wall-clock schedule
+				// but TZ is unset, Go falls back to UTC silently and "Daily
+				// 03:00" fires at 03:00 UTC. Most container platforms set TZ
+				// (Unraid templates ship it by default), but bare-Docker
+				// users running without --env TZ=... can be surprised.
+				if !tzUnsetWarned && os.Getenv("TZ") == "" {
+					log.Printf("warning: pullSchedule uses 'specific' but TZ env var is unset — schedule will fire in UTC. Set TZ in your container (e.g. America/New_York) for local-time scheduling.")
+					tzUnsetWarned = true
+				}
 				next := core.NextPullTime(*cfg.PullSchedule)
 				if next.IsZero() {
 					log.Printf("Scheduled TRaSH pull disabled (invalid specific schedule)")
@@ -241,6 +276,11 @@ func main() {
 				}
 				delay := time.Until(next)
 				if delay <= 0 {
+					// The scheduled time has already passed (typically because
+					// the container was down across it). Catch-up: fire on the
+					// next loop iteration so the missed pull still runs once.
+					// Documented here so the immediate-fire isn't surprising.
+					log.Printf("Scheduled TRaSH pull: next time %s is in the past (container was likely down across it) — running catch-up immediately", next.Format(time.RFC3339))
 					delay = time.Millisecond
 				}
 				timer = time.NewTimer(delay)
@@ -313,6 +353,72 @@ func main() {
 	mux.Handle("GET /{$}", &api.IndexHandler{Tmpl: indexTmpl, BasePath: basePath})
 	mux.HandleFunc("/partials/", http.NotFound)
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+
+	// Auto-sync schedule. When the user enables SyncSchedule (separate from
+	// PullSchedule — pull = "fetch new TRaSH data", sync = "push my saved
+	// settings to Arr"), this goroutine arms a wall-clock timer and fires
+	// ForceSyncAllRules at the scheduled instant. Force-sync bypasses the
+	// LastSyncCommit short-circuit so it catches Arr-side drift (manual
+	// edits, third-party tools) without needing a passive drift detector.
+	// Wakes on SyncUpdateCh whenever the config changes.
+	utils.SafeGo("auto-sync-scheduler", func() {
+		var timer *time.Timer
+		var timerCh <-chan time.Time
+
+		stopTimer := func() {
+			if timer != nil {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer = nil
+				timerCh = nil
+			}
+		}
+
+		armFromConfig := func() {
+			stopTimer()
+			cfg := cfgStore.Get()
+			if cfg.SyncSchedule == nil || !cfg.SyncSchedule.Enabled {
+				app.SetNextSyncAt(time.Time{})
+				log.Printf("Auto-sync schedule disabled")
+				return
+			}
+			next := core.NextSyncTime(*cfg.SyncSchedule)
+			if next.IsZero() {
+				app.SetNextSyncAt(time.Time{})
+				log.Printf("Auto-sync schedule disabled (invalid configuration)")
+				return
+			}
+			delay := time.Until(next)
+			if delay <= 0 {
+				log.Printf("Auto-sync schedule: next time %s is in the past — running catch-up immediately", next.Format(time.RFC3339))
+				delay = time.Millisecond
+			}
+			timer = time.NewTimer(delay)
+			timerCh = timer.C
+			app.SetNextSyncAt(next)
+			log.Printf("Auto-sync schedule armed for %s", next.Format(time.RFC3339))
+		}
+
+		armFromConfig()
+
+		for {
+			select {
+			case <-timerCh:
+				log.Printf("Auto-sync schedule firing — force-syncing all enabled rules")
+				app.ForceSyncAllRules()
+				armFromConfig() // re-arm for next occurrence
+			case <-app.SyncUpdateCh:
+				armFromConfig()
+			case <-ctx.Done():
+				stopTimer()
+				return
+			}
+		}
+	})
 
 	// Background: reap expired sessions every 5 min
 	utils.SafeGo("session-cleanup", func() {

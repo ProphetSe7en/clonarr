@@ -188,6 +188,32 @@ export default {
       );
     },
 
+    // Counter for the Additional CFs picker group header — inline IIFE on
+    // x-text didn't reliably re-trigger Alpine reactivity when extraCFs
+    // mutated (counter stayed at 0/N after toggling). Method-form forces
+    // a re-evaluation per render. Returns { total, added, overridden } —
+    // overridden counts added CFs whose current score differs from the
+    // profile's score-set default.
+    pdExtraGroupCount(group) {
+      const cfs = (group?.cfs || []).filter(cf => !this._extraInProfile(cf.trashId));
+      let added = 0, overridden = 0;
+      for (const cf of cfs) {
+        const cur = this.extraCFs[cf.trashId];
+        if (cur === undefined) continue;
+        added++;
+        if (cur !== this.pdExtraCFScore(cf)) overridden++;
+      }
+      return { total: cfs.length, added, overridden };
+    },
+
+    // Resolve the score that this CF would be added at — current profile's
+    // score-set falling back to default. Used by picker rows and the
+    // pdToggleAdditionalGroup helper. Returns 0 when no score is defined.
+    pdExtraCFScore(cf) {
+      const scoreSet = this.profileDetail?.detail?.profile?.trashScoreSet || 'default';
+      return cf?.trashScores?.[scoreSet] ?? cf?.trashScores?.default ?? 0;
+    },
+
     // Group-level toggle for the Additional CFs picker. Mirrors the per-group
     // toggle in the main Groups section: when checked, every selectable CF in
     // the group is added to extraCFs at its current-score-set default; when
@@ -2335,20 +2361,182 @@ export default {
     pdOverrideSummary() {
       const general = this.pdGeneralChangeCount();
       const quality = this.pdQualityChangeCount() + this.pdQualityItemsChangeCount();
+      // Customizations: union of cfScoreOverrides (TRaSH-base CFs whose
+      // score the user changed) + extraCFs (CFs added beyond profile
+      // defaults). A CF can be in both maps (added + score-changed) — count
+      // once via Set union. Replaces the old separate cfScores + extraCFs
+      // counts for the unified CF Customizations section.
+      // Walk pdAllCustomizations(). added and overridden OVERLAP — a CF that
+      // was added beyond profile defaults AND has a custom score (≠ TRaSH
+      // default) counts in BOTH. Visual row already paints both states
+      // (orange name from isAdded + orange score from .overridden class);
+      // the badge counts now mirror that. Sum (added + overridden) may
+      // therefore exceed customizations — that's intentional, the union
+      // total stays accurate via customizations.
+      const all = this.pdAllCustomizations();
+      const added = all.filter(it => it.isAdded).length;
+      const overridden = all.filter(it => it.isOverridden).length;
+      const customizations = all.length;
+      // Kept for backward-compat with existing UI bindings; will be
+      // collapsed once the unified section lands.
       const cfScores = Object.keys(this.cfScoreOverrides).length;
       const extraCFs = Object.keys(this.extraCFs).length;
       const optional = this.pdOptionalCount();
       // total = overrides only (profile-level settings the user changed).
       // optional = separate count of TRaSH optional CFs / groups
-      //   activated outside the profile's defaults — semantically distinct
-      //   from overrides (overrides change WHAT the rule does; optional
-      //   activations change WHAT'S in the profile within the TRaSH spec).
-      // Both are reset by pdDisableOverrides; the UI shows them as two
-      // separate badges so the user understands the category of change.
+      //   activated outside the profile's defaults.
       return {
-        general, quality, cfScores, extraCFs, optional,
-        total: general + quality + cfScores + extraCFs,
+        general, quality, cfScores, extraCFs, customizations, added, overridden, optional,
+        total: general + quality + customizations,
       };
+    },
+
+    // Compact "X added · Y overridden" formatter used by every
+    // CF Customizations badge (status bar, card header, group cards).
+    // Empty string when both are zero (caller decides what to show then).
+    formatCustomizationCounts(added, overridden) {
+      if (added === 0 && overridden === 0) return '';
+      if (added === 0) return overridden + ' custom score' + (overridden === 1 ? '' : 's');
+      if (overridden === 0) return added + ' extra CF' + (added === 1 ? '' : 's');
+      return added + ' extra CF' + (added === 1 ? '' : 's') + ' · ' + overridden + ' custom score' + (overridden === 1 ? '' : 's');
+    },
+
+    // Build the unified CF Customizations list. Walks both maps
+    // (cfScoreOverrides for TRaSH-base CFs and extraCFs for added CFs)
+    // and returns one entry per unique trashId, annotated with everything
+    // the renderer needs to color-code by role:
+    //
+    //   isAdded     — CF is in extraCFs (beyond profile's TRaSH-base set)
+    //   isOverridden — score differs from the CF's TRaSH default
+    //   defaultScore — the CF's TRaSH default for the active score-set
+    //   currentScore — what the user has set
+    //   groupName    — which TRaSH cf-group the CF belongs to (display label)
+    //
+    // Sorted by groupName then CF name so customizations group visually
+    // by their source. CFs that are in both maps render once (isAdded
+    // wins for the toggle/remove control, score override still applies).
+    pdAllCustomizations() {
+      const items = [];
+      const seen = new Set();
+      const scoreSet = this.profileDetail?.detail?.profile?.trashScoreSet || 'default';
+      // Lookup helper: find name + group for a tid via extraCFGroups
+      // (covers any CF that exists in TRaSH-data) then fall through to
+      // the active profile's trashGroups (covers TRaSH-base CFs the
+      // picker doesn't surface).
+      const lookup = (tid) => {
+        for (const g of (this.extraCFGroups || [])) {
+          const cf = g.cfs?.find(c => c.trashId === tid);
+          if (cf) {
+            const def = cf.trashScores?.[scoreSet] ?? cf.trashScores?.default ?? 0;
+            return { name: cf.name, category: g.category || 'Other', groupName: g.name, defaultScore: def, description: cf.description, isDangling: false };
+          }
+        }
+        const groups = this.profileDetail?.detail?.trashGroups || [];
+        for (const g of groups) {
+          const cf = (g.cfs || []).find(c => c.trashId === tid);
+          if (cf) return { name: cf.name, category: g.category || 'Other', groupName: g.name, defaultScore: this.resolveCFDefaultScore(tid), description: cf.description, isDangling: false };
+        }
+        // formatItemNames covers the "Required CFs" surface — TRaSH-base CFs
+        // that live directly in profile.FormatItems (no source cf-group).
+        // Base Profile especially has many of these (Wrong Language etc.),
+        // and without this lookup the CF Customizations row falls back to a
+        // truncated trashId. Description isn't on formatItemNames; pull it
+        // from extraCFAllCFs when available.
+        for (const fi of (this.profileDetail?.detail?.formatItemNames || [])) {
+          if (fi.trashId === tid) {
+            let desc = '';
+            for (const cf of (this.extraCFAllCFs || [])) {
+              if (cf.trashId === tid) { desc = cf.description || ''; break; }
+            }
+            return { name: fi.name, category: 'Required', groupName: '', defaultScore: this.resolveCFDefaultScore(tid), description: desc, isDangling: false };
+          }
+        }
+        // Last-chance live lookup via extraCFAllCFs (covers user-created customs
+        // that don't appear in any TRaSH/profile group).
+        for (const cf of (this.extraCFAllCFs || [])) {
+          if (cf.trashId === tid) {
+            return { name: cf.name, category: 'Custom', groupName: '', defaultScore: cf.score ?? 0, description: cf.description || '', isDangling: false };
+          }
+        }
+        // Dangling — rule references a CF that no longer exists in TRaSH data
+        // OR in the user's custom-CF store (e.g. user deleted a custom CF
+        // without cleaning up rule.scoreOverrides). Surfacing this clearly
+        // beats rendering a truncated trashId. Backend already skips the
+        // entry at sync-time with a warning; UI just needs to make it
+        // actionable so the user can remove the orphaned override.
+        const shortId = tid.replace(/^custom:/, '').substring(0, 12);
+        return { name: 'Deleted CF (' + shortId + '…)', category: 'Deleted', groupName: '', defaultScore: '?', description: '', isDangling: true };
+      };
+      for (const [tid, score] of Object.entries(this.extraCFs)) {
+        if (seen.has(tid)) continue;
+        const meta = lookup(tid);
+        const def = meta.defaultScore;
+        items.push({
+          trashId: tid,
+          name: meta.name,
+          category: meta.category,
+          groupName: meta.groupName,
+          description: meta.description,
+          isAdded: true,
+          defaultScore: def,
+          currentScore: score,
+          isOverridden: def !== '?' && score !== def,
+          isDangling: !!meta.isDangling,
+        });
+        seen.add(tid);
+      }
+      for (const [tid, score] of Object.entries(this.cfScoreOverrides)) {
+        if (seen.has(tid)) continue;
+        const def = this.resolveCFDefaultScore(tid);
+        if (def !== '?' && score === def) continue; // not actually overridden
+        const meta = lookup(tid);
+        items.push({
+          trashId: tid,
+          name: meta.name,
+          category: meta.category,
+          groupName: meta.groupName,
+          description: meta.description,
+          isAdded: false,
+          defaultScore: def,
+          currentScore: score,
+          isOverridden: true,
+          isDangling: !!meta.isDangling,
+        });
+        seen.add(tid);
+      }
+      items.sort((a, b) => (a.groupName || '').localeCompare(b.groupName || '') || (a.name || '').localeCompare(b.name || ''));
+      return items;
+    },
+
+    // Hybrid layout for the CF Customizations card: split pdAllCustomizations()
+    // into flat rows (CFs whose source group has only one customized entry, or
+    // no group at all) and group cards (groups with 2+ customized entries —
+    // collapsible to keep the section compact when many CFs are tweaked).
+    // Returns { flat: [...], groups: [{name, category, items: []}] }.
+    // Flat list preserves the parent sort (by groupName then name).
+    // Group list sorts alphabetically by groupName.
+    pdGroupedCustomizations() {
+      const all = this.pdAllCustomizations();
+      const counts = {};
+      for (const it of all) {
+        const k = it.groupName || '';
+        counts[k] = (counts[k] || 0) + 1;
+      }
+      const flat = [];
+      const groupMap = {};
+      for (const it of all) {
+        const k = it.groupName || '';
+        if (k === '' || counts[k] === 1) {
+          flat.push(it);
+        } else {
+          if (!groupMap[k]) {
+            groupMap[k] = { name: k, category: it.category, items: [] };
+          }
+          groupMap[k].items.push(it);
+        }
+      }
+      const groups = Object.values(groupMap).sort((a, b) => a.name.localeCompare(b.name));
+      return { flat, groups };
     },
 
     // Count of TRaSH optional CFs and groups activated outside the
@@ -2634,8 +2822,7 @@ export default {
       const overridesParts = [];
       if (s.general > 0) overridesParts.push(`General: ${s.general}`);
       if (s.quality > 0) overridesParts.push(`Quality: ${s.quality}`);
-      if (s.cfScores > 0) overridesParts.push(`Overridden Scores: ${s.cfScores}`);
-      if (s.extraCFs > 0) overridesParts.push(`Additional CFs: ${s.extraCFs}`);
+      if (s.customizations > 0) overridesParts.push(`CF Customizations: ${s.customizations}`);
       const lines = [];
       if (s.total > 0) {
         lines.push(`${s.total} override${s.total === 1 ? '' : 's'}: ${overridesParts.join(', ')}`);

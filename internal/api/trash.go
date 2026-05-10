@@ -26,13 +26,22 @@ func (s *Server) handleTrashStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) nextPullForStatus() time.Time {
 	cfg := s.Core.Config.Get()
-	if cfg.PullInterval == "specific" {
-		return nextSpecificPull(cfg)
-	}
 	if cfg.PullInterval == "0" {
 		return time.Time{}
 	}
-	return s.Core.GetNextPullAt()
+	// Single source of truth: the scheduler keeps NextPullAt updated for both
+	// interval and "specific" modes via SetNextPullAt. Recomputing here would
+	// produce different values 1ms before vs after a fire instant (today's
+	// 03:00 vs tomorrow's 03:00) — countdown jitter near fire time. Trust
+	// the scheduler's value; fall back to a fresh compute only if the
+	// scheduler hasn't initialised yet (boot race).
+	if next := s.Core.GetNextPullAt(); !next.IsZero() {
+		return next
+	}
+	if cfg.PullInterval == "specific" {
+		return nextSpecificPull(cfg)
+	}
+	return time.Time{}
 }
 
 func nextPullAfterConfigSave(cfg core.Config) time.Time {

@@ -125,7 +125,7 @@
                               </template>
                               <template x-if="_so + _qo + _oo > 0">
                                 <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-orange-bg);color:var(--accent-orange);flex-shrink:0"
-                                      x-tt="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from TRaSH defaults: ' + parts.join(', '); })()"
+                                      x-tt="(() => { const parts = []; if (_so) parts.push(_so + ' score'); if (_qo) parts.push(_qo + ' quality'); if (_oo) parts.push(_oo + ' settings'); return 'Values that differ from profile defaults: ' + parts.join(', '); })()"
                                       x-text="(_so + _qo + _oo) + ' override' + ((_so + _qo + _oo) !== 1 ? 's' : '')"></span>
                               </template>
                               <!-- Optional CFs badge — backend lazy-computes
@@ -134,7 +134,7 @@
                                    same rule (single source of truth). -->
                               <template x-if="(_rule.optionalCount || 0) > 0">
                                 <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--fill-purple-soft);color:var(--accent-purple);flex-shrink:0"
-                                      x-tt="'TRaSH optional CFs activated outside the profile defaults'"
+                                      x-tt="'Optional CFs activated outside the profile defaults'"
                                       x-text="_rule.optionalCount + ' optional'"></span>
                               </template>
                             </span>
@@ -466,7 +466,7 @@
               <template x-if="getCompareInstance(activeAppType) && instProfiles[getCompareInstance(activeAppType)?.id]">
                 <button class="btn btn-sm" style="font-size:11px;padding:3px 8px"
                         @click="(() => { const ci = getCompareInstance(activeAppType); if (!ci) return; const arrId = instCompareProfile[ci.id]; const trashId = instCompareTrashId[ci.id]; if (arrId && trashId) { runProfileCompare(ci, arrId, trashId); } else { loadInstanceProfiles(ci); } })()"
-                        x-tt="(() => { const ci = getCompareInstance(activeAppType); if (!ci) return 'Refresh'; const arrId = instCompareProfile[ci?.id]; const trashId = instCompareTrashId[ci?.id]; return (arrId && trashId) ? 'Re-run comparison with current selection (re-fetches both Arr and TRaSH state)' : 'Refresh Arr profile list'; })()">⟳</button>
+                        x-tt="(() => { const ci = getCompareInstance(activeAppType); if (!ci) return 'Refresh'; const arrId = instCompareProfile[ci?.id]; const trashId = instCompareTrashId[ci?.id]; return (arrId && trashId) ? 'Re-run comparison with current selection (re-fetches both Arr and guide state)' : 'Refresh Arr profile list'; })()">⟳</button>
               </template>
             </div>
           </div>
@@ -552,7 +552,7 @@
                                                of sync' — these aren't problems, just choices. -->
                                           <template x-if="compareAdjustedCounts(cr).optional > 0">
                                             <span style="color:var(--accent-purple);font-size:13px;font-weight:500;margin-left:8px"
-                                                  x-tt="'TRaSH optional CFs activated outside profile defaults — filter by Optional below to see them.'"
+                                                  x-tt="'Optional CFs activated outside profile defaults — filter by Optional below to see them.'"
                                                   x-text="'\u25CF ' + compareAdjustedCounts(cr).optional + ' optional CFs activated'"></span>
                                           </template>
                                           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
@@ -575,7 +575,7 @@
                                           <button type="button" class="compare-chip compare-chip-wrong" :class="compareFilter === 'wrong' ? 'active' : ''" :aria-pressed="compareFilter === 'wrong'" @click="compareFilter = 'wrong'" x-text="'⚠ Wrong score (' + compareAdjustedCounts(cr).wrong + ')'"></button>
                                           <button type="button" class="compare-chip compare-chip-missing" :class="compareFilter === 'missing' ? 'active' : ''" :aria-pressed="compareFilter === 'missing'" @click="compareFilter = 'missing'" x-tt="'Golden Rule groups count as 1 item — pick 1 of the available variants'" x-text="'✗ Missing (' + compareAdjustedCounts(cr).missing + ')'"></button>
                                           <button type="button" class="compare-chip compare-chip-extra" :class="compareFilter === 'extra' ? 'active' : ''" :aria-pressed="compareFilter === 'extra'" @click="compareFilter = 'extra'" x-text="'+ Extra (' + compareAdjustedCounts(cr).extra + ')'"></button>
-                                          <button type="button" class="compare-chip compare-chip-optional" :class="compareFilter === 'optional' ? 'active' : ''" :aria-pressed="compareFilter === 'optional'" @click="compareFilter = 'optional'" x-tt="'TRaSH optional CFs activated outside the profile defaults — Reset to Profile Default would clear these.'" x-text="'⬢ Optional (' + compareAdjustedCounts(cr).optional + ')'"></button>
+                                          <button type="button" class="compare-chip compare-chip-optional" :class="compareFilter === 'optional' ? 'active' : ''" :aria-pressed="compareFilter === 'optional'" @click="compareFilter = 'optional'" x-tt="'Optional CFs activated outside the profile defaults — Reset to Profile Default would clear these.'" x-text="'⬢ Optional (' + compareAdjustedCounts(cr).optional + ')'"></button>
                                           <button type="button" class="compare-chip compare-chip-match" :class="compareFilter === 'match' ? 'active' : ''" :aria-pressed="compareFilter === 'match'" @click="compareFilter = 'match'" x-text="'✓ Matching (' + compareAdjustedCounts(cr).matching + ')'"></button>
                                         </div>
 

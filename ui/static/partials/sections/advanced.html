@@ -241,11 +241,11 @@
                   <span x-show="cf.isCustom" style="background:var(--border-subtle);color:var(--accent-blue);padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0" x-tt="'Custom format'">custom</span>
                 </span>
                 <div style="display:flex;gap:10px;align-items:center;white-space:nowrap">
-                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted)" x-tt="'Mark as required — exists in group whether user opts in or not'">
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted)" x-tt="'Always in the group. The user cannot turn this CF off when the group is active.'">
                     <input type="checkbox" x-model="cfgbRequiredCFs[cf.trashId]" @change="cfgbRequiredCFs = {...cfgbRequiredCFs}">
                     required
                   </label>
-                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted)" x-tt="'Per-CF default override — rare; TRaSH only uses this on Golden Rule files'">
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted)" x-tt="'Pre-check this CF when the user enables the group. They can still uncheck it.'">
                     <input type="checkbox" x-model="cfgbDefaultCFs[cf.trashId]" @change="cfgbDefaultCFs = {...cfgbDefaultCFs}">
                     default
                   </label>

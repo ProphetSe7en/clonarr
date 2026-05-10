@@ -99,15 +99,17 @@
                   <option :value="d.v" x-text="d.l"></option>
                 </template>
               </select>
-              <select class="input" style="width:100px"
-                      x-show="config.pullInterval === 'specific' && config.pullSchedule.mode === 'monthly'"
-                      x-model.number="config.pullSchedule.dayOfMonth"
-                      @change="saveConfig(['pullInterval'])"
-                      aria-label="Scheduled pull day of month">
-                <template x-for="d in Array.from({length:28},(_,i)=>i+1)" :key="d">
-                  <option :value="d" x-text="d"></option>
-                </template>
-              </select>
+              <span x-show="config.pullInterval === 'specific' && config.pullSchedule.mode === 'monthly'"
+                    x-tt="'Day 1-28 only — months with fewer days (Feb) make 29-31 unreliable, so they are not offered.'">
+                <select class="input" style="width:100px"
+                        x-model.number="config.pullSchedule.dayOfMonth"
+                        @change="saveConfig(['pullInterval'])"
+                        aria-label="Scheduled pull day of month">
+                  <template x-for="d in Array.from({length:28},(_,i)=>i+1)" :key="d">
+                    <option :value="d" x-text="d"></option>
+                  </template>
+                </select>
+              </span>
               <span style="font-size:13px;color:var(--text-muted)"
                     x-show="config.pullInterval === 'specific'">at</span>
               <select class="input" style="width:72px"
@@ -144,6 +146,74 @@
               <span x-show="config.pullInterval === 'specific'"
                     style="flex-basis:100%;font-size:12px;color:var(--text-secondary);font-style:italic"
                     x-text="scheduleTimeZoneHelperText()"></span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label" x-tt="'Periodically force-resync your saved profile settings to Sonarr/Radarr — overwrites any manual changes done in the *arr UI or via other tools. Independent of Pull Interval. Default off; turn on if you want clonarr to keep the profile clean even when no TRaSH updates have happened.'">Auto-sync Schedule</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <select class="input" style="width:130px"
+                      x-model="config.syncSchedule.mode"
+                      @change="config.syncSchedule.enabled = ($el.value !== 'disabled'); if ($el.value !== 'disabled') _syncScheduleSavedMode = $el.value; saveConfig(['syncSchedule'])"
+                      aria-label="Auto-sync schedule mode">
+                <option value="disabled">Disabled</option>
+                <template x-for="m in (manifest.pullScheduleModes || [])" :key="m.value">
+                  <option :value="m.value" x-text="m.label"></option>
+                </template>
+              </select>
+              <select class="input" style="width:140px"
+                      x-show="config.syncSchedule.enabled && config.syncSchedule.mode === 'weekly'"
+                      x-model.number="config.syncSchedule.dayOfWeek"
+                      @change="saveConfig(['syncSchedule'])"
+                      aria-label="Auto-sync schedule day of week">
+                <template x-for="d in [{v:0,l:'Sunday'},{v:1,l:'Monday'},{v:2,l:'Tuesday'},{v:3,l:'Wednesday'},{v:4,l:'Thursday'},{v:5,l:'Friday'},{v:6,l:'Saturday'}]" :key="d.v">
+                  <option :value="d.v" x-text="d.l"></option>
+                </template>
+              </select>
+              <span x-show="config.syncSchedule.enabled && config.syncSchedule.mode === 'monthly'"
+                    x-tt="'Day 1-28 only — months with fewer days (Feb) make 29-31 unreliable, so they are not offered.'">
+                <select class="input" style="width:100px"
+                        x-model.number="config.syncSchedule.dayOfMonth"
+                        @change="saveConfig(['syncSchedule'])"
+                        aria-label="Auto-sync schedule day of month">
+                  <template x-for="d in Array.from({length:28},(_,i)=>i+1)" :key="d">
+                    <option :value="d" x-text="d"></option>
+                  </template>
+                </select>
+              </span>
+              <span x-show="config.syncSchedule.enabled" style="font-size:13px;color:var(--text-muted)">at</span>
+              <select class="input" style="width:72px"
+                      x-show="config.syncSchedule.enabled"
+                      :value="syncScheduleHourValue()"
+                      @change="setSyncScheduleHour($event.target.value); saveConfig(['syncSchedule'])"
+                      aria-label="Auto-sync schedule hour">
+                <template x-for="h in pullScheduleHourOptions()" :key="h.value">
+                  <option :value="h.value" x-text="h.label"></option>
+                </template>
+              </select>
+              <span style="font-size:13px;color:var(--text-muted)"
+                    x-show="config.syncSchedule.enabled">:</span>
+              <select class="input" style="width:70px"
+                      x-show="config.syncSchedule.enabled"
+                      :value="syncScheduleMinuteValue()"
+                      @change="setSyncScheduleMinute($event.target.value); saveConfig(['syncSchedule'])"
+                      aria-label="Auto-sync schedule minute">
+                <template x-for="m in pullScheduleMinuteOptions()" :key="m.value">
+                  <option :value="m.value" x-text="m.label"></option>
+                </template>
+              </select>
+              <select class="input" style="width:76px"
+                      x-show="config.syncSchedule.enabled && pullScheduleUses12Hour()"
+                      :value="syncSchedulePeriodValue()"
+                      @change="setSyncSchedulePeriod($event.target.value); saveConfig(['syncSchedule'])"
+                      aria-label="Auto-sync schedule period">
+                <template x-for="p in pullSchedulePeriodOptions()" :key="p.value">
+                  <option :value="p.value" x-text="p.label"></option>
+                </template>
+              </select>
+              <span x-show="!config.syncSchedule.enabled"
+                    style="font-size:12px;color:var(--text-muted)">Sync only follows pull or manual triggers</span>
+              <span x-show="config.syncSchedule.enabled"
+                    style="flex-basis:100%;font-size:12px;color:var(--text-secondary);font-style:italic">Forces a resync of every active rule at this time, overwriting any settings changed directly in Sonarr/Radarr or by other tools.</span>
             </div>
           </div>
           <div class="setting-row">

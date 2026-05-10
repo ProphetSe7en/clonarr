@@ -615,6 +615,15 @@ export function clonarr() {
         if (!r.ok) return;
         this.config = await r.json();
         this.config.pullSchedule = Object.assign({ mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, this.config.pullSchedule || {});
+        this.config.syncSchedule = Object.assign({ enabled: false, mode: 'daily', time: '04:00', dayOfWeek: 0, dayOfMonth: 1 }, this.config.syncSchedule || {});
+        // UI's mode dropdown uses 'disabled' as a sentinel for "off". Map the
+        // backend's enabled=false (regardless of saved mode) to that sentinel
+        // so the dropdown reflects the actual state. Saved mode is preserved
+        // in a stash so we can restore it if user re-enables.
+        if (!this.config.syncSchedule.enabled) {
+          this._syncScheduleSavedMode = this.config.syncSchedule.mode || 'daily';
+          this.config.syncSchedule.mode = 'disabled';
+        }
         // Ensure prowlarr config object exists
         if (!this.config.prowlarr) this.config.prowlarr = { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] };
         // Back-fill missing arrays for configs saved before category overrides existed.
@@ -724,7 +733,13 @@ export function clonarr() {
     },
 
     formatPullScheduleClock(hour, minute) {
-      return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(2020, 0, 1, hour, minute));
+      // Explicit hour12 flag so display matches the picker's mode. Without it,
+      // Intl.DateTimeFormat picks based on the resolved locale's default cycle —
+      // for en-US (common default even outside the US, when English sits high
+      // in the browser language list) that's 12h, producing AM/PM next to the
+      // container TZ label even when the picker's already showing 24h.
+      const opts = { hour: 'numeric', minute: '2-digit', hour12: this.pullScheduleUses12Hour() };
+      return new Intl.DateTimeFormat(undefined, opts).format(new Date(2020, 0, 1, hour, minute));
     },
 
     formatScheduleClockValue(value) {
@@ -736,7 +751,7 @@ export function clonarr() {
     formatLocalClock(isoString) {
       if (!isoString) return '';
       try {
-        return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: this.pullScheduleUses12Hour() });
       } catch {
         return '';
       }
@@ -767,6 +782,70 @@ export function clonarr() {
       return this.setPullScheduleTime(hour, Number(value));
     },
 
+    // ---- Auto-sync schedule clock helpers ----
+    // Parallel to pull-schedule helpers above; same HH/MM/AM-PM dropdown shape
+    // so the Settings UI has consistent design between Pull Interval and
+    // Auto-sync Schedule. Reuses pullScheduleUses12Hour / pullScheduleHourOptions
+    // / pullScheduleMinuteOptions / pullSchedulePeriodOptions (those don't
+    // depend on the schedule — only on browser locale + minute range).
+
+    syncScheduleTimeParts() {
+      const time = this.config?.syncSchedule?.time || '04:00';
+      const match = time.match(/^(\d{2}):(\d{2})$/);
+      if (!match) return { hour: 4, minute: 0 };
+      const hour = Math.max(0, Math.min(23, parseInt(match[1], 10)));
+      const minute = Math.max(0, Math.min(59, parseInt(match[2], 10)));
+      return { hour, minute };
+    },
+
+    syncScheduleHourValue() {
+      const { hour } = this.syncScheduleTimeParts();
+      if (!this.pullScheduleUses12Hour()) return hour;
+      const h = hour % 12;
+      return h === 0 ? 12 : h;
+    },
+
+    syncScheduleMinuteValue() {
+      return this.syncScheduleTimeParts().minute;
+    },
+
+    syncSchedulePeriodValue() {
+      return this.syncScheduleTimeParts().hour < 12 ? 'AM' : 'PM';
+    },
+
+    setSyncScheduleTime(hour, minute) {
+      const h = Math.max(0, Math.min(23, Number(hour) || 0));
+      const m = Math.max(0, Math.min(59, Number(minute) || 0));
+      const next = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      const changed = this.config.syncSchedule.time !== next;
+      this.config.syncSchedule.time = next;
+      return changed;
+    },
+
+    setSyncScheduleHour(value) {
+      const { hour, minute } = this.syncScheduleTimeParts();
+      let nextHour = Number(value);
+      if (this.pullScheduleUses12Hour()) {
+        const period = hour < 12 ? 'AM' : 'PM';
+        if (nextHour === 12) nextHour = 0;
+        if (period === 'PM') nextHour += 12;
+      }
+      return this.setSyncScheduleTime(nextHour, minute);
+    },
+
+    setSyncScheduleMinute(value) {
+      const { hour } = this.syncScheduleTimeParts();
+      return this.setSyncScheduleTime(hour, Number(value));
+    },
+
+    setSyncSchedulePeriod(value) {
+      const { hour, minute } = this.syncScheduleTimeParts();
+      const isPM = value === 'PM';
+      let nextHour = hour % 12;
+      if (isPM) nextHour += 12;
+      return this.setSyncScheduleTime(nextHour, minute);
+    },
+
     setPullSchedulePeriod(value) {
       const { hour, minute } = this.pullScheduleTimeParts();
       const isPM = value === 'PM';
@@ -785,6 +864,24 @@ export function clonarr() {
           if (this.config.pullInterval === 'specific') body.pullSchedule = this.config.pullSchedule;
         }
         if (fields && fields.includes('pullSchedule')) body.pullSchedule = this.config.pullSchedule;
+        if (fields && fields.includes('syncSchedule')) {
+          // Translate UI sentinel 'disabled' back to enabled=false + a real
+          // mode value (backend rejects mode==''). Also normalize time to
+          // HH:MM exactly — some browsers' <input type="time"> emit HH:MM:SS,
+          // which the backend validator (^\d{2}:\d{2}$) would silently reject.
+          const ui = this.config.syncSchedule;
+          const mode = ui.mode === 'disabled' ? (this._syncScheduleSavedMode || 'daily') : ui.mode;
+          body.syncSchedule = {
+            ...ui,
+            enabled: ui.mode !== 'disabled',
+            mode: mode,
+            time: String(ui.time || '').slice(0, 5),
+          };
+          // Mirror the toggle decision back into local state so subsequent
+          // saves (e.g. user picks Disabled then changes time) don't
+          // re-enable inadvertently.
+          this.config.syncSchedule.enabled = body.syncSchedule.enabled;
+        }
         if (fields && fields.includes('devMode')) body.devMode = this.config.devMode;
         if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
@@ -795,8 +892,19 @@ export function clonarr() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
-        if (r.ok && pullScheduleChanged) await this.loadTrashStatus();
-      } catch (e) { console.error('saveConfig:', e); }
+        if (!r.ok) {
+          // Surface validation errors to the user instead of silently swallowing
+          // (esp. for the new pull-schedule path where bad combinations now reject).
+          let msg = 'Could not save settings';
+          try { const data = await r.json(); if (data && data.error) msg = data.error; } catch {}
+          this.showToast(msg, 'error', 6000);
+          return;
+        }
+        if (pullScheduleChanged) await this.loadTrashStatus();
+      } catch (e) {
+        console.error('saveConfig:', e);
+        this.showToast('Could not save settings (network error)', 'error', 6000);
+      }
     },
 
     async loadTrashStatus() {

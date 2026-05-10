@@ -977,6 +977,14 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 		}
 	}
 
+	// Persist the actual-pull timestamp so loadAndSwap (which is shared
+	// with LoadFromDisk) can show "TRaSH synced X ago" without the
+	// disk-load mistakenly resetting it to "now". Written before the swap
+	// so the in-memory snapshot picks it up via the read in loadAndSwap.
+	pullStamp := time.Now().UTC().Format(time.RFC3339)
+	if werr := os.WriteFile(filepath.Join(filepath.Dir(ts.dataDir), "last-pull.txt"), []byte(pullStamp), 0644); werr != nil {
+		log.Printf("Warning: failed to persist last-pull timestamp: %v", werr)
+	}
 	return ts.loadAndSwap()
 }
 
@@ -1033,7 +1041,16 @@ func (ts *TrashStore) loadAndSwap() error {
 	}
 	// Parse changelog from updates.txt
 	data.Changelog = parseChangelog(filepath.Join(ts.dataDir, "docs", "updates.txt"), 5)
-	data.LastPull = time.Now()
+	// LastPull is the timestamp of the last actual git pull, NOT this load.
+	// Persisted alongside the data dir so a load-from-disk (test workflow,
+	// scheduled pull mode that skips startup pull) preserves the prior
+	// pull's timestamp instead of resetting to "now" on every restart.
+	// Written by CloneOrPull on success; read here so both paths agree.
+	if raw, err := os.ReadFile(filepath.Join(filepath.Dir(ts.dataDir), "last-pull.txt")); err == nil {
+		if t, perr := time.Parse(time.RFC3339, strings.TrimSpace(string(raw))); perr == nil {
+			data.LastPull = t
+		}
+	}
 
 	// Generate diff from previous commit (if available)
 	ts.mu.RLock()

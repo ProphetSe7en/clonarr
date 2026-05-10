@@ -176,16 +176,20 @@
                                 ? 'Override mode — no changes yet'
                                 : 'Override mode &middot; ' + pdOverrideSummary().total + ' change' + (pdOverrideSummary().total === 1 ? '' : 's')"></span>
                 <template x-if="pdOverrideSummary().general > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="'General: ' + pdOverrideSummary().general"></span>
+                  <span style="font-size:11px;color:var(--accent-orange)" x-text="'General: ' + pdOverrideSummary().general"></span>
                 </template>
                 <template x-if="pdOverrideSummary().quality > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="'Quality: ' + pdOverrideSummary().quality"></span>
+                  <span style="font-size:11px;color:var(--accent-orange)" x-text="'Quality: ' + pdOverrideSummary().quality"></span>
                 </template>
-                <template x-if="pdOverrideSummary().cfScores > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="'Overridden Scores: ' + pdOverrideSummary().cfScores"></span>
+                <template x-if="pdOverrideSummary().added > 0">
+                  <span style="font-size:11px;color:var(--accent-orange)"
+                        x-tt="'CFs added beyond the profile defaults'"
+                        x-text="'Extra CFs: ' + pdOverrideSummary().added"></span>
                 </template>
-                <template x-if="pdOverrideSummary().extraCFs > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="'Additional CFs: ' + pdOverrideSummary().extraCFs"></span>
+                <template x-if="pdOverrideSummary().overridden > 0">
+                  <span style="font-size:11px;color:var(--accent-orange)"
+                        x-tt="'CFs in the profile whose score you changed from the profile default'"
+                        x-text="'Custom scores: ' + pdOverrideSummary().overridden"></span>
                 </template>
                 <!-- Optional CFs — separate blue badge, semantically distinct
                      from overrides. Counts TRaSH optional CFs / groups
@@ -193,8 +197,8 @@
                      these too, but they aren't "overrides" — they're
                      customizations within TRaSH's spec. -->
                 <template x-if="pdOverrideSummary().optional > 0">
-                  <span style="font-size:11px;color:var(--accent-purple);background:var(--fill-purple-soft);padding:1px 7px;border-radius:10px"
-                        x-tt="'TRaSH optional CFs and groups activated outside the profile defaults. Hover the purple dots on each group below to see which.'"
+                  <span style="font-size:11px;color:var(--accent-purple)"
+                        x-tt="'Optional CFs and groups activated outside the profile defaults. Hover the purple dots on each group below to see which.'"
                         x-text="'Optional CFs: ' + pdOverrideSummary().optional"></span>
                 </template>
               </div>
@@ -225,7 +229,7 @@
                   <span class="detail-section-chevron" :class="{ open: !pdGeneralCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
                   <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">General</span>
                   <template x-if="pdGeneralChangeCount() > 0">
-                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="pdGeneralChangeCount() + (pdGeneralChangeCount() === 1 ? ' override' : ' overrides')"></span>
+                    <span style="font-size:11px;color:var(--accent-orange)" x-text="pdGeneralChangeCount() + (pdGeneralChangeCount() === 1 ? ' change' : ' changes')"></span>
                   </template>
                   <template x-if="pdGeneralChangeCount() === 0">
                     <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
@@ -378,7 +382,7 @@
                   <span class="detail-section-chevron" :class="{ open: !pdQualityCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
                   <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality</span>
                   <template x-if="pdQualityChangeCount() + pdQualityItemsChangeCount() > 0">
-                    <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="(pdQualityChangeCount() + pdQualityItemsChangeCount()) + ' change' + (pdQualityChangeCount() + pdQualityItemsChangeCount() === 1 ? '' : 's')"></span>
+                    <span style="font-size:11px;color:var(--accent-orange)" x-text="(pdQualityChangeCount() + pdQualityItemsChangeCount()) + ' change' + (pdQualityChangeCount() + pdQualityItemsChangeCount() === 1 ? '' : 's')"></span>
                   </template>
                   <template x-if="pdQualityChangeCount() + pdQualityItemsChangeCount() === 0">
                     <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
@@ -421,7 +425,7 @@
                     <span class="pd-label" style="width:170px;flex-shrink:0">Quality Items</span>
                     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0">
                       <template x-if="pdQualityItemsChangeCount() > 0">
-                        <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px;white-space:nowrap" x-text="pdQualityItemsChangeCount() + ' change' + (pdQualityItemsChangeCount() === 1 ? '' : 's')"></span>
+                        <span style="font-size:11px;color:var(--accent-orange);white-space:nowrap" x-text="pdQualityItemsChangeCount() + ' change' + (pdQualityItemsChangeCount() === 1 ? '' : 's')"></span>
                       </template>
                       <template x-if="pdQualityItemsChangeCount() === 0">
                         <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px;white-space:nowrap">Profile default</span>
@@ -618,59 +622,18 @@
                they exist solely to manage the override entries themselves. -->
           <div x-show="pdOverridesEnabled">
 
-          <!-- Overridden Scores card — compact (10px 14px). Lists each CF whose score
-               has been changed from the profile default. Edits to Required/Group CF
-               score inputs (gated on pdOverridesEnabled) populate this list. -->
-          <div class="pd-card pd-card-cfscores" style="margin-top:18px;padding:10px 14px">
-            <div :style="pdCFScoresCollapsed ? 'display:flex;align-items:center;gap:8px' : 'display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px'">
-              <button type="button" class="collapse-toggle"
-                      style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"
-                      @click="pdCFScoresCollapsed = !pdCFScoresCollapsed"
-                      :aria-expanded="!pdCFScoresCollapsed"
-                      aria-controls="pd-cf-scores-body">
-                <span class="detail-section-chevron" :class="{ open: !pdCFScoresCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-                <span style="font-size:13px;color:var(--text-primary);font-weight:600">Overridden Scores</span>
-                <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0">
-                  <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px"
-                        x-text="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length + ' override' + (Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 1 ? '' : 's')"></span>
-                </template>
-                <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 0">
-                  <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
-                </template>
-              </button>
-              <span>
-                <button class="btn" x-show="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0"
-                        style="font-size:11px;padding:1px 8px;border-color:var(--accent-red);color:var(--accent-red)"
-                        x-tt="'Reset all CF score overrides to Profile defaults'"
-                        @click="cfScoreOverrides = {}">&#8634; Reset Overridden</button>
-              </span>
-            </div>
-            <div id="pd-cf-scores-body" x-show="!pdCFScoresCollapsed">
-              <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 0">
-                <div :style="'column-count:' + (Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length > 8 ? 2 : 1) + ';column-gap:24px'">
-                  <template x-for="tid in Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).sort((a,b) => (resolveCFName(a)).localeCompare(resolveCFName(b)))" :key="'so-'+tid">
-                    <div style="break-inside:avoid;display:flex;align-items:center;padding:3px 0;font-size:12px;gap:4px">
-                      <span style="color:var(--text-primary);width:180px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="resolveCFName(tid)"></span>
-                      <span style="color:var(--text-muted);width:55px;flex-shrink:0;text-align:right;font-family:monospace" x-text="resolveCFDefaultScore(tid)"></span>
-                      <span style="color:var(--text-muted);flex-shrink:0;margin:0 2px">→</span>
-                      <input type="number" class="pb-score-input overridden" style="width:65px;flex-shrink:0"
-                             :value="cfScoreOverrides[tid]"
-                             @change="const v = parseInt($event.target.value) || 0; const def = resolveCFDefaultScore(tid); if (v === def) { const {[tid]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [tid]: v}; }">
-                      <button type="button" class="inline-action" @click="const {[tid]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                              style="color:var(--accent-red);font-size:12px;flex-shrink:0;margin-left:2px" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
-                    </div>
-                  </template>
-                </div>
-              </template>
-              <template x-if="Object.keys(cfScoreOverrides).filter(tid => { const d = resolveCFDefaultScore(tid); return d === '?' || cfScoreOverrides[tid] !== d; }).length === 0">
-                <div style="font-size:12px;color:var(--text-muted-secondary);font-style:italic;padding:4px 0">No score overrides yet. Edit any score in the Required CFs or Group CFs sections below to override its profile default.</div>
-              </template>
-            </div>
-          </div>
-          <!-- Extra CFs card — uses pd-card + pd-card-extracfs (orange left-border) for
-               visual consistency with CF Scores. The "non-standard" warning identity now
-               comes from the orange left border + the warning text in the body, not from
-               a full yellow border. Lazy-load picker on first expand. -->
+          <!-- CF Customizations card (replaces the prior "Overridden Scores"
+               + "Additional Custom Formats" pair). Unified view of every CF
+               whose score differs from the profile's TRaSH default, plus the
+               picker for adding CFs beyond the profile's defaults.
+               Color-coding makes the role visible at a glance:
+                 - Orange CF name  = Additional (added beyond profile defaults)
+                 - Orange score    = Overridden (differs from TRaSH default)
+                 - Both orange     = Added with non-default score (typical for
+                                     extras the user has explicitly scored).
+               Hybrid layout: 1-customization-from-a-group → flat row, 2+ →
+               collapsible group card (keeps the section compact when many
+               CFs from the same source group are tweaked). -->
           <div class="pd-card pd-card-extracfs" style="margin-top:18px;padding:10px 14px"
                x-effect="if (!pdExtraCFsCollapsed && extraCFAllCFs.length === 0 && profileDetail?.instance?.type) loadExtraCFList()">
           <div :style="pdExtraCFsCollapsed ? 'display:flex;align-items:center;gap:8px' : 'display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--bg-muted);margin-bottom:10px'">
@@ -680,71 +643,134 @@
                     :aria-expanded="!pdExtraCFsCollapsed"
                     aria-controls="pd-extra-cfs-body">
               <span class="detail-section-chevron" :class="{ open: !pdExtraCFsCollapsed }" style="color:var(--text-muted);font-size:11px">&#9654;</span>
-              <span style="font-size:13px;color:var(--text-primary);font-weight:600">Additional Custom Formats</span>
-              <template x-if="Object.keys(extraCFs).length > 0">
-                <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 7px;border-radius:10px" x-text="Object.keys(extraCFs).length + ' added'"></span>
+              <span style="font-size:13px;color:var(--text-primary);font-weight:600">CF Customizations</span>
+              <template x-if="pdAllCustomizations().length > 0">
+                <span style="font-size:11px;color:var(--accent-orange)"
+                      x-text="formatCustomizationCounts(pdOverrideSummary().added, pdOverrideSummary().overridden)"></span>
               </template>
-              <template x-if="Object.keys(extraCFs).length === 0">
-                <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">None</span>
+              <template x-if="pdAllCustomizations().length === 0">
+                <span style="font-size:11px;color:var(--text-muted-secondary);background:rgba(110,118,129,0.15);padding:1px 7px;border-radius:10px">Profile default</span>
               </template>
             </button>
             <span>
-              <input x-show="!pdExtraCFsCollapsed" type="text" class="input" x-model="extraCFSearch" placeholder="Search..." style="font-size:12px;width:140px;padding:2px 8px;margin-right:6px">
-              <button class="btn" x-show="Object.keys(extraCFs).length > 0"
+              <input x-show="!pdExtraCFsCollapsed" type="text" class="input" x-model="extraCFSearch" placeholder="Search picker..." style="font-size:12px;width:140px;padding:2px 8px;margin-right:6px">
+              <button class="btn" x-show="pdAllCustomizations().length > 0"
                       style="font-size:11px;padding:1px 8px;border-color:var(--accent-red);color:var(--accent-red)"
-                      x-tt="'Remove all additional CFs (the profile default is none)'"
-                      @click="extraCFs = {}">&#8634; Reset Additional</button>
+                      x-tt="'Reset all CF customizations: removes extra CFs and reverts custom scores to profile defaults'"
+                      @click="cfScoreOverrides = {}; extraCFs = {}">&#8634; Reset Customizations</button>
             </span>
           </div>
           <div id="pd-extra-cfs-body" x-show="!pdExtraCFsCollapsed">
-            <div style="font-size:13px;color:var(--accent-red);font-weight:600;margin-bottom:10px">&#9888; Non-standard for this profile — use at your own risk</div>
             <template x-if="extraCFAllCFs.length === 0">
               <div style="font-size:12px;color:var(--text-secondary);font-style:italic;padding:4px 0">Loading custom formats...</div>
             </template>
-            <!-- Selected extras — mirrors the picker's group structure below as
-                 collapsible mini-cards per source group. Auto-fit grid lays them
-                 2-up (or more) on wide viewports, 1-up on narrow. Each subgroup
-                 shows its added count; expand to deselect/edit individual scores. -->
-            <template x-if="Object.keys(extraCFs).length > 0">
-              <div style="margin-bottom:8px;padding:6px 8px;background:var(--bg-page);border-radius:4px">
-                <div style="font-size:12px;color:var(--accent-orange);margin-bottom:6px;font-weight:600">Added (<span x-text="Object.keys(extraCFs).length"></span>)</div>
+            <!-- Hybrid customizations list — flat rows for one-off entries,
+                 collapsible group cards for groups with 2+ customizations.
+                 Both render the same row layout (toggle when added, name
+                 with orange when added, group label, def hint, score input
+                 with .overridden class, revert button). -->
+            <template x-if="pdAllCustomizations().length > 0">
+              <div style="margin-bottom:12px">
+                <!-- Flat rows: count==1 OR no group -->
+                <template x-if="pdGroupedCustomizations().flat.length > 0">
+                  <div style="padding:6px 8px;background:var(--bg-page);border-radius:4px;margin-bottom:8px">
+                    <template x-for="item in pdGroupedCustomizations().flat" :key="'cust-flat-'+item.trashId">
+                      <div class="cf-row" style="padding:4px 8px;gap:8px">
+                        <template x-if="item.isAdded">
+                          <label class="toggle toggle-sm" @click.stop x-tt="'Remove this extra CF'">
+                            <input type="checkbox" :checked="true"
+                                   @change="const {[item.trashId]: _, ...rest} = extraCFs; extraCFs = rest">
+                            <span class="slider"></span>
+                          </label>
+                        </template>
+                        <template x-if="!item.isAdded">
+                          <span style="width:32px;flex-shrink:0"></span>
+                        </template>
+                        <div class="cf-name" style="flex:1;min-width:0">
+                          <span :style="item.isAdded ? 'color:var(--accent-orange);font-weight:500' : ''" x-text="item.name"></span>
+                          <span class="cf-info" x-show="item.description" @mouseenter="showCFTooltip($event, item.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
+                          <template x-if="item.groupName">
+                            <span style="font-size:11px;color:var(--text-muted-secondary);margin-left:8px;font-style:italic" x-text="'in ' + item.groupName"></span>
+                          </template>
+                        </div>
+                        <template x-if="item.defaultScore !== '?' && item.isOverridden">
+                          <span style="color:var(--text-muted);font-size:11px;font-family:monospace;flex-shrink:0" x-text="'Default: ' + item.defaultScore"></span>
+                        </template>
+                        <button type="button" class="inline-action"
+                                @click="if (item.isAdded) { const {[item.trashId]: _, ...rest} = extraCFs; extraCFs = rest; } else { const {[item.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; }"
+                                style="color:var(--accent-red);font-size:12px;flex-shrink:0"
+                                x-tt="item.isAdded ? 'Remove this extra CF' : 'Reset score to profile default'"
+                                aria-label="Reset / remove">&#8634;</button>
+                        <input type="number" class="pb-score-input" :class="item.isOverridden ? 'overridden' : ''" style="width:65px;flex-shrink:0"
+                               :value="item.currentScore"
+                               @change="const v = parseInt($event.target.value) || 0; if (item.isAdded) { extraCFs = {...extraCFs, [item.trashId]: v}; } else { const def = resolveCFDefaultScore(item.trashId); if (v === def) { const {[item.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [item.trashId]: v}; } }">
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <!-- Group cards: count>=2 from same group, collapsed by default.
+                     Auto-fit grid lays them 2-up (or more) on wide viewports,
+                     1-up on narrow — keeps the section compact when many
+                     groups have customizations. -->
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:4px">
-                <template x-for="group in extraCFGroups" :key="'ag-'+group.name">
-                  <template x-if="group.cfs.some(cf => extraCFs[cf.trashId] !== undefined)">
-                    <div class="detail-section" :class="getCategoryClass(group.category)">
-                      <button type="button" class="detail-section-header"
-                              @click="detailSections['added_'+group.name] = !detailSections['added_'+group.name]"
-                              :aria-expanded="detailSections['added_'+group.name]">
-                        <span class="detail-section-chevron" :class="{ open: detailSections['added_'+group.name] }">&#9654;</span>
-                        <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
-                        <span style="font-size:12px;color:var(--accent-orange);margin-left:8px"
-                              x-text="group.cfs.filter(cf => extraCFs[cf.trashId] !== undefined).length + ' added'"></span>
-                        <span style="margin-right:auto"></span>
-                      </button>
-                      <div x-show="detailSections['added_'+group.name]">
-                        <template x-for="cf in group.cfs.filter(cf => extraCFs[cf.trashId] !== undefined)" :key="'as-'+cf.trashId">
-                          <div class="cf-row">
-                            <label class="toggle toggle-sm" @click.stop>
+                <template x-for="group in pdGroupedCustomizations().groups" :key="'cust-grp-'+group.name">
+                  <div class="detail-section" :class="getCategoryClass(group.category)" style="margin-bottom:0">
+                    <button type="button" class="detail-section-header"
+                            @click="detailSections['cust_'+group.name] = !detailSections['cust_'+group.name]"
+                            :aria-expanded="detailSections['cust_'+group.name]">
+                      <span class="detail-section-chevron" :class="{ open: detailSections['cust_'+group.name] }">&#9654;</span>
+                      <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
+                      <span style="font-size:12px;color:var(--accent-orange);margin-left:8px"
+                            x-text="formatCustomizationCounts(group.items.filter(it => it.isAdded).length, group.items.filter(it => it.isOverridden).length)"></span>
+                      <span style="margin-right:auto"></span>
+                    </button>
+                    <div x-show="detailSections['cust_'+group.name]">
+                      <template x-for="item in group.items" :key="'cust-grp-item-'+item.trashId">
+                        <div class="cf-row" style="padding:4px 8px;gap:8px">
+                          <template x-if="item.isAdded">
+                            <label class="toggle toggle-sm" @click.stop x-tt="'Remove this extra CF'">
                               <input type="checkbox" :checked="true"
-                                     @change="const {[cf.trashId]: _, ...rest} = extraCFs; extraCFs = rest">
+                                     @change="const {[item.trashId]: _, ...rest} = extraCFs; extraCFs = rest">
                               <span class="slider"></span>
                             </label>
-                            <div class="cf-name">
-                              <span style="color:var(--accent-orange);font-weight:500" x-text="cf.name"></span>
-                              <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
-                            </div>
-                            <input type="number" class="pb-score-input overridden" :value="extraCFs[cf.trashId]"
-                                   @change="extraCFs = {...extraCFs, [cf.trashId]: parseInt($event.target.value)||0}"
-                                   style="width:65px;flex-shrink:0;margin-right:16px">
+                          </template>
+                          <template x-if="!item.isAdded">
+                            <span style="width:32px;flex-shrink:0"></span>
+                          </template>
+                          <div class="cf-name" style="flex:1;min-width:0">
+                            <span :style="item.isAdded ? 'color:var(--accent-orange);font-weight:500' : ''" x-text="item.name"></span>
+                            <span class="cf-info" x-show="item.description" @mouseenter="showCFTooltip($event, item.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
                           </div>
-                        </template>
-                      </div>
+                          <template x-if="item.defaultScore !== '?' && item.isOverridden">
+                            <span style="color:var(--text-muted);font-size:11px;font-family:monospace;flex-shrink:0" x-text="'Default: ' + item.defaultScore"></span>
+                          </template>
+                          <button type="button" class="inline-action"
+                                  @click="if (item.isAdded) { const {[item.trashId]: _, ...rest} = extraCFs; extraCFs = rest; } else { const {[item.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; }"
+                                  style="color:var(--accent-red);font-size:12px;flex-shrink:0"
+                                  x-tt="item.isAdded ? 'Remove this extra CF' : 'Reset score to profile default'"
+                                  aria-label="Reset / remove">&#8634;</button>
+                          <input type="number" class="pb-score-input" :class="item.isOverridden ? 'overridden' : ''" style="width:65px;flex-shrink:0"
+                                 :value="item.currentScore"
+                                 @change="const v = parseInt($event.target.value) || 0; if (item.isAdded) { extraCFs = {...extraCFs, [item.trashId]: v}; } else { const def = resolveCFDefaultScore(item.trashId); if (v === def) { const {[item.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [item.trashId]: v}; } }">
+                        </div>
+                      </template>
                     </div>
-                  </template>
+                  </div>
                 </template>
-                </div>
+                </div><!-- /grid wrapper for group cards -->
               </div>
             </template>
+            <template x-if="pdAllCustomizations().length === 0 && extraCFAllCFs.length > 0">
+              <div style="font-size:12px;color:var(--text-muted-secondary);font-style:italic;padding:4px 0;margin-bottom:8px">
+                No customizations yet. Edit any score in the Required CFs or Group CFs sections above to override its profile default, or use the picker below to add CFs beyond the profile's defaults.
+              </div>
+            </template>
+            <!-- Picker — Add CFs beyond profile defaults. Visible warning + sub-header
+                 marks this as the "extra" surface (was its own card before). -->
+            <div x-show="extraCFAllCFs.length > 0" style="border-top:1px solid var(--bg-muted);padding-top:10px">
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+                <span style="color:var(--accent-orange);font-weight:600">+ Add custom formats</span> beyond the profile's TRaSH defaults. Use at your own risk; non-standard customizations may interact unexpectedly with TRaSH score sets.
+              </div>
             <!-- Available CFs by group — same detail-section / cf-row layout as the
                  main Groups section, with category color on the left border. CFs stay
                  visible after adding (orange highlight on name) so the user sees their
@@ -761,8 +787,8 @@
                           :aria-expanded="detailSections['extra_'+group.name]">
                     <span class="detail-section-chevron" :class="{ open: detailSections['extra_'+group.name] }">&#9654;</span>
                     <span style="font-size:13px;font-weight:500" x-text="group.name"></span>
-                    <span x-text="(() => { const total = group.cfs.filter(cf => !_extraInProfile(cf.trashId)).length; const added = group.cfs.filter(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] !== undefined).length; return added + '/' + total + (added > 0 ? ' added' : ''); })()"
-                          :style="'font-size:12px;margin-left:8px;color:' + (group.cfs.some(cf => !_extraInProfile(cf.trashId) && extraCFs[cf.trashId] !== undefined) ? 'var(--accent-orange)' : 'var(--text-muted)')"></span>
+                    <span x-text="(() => { const c = pdExtraGroupCount(group); const parts = [c.added + '/' + c.total + (c.added > 0 ? ' extra' : '')]; if (c.overridden > 0) parts.push(c.overridden + ' custom score' + (c.overridden === 1 ? '' : 's')); return parts.join(' · '); })()"
+                          :style="'font-size:12px;margin-left:8px;color:' + (pdExtraGroupCount(group).added > 0 ? 'var(--accent-orange)' : 'var(--text-muted)')"></span>
                   </button>
                   <span style="margin-right:auto"></span>
                   <label class="toggle toggle-sm" @click.stop x-tt="'Add or remove every selectable CF in this group'">
@@ -785,19 +811,42 @@
                          :style="extraCFs[cf.trashId] !== undefined ? '' : 'opacity:0.6'">
                       <label class="toggle toggle-sm" @click.stop>
                         <input type="checkbox" :checked="extraCFs[cf.trashId] !== undefined"
-                               @change="if ($event.target.checked) { const scoreSet = profileDetail?.detail?.profile?.trashScoreSet || 'default'; extraCFs = {...extraCFs, [cf.trashId]: cf.trashScores?.[scoreSet] ?? cf.trashScores?.default ?? 0}; } else { const {[cf.trashId]: _, ...rest} = extraCFs; extraCFs = rest; }">
+                               @change="if ($event.target.checked) { extraCFs = {...extraCFs, [cf.trashId]: pdExtraCFScore(cf)}; } else { const {[cf.trashId]: _, ...rest} = extraCFs; extraCFs = rest; }">
                         <span class="slider"></span>
                       </label>
                       <div class="cf-name">
                         <span :style="extraCFs[cf.trashId] !== undefined ? 'color:var(--accent-orange);font-weight:500' : ''" x-text="cf.name"></span>
                         <span class="cf-info" x-show="cf.description" @mouseenter="showCFTooltip($event, cf.description)" @mouseleave="hideCFTooltip()">ⓘ</span>
                       </div>
+                      <!-- Editable score when CF is added; static display otherwise (matches Groups layout). -->
+                      <template x-if="extraCFs[cf.trashId] !== undefined">
+                        <div style="flex-shrink:0;display:flex;align-items:center;gap:6px">
+                          <template x-if="extraCFs[cf.trashId] !== pdExtraCFScore(cf)">
+                            <span style="color:var(--text-muted);font-size:11px;font-family:monospace" x-text="'Default: ' + pdExtraCFScore(cf)"></span>
+                          </template>
+                          <button type="button" class="inline-action" x-show="extraCFs[cf.trashId] !== pdExtraCFScore(cf)"
+                                  @click="extraCFs = {...extraCFs, [cf.trashId]: pdExtraCFScore(cf)}"
+                                  style="color:var(--accent-red);font-size:12px"
+                                  x-tt="'Reset score to default'"
+                                  aria-label="Reset score">&#8634;</button>
+                          <input type="number" class="pb-score-input" :class="extraCFs[cf.trashId] !== pdExtraCFScore(cf) ? 'overridden' : ''"
+                                 :value="extraCFs[cf.trashId]"
+                                 @change="extraCFs = {...extraCFs, [cf.trashId]: parseInt($event.target.value)||0}"
+                                 style="width:65px">
+                        </div>
+                      </template>
+                      <template x-if="extraCFs[cf.trashId] === undefined">
+                        <div class="cf-score" :class="(() => { const s = pdExtraCFScore(cf); return s > 0 ? 'positive' : s < 0 ? 'negative' : 'zero'; })()">
+                          <span x-text="(() => { const s = pdExtraCFScore(cf); return (s > 0 ? '+' : '') + s; })()"></span>
+                        </div>
+                      </template>
                     </div>
                   </template>
                 </div>
               </div>
             </template>
             <div x-show="extraCFAvailable().length === 0 && extraCFAllCFs.length > 0" style="font-size:13px;color:var(--text-muted);padding:4px 0">No matching CFs</div>
+            </div><!-- /picker wrapper (extraCFAllCFs.length > 0) -->
           </div><!-- /x-show pdExtraCFsCollapsed -->
           </div><!-- /Extra CFs card -->
 
@@ -831,13 +880,14 @@
                         <div class="cf-row">
                           <div class="cf-name" x-text="cf.name"></div>
                           <template x-if="pdOverridesEnabled">
-                            <div style="flex-shrink:0">
+                            <div style="flex-shrink:0;display:flex;align-items:center;gap:6px">
+                              <span x-show="cfScoreOverrides[cf.trashId] !== undefined" style="color:var(--text-muted);font-size:11px;font-family:monospace" x-text="'Default: ' + (cf.score ?? 0)"></span>
+                              <button type="button" class="inline-action" x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                                      style="color:var(--accent-red);font-size:12px" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                               <input type="number" class="pb-score-input" :class="cfScoreOverrides[cf.trashId] !== undefined ? 'overridden' : ''"
                                      :value="cfScoreOverrides[cf.trashId] ?? cf.score ?? 0"
                                      @change="const v = parseInt($event.target.value) || 0; if (v === (cf.score ?? 0)) { const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [cf.trashId]: v}; }"
                                      style="width:65px">
-                              <button type="button" class="inline-action" x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                                      style="color:var(--accent-red);font-size:12px;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                             </div>
                           </template>
                           <template x-if="!pdOverridesEnabled">
@@ -970,13 +1020,14 @@
                     <div class="cf-row" style="padding:2px 0;break-inside:avoid">
                       <div class="cf-name" style="font-size:12px;color:var(--text-muted)" x-text="fi.name"></div>
                       <template x-if="pdOverridesEnabled">
-                        <div style="flex-shrink:0">
+                        <div style="flex-shrink:0;display:flex;align-items:center;gap:6px">
+                          <span x-show="cfScoreOverrides[fi.trashId] !== undefined" style="color:var(--text-muted);font-size:11px;font-family:monospace" x-text="'Default: ' + (fi.score ?? 0)"></span>
+                          <button type="button" class="inline-action" x-show="cfScoreOverrides[fi.trashId] !== undefined" @click="const {[fi.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                                  style="color:var(--accent-red);font-size:12px" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                           <input type="number" class="pb-score-input" :class="cfScoreOverrides[fi.trashId] !== undefined ? 'overridden' : ''"
                                  :value="cfScoreOverrides[fi.trashId] ?? fi.score ?? 0"
                                  @change="const v = parseInt($event.target.value) || 0; if (v === (fi.score ?? 0)) { const {[fi.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [fi.trashId]: v}; }"
                                  style="width:65px">
-                          <button type="button" class="inline-action" x-show="cfScoreOverrides[fi.trashId] !== undefined" @click="const {[fi.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                                  style="color:var(--accent-red);font-size:12px;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                         </div>
                       </template>
                       <template x-if="!pdOverridesEnabled">
@@ -1020,8 +1071,8 @@
                             x-tt="pdGroupOptionalCount(group) + ' optional CF' + (pdGroupOptionalCount(group) === 1 ? '' : 's') + ' activated outside profile defaults'"></span>
                     </template>
                     <template x-if="group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
-                      <span style="font-size:11px;color:var(--accent-orange);background:var(--accent-orange-bg);padding:1px 5px;border-radius:3px;margin-right:auto"
-                            x-text="group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length + ' override' + (group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length !== 1 ? 's' : '')"></span>
+                      <span style="font-size:11px;color:var(--accent-orange);margin-right:auto"
+                            x-text="(() => { const n = group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length; return n + ' custom score' + (n === 1 ? '' : 's'); })()"></span>
                     </template>
                     <template x-if="!group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
                       <span style="margin-right:auto"></span>
@@ -1083,13 +1134,14 @@
                       </div>
                       <!-- Score: editable for all CFs when score override active (required needs group active, optional needs CF active) -->
                       <template x-if="pdOverridesEnabled && (cf.required ? (selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled) : selectedOptionalCFs[cf.trashId])">
-                        <div style="flex-shrink:0">
+                        <div style="flex-shrink:0;display:flex;align-items:center;gap:6px">
+                          <span x-show="cfScoreOverrides[cf.trashId] !== undefined" style="color:var(--text-muted);font-size:11px;font-family:monospace" x-text="'Default: ' + (cf.score ?? 0)"></span>
+                          <button type="button" class="inline-action" x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
+                                  style="color:var(--accent-red);font-size:12px" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                           <input type="number" class="pb-score-input" :class="cfScoreOverrides[cf.trashId] !== undefined ? 'overridden' : ''"
                                  :value="cfScoreOverrides[cf.trashId] ?? cf.score ?? 0"
                                  @change="const v = parseInt($event.target.value) || 0; if (v === (cf.score ?? 0)) { const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest; } else { cfScoreOverrides = {...cfScoreOverrides, [cf.trashId]: v}; }"
                                  style="width:65px">
-                          <button type="button" class="inline-action" x-show="cfScoreOverrides[cf.trashId] !== undefined" @click="const {[cf.trashId]: _, ...rest} = cfScoreOverrides; cfScoreOverrides = rest"
-                                  style="color:var(--accent-red);font-size:12px;margin-left:2px;vertical-align:middle" x-tt="'Reset to Profile default'" aria-label="Reset to profile default">&#8634;</button>
                         </div>
                       </template>
                       <template x-if="!(pdOverridesEnabled && (cf.required ? (selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled) : selectedOptionalCFs[cf.trashId]))">
