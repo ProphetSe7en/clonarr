@@ -2,6 +2,56 @@
 
 ## v2.5.7
 
+### Scheduled pull intervals (PR #46 by @ColeSpringer)
+
+You can now schedule TRaSH pulls on a clock — Daily / Weekly / Monthly
+at a specific time of day — instead of "every X hours". The next pull
+time is shown in the UI relative to your timezone. Thanks Cole for the
+contribution.
+
+### Toast manager (PR #47 by @ColeSpringer)
+
+Notifications now stack and deduplicate sensibly: identical errors
+collapse into one toast with a "× 3"-style repeat counter, hovering
+pauses the auto-dismiss timer, and a max of three are visible at once
+(the rest queue). Errors and warnings get a louder ARIA role so screen
+readers announce them properly. Thanks Cole.
+
+### CF Customizations card
+
+The Profile Sync editor used to show "Overridden Scores" and
+"Additional CFs" as two separate cards. They're now one **CF
+Customizations** card, hybrid-laid-out: when a CF Group has one
+customization it shows as a flat row, when it has two or more they
+collapse into a group card. Each row is color-coded by category so
+you can scan at a glance.
+
+### Auto-sync, friendlier and more resilient
+
+- Auto-sync **no longer runs at container restart**. The first sync
+  happens on the next scheduled trigger instead, so a routine update
+  doesn't fire a Discord notification for every rule.
+- When an Arr instance briefly drops off the network, clonarr now
+  **retries with backoff** (up to 30 minutes per pass) before giving
+  up. You get **one notification per instance** ("Radarr is not
+  reachable — will retry on next sync") rather than 20 errors for 20
+  rules.
+- New **Auto-sync Schedule** (Settings) lets you periodically
+  force-resync everything on a clock, independent of the pull
+  schedule. Default OFF. Useful for catching CF drift even when TRaSH
+  hasn't changed.
+- **Plain-language error messages** in Discord, NTFY, Apprise, and on
+  the rule card. Raw Go errors like
+  `plan failed: list CFs: request failed: Get "http://...": EOF` are
+  now `Radarr became unreachable during sync — will retry on next
+  sync` or similar.
+
+### Sync All / per-rule Sync Now
+
+Both check Arr is reachable **before** queuing 20 sync attempts. If
+it isn't, you get one "Radarr is not reachable" toast instead of 20
+generic "Failed to build sync plan" errors.
+
 ### Compare tab redesigned
 
 The Compare tab is now a read-only view that highlights differences
@@ -22,6 +72,12 @@ aren't score concepts.
 - **Sync Profile** preview list scrolls inside the modal frame so the
   Apply / Dry Run / Cancel buttons stay visible with long change
   lists.
+
+### Polish
+
+- CF category colors refreshed: **Required** is now slate teal,
+  **SQP** indigo, **Miscellaneous** iron-blue steel. Other stays the
+  neutral grey it was.
 
 ## v2.5.6
 

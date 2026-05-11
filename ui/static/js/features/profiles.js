@@ -1494,6 +1494,28 @@ export default {
     },
 
     async startApply() {
+      // Pre-flight reachability check — bail out with a friendly toast
+      // before the confirm modals + body building if the Arr instance is
+      // unreachable. Avoids the user clicking through an "overwrite?"
+      // confirm only to get a generic "failed to build sync plan" toast
+      // when the real cause is just that Sonarr/Radarr is down.
+      const instId = this.syncForm.instanceId;
+      const instName = this.syncForm.instanceName || this.profileDetail?.instance?.name || 'instance';
+      if (instId) {
+        try {
+          const probe = await fetch(`/api/instances/${instId}/test`, { method: 'POST' });
+          const probeBody = await probe.json().catch(() => ({}));
+          if (!probe.ok || probeBody.connected === false) {
+            const detail = probeBody.error || `${instName} is not reachable.`;
+            this.showToast(`Save & Sync skipped — ${detail}`, 'error', 8000);
+            return;
+          }
+        } catch (e) {
+          this.showToast(`Save & Sync skipped — ${instName} unreachable: ${e.message}`, 'error', 8000);
+          return;
+        }
+      }
+
       // Overwrite-confirmation guard. The "Edit sync rule" pencil flow sets
       // _editFlow=true in _loadSyncInstanceData; that path expects to update
       // the existing rule and shows no popup. Any other path (Save & Sync
@@ -1688,6 +1710,27 @@ export default {
     // --- Quick Sync ---
 
     async quickSync(inst, sh, silent = false, useHistoryOnly = false) {
+      // Pre-flight reachability check for interactive paths (per-rule "Sync
+      // now" + rollback). Skipped when silent=true because Sync All already
+      // pre-flights once before iterating, and we don't want to spam N
+      // probes for N rules on the same instance.
+      if (!silent) {
+        try {
+          const probe = await fetch(`/api/instances/${inst.id}/test`, { method: 'POST' });
+          const probeBody = await probe.json().catch(() => ({}));
+          if (!probe.ok || probeBody.connected === false) {
+            const detail = probeBody.error || `${inst.name} is not reachable.`;
+            this.showToast(`"${sh.profileName}" sync skipped — ${detail}`, 'error', 8000);
+            this.setRuleSyncError(inst.id, sh.arrProfileId, detail);
+            return { ok: false, name: sh.profileName, error: detail };
+          }
+        } catch (e) {
+          const msg = `${inst.name} unreachable — ${e.message}`;
+          this.showToast(`"${sh.profileName}" sync skipped — ${msg}`, 'error', 8000);
+          this.setRuleSyncError(inst.id, sh.arrProfileId, msg);
+          return { ok: false, name: sh.profileName, error: msg };
+        }
+      }
       // Look up the rule once — used for importedProfileId fallback AND
       // for the SelectedCFs source-of-truth lookup below.
       // useHistoryOnly bypasses rule lookup entirely: required for rollback
@@ -1876,6 +1919,23 @@ export default {
       });
       if (!rules.length) {
         this.showToast(`Sync All (${inst.name}): no profiles with auto-sync enabled`, 'warning', 4000);
+        return;
+      }
+      // Pre-flight reachability check — bail out with ONE friendly toast
+      // instead of iterating N rules and producing N copies of the same
+      // "FAILED: ..." line in a single aggregate toast. Uses the existing
+      // /api/instances/{id}/test endpoint which already returns a clear
+      // "<instance> is not reachable" message for connection errors.
+      try {
+        const probe = await fetch(`/api/instances/${inst.id}/test`, { method: 'POST' });
+        const probeBody = await probe.json().catch(() => ({}));
+        if (!probe.ok || probeBody.connected === false) {
+          const detail = probeBody.error || `${inst.name} is not reachable — check that the instance is running.`;
+          this.showToast(`Sync All (${inst.name}): ${detail}`, 'error', 8000);
+          return;
+        }
+      } catch (e) {
+        this.showToast(`Sync All (${inst.name}): could not reach ${inst.name} — ${e.message}`, 'error', 8000);
         return;
       }
       // quickSync expects a sync-history-entry shape. Adapt each rule

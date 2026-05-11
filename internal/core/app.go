@@ -58,6 +58,21 @@ type App struct {
 	AutoSyncMu     sync.Mutex
 }
 
+// IsShuttingDown returns true once ShutdownCh has been closed (graceful
+// shutdown in progress). Non-blocking — callers can use this to attribute
+// context-canceled errors correctly (shutdown vs request timeout).
+func (a *App) IsShuttingDown() bool {
+	if a == nil || a.ShutdownCh == nil {
+		return false
+	}
+	select {
+	case <-a.ShutdownCh:
+		return true
+	default:
+		return false
+	}
+}
+
 // SetNextPullAt records the next automatic TRaSH pull time for /api/trash/status.
 func (a *App) SetNextPullAt(t time.Time) {
 	if a == nil {

@@ -109,8 +109,19 @@ export default {
     // Returns the CSS class suffix (cat-anime, cat-other, …) for a TRaSH
     // category name. Falls back to cat-other when unknown or before
     // manifest loads.
+    //
+    // SQP and Required have sub-variants in TRaSH ([SQP-4 (MA Hybrid)],
+    // [Required] Repack/Proper, …) so an exact-label lookup misses them.
+    // Prefix-fallback paints all SQP-* / Required-* groups with the same
+    // category color, matching the backend CategoryTier behavior.
     manifestCategoryClass(label) {
-      return this._categoryClassMap[label] || 'cat-other';
+      if (this._categoryClassMap[label]) return this._categoryClassMap[label];
+      if (typeof label === 'string') {
+        const upper = label.toUpperCase();
+        if (upper.startsWith('SQP')) return 'cat-sqp';
+        if (upper.startsWith('REQUIRED')) return 'cat-required';
+      }
+      return 'cat-other';
     },
 
     // Same as above for profile groups (grp-sqp, grp-other, …).

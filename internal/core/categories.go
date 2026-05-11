@@ -31,7 +31,7 @@ var CFCategories = []CategoryMeta{
 	{ID: "hq-release-groups", Label: "HQ Release Groups", Color: "#e3b341", Aliases: []string{"Release Groups"}},
 	{ID: "resolution", Label: "Resolution", Color: "#79c0ff"},
 	{ID: "streaming", Label: "Streaming Services", Color: "#39d353"},
-	{ID: "miscellaneous", Label: "Miscellaneous", Color: "#8b949e"},
+	{ID: "miscellaneous", Label: "Miscellaneous", Color: "#6b8aa8"},
 	{ID: "optional", Label: "Optional", Color: "#58a6ff", Aliases: []string{"Movie Versions"}},
 	{ID: "unwanted", Label: "Unwanted", Color: "#f85149"},
 	{ID: "anime", Label: "Anime", Color: "#f778ba"},
@@ -39,7 +39,9 @@ var CFCategories = []CategoryMeta{
 	{ID: "german", Label: "German", Color: "#f0883e", Aliases: []string{"German Source Groups", "German Miscellaneous"}},
 	{ID: "language", Label: "Language Profiles", Color: "#3fb950"},
 	{ID: "other", Label: "Other", Color: "#8b949e"},
-	{ID: "required-core", Label: "Required Core", Color: "#8b949e"},
+	{ID: "required-core", Label: "Required Core", Color: "#5eccac"},
+	{ID: "required", Label: "Required", Color: "#5eccac"},
+	{ID: "sqp", Label: "SQP", Color: "#7c83eb"},
 }
 
 // ProfileGroups is the catalog of profile-group prefix tags. IDs match the

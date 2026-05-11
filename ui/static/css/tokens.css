@@ -87,9 +87,11 @@
   --cat-french: #39d2e0;
   --cat-language: #3fb950;
   --cat-german: #f0883e;
-  --cat-miscellaneous: #8b949e;
+  --cat-miscellaneous: #6b8aa8;
   --cat-other: #8b949e;
-  --cat-required-core: #8b949e;
+  --cat-required-core: #5eccac;
+  --cat-required: #5eccac;
+  --cat-sqp: #7c83eb;
 
   /* Profile groups. The backend manifest may override these at runtime. */
   --grp-sqp: #58a6ff;

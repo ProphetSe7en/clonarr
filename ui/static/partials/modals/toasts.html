@@ -8,7 +8,7 @@
            @mouseleave="resumeToast(toast.id)"
            @focusin="pauseToast(toast.id)"
            @focusout="if (!$el.contains($event.relatedTarget)) resumeToast(toast.id)">
-        <button type="button" class="toast-close" aria-label="Dismiss notification" @click.stop="dismissToast(toast.id)">x</button>
+        <button type="button" class="toast-close" aria-label="Dismiss notification" @click.stop="dismissToast(toast.id)">×</button>
         <div class="toast-content"
              :class="toast.expandable ? 'toast-content-expandable' : ''"
              :role="toast.expandable ? 'button' : null"

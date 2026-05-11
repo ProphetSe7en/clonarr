@@ -328,7 +328,7 @@ export default {
           message: `${collapsed} additional notification${collapsed === 1 ? '' : 's'} were hidden while the toast queue was full.`,
           type: 'info',
           duration: 5000,
-          key: `toast-overflow-summary:${Date.now()}`,
+          key: 'toast-overflow-summary',
         }, 'info', 5000);
         this.toasts = [...this.toasts, summary];
         this._startToastTimer(summary, true);
