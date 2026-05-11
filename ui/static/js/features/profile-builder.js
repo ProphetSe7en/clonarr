@@ -1135,7 +1135,14 @@ export default {
         this.pbScoreSetChanged();
         // Notify about unmapped CFs
         if (data.unmapped && data.unmapped.length > 0) {
-          this.showToast(`Profile loaded. ${data.unmapped.length} CF(s) could not be mapped to TRaSH IDs:\n\n${data.unmapped.join('\n')}`, 'error', 8000);
+          this.showToast({
+            title: 'Profile loaded with unmapped CFs',
+            message: `${data.unmapped.length} CF${data.unmapped.length === 1 ? '' : 's'} could not be mapped to TRaSH IDs.`,
+            details: data.unmapped,
+            type: 'error',
+            duration: 8000,
+            key: this.toastKey('profile-builder-unmapped', data.unmapped.length, data.unmapped),
+          });
         }
       } catch (e) {
         this.showToast('Error loading profile: ' + e.message, 'error', 8000);

@@ -1,13 +1,40 @@
 {{define "modals/toasts"}}
   <!-- Toast notifications -->
-  <div style="position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:450px;width:100%;max-height:80vh;overflow-y:auto">
+  <div class="toast-stack" x-show="toasts.length > 0 || toastPendingCount() > 0" aria-live="polite" aria-relevant="additions text">
     <template x-for="toast in toasts" :key="toast.id">
-      <div :style="'position:relative;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.5;box-shadow:0 4px 12px var(--alpha-shadow);cursor:pointer;animation:fadeIn 0.2s;overflow:hidden;' + (toast.type === 'warning' ? 'background:var(--accent-orange-bg);border:1px solid var(--accent-orange);color:var(--accent-orange)' : toast.type === 'error' ? 'background:var(--accent-red-bg);border:1px solid var(--accent-red);color:var(--accent-red)' : 'background:var(--accent-green-bg);border:1px solid var(--accent-green-strong);color:var(--accent-green)')"
-           @click="toasts = toasts.filter(t => t.id !== toast.id)">
-        <span style="white-space:pre-line" x-text="toast.message"></span>
-        <div :style="'position:absolute;bottom:0;left:0;height:3px;border-radius:0 0 8px 8px;opacity:0.6;background:currentColor;animation:toastProgress ' + (toast.duration || 8000) + 'ms linear forwards'"></div>
+      <div :class="toastClass(toast)"
+           :role="toastRole(toast)"
+           @mouseenter="pauseToast(toast.id)"
+           @mouseleave="resumeToast(toast.id)"
+           @focusin="pauseToast(toast.id)"
+           @focusout="if (!$el.contains($event.relatedTarget)) resumeToast(toast.id)">
+        <button type="button" class="toast-close" aria-label="Dismiss notification" @click.stop="dismissToast(toast.id)">x</button>
+        <div class="toast-content"
+             :class="toast.expandable ? 'toast-content-expandable' : ''"
+             :role="toast.expandable ? 'button' : null"
+             :tabindex="toast.expandable ? 0 : -1"
+             :aria-expanded="toast.expandable ? String(toast.expanded) : null"
+             @click="toggleToast(toast.id)"
+             @keydown.enter.prevent="toggleToast(toast.id)"
+             @keydown.space.prevent="toggleToast(toast.id)">
+          <div class="toast-header" x-show="toast.title || toast.repeatCount > 1">
+            <div class="toast-title" x-show="toast.title" x-text="toast.title"></div>
+            <div class="toast-repeat" x-show="toast.repeatCount > 1" x-text="'x' + toast.repeatCount"></div>
+          </div>
+          <div class="toast-message" :class="toast.expanded ? 'toast-message-expanded' : ''" x-text="toastDisplayText(toast)"></div>
+          <div class="toast-more" x-show="toast.expandable" x-text="toast.expanded ? 'Show less' : 'Show more'"></div>
+        </div>
+        <div class="toast-progress"
+             :style="toastProgressStyle(toast)"
+             x-effect="
+               toast.animationNonce;
+               $el.style.animation = 'none';
+               $el.offsetWidth;
+               $el.style.animation = '';
+             "></div>
       </div>
     </template>
+    <div class="toast-queue-footer" x-show="toastPendingCount() > 0" x-text="toastPendingLabel()"></div>
   </div>
 
 {{end}}

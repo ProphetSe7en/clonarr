@@ -244,8 +244,6 @@ export default function baseState() {
     confirmModal: { show: false, title: '', message: '', confirmLabel: '', cancelLabel: '', secondaryLabel: '', hideCancel: false, onConfirm: null, onCancel: null, onSecondary: null },
     inputModal: { show: false, title: '', message: '', value: '', placeholder: '', confirmLabel: '', onConfirm: null, onCancel: null },
     sandboxCopyModal: { show: false, title: '', text: '', copied: false },
-    toasts: [], // { id, message, type: 'info'|'warning'|'error', timeout }
-
     // Import
     importedProfiles: { radarr: [], sonarr: [] },
     showImportModal: false, // false or app type string

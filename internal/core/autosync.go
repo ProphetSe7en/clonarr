@@ -539,15 +539,13 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 
 	// Push event to frontend toast queue (only when there are actual changes)
 	if result.CFsCreated > 0 || result.CFsUpdated > 0 || result.ScoresUpdated > 0 || result.QualityUpdated || len(result.SettingsDetails) > 0 {
-		// Collect details for toast (max 5 lines)
+		// Collect details for the frontend toast. The UI owns compacting and
+		// expansion, so keep the event payload complete.
 		var details []string
 		details = append(details, result.CFDetails...)
 		details = append(details, result.ScoreDetails...)
 		details = append(details, result.QualityDetails...)
 		details = append(details, result.SettingsDetails...)
-		if len(details) > 5 {
-			details = append(details[:4], fmt.Sprintf("...and %d more", len(details)-4))
-		}
 		app.AutoSyncMu.Lock()
 		app.AutoSyncEvents = append(app.AutoSyncEvents, AutoSyncEvent{
 			InstanceName:   inst.Name,

@@ -22,9 +22,11 @@ import profileBuilder from './features/profile-builder.js';
 import profiles from './features/profiles.js';
 import qualitySizes from './features/quality-sizes.js';
 import scoring from './features/scoring.js';
+import toasts from './features/toasts.js';
 
 const featureModules = [
   navigation,
+  toasts,
   manifest,
   authSecurity,
   autoSync,

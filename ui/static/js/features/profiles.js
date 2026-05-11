@@ -271,12 +271,6 @@ export default {
       document.documentElement.setAttribute('data-theme', resolved);
     },
 
-    showToast(message, type = 'info', duration = 8000) {
-      const id = Date.now() + Math.random();
-      this.toasts = [...this.toasts, { id, message, type, duration }];
-      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, duration);
-    },
-
     async checkCleanupEvents() {
       try {
         const r = await fetch('/api/cleanup-events');
@@ -284,20 +278,32 @@ export default {
         const events = await r.json();
         if (events.length === 0) return;
         // Coalesce per instance: bulk deletions in Arr would otherwise spawn
-        // one toast per affected profile, stacking 25+ deep with their own
-        // scrollbar. One toast per instance with first-three names + count
-        // is informative without being a wall of yellow.
+        // one toast per affected profile. The toast manager keeps the compact
+        // preview small and lets the full profile list expand inline.
         const byInstance = {};
         for (const ev of events) {
           (byInstance[ev.instanceName] = byInstance[ev.instanceName] || []).push(ev.profileName);
         }
         for (const [instanceName, names] of Object.entries(byInstance)) {
           if (names.length === 1) {
-            this.showToast(`"${names[0]}" — deleted in ${instanceName}, sync rule removed`, 'warning', 6000);
+            this.showToast({
+              title: `"${names[0]}" deleted`,
+              message: `Sync rule removed from ${instanceName}.`,
+              type: 'warning',
+              duration: 6000,
+              key: this.toastKey('cleanup', instanceName, names[0]),
+            });
           } else {
-            const preview = names.slice(0, 3).map(n => `"${n}"`).join(', ');
-            const extra = names.length > 3 ? ` and ${names.length - 3} more` : '';
-            this.showToast(`${names.length} profiles deleted in ${instanceName}, sync rules removed:\n${preview}${extra}`, 'warning', 8000);
+            this.showToast({
+              title: `${names.length} profiles deleted in ${instanceName}`,
+              message: 'Sync rules removed.',
+              details: names.map(n => `"${n}"`),
+              type: 'warning',
+              duration: 8000,
+              key: this.toastKey(
+                'cleanup', instanceName, names.length, names[0], names[names.length - 1], names
+              ),
+            });
           }
         }
       } catch (e) { /* ignore */ }
@@ -308,21 +314,79 @@ export default {
         const r = await fetch('/api/auto-sync/events');
         if (!r.ok) return;
         const events = await r.json();
-        for (let i = 0; i < events.length; i++) {
-          const ev = events[i];
-          setTimeout(() => {
-            if (ev.error) {
-              this.showToast(`Auto-sync failed: ${ev.instanceName} — ${ev.profileName}: ${ev.error}`, 'error', 8000);
+        const profileLabel = (ev) => ev.arrProfileName && ev.arrProfileName !== ev.profileName
+          ? `${ev.profileName} -> ${ev.arrProfileName}` : ev.profileName;
+        const groups = {};
+        for (const ev of events) {
+          const severity = ev.error ? 'error' : 'info';
+          const key = `${severity}:${ev.instanceName}`;
+          (groups[key] = groups[key] || { severity, instanceName: ev.instanceName, events: [] }).events.push(ev);
+        }
+        for (const group of Object.values(groups)) {
+          if (group.severity === 'error') {
+            if (group.events.length === 1) {
+              const ev = group.events[0];
+              this.showToast({
+                title: `Auto-sync failed: ${group.instanceName}`,
+                message: `${profileLabel(ev)}: ${ev.error}`,
+                type: 'error',
+                duration: 8000,
+                key: this.toastKey(
+                  'autosync', 'error', group.instanceName, ev.profileName, ev.timestamp || ev.error
+                ),
+              });
             } else {
-              const profileLabel = ev.arrProfileName && ev.arrProfileName !== ev.profileName
-                ? `${ev.profileName} → ${ev.arrProfileName}` : ev.profileName;
-              let msg = `Auto-sync: ${ev.instanceName} — "${profileLabel}"`;
-              if (ev.details?.length > 0) {
-                msg += '\n' + ev.details.join('\n');
-              }
-              this.showToast(msg, 'info', 8000);
+              const latestTimestamp = group.events.reduce((latest, ev) => ev.timestamp && ev.timestamp > latest ? ev.timestamp : latest, '');
+              this.showToast({
+                title: `Auto-sync failed: ${group.instanceName}`,
+                message: `${group.events.length} profiles failed.`,
+                details: group.events.map(ev => `${profileLabel(ev)}: ${ev.error}`),
+                type: 'error',
+                duration: 10000,
+                key: this.toastKey(
+                  'autosync',
+                  'error',
+                  group.instanceName,
+                  group.events.length,
+                  latestTimestamp,
+                  group.events.map(ev => [ev.profileName, ev.error])
+                ),
+              });
             }
-          }, i * 3000);
+          } else if (group.events.length === 1) {
+            const ev = group.events[0];
+            this.showToast({
+              title: `Auto-sync: ${group.instanceName}`,
+              message: `"${profileLabel(ev)}"`,
+              details: ev.details || [],
+              type: 'info',
+              duration: 8000,
+              key: this.toastKey(
+                'autosync', 'info', group.instanceName, ev.profileName, ev.timestamp || ''
+              ),
+            });
+          } else {
+            const latestTimestamp = group.events.reduce((latest, ev) => ev.timestamp && ev.timestamp > latest ? ev.timestamp : latest, '');
+            const details = group.events.flatMap(ev => [
+              `"${profileLabel(ev)}"`,
+              ...((ev.details || []).map(detail => `  ${detail}`)),
+            ]);
+            this.showToast({
+              title: `Auto-sync: ${group.instanceName}`,
+              message: `${group.events.length} profiles updated.`,
+              details,
+              type: 'info',
+              duration: 10000,
+              key: this.toastKey(
+                'autosync',
+                'info',
+                group.instanceName,
+                group.events.length,
+                latestTimestamp,
+                group.events.map(ev => ev.profileName)
+              ),
+            });
+          }
         }
         // Reload sync history if any events came through
         if (events.length > 0) {
@@ -1546,14 +1610,16 @@ export default {
               ...(result.qualityDetails || []),
               ...(result.settingsDetails || [])
             ];
-            let msg = `"${this.syncForm.profileName}" synced`;
-            if (details.length > 0) {
-              const shown = details.length > 5 ? [...details.slice(0, 4), `...and ${details.length - 4} more`] : details;
-              msg += '\n' + shown.join('\n');
-            } else {
-              msg += ' — no changes';
-            }
-            this.showToast(msg, 'info', details.length > 0 ? 8000 : 4000);
+            this.showToast({
+              title: `"${this.syncForm.profileName}" synced`,
+              message: details.length > 0 ? `${details.length} change${details.length === 1 ? '' : 's'} applied.` : 'No changes.',
+              details,
+              type: 'info',
+              duration: details.length > 0 ? 8000 : 4000,
+              key: this.toastKey(
+                'sync-imported', this.syncForm.instanceId, this.syncForm.profileName, details.length, details
+              ),
+            });
           }
         }
         this.syncResult = result;
@@ -1695,14 +1761,16 @@ export default {
           ...(result.qualityDetails || []),
           ...(result.settingsDetails || [])
         ];
-        let msg = `${inst.name} — "${sh.profileName}" synced`;
-        if (details.length > 0) {
-          const shown = details.length > 5 ? [...details.slice(0, 4), `...and ${details.length - 4} more`] : details;
-          msg += '\n' + shown.join('\n');
-        } else {
-          msg += ' — no changes';
+        if (!silent) {
+          this.showToast({
+            title: `${inst.name} - "${sh.profileName}" synced`,
+            message: details.length > 0 ? `${details.length} change${details.length === 1 ? '' : 's'} applied.` : 'No changes.',
+            details,
+            type: 'info',
+            duration: details.length > 0 ? 8000 : 4000,
+            key: this.toastKey('sync', inst.id, sh.arrProfileId, details.length, details),
+          });
         }
-        if (!silent) this.showToast(msg, 'info', details.length > 0 ? 8000 : 4000);
         this.setRuleSyncError(inst.id, sh.arrProfileId, '');
         await this.loadSyncHistory(inst.id);
         const summary = details.length > 0 ? details.slice(0, 3).join(', ') : 'no changes';
@@ -1844,14 +1912,29 @@ export default {
       for (const rule of rules) {
         results.push(await this.quickSync(inst, ruleToHistoryShape(rule), true));
       }
-      const lines = results.map(r => {
-        if (!r.ok) return `${r.name} — FAILED: ${r.error}`;
-        if (r.details?.length > 0) return `${r.name} — ${r.details.slice(0, 2).join(', ')}`;
-        return `${r.name} — no changes`;
+      const details = results.flatMap(r => {
+        if (!r.ok) return [`${r.name} - FAILED: ${r.error}`];
+        if (r.details?.length > 0) return [r.name, ...r.details.map(detail => `  ${detail}`)];
+        return [`${r.name} - no changes`];
       });
       const errors = results.filter(r => !r.ok).length;
       const toastType = errors === results.length ? 'error' : errors > 0 ? 'warning' : 'info';
-      this.showToast(`Sync All (${inst.name}):\n${lines.join('\n')}`, toastType, 10000);
+      this.showToast({
+        title: `Sync All (${inst.name})`,
+        message: errors > 0
+          ? `${results.length - errors} succeeded, ${errors} failed.`
+          : `${results.length} profile${results.length === 1 ? '' : 's'} synced.`,
+        details,
+        type: toastType,
+        duration: 10000,
+        key: this.toastKey(
+          'sync-all',
+          inst.id,
+          results.length,
+          errors,
+          results.map(r => [r.name, r.ok, r.error || r.summary || ''])
+        ),
+      });
     },
 
     // --- Sync History ---
@@ -2248,8 +2331,16 @@ export default {
         if (rule && rule.enabled) {
           await this.toggleAutoSyncRule(rule);
         }
-        const details = result.details?.length ? '\n' + result.details.slice(0, 5).join('\n') : '';
-        this.showToast(`Rolled back "${entry.arrProfileName}" to ${prevDate}. Auto-sync disabled.${details}`, 'info', 8000);
+        this.showToast({
+          title: `Rolled back "${entry.arrProfileName}"`,
+          message: `Restored ${prevDate}. Auto-sync disabled.`,
+          details: result.details || [],
+          type: 'info',
+          duration: 8000,
+          key: this.toastKey(
+            'rollback', inst.id, entry.arrProfileId, prevEntry.appliedAt || prevEntry.lastSync || entry.arrProfileId
+          ),
+        });
         await this.loadProfileHistory(inst.id, entry.arrProfileId);
         await this.loadSyncHistory(inst.id);
       } else {
