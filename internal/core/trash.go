@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,6 +17,10 @@ import (
 	"sync"
 	"time"
 )
+
+// ErrTrashBusy indicates a TRaSH pull, load, or reset operation already holds
+// the store operation lock.
+var ErrTrashBusy = errors.New("TRaSH pull/reset already in progress")
 
 // --- TRaSH Data Types ---
 
@@ -219,6 +224,7 @@ type TrashData struct {
 type TrashStore struct {
 	mu                sync.RWMutex // protects data
 	pullMu            sync.Mutex   // serializes clone/pull operations (C4)
+	repoMu            sync.RWMutex // protects dataDir git/filesystem access against reset/delete
 	data              *TrashData
 	dataDir           string                         // path to TRaSH repo clone
 	pullError         string                         // last pull error (empty = OK)
@@ -274,10 +280,50 @@ func (ts *TrashStore) DataDir() string {
 	return ts.dataDir
 }
 
+// Reset clears the local TRaSH Guides clone and pull metadata, then replaces
+// the in-memory snapshot with an empty dataset. User configuration and locally
+// saved profiles/CFs live outside this store and are intentionally untouched.
+func (ts *TrashStore) Reset() error {
+	if !ts.pullMu.TryLock() {
+		return ErrTrashBusy
+	}
+	defer ts.pullMu.Unlock()
+
+	ts.repoMu.Lock()
+	defer ts.repoMu.Unlock()
+
+	dataRoot := filepath.Dir(ts.dataDir)
+	paths := []string{
+		ts.dataDir,
+		filepath.Join(dataRoot, "last-pull.txt"),
+		filepath.Join(dataRoot, "last-pull-diff.json"),
+	}
+	for _, path := range paths {
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("remove %s: %w", path, err)
+		}
+	}
+
+	ts.mu.Lock()
+	ts.data = &TrashData{}
+	ts.pullError = ""
+	ts.lastChangelogDate = ""
+	ts.mu.Unlock()
+	return nil
+}
+
 // DiffChangedFiles returns a human-readable summary of files changed between two commits.
 // Groups changes by app type (Radarr/Sonarr) and category (CFs, Profiles, Groups, etc).
 // Uses git diff --name-status to show Added/Modified/Deleted per file.
 func (ts *TrashStore) DiffChangedFiles(prevCommit, newCommit string) string {
+	ts.repoMu.RLock()
+	defer ts.repoMu.RUnlock()
+	return ts.diffChangedFilesLocked(prevCommit, newCommit)
+}
+
+// diffChangedFilesLocked is DiffChangedFiles without locking. Caller must hold
+// repoMu for read or write.
+func (ts *TrashStore) diffChangedFilesLocked(prevCommit, newCommit string) string {
 	cmd := exec.Command("git", "-C", ts.dataDir, "diff", "--name-status", prevCommit, newCommit)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -613,17 +659,28 @@ type CommitGroupInfo struct {
 	Includes       []string // profile trash_ids in quality_profiles.include
 }
 
-// GroupsAtCommit returns cf-group trash_ids and their state at the given
-// git commit. Walks both radarr/cf-groups/ and sonarr/cf-groups/ and
-// reads each .json via `git show <commit>:<path>`. Errors are absorbed
-// (specific commit may not exist after shallow-clone re-init) — caller
-// treats empty result as "no info, leave migration entry empty".
-func (ts *TrashStore) GroupsAtCommit(commit string) map[string]CommitGroupInfo {
+// GroupsAtCommit returns cf-group trash_ids and their state at the given git
+// commit, plus whether the commit lookup succeeded. Walks both
+// radarr/cf-groups/ and sonarr/cf-groups/ and reads each .json via
+// `git show <commit>:<path>`.
+//
+// ok=false means the repo/commit could not be read, so callers should not
+// persist an empty snapshot. ok=true with an empty map is a valid lookup that
+// found no groups.
+func (ts *TrashStore) GroupsAtCommit(commit string) (map[string]CommitGroupInfo, bool) {
 	if commit == "" || ts.dataDir == "" {
-		return nil
+		return nil, false
 	}
+	ts.repoMu.RLock()
+	defer ts.repoMu.RUnlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	commitCmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "cat-file", "-e", commit+"^{commit}")
+	if err := commitCmd.Run(); err != nil {
+		return nil, false
+	}
 
 	result := make(map[string]CommitGroupInfo)
 	for _, app := range []string{"radarr", "sonarr"} {
@@ -631,7 +688,7 @@ func (ts *TrashStore) GroupsAtCommit(commit string) map[string]CommitGroupInfo {
 		listCmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "ls-tree", "--name-only", commit, dir)
 		listOut, err := listCmd.Output()
 		if err != nil {
-			continue
+			return nil, false
 		}
 		for _, path := range strings.Split(strings.TrimSpace(string(listOut)), "\n") {
 			if !strings.HasSuffix(path, ".json") {
@@ -665,7 +722,7 @@ func (ts *TrashStore) GroupsAtCommit(commit string) map[string]CommitGroupInfo {
 			}
 		}
 	}
-	return result
+	return result, true
 }
 
 // DiffPull runs `git diff --name-status <prev>..<new> -- docs/json/` and
@@ -677,6 +734,9 @@ func (ts *TrashStore) DiffPull(prevCommit, newCommit string) (*PullChangeSet, er
 	if prevCommit == "" || newCommit == "" || prevCommit == newCommit {
 		return &PullChangeSet{}, nil
 	}
+	ts.repoMu.RLock()
+	defer ts.repoMu.RUnlock()
+
 	// 10s timeout — `git diff --name-status` on the sparse-checkout repo is
 	// normally a milliseconds operation, but a wedged filesystem (NFS drop,
 	// disk failure) could otherwise hang the goroutine forever. Failing the
@@ -892,6 +952,9 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 	}
 	defer ts.pullMu.Unlock()
 
+	ts.repoMu.Lock()
+	defer ts.repoMu.Unlock()
+
 	if err := os.MkdirAll(filepath.Dir(ts.dataDir), 0755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
@@ -1003,6 +1066,9 @@ func (ts *TrashStore) LoadFromDisk() error {
 	}
 	defer ts.pullMu.Unlock()
 
+	ts.repoMu.Lock()
+	defer ts.repoMu.Unlock()
+
 	if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err != nil {
 		return fmt.Errorf("TRaSH repo not cloned at %s", ts.dataDir)
 	}
@@ -1012,7 +1078,7 @@ func (ts *TrashStore) LoadFromDisk() error {
 
 // loadAndSwap reads commit metadata + parses CF/profile JSON from the on-disk
 // repo and atomically swaps a new snapshot into the store. Caller must hold
-// pullMu.
+// pullMu and repoMu.
 //
 // On failure, records the error in ts.pullError so TrashStatus / the UI can
 // surface a "pull failing" state instead of silently showing a stale snapshot.
@@ -1059,7 +1125,7 @@ func (ts *TrashStore) loadAndSwap() error {
 	ts.mu.RUnlock()
 
 	if prevCommit != "" && data.CommitHash != prevCommit {
-		if diff := ts.DiffChangedFiles(prevCommit, data.CommitHash); diff != "" {
+		if diff := ts.diffChangedFilesLocked(prevCommit, data.CommitHash); diff != "" {
 			data.LastDiff = &PullDiff{
 				PrevCommit: prevCommit,
 				NewCommit:  data.CommitHash,

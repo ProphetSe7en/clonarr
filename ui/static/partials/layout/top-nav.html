@@ -17,7 +17,7 @@
          @keydown.escape.window="if (showChangelog) { showChangelog = false; $nextTick(() => $refs.trashChangelogButton?.focus()) }">
       <span class="dot" :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"></span>
       <template x-if="trashStatus.cloned">
-        <button type="button" class="inline-action" @click="showChangelog = !showChangelog"
+        <button type="button" class="inline-action trash-sync-button" @click="showChangelog = !showChangelog"
                 x-ref="trashChangelogButton"
                 :aria-expanded="showChangelog"
                 aria-controls="trash-changelog-dropdown"
@@ -32,7 +32,12 @@
         </button>
       </template>
       <template x-if="!trashStatus.cloned">
-        <span>TRaSH not synced</span>
+        <span>
+          TRaSH not synced
+          <span class="sync-next" x-show="trashStatus.nextPull"
+                style="color:var(--text-muted);font-size:12px;margin-left:6px"
+                x-text="'· ' + nextPullLabel()"></span>
+        </span>
       </template>
       <button class="btn btn-sm" @click="pullTrash()" :disabled="pulling" style="margin-left:8px">
         <span x-show="pulling" class="spinner"></span>

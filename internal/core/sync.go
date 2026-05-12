@@ -21,6 +21,41 @@ func (app *App) GetSyncMutex(instanceID string) *sync.Mutex {
 	return v.(*sync.Mutex)
 }
 
+// TryLockConfiguredSyncs attempts to lock every currently configured instance
+// sync mutex. The returned unlock function releases all locks acquired by this
+// call. If any instance is already syncing, previously acquired locks are
+// released and busy is true.
+func (app *App) TryLockConfiguredSyncs() (unlock func(), busy bool) {
+	cfg := app.Config.Get()
+	seen := make(map[string]bool, len(cfg.Instances))
+	instanceIDs := make([]string, 0, len(cfg.Instances))
+	for _, inst := range cfg.Instances {
+		if inst.ID == "" || seen[inst.ID] {
+			continue
+		}
+		seen[inst.ID] = true
+		instanceIDs = append(instanceIDs, inst.ID)
+	}
+	sort.Strings(instanceIDs)
+
+	locked := make([]*sync.Mutex, 0, len(instanceIDs))
+	for _, id := range instanceIDs {
+		mu := app.GetSyncMutex(id)
+		if !mu.TryLock() {
+			for i := len(locked) - 1; i >= 0; i-- {
+				locked[i].Unlock()
+			}
+			return func() {}, true
+		}
+		locked = append(locked, mu)
+	}
+	return func() {
+		for i := len(locked) - 1; i >= 0; i-- {
+			locked[i].Unlock()
+		}
+	}, false
+}
+
 // GetLastSyncedCFs returns the CF snapshot from the previous sync for "add_new" mode.
 // Returns nil if not needed (behavior is not "add_new") or no history exists.
 func (app *App) GetLastSyncedCFs(instanceID string, arrProfileID int, behavior *SyncBehavior) []string {
@@ -108,12 +143,12 @@ type SyncSummary struct {
 
 // SyncRequest is the input for a dry-run or apply operation.
 type SyncRequest struct {
-	InstanceID        string          `json:"instanceId"`
-	ProfileTrashID    string          `json:"profileTrashId"`
-	ImportedProfileID string          `json:"importedProfileId,omitempty"` // alternative: sync from imported/custom profile
-	ArrProfileID      int             `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
-	ProfileName       string          `json:"profileName"`                 // custom name for new profile (optional)
-	SelectedCFs       []string        `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
+	InstanceID        string   `json:"instanceId"`
+	ProfileTrashID    string   `json:"profileTrashId"`
+	ImportedProfileID string   `json:"importedProfileId,omitempty"` // alternative: sync from imported/custom profile
+	ArrProfileID      int      `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
+	ProfileName       string   `json:"profileName"`                 // custom name for new profile (optional)
+	SelectedCFs       []string `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
 	// ExpandRule, when true, tells handleApply to look up the auto-sync rule
 	// for (instanceId, arrProfileId), run ExpandSelectedCFsForBrandNewGroups
 	// to auto-include CFs from brand-new default-on TRaSH cf-groups, and
@@ -123,15 +158,15 @@ type SyncRequest struct {
 	// the manual Sync All path (frontend quickSync → /api/sync/apply) didn't.
 	// Default false: every other caller of /api/sync/apply (Profile Sync's
 	// Save & Sync, Compare apply, sync-history rerun, etc.) is unaffected.
-	ExpandRule        bool            `json:"expandRule,omitempty"`
+	ExpandRule bool `json:"expandRule,omitempty"`
 	// KeepArrCFIDs lists Arr CF IDs that must NOT be zeroed by ResetMode='reset_to_zero'.
 	// Used by Compare flow when the user unchecks an "Extra in Arr" row (= keep at current score).
 	// Backend treats these as if they were part of the synced set during the reset loop.
 	// Save & Sync flow leaves this empty — it relies on scoreOverrides + extraCFs (trash-id keyed).
-	KeepArrCFIDs      []int           `json:"keepArrCFIDs,omitempty"`
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`    // per-CF score overrides (trash_id → score)
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"`  // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"`  // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
+	KeepArrCFIDs     []int           `json:"keepArrCFIDs,omitempty"`
+	ScoreOverrides   map[string]int  `json:"scoreOverrides,omitempty"`   // per-CF score overrides (trash_id → score)
+	QualityOverrides map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat quality override (name → allowed). Used when QualityStructure is empty.
+	QualityStructure []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
 	// Profile setting overrides (nil = use TRaSH default)
 	Overrides *SyncOverrides `json:"overrides,omitempty"`
 	// Sync behavior rules (nil = defaults: add_missing, remove_custom, reset_to_zero)

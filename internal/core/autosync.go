@@ -20,6 +20,14 @@ import (
 // SourceAutoPullInterval (scheduled tick), SourceManualPull (user clicked
 // Pull in the UI).
 func (app *App) AutoSyncAfterPull(trigger string) {
+	currentCommit := app.Trash.CurrentCommit()
+	if currentCommit == "" {
+		if app.DebugLog != nil {
+			app.DebugLog.Logf(LogAutoSync, "TRaSH data not loaded — skipping AutoSyncAfterPull")
+		}
+		return
+	}
+
 	// Clean up stale rules/history for Arr profiles that no longer exist
 	app.CleanupStaleRules()
 
@@ -39,11 +47,6 @@ func (app *App) AutoSyncAfterPull(trigger string) {
 		return
 	}
 	if len(cfg.AutoSync.Rules) == 0 {
-		return
-	}
-
-	currentCommit := app.Trash.CurrentCommit()
-	if currentCommit == "" {
 		return
 	}
 
@@ -104,6 +107,14 @@ func filterEligibleRulesForPull(rules []AutoSyncRule, currentCommit string) []Au
 // orphaned, imported, or disabled are still skipped — same gates as the
 // pull-driven path.
 func (app *App) ForceSyncAllRules() {
+	currentCommit := app.Trash.CurrentCommit()
+	if currentCommit == "" {
+		if app.DebugLog != nil {
+			app.DebugLog.Logf(LogAutoSync, "TRaSH data not loaded — skipping ForceSyncAllRules")
+		}
+		return
+	}
+
 	app.CleanupStaleRules()
 	app.MigratePriorAvailableGroups()
 
@@ -113,11 +124,6 @@ func (app *App) ForceSyncAllRules() {
 		return
 	}
 	if len(cfg.AutoSync.Rules) == 0 {
-		return
-	}
-
-	currentCommit := app.Trash.CurrentCommit()
-	if currentCommit == "" {
 		return
 	}
 
@@ -1020,8 +1026,8 @@ func (app *App) WaitForInstanceReachable(inst Instance) bool {
 // Mirrors frontend's pdOverrideSummary + pdGroupOptionalCount:
 //
 //   - overrides = profile-level changes (general + quality + per-CF score
-//     overrides + extras). Walks rule.Overrides + rule.QualityStructure
-//     + rule.QualityOverrides + rule.ScoreOverrides directly.
+//     overrides + extras). Walks rule.Overrides, rule.QualityStructure,
+//     rule.QualityOverrides, and rule.ScoreOverrides directly.
 //   - optional  = TRaSH-blessed activations outside profile defaults.
 //     Walks the profile's cf-groups (via ProfileDetailData) and counts
 //     non-required CFs whose selected state diverges from cf.Default.
@@ -1200,7 +1206,11 @@ func (app *App) MigratePriorAvailableGroups() {
 
 	// Cache by commit hash — many rules typically share the same
 	// LastSyncCommit, so we git-read each commit's groups only once.
-	commitCache := make(map[string]map[string]CommitGroupInfo)
+	type commitGroupLookup struct {
+		groups map[string]CommitGroupInfo
+		ok     bool
+	}
+	commitCache := make(map[string]commitGroupLookup)
 
 	var migrated int
 	for _, rule := range cfg.AutoSync.Rules {
@@ -1214,15 +1224,19 @@ func (app *App) MigratePriorAvailableGroups() {
 			continue // imported profile — group resolution is a separate path
 		}
 
-		commitGroups, ok := commitCache[rule.LastSyncCommit]
-		if !ok {
-			commitGroups = app.Trash.GroupsAtCommit(rule.LastSyncCommit)
-			commitCache[rule.LastSyncCommit] = commitGroups
+		lookup, cached := commitCache[rule.LastSyncCommit]
+		if !cached {
+			groups, ok := app.Trash.GroupsAtCommit(rule.LastSyncCommit)
+			lookup = commitGroupLookup{groups: groups, ok: ok}
+			commitCache[rule.LastSyncCommit] = lookup
+		}
+		if !lookup.ok {
+			continue // repo/commit unavailable; leave nil so migration can retry later
 		}
 
 		// Filter to groups that included this rule's profile at that commit.
 		snapshot := make(map[string]bool)
-		for groupTID, info := range commitGroups {
+		for groupTID, info := range lookup.groups {
 			for _, profTID := range info.Includes {
 				if profTID == rule.TrashProfileID {
 					snapshot[groupTID] = info.DefaultEnabled
@@ -1231,9 +1245,10 @@ func (app *App) MigratePriorAvailableGroups() {
 			}
 		}
 
-		// Save. Even an empty snapshot is recorded (as empty map) so we
-		// don't repeat the migration on every pull tick — the empty map
-		// itself signals "we've looked, found nothing relevant".
+		// Save. Even an empty snapshot from a successful commit lookup is
+		// recorded (as empty map) so we don't repeat the migration on every
+		// pull tick — the empty map itself signals "we've looked, found
+		// nothing relevant".
 		ruleID := rule.ID
 		app.Config.Update(func(cfg *Config) {
 			for i := range cfg.AutoSync.Rules {

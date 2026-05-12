@@ -227,8 +227,22 @@
                 </span>
               </template>
               <template x-if="!trashStatus.cloned">
-                <span style="color:var(--text-muted)">Not cloned yet. Click Pull in the nav bar.</span>
+                <span style="color:var(--text-muted)">
+                  Not cloned yet. Click Pull in the nav bar<span x-show="trashStatus.nextPull" x-text="', or wait for ' + nextPullLabel()"></span>.
+                </span>
               </template>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Reset TRaSH Data</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-danger"
+                      @click="resetTrashData()"
+                      :disabled="trashStatus.pulling || pulling || syncing || trashResetting">
+                <span x-show="trashResetting" class="spinner"></span>
+                <span>Reset data</span>
+              </button>
+              <span style="font-size:12px;color:var(--text-muted)">Deletes only the local cache. Pull redownloads TRaSH data; Sync All forces an Arr refresh.</span>
             </div>
           </div>
         </div>

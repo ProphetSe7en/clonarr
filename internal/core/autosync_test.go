@@ -2,6 +2,9 @@ package core
 
 import (
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -292,8 +295,8 @@ func TestApplyOrphanMarking_MixedTransitions(t *testing.T) {
 		}},
 	}
 	valid := map[string]map[int]bool{
-		"inst-A": {1: true},        // 10 missing
-		"inst-B": {20: true},       // 20 reappeared
+		"inst-A": {1: true},  // 10 missing
+		"inst-B": {20: true}, // 20 reappeared
 	}
 	now := "2026-04-27T12:00:00Z"
 
@@ -304,5 +307,121 @@ func TestApplyOrphanMarking_MixedTransitions(t *testing.T) {
 	}
 	if cfg.AutoSync.Rules[1].OrphanedAt != "" {
 		t.Errorf("r2 should be cleared")
+	}
+}
+
+func seedTrashGroupGitCommit(t *testing.T, dataDir string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dataDir, "docs", "json", "radarr", "cf-groups"), 0755); err != nil {
+		t.Fatalf("mkdir cf-groups: %v", err)
+	}
+	groupJSON := `{
+  "name": "Test Group",
+  "trash_id": "group-1",
+  "default": "true",
+  "quality_profiles": { "include": { "profile": "profile-1" } }
+}`
+	if err := os.WriteFile(filepath.Join(dataDir, "docs", "json", "radarr", "cf-groups", "group.json"), []byte(groupJSON), 0644); err != nil {
+		t.Fatalf("write cf-group: %v", err)
+	}
+
+	cmds := [][]string{
+		{"git", "-C", dataDir, "init", "-q"},
+		{"git", "-C", dataDir, "config", "user.email", "test@example.com"},
+		{"git", "-C", dataDir, "config", "user.name", "test"},
+		{"git", "-C", dataDir, "config", "commit.gpgsign", "false"},
+		{"git", "-C", dataDir, "add", "docs/json/radarr/cf-groups/group.json"},
+		{"git", "-C", dataDir, "commit", "-q", "-m", "groups"},
+	}
+	for _, c := range cmds {
+		if out, err := exec.Command(c[0], c[1:]...).CombinedOutput(); err != nil {
+			t.Fatalf("%s: %v\n%s", strings.Join(c, " "), err, out)
+		}
+	}
+	out, err := exec.Command("git", "-C", dataDir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD: %v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestMigratePriorAvailableGroupsLeavesNilWhenGitLookupFails(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfigStore(dir)
+	if err := cfg.Set(&Config{
+		AutoSync: AutoSyncConfig{Rules: []AutoSyncRule{{
+			ID:             "rule-1",
+			TrashProfileID: "profile-1",
+			LastSyncCommit: "missing-commit",
+		}}},
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	app := &App{
+		Config:   cfg,
+		Trash:    NewTrashStore(dir),
+		DebugLog: NewDebugLogger(dir),
+	}
+
+	app.MigratePriorAvailableGroups()
+
+	got := cfg.Get().AutoSync.Rules[0].PriorAvailableGroups
+	if got != nil {
+		t.Fatalf("PriorAvailableGroups = %#v, want nil so migration can retry", got)
+	}
+}
+
+func TestMigratePriorAvailableGroupsPopulatesFromCommit(t *testing.T) {
+	dir := t.TempDir()
+	commit := seedTrashGroupGitCommit(t, filepath.Join(dir, "trash-guides"))
+	cfg := NewConfigStore(dir)
+	if err := cfg.Set(&Config{
+		AutoSync: AutoSyncConfig{Rules: []AutoSyncRule{{
+			ID:             "rule-1",
+			TrashProfileID: "profile-1",
+			LastSyncCommit: commit,
+		}}},
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	app := &App{
+		Config:   cfg,
+		Trash:    NewTrashStore(dir),
+		DebugLog: NewDebugLogger(dir),
+	}
+
+	app.MigratePriorAvailableGroups()
+
+	got := cfg.Get().AutoSync.Rules[0].PriorAvailableGroups
+	if got == nil || !got["group-1"] {
+		t.Fatalf("PriorAvailableGroups = %#v, want group-1=true", got)
+	}
+}
+
+func TestForceSyncAllRulesWithNoTrashCommitSkipsMigration(t *testing.T) {
+	dir := t.TempDir()
+	commit := seedTrashGroupGitCommit(t, filepath.Join(dir, "trash-guides"))
+	cfg := NewConfigStore(dir)
+	if err := cfg.Set(&Config{
+		AutoSync: AutoSyncConfig{Rules: []AutoSyncRule{{
+			ID:             "rule-1",
+			Enabled:        true,
+			TrashProfileID: "profile-1",
+			LastSyncCommit: commit,
+		}}},
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	app := &App{
+		Config:   cfg,
+		Trash:    NewTrashStore(dir),
+		DebugLog: NewDebugLogger(dir),
+	}
+
+	app.ForceSyncAllRules()
+
+	got := cfg.Get().AutoSync.Rules[0].PriorAvailableGroups
+	if got != nil {
+		t.Fatalf("PriorAvailableGroups = %#v, want nil when current TRaSH commit is empty", got)
 	}
 }

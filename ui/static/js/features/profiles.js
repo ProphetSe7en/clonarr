@@ -467,6 +467,87 @@ export default {
       }
     },
 
+    resetTrashData() {
+      if (this.trashResetting || this.trashStatus?.pulling || this.pulling || this.syncing) return;
+      this.confirmModal = {
+        show: true,
+        title: 'Reset TRaSH Data',
+        message: 'Delete the local TRaSH Guides cache and pull metadata?\n\nUser settings, instances, sync rules, custom profiles, and custom CFs are not deleted.\n\nAfter reset, Pull downloads a fresh TRaSH cache. If it lands on the same TRaSH commit your rules already synced, Pull will not force Arr profiles to resync. Use Sync All after Pull if you want to force an Arr refresh.',
+        confirmLabel: 'Reset data',
+        onConfirm: () => this._resetTrashDataConfirmed(),
+      };
+    },
+
+    async _resetTrashDataConfirmed() {
+      if (this.trashResetting) return;
+      this.trashResetting = true;
+      try {
+        const r = await fetch('/api/trash/reset', { method: 'POST' });
+        if (!r.ok) {
+          let msg = 'Failed to reset TRaSH data';
+          try {
+            const data = await r.json();
+            if (data?.error) msg = data.error;
+          } catch {}
+          this.showToast(msg, 'error', 6000);
+          return;
+        }
+        await this.loadTrashStatus();
+        this.clearTrashDerivedCaches();
+        this.showToast('TRaSH data reset. Pull downloads fresh data; use Sync All after Pull for a forced Arr refresh.', 'info', 7000);
+      } catch (e) {
+        this.showToast('Failed to reset TRaSH data: ' + e.message, 'error', 6000);
+      } finally {
+        this.trashResetting = false;
+      }
+    },
+
+    clearTrashDerivedCaches() {
+      this.trashProfiles = { radarr: [], sonarr: [] };
+      this.qualitySizesPerApp = {};
+      this.cfBrowseData = {};
+      this.conflictsData = {};
+      this.namingData = {};
+
+      this.pbCategories = [];
+      this.pbScoreSets = [];
+      this.pbQualityPresets = [];
+
+      this.extraCFAllCFs = [];
+      this.extraCFGroups = [];
+      this._extraInProfileSet = null;
+
+      this.cfgbCFs = [];
+      this.cfgbGroups = [];
+      this.cfgbProfiles = [];
+      this.cfgbTrashCFGroups = [];
+      this.cfgbHasCustom = false;
+      this.cfgbUngroupedTrashCount = 0;
+      this.cfgbUngroupedRemainingCount = 0;
+      this.cfgbLoadError = '';
+      this._cfgbTrashFlat = [];
+      this._cfgbTrashGroupMap = new Map();
+      this._cfgbTrashHasCustom = false;
+      this._cfgbLoadFor = '';
+
+      this._sandboxCFCache = {};
+      this._trashScoreContextCache = {};
+      this.profileDetail = null;
+      this.showProfileInfo = false;
+      this.profileBuilder = false;
+      this.sandboxCFBrowser = {
+        open: false,
+        appType: '',
+        categories: [],
+        customCFs: [],
+        selected: {},
+        scores: {},
+        expanded: {},
+        filter: '',
+      };
+      this.showChangelog = false;
+    },
+
     // --- Profile Detail ---
 
     // restoreFromRule controls auto-restore from existing sync rules:

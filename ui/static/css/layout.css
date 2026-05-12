@@ -15,6 +15,7 @@
   .topnav .sync-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); flex-shrink: 0; }
   .topnav .sync-status .dot.stale { background: var(--accent-orange); }
   .topnav .sync-status .dot.none { background: var(--text-secondary); }
+  .topnav .trash-sync-button { gap: 4px; }
 
   /* Changelog dropdown */
   .changelog-dropdown { position: absolute; top: calc(100% + 6px); right: 0; width: 500px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 8px; box-shadow: 0 8px 24px var(--alpha-shadow); z-index: 200; max-height: 420px; overflow-y: auto; }
@@ -53,4 +54,3 @@
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .section-title { font-size: 18px; font-weight: 600; }
   .section-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
-

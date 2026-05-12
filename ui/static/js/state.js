@@ -88,6 +88,7 @@ export default function baseState() {
     expandedInstances: {},
     expandedProfileGroups: {},
     pulling: false,
+    trashResetting: false,
     profileTabs: {},  // per app-type profile tab: { radarr: 'trash-sync', sonarr: 'trash-sync' }
     compareInstanceIds: {},  // per app-type: { radarr: 'id', sonarr: 'id' }
     syncRulesExpanded: {},  // per app-type: { radarr: true, sonarr: false }

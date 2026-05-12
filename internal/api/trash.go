@@ -3,6 +3,7 @@ package api
 import (
 	"clonarr/internal/core"
 	"clonarr/internal/utils"
+	"errors"
 	"log"
 	"net/http"
 	"sort"
@@ -121,6 +122,25 @@ func (s *Server) handleTrashPull(w http.ResponseWriter, r *http.Request) {
 	})
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]string{"status": "pulling"})
+}
+
+func (s *Server) handleTrashReset(w http.ResponseWriter, r *http.Request) {
+	unlockSyncs, busy := s.Core.TryLockConfiguredSyncs()
+	if busy {
+		writeError(w, http.StatusConflict, "Sync already in progress; try again after it finishes")
+		return
+	}
+	defer unlockSyncs()
+
+	if err := s.Core.Trash.Reset(); err != nil {
+		if errors.Is(err, core.ErrTrashBusy) {
+			writeError(w, http.StatusConflict, "TRaSH pull/reset already in progress")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Failed to reset TRaSH data: "+err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "reset"})
 }
 
 // shortCommit returns the first 7 characters of a git commit hash for

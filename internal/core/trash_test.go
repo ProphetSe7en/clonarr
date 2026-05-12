@@ -1,6 +1,189 @@
 package core
 
-import "testing"
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func seedTrashStoreForReset(t *testing.T) (*TrashStore, string) {
+	t.Helper()
+	dir := t.TempDir()
+	ts := NewTrashStore(dir)
+
+	if err := os.MkdirAll(filepath.Join(dir, "trash-guides", ".git"), 0755); err != nil {
+		t.Fatalf("mkdir trash-guides: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "trash-guides", "sentinel.txt"), []byte("data"), 0644); err != nil {
+		t.Fatalf("write repo sentinel: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "last-pull.txt"), []byte("2026-05-11T12:00:00Z"), 0644); err != nil {
+		t.Fatalf("write last-pull: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "last-pull-diff.json"), []byte(`{"prevCommit":"old","newCommit":"abc123","summary":"changed","time":"2026-05-11T12:00:00Z"}`), 0644); err != nil {
+		t.Fatalf("write last diff: %v", err)
+	}
+
+	ts.data = &TrashData{
+		LastPull:   time.Date(2026, time.May, 11, 12, 0, 0, 0, time.UTC),
+		CommitHash: "abc123",
+		CommitDate: "2026-05-11 12:00:00 +0000",
+		LastDiff: &PullDiff{
+			PrevCommit: "old",
+			NewCommit:  "abc123",
+			Summary:    "changed",
+			Time:       "2026-05-11T12:00:00Z",
+		},
+		Changelog: []ChangelogSection{{Date: "2026-05-11"}},
+		Radarr: AppData{
+			CustomFormats: map[string]*TrashCF{"cf1": {TrashID: "cf1"}},
+			CFGroups:      []*TrashCFGroup{{Name: "group"}},
+			Profiles:      []*TrashQualityProfile{{Name: "profile"}},
+		},
+		Sonarr: AppData{
+			CustomFormats: map[string]*TrashCF{"cf2": {TrashID: "cf2"}},
+			CFGroups:      []*TrashCFGroup{{Name: "group"}},
+			Profiles:      []*TrashQualityProfile{{Name: "profile"}},
+		},
+	}
+	ts.pullError = "previous failure"
+	ts.lastChangelogDate = "2026-05-11"
+
+	return ts, dir
+}
+
+func assertPathMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("%s exists or stat failed with non-missing error: %v", path, err)
+	}
+}
+
+func assertPathExists(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("%s missing: %v", path, err)
+	}
+}
+
+func TestTrashStoreResetClearsLocalTrashData(t *testing.T) {
+	ts, dir := seedTrashStoreForReset(t)
+
+	if err := ts.Reset(); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+
+	assertPathMissing(t, filepath.Join(dir, "trash-guides"))
+	assertPathMissing(t, filepath.Join(dir, "last-pull.txt"))
+	assertPathMissing(t, filepath.Join(dir, "last-pull-diff.json"))
+
+	st := ts.Status()
+	if st.Cloned {
+		t.Fatalf("Cloned = true, want false")
+	}
+	if st.CommitHash != "" {
+		t.Fatalf("CommitHash = %q, want empty", st.CommitHash)
+	}
+	if st.LastPull != "" {
+		t.Fatalf("LastPull = %q, want empty", st.LastPull)
+	}
+	if st.LastDiff != nil {
+		t.Fatalf("LastDiff = %#v, want nil", st.LastDiff)
+	}
+	if st.PullError != "" {
+		t.Fatalf("PullError = %q, want empty", st.PullError)
+	}
+	if st.RadarrCFs != 0 || st.SonarrCFs != 0 || st.RadarrGroups != 0 || st.SonarrGroups != 0 || st.RadarrProfs != 0 || st.SonarrProfs != 0 {
+		t.Fatalf("counts not cleared: %+v", st)
+	}
+	if ts.lastChangelogDate != "" {
+		t.Fatalf("lastChangelogDate = %q, want empty", ts.lastChangelogDate)
+	}
+}
+
+func TestTrashStoreResetIdempotentWhenFilesMissing(t *testing.T) {
+	ts := NewTrashStore(t.TempDir())
+
+	if err := ts.Reset(); err != nil {
+		t.Fatalf("first Reset: %v", err)
+	}
+	if err := ts.Reset(); err != nil {
+		t.Fatalf("second Reset: %v", err)
+	}
+
+	st := ts.Status()
+	if st.Cloned || st.CommitHash != "" || st.LastDiff != nil || st.PullError != "" {
+		t.Fatalf("status not empty after idempotent reset: %+v", st)
+	}
+}
+
+func TestTrashStoreResetBusyLeavesFilesIntact(t *testing.T) {
+	ts, dir := seedTrashStoreForReset(t)
+
+	ts.pullMu.Lock()
+	err := ts.Reset()
+	ts.pullMu.Unlock()
+
+	if !errors.Is(err, ErrTrashBusy) {
+		t.Fatalf("Reset error = %v, want ErrTrashBusy", err)
+	}
+	assertPathExists(t, filepath.Join(dir, "trash-guides"))
+	assertPathExists(t, filepath.Join(dir, "last-pull.txt"))
+	assertPathExists(t, filepath.Join(dir, "last-pull-diff.json"))
+
+	st := ts.Status()
+	if !st.Cloned || st.CommitHash == "" || st.LastDiff == nil || st.PullError == "" {
+		t.Fatalf("status was unexpectedly cleared while busy: %+v", st)
+	}
+}
+
+func TestTrashStoreResetWaitsForRepoReaders(t *testing.T) {
+	ts, dir := seedTrashStoreForReset(t)
+
+	ts.repoMu.RLock()
+	done := make(chan error, 1)
+	go func() {
+		done <- ts.Reset()
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if ts.Status().Pulling {
+			break
+		}
+		if time.Now().After(deadline) {
+			ts.repoMu.RUnlock()
+			t.Fatalf("timed out waiting for Reset to acquire pull lock")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	select {
+	case err := <-done:
+		ts.repoMu.RUnlock()
+		t.Fatalf("Reset completed while repo read lock was held: %v", err)
+	default:
+	}
+	assertPathExists(t, filepath.Join(dir, "trash-guides"))
+	assertPathExists(t, filepath.Join(dir, "last-pull.txt"))
+	assertPathExists(t, filepath.Join(dir, "last-pull-diff.json"))
+
+	ts.repoMu.RUnlock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Reset after repo read lock released: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for Reset after repo read lock released")
+	}
+
+	assertPathMissing(t, filepath.Join(dir, "trash-guides"))
+	assertPathMissing(t, filepath.Join(dir, "last-pull.txt"))
+	assertPathMissing(t, filepath.Join(dir, "last-pull-diff.json"))
+}
 
 // CompareCFCategories drives the unified group-sort across both backend and
 // frontend (the JS _compareCFCategories mirrors this). The contract:
@@ -8,6 +191,7 @@ import "testing"
 //   - Tier 1: SQP-prefix categories
 //   - Tier 2: "Other" / unrecognised
 //   - Tier 3: Custom
+//
 // Within tier, alphabetical on category name.
 func TestCompareCFCategories_Tiering(t *testing.T) {
 	cases := []struct {
@@ -61,14 +245,14 @@ func TestCompareCFGroups_Tiering(t *testing.T) {
 	intp := func(n int) *int { return &n }
 
 	cases := []struct {
-		desc                                   string
-		aName                                  string
-		aGroup                                 *int
-		aCustom                                bool
-		bName                                  string
-		bGroup                                 *int
-		bCustom                                bool
-		want                                   int // -1, 0, +1
+		desc    string
+		aName   string
+		aGroup  *int
+		aCustom bool
+		bName   string
+		bGroup  *int
+		bCustom bool
+		want    int // -1, 0, +1
 	}{
 		// Both have Group — compare by integer
 		{"both have group, lower wins", "[Audio]", intp(1), false, "[German]", intp(11), false, -1},
@@ -112,16 +296,16 @@ func TestCompareCFGroups_Tiering(t *testing.T) {
 // upper-case "[SQP]" prefix but defensive coding for any drift.
 func TestCategoryTier_SQPCaseInsensitive(t *testing.T) {
 	cases := map[string]int{
-		"SQP":                          1,
-		"sqp-1":                        1,
-		"SqP-4 (MA Hybrid)":            1,
-		"sqp-something":                1,
-		"Audio":                        0,
-		"Custom":                       3,
-		"Other":                        2,
-		"":                             2,
-		"Streaming Services":           0,
-		"Squad":                        0, // does not start with SQP — the literal Q matters
+		"SQP":                1,
+		"sqp-1":              1,
+		"SqP-4 (MA Hybrid)":  1,
+		"sqp-something":      1,
+		"Audio":              0,
+		"Custom":             3,
+		"Other":              2,
+		"":                   2,
+		"Streaming Services": 0,
+		"Squad":              0, // does not start with SQP — the literal Q matters
 	}
 	for cat, want := range cases {
 		got := CategoryTier(cat)

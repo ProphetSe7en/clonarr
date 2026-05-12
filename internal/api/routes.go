@@ -42,6 +42,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	// TRaSH
 	mux.HandleFunc("GET /api/trash/status", s.handleTrashStatus)
 	mux.HandleFunc("POST /api/trash/pull", s.handleTrashPull)
+	mux.HandleFunc("POST /api/trash/reset", s.handleTrashReset)
 	mux.HandleFunc("GET /api/trash/{app}/cfs", s.handleTrashCFs)
 	mux.HandleFunc("GET /api/trash/{app}/score-contexts", s.handleTrashScoreContexts)
 	mux.HandleFunc("GET /api/trash/{app}/cf-groups", s.handleTrashCFGroups)
