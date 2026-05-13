@@ -425,3 +425,114 @@ func TestForceSyncAllRulesWithNoTrashCommitSkipsMigration(t *testing.T) {
 		t.Fatalf("PriorAvailableGroups = %#v, want nil when current TRaSH commit is empty", got)
 	}
 }
+
+// TestCleanupDanglingCustomCFsOnRule_StripsBothMaps verifies the helper
+// removes "custom:" IDs from BOTH SelectedCFs (slice) and ScoreOverrides
+// (map), persists via Config.Update, and reports the removed IDs.
+func TestCleanupDanglingCustomCFsOnRule_StripsBothMaps(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfigStore(dir)
+	if err := cfg.Set(&Config{
+		AutoSync: AutoSyncConfig{Rules: []AutoSyncRule{{
+			ID:          "rule-1",
+			SelectedCFs: []string{"trash-keep-1", "custom:dead1", "custom:keep-1", "custom:dead2"},
+			ScoreOverrides: map[string]int{
+				"trash-keep-2":   500,
+				"custom:dead1":   100,
+				"custom:keep-2":  200,
+				"custom:dead3":   -50, // score-only orphan, not in SelectedCFs
+			},
+		}}},
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	app := &App{Config: cfg, DebugLog: NewDebugLogger(dir)}
+
+	removed := app.CleanupDanglingCustomCFsOnRule("rule-1", []string{"custom:dead1", "custom:dead2", "custom:dead3"})
+
+	got := cfg.Get().AutoSync.Rules[0]
+	wantSelected := map[string]bool{"trash-keep-1": true, "custom:keep-1": true}
+	if len(got.SelectedCFs) != len(wantSelected) {
+		t.Fatalf("SelectedCFs after cleanup: got %v, want %d entries", got.SelectedCFs, len(wantSelected))
+	}
+	for _, id := range got.SelectedCFs {
+		if !wantSelected[id] {
+			t.Errorf("SelectedCFs unexpectedly retained %q", id)
+		}
+	}
+	wantScores := map[string]int{"trash-keep-2": 500, "custom:keep-2": 200}
+	if len(got.ScoreOverrides) != len(wantScores) {
+		t.Fatalf("ScoreOverrides after cleanup: got %v, want %v", got.ScoreOverrides, wantScores)
+	}
+	for k, v := range wantScores {
+		if got.ScoreOverrides[k] != v {
+			t.Errorf("ScoreOverrides[%q] = %d, want %d", k, got.ScoreOverrides[k], v)
+		}
+	}
+	if len(removed) != 3 {
+		t.Errorf("removed IDs count = %d, want 3 (custom:dead1, custom:dead2, custom:dead3)", len(removed))
+	}
+	for _, id := range removed {
+		if id != "custom:dead1" && id != "custom:dead2" && id != "custom:dead3" {
+			t.Errorf("unexpected removed ID: %q", id)
+		}
+	}
+}
+
+// TestCleanupDanglingCustomCFsOnRule_NoopOnEmptyOrTrashOnly verifies the
+// helper is a safe no-op for empty inputs and rejects non-"custom:"
+// prefixed IDs (TRaSH orphans must NOT be auto-cleaned).
+func TestCleanupDanglingCustomCFsOnRule_NoopOnEmptyOrTrashOnly(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfigStore(dir)
+	if err := cfg.Set(&Config{
+		AutoSync: AutoSyncConfig{Rules: []AutoSyncRule{{
+			ID:             "rule-1",
+			SelectedCFs:    []string{"trash-1", "custom:keep-1"},
+			ScoreOverrides: map[string]int{"trash-1": 100, "custom:keep-1": 200},
+		}}},
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	app := &App{Config: cfg, DebugLog: NewDebugLogger(dir)}
+
+	// Empty input: no-op
+	if got := app.CleanupDanglingCustomCFsOnRule("rule-1", nil); got != nil {
+		t.Errorf("nil input: got removed=%v, want nil", got)
+	}
+
+	// TRaSH IDs are filtered out — must not be cleaned
+	if got := app.CleanupDanglingCustomCFsOnRule("rule-1", []string{"trash-orphan-1", "trash-orphan-2"}); got != nil {
+		t.Errorf("TRaSH IDs: got removed=%v, want nil (TRaSH IDs must survive)", got)
+	}
+
+	// Rule unchanged
+	after := cfg.Get().AutoSync.Rules[0]
+	if len(after.SelectedCFs) != 2 || len(after.ScoreOverrides) != 2 {
+		t.Errorf("rule mutated by no-op call: SelectedCFs=%v ScoreOverrides=%v", after.SelectedCFs, after.ScoreOverrides)
+	}
+}
+
+// TestCleanupDanglingCustomCFsOnRule_UnknownRule verifies the helper does
+// not panic or mutate other rules when the targeted ruleID doesn't exist.
+func TestCleanupDanglingCustomCFsOnRule_UnknownRule(t *testing.T) {
+	dir := t.TempDir()
+	cfg := NewConfigStore(dir)
+	if err := cfg.Set(&Config{
+		AutoSync: AutoSyncConfig{Rules: []AutoSyncRule{{
+			ID:          "rule-1",
+			SelectedCFs: []string{"custom:dead1"},
+		}}},
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	app := &App{Config: cfg, DebugLog: NewDebugLogger(dir)}
+
+	if got := app.CleanupDanglingCustomCFsOnRule("nonexistent-rule", []string{"custom:dead1"}); got != nil {
+		t.Errorf("unknown rule: got removed=%v, want nil", got)
+	}
+	// rule-1 must remain untouched
+	if got := cfg.Get().AutoSync.Rules[0].SelectedCFs; len(got) != 1 || got[0] != "custom:dead1" {
+		t.Errorf("rule-1 mutated by call to other ruleID: SelectedCFs=%v", got)
+	}
+}

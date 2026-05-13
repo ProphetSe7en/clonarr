@@ -229,6 +229,7 @@ export default function baseState() {
     cfExportCopied: false,       // clipboard copy feedback
     cfEditorSchema: {},          // cached per app type: [{implementation, fields:[{name,label,type,selectOptions}]}]
     cfEditorSchemaLoading: false,
+    cfEditorSchemaError: '',     // populated when schema fetch fails (Arr unreachable, no instance, etc.)
     cfEditorShowPreview: false,
     cfEditorSpecCounter: 0,     // unique ID counter for x-for keys
 
@@ -356,6 +357,7 @@ export default function baseState() {
     syncResultDetailsOpen: false,
     dryrunDetailsOpen: false,
     syncing: false,
+    savingRule: false,       // Save-only PUT in flight (Profile Detail editor "Save" button)
     syncPreview: null,       // dry-run preview for update mode in sync modal
     syncPreviewLoading: false,
 

@@ -512,6 +512,33 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 
 	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID))
 
+	// Strip dangling "custom:" refs from the rule on the same successful-sync
+	// boundary that records history — keeps rule data clean so the profile
+	// editor doesn't render "Deleted CF (...)" ghost entries for customs the
+	// user already removed. TRaSH-id orphans are NOT cleaned (see helper).
+	if removed := app.CleanupDanglingCustomCFsOnRule(rule.ID, plan.DanglingCustomCFs); len(removed) > 0 {
+		log.Printf("Auto-sync: rule %s — cleaned %d dangling custom-CF reference(s) after sync", rule.ID, len(removed))
+		app.DebugLog.Logf(LogAutoSync, "Rule %s: removed %d dangling custom CFs: %s", rule.ID, len(removed), strings.Join(removed, ", "))
+		// Refresh rule local snapshot so the history entry below doesn't
+		// re-introduce the orphan IDs via the rule reference.
+		app.Config.Update(func(cfg *Config) {
+			for i := range cfg.AutoSync.Rules {
+				if cfg.AutoSync.Rules[i].ID == rule.ID {
+					rule.SelectedCFs = append([]string(nil), cfg.AutoSync.Rules[i].SelectedCFs...)
+					if len(cfg.AutoSync.Rules[i].ScoreOverrides) > 0 {
+						rule.ScoreOverrides = make(map[string]int, len(cfg.AutoSync.Rules[i].ScoreOverrides))
+						for k, v := range cfg.AutoSync.Rules[i].ScoreOverrides {
+							rule.ScoreOverrides[k] = v
+						}
+					} else {
+						rule.ScoreOverrides = nil
+					}
+					return
+				}
+			}
+		})
+	}
+
 	// Update sync history (mirror manual sync — api/sync.go handleApply).
 	allCFIDs := make([]string, 0)
 	for _, a := range plan.CFActions {
@@ -1315,6 +1342,72 @@ func (app *App) UpdateAutoSyncRuleSelectedCFs(ruleID string, selectedCFs []strin
 	})
 }
 
+// CleanupDanglingCustomCFsOnRule strips "custom:" CF references from a
+// rule's SelectedCFs and ScoreOverrides when the underlying custom CF no
+// longer exists in CustomCFs (the user deleted it). Called after a
+// successful sync apply with the plan.DanglingCustomCFs list — these are
+// the orphans BuildSyncPlan already silently skipped at plan time.
+//
+// TRaSH-id orphans are NOT cleaned: they can transiently disappear during
+// Reset/Pull cycles or restructure migrations and must survive across syncs.
+// danglingIDs is filtered to "custom:" prefix only as a defense in depth —
+// callers are expected to pass plan.DanglingCustomCFs which already only
+// contains custom-prefixed IDs.
+//
+// Returns the slice of IDs actually removed (for logging). Empty when
+// nothing changed. No-op when danglingIDs is empty.
+func (app *App) CleanupDanglingCustomCFsOnRule(ruleID string, danglingIDs []string) []string {
+	if len(danglingIDs) == 0 {
+		return nil
+	}
+	targets := make(map[string]bool, len(danglingIDs))
+	for _, id := range danglingIDs {
+		if strings.HasPrefix(id, "custom:") {
+			targets[id] = true
+		}
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+
+	removedSet := make(map[string]bool)
+	app.Config.Update(func(cfg *Config) {
+		for i := range cfg.AutoSync.Rules {
+			if cfg.AutoSync.Rules[i].ID != ruleID {
+				continue
+			}
+			r := &cfg.AutoSync.Rules[i]
+			if len(r.SelectedCFs) > 0 {
+				kept := r.SelectedCFs[:0:0] // new backing array, don't alias caller's slice
+				for _, id := range r.SelectedCFs {
+					if targets[id] {
+						removedSet[id] = true
+						continue
+					}
+					kept = append(kept, id)
+				}
+				r.SelectedCFs = kept
+			}
+			for id := range r.ScoreOverrides {
+				if targets[id] {
+					delete(r.ScoreOverrides, id)
+					removedSet[id] = true
+				}
+			}
+			return
+		}
+	})
+
+	if len(removedSet) == 0 {
+		return nil
+	}
+	removed := make([]string, 0, len(removedSet))
+	for id := range removedSet {
+		removed = append(removed, id)
+	}
+	return removed
+}
+
 // updateAutoSyncRuleCommit updates the last sync commit and clears error for a rule.
 // priorGroups is the snapshot of cf-groups available for this rule's profile at
 // this sync — written so future loads can distinguish "user opted out of an
@@ -1324,8 +1417,13 @@ func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string, priorGroups map[
 	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
+				now := time.Now().Format(time.RFC3339)
 				cfg.AutoSync.Rules[i].LastSyncCommit = commit
-				cfg.AutoSync.Rules[i].LastSyncTime = time.Now().Format(time.RFC3339)
+				cfg.AutoSync.Rules[i].LastSyncTime = now
+				// Equalize UpdatedAt with LastSyncTime so any "Save-only"
+				// edit that happened before this auto-sync tick is now
+				// considered synced — the indicator clears.
+				cfg.AutoSync.Rules[i].UpdatedAt = now
 				cfg.AutoSync.Rules[i].LastSyncError = ""
 				if priorGroups != nil {
 					cfg.AutoSync.Rules[i].PriorAvailableGroups = priorGroups
@@ -1358,13 +1456,16 @@ func ComputeAvailableGroups(ad *AppData, profileTrashID string) map[string]bool 
 	return result
 }
 
-// updateAutoSyncRuleError sets the last error for a rule (does NOT update commit).
+// updateAutoSyncRuleError sets the last error for a rule (does NOT update commit
+// or LastSyncTime — LastSyncTime is "last SUCCESSFUL sync", which keeps the
+// Profiles-tab "● unsynced" indicator visible when the user has unsynced edits
+// AND the auto-sync run failed to apply them. The error badge surfaces the
+// failure separately.
 func (app *App) UpdateAutoSyncRuleError(ruleID, errMsg string) {
 	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
 				cfg.AutoSync.Rules[i].LastSyncError = errMsg
-				cfg.AutoSync.Rules[i].LastSyncTime = time.Now().Format(time.RFC3339)
 				return
 			}
 		}

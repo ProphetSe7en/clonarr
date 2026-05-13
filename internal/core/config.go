@@ -130,9 +130,19 @@ type AutoSyncRule struct {
 	QualityStructure []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (replaces TRaSH items). Trumps QualityOverrides when set.
 	Behavior         *SyncBehavior   `json:"behavior,omitempty"`         // sync behavior rules (nil = defaults)
 	Overrides        *SyncOverrides  `json:"overrides,omitempty"`        // user overrides (min score, language, cutoff, etc.)
-	LastSyncCommit   string          `json:"lastSyncCommit,omitempty"`
-	LastSyncTime     string          `json:"lastSyncTime,omitempty"`
-	LastSyncError    string          `json:"lastSyncError,omitempty"`
+	LastSyncCommit string `json:"lastSyncCommit,omitempty"`
+	// LastSyncTime is the timestamp of the last SUCCESSFUL sync — bumped by
+	// the auto-sync engine (UpdateAutoSyncRuleCommit), manual /api/sync/apply,
+	// and Restore. NOT bumped on sync failure (UpdateAutoSyncRuleError leaves
+	// it alone) so the "● unsynced" indicator survives across failed auto-sync
+	// ticks until the user fixes the underlying error.
+	LastSyncTime  string `json:"lastSyncTime,omitempty"`
+	LastSyncError string `json:"lastSyncError,omitempty"`
+	// UpdatedAt is bumped every time the rule's user-facing settings change
+	// (Save-only PUT with a real diff, sync apply success, auto-sync engine
+	// success). Compared against LastSyncTime to surface "● unsynced" on the
+	// rule card when saved overrides haven't been pushed to Arr yet.
+	UpdatedAt string `json:"updatedAt,omitempty"`
 	// PriorAvailableGroups is a snapshot of which cf-groups were available
 	// for this rule's profile at last successful sync. Map of
 	// group_trash_id → was_default_enabled_at_last_sync. Used to detect

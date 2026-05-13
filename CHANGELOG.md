@@ -73,6 +73,16 @@ aren't score concepts.
   Apply / Dry Run / Cancel buttons stay visible with long change
   lists.
 
+### Save without syncing
+
+The rule editor (Profiles tab → Edit pencil) has a third button next
+to Save &amp; Sync: **Save**. Saves your changes to the rule without
+pushing them to Radarr/Sonarr. The next Sync All, per-rule Sync Now,
+or scheduled Auto-Sync picks them up.
+
+Rules with saved-but-not-synced edits show a `● unsynced` chip on the
+rule card so you can spot the pending ones.
+
 ### Polish
 
 - CF category colors refreshed: **Required** is now slate teal,

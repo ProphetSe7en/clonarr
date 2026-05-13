@@ -66,8 +66,29 @@ export default {
 
     getAllSelectedCFIds() {
       const ids = this.getSelectedCFIds();
-      const extraIds = Object.keys(this.extraCFs);
+      const extraIds = Object.keys(this.extraCFs).filter(tid => !this._isOrphanCustomTrashId(tid));
       return extraIds.length > 0 ? [...ids, ...extraIds] : ids;
+    },
+
+    // True when tid is a custom: ID that no longer resolves to a live
+    // custom CF. Used to strip dead refs from sync payloads + post-sync
+    // rule persistence so backend doesn't have to clean up after us.
+    //
+    // GUARDED: only returns true when extraCFAllCFs is populated. Empty
+    // means /api/trash/{app}/all-cfs returned nothing (TRaSH cache empty
+    // during Reset window — backend short-circuits and drops customs from
+    // the response). We can't distinguish "deleted" from "not loaded yet"
+    // in that state, so we leave the IDs alone and let backend cleanup
+    // catch them post-sync. Worst case in the Reset window: orphan ref
+    // round-trips one extra time — same as before this fix.
+    _isOrphanCustomTrashId(tid) {
+      if (!tid || !tid.startsWith('custom:')) return false;
+      const all = this.extraCFAllCFs || [];
+      if (all.length === 0) return false; // unknown — don't strip
+      for (const cf of all) {
+        if (cf.trashId === tid) return false; // resolved — alive
+      }
+      return true; // custom: prefix + customs loaded + no match = dead
     },
 
     resolveCFName(tid) {
@@ -581,7 +602,19 @@ export default {
       }
       try {
         const r = await fetch(`/api/trash/${inst.type}/profiles/${profile.trashId}`);
-        if (!r.ok) { console.error('loadProfileDetail: HTTP', r.status); return; }
+        if (!r.ok) {
+          // Surface the backend error so the user knows what to do
+          // (TRaSH data empty → run Pull, profile missing → upstream
+          // change). Silent console.error left the click feeling broken.
+          let msg = 'Could not open profile';
+          try { const data = await r.json(); if (data?.error) msg = data.error; } catch (_) {}
+          this.showToast(msg, 'error', 8000);
+          // Reset the half-loaded state so the overlay doesn't show a
+          // stale shell — return to the profile list.
+          this.profileDetail = null;
+          console.error('loadProfileDetail: HTTP', r.status);
+          return;
+        }
         const detail = await r.json();
         this.profileDetail = { ...this.profileDetail, detail: detail };
         this.initDetailSections(detail);
@@ -1490,9 +1523,20 @@ export default {
           body.keepArrCFIDs = existingRule.keepArrCFIDs;
         }
       }
-      // Per-CF score overrides + extra CFs scores.
-      const allScoreOverrides = { ...this.cfScoreOverrides };
-      for (const [tid, score] of Object.entries(this.extraCFs)) allScoreOverrides[tid] = score;
+      // Per-CF score overrides + extra CFs scores. Strip orphan custom:
+      // refs (deleted CFs still in state) so backend doesn't have to
+      // clean up after us — keeps payloads + persisted rule data clean.
+      // See _isOrphanCustomTrashId for the guard that handles the Reset
+      // window safely.
+      const allScoreOverrides = {};
+      for (const [tid, score] of Object.entries(this.cfScoreOverrides)) {
+        if (this._isOrphanCustomTrashId(tid)) continue;
+        allScoreOverrides[tid] = score;
+      }
+      for (const [tid, score] of Object.entries(this.extraCFs)) {
+        if (this._isOrphanCustomTrashId(tid)) continue;
+        allScoreOverrides[tid] = score;
+      }
       if (Object.keys(allScoreOverrides).length > 0) body.scoreOverrides = allScoreOverrides;
       // Quality overrides: structure (new) trumps flat map (legacy). Skip
       // sending qualityStructure when it exactly mirrors profile defaults —
@@ -1788,6 +1832,89 @@ export default {
       await this.startApply();
     },
 
+    // Persist Profile Detail editor state to the existing rule WITHOUT
+    // triggering a sync. Mirrors the rule-update half of startApply
+    // (lines 1789-1822) but skips /api/sync/apply entirely. Backend bumps
+    // UpdatedAt on the ?save_only=1 PUT so the Profiles tab can render
+    // "● Unsynced changes" on the rule card until the next Sync All /
+    // Sync Now / Auto-Sync run equalizes UpdatedAt with LastSyncTime.
+    // Gated on _editLockedArrProfileId (only the edit-existing-rule flow
+    // — Create New has no rule to save against, must Save & Sync first).
+    async saveRuleOnly() {
+      if (!this.profileDetail || !this.profileDetail.instance) return;
+      const inst = this.profileDetail.instance;
+      const profile = this.profileDetail.profile;
+      const arrId = this.profileDetail._editLockedArrProfileId || 0;
+      if (!arrId) {
+        this.showToast('No existing rule to save — use Save & Sync or Create New first.', 'error', 8000);
+        return;
+      }
+      const existingRule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === arrId);
+      if (!existingRule) {
+        this.showToast('Could not find rule to update. Refresh and try again.', 'error', 8000);
+        return;
+      }
+      // Populate syncForm minimally so buildSyncBody can read its fields,
+      // then restore — saveRuleOnly is independent of the Sync Profile
+      // modal, no need to leave syncForm primed for an accidental
+      // Save & Sync click.
+      const prevSyncForm = this.syncForm;
+      const prevSyncMode = this.syncMode;
+      this.syncForm = {
+        instanceId: inst.id,
+        instanceName: inst.name,
+        appType: inst.type,
+        profileTrashId: profile.trashId,
+        importedProfileId: existingRule.importedProfileId || '',
+        profileName: profile.name,
+        arrProfileId: String(arrId),
+        newProfileName: profile.name,
+        behavior: existingRule.behavior || { addMode: 'add_missing', removeMode: 'remove_custom', resetMode: 'reset_to_zero' }
+      };
+      this.syncMode = 'update';
+      let syncBody;
+      try {
+        syncBody = this.buildSyncBody();
+      } finally {
+        this.syncForm = prevSyncForm;
+        this.syncMode = prevSyncMode;
+      }
+      const updated = {
+        ...existingRule,
+        selectedCFs: syncBody.selectedCFs || [],
+        arrProfileId: arrId,
+        behavior: syncBody.behavior || existingRule.behavior,
+        overrides: syncBody.overrides || null,
+        scoreOverrides: syncBody.scoreOverrides || null,
+        qualityOverrides: syncBody.qualityOverrides || null,
+        qualityStructure: syncBody.qualityStructure || null,
+        keepArrCFIDs: (Array.isArray(syncBody.keepArrCFIDs) ? syncBody.keepArrCFIDs : existingRule.keepArrCFIDs) || null,
+      };
+      this.debugLog('UI', `Save (rule-only): "${profile.name}" → ${inst.name}`);
+      this.savingRule = true;
+      try {
+        const r = await fetch(`/api/auto-sync/rules/${existingRule.id}?save_only=1`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+        if (!r.ok) {
+          let msg = 'Save failed';
+          try { const data = await r.json(); if (data?.error) msg = data.error; } catch (_) {}
+          if (r.status === 409) msg = 'Sync running on this instance — try again in a moment.';
+          this.showToast(msg, 'error', 8000);
+          return;
+        }
+        await this.loadAutoSyncRules();
+        this.showToast('Settings saved. Will sync on next Sync All / Sync Now / Auto-Sync.', 'success', 6000);
+      } catch (e) {
+        console.error('saveRuleOnly:', e);
+        this.showToast('Save failed: ' + e.message, 'error', 8000);
+      } finally {
+        this.savingRule = false;
+      }
+    },
+
     // --- Quick Sync ---
 
     async quickSync(inst, sh, silent = false, useHistoryOnly = false) {
@@ -1897,6 +2024,9 @@ export default {
         }
         this.setRuleSyncError(inst.id, sh.arrProfileId, '');
         await this.loadSyncHistory(inst.id);
+        // Reload rules so the "● unsynced" chip clears once the server has
+        // equalized UpdatedAt with LastSyncTime on success.
+        await this.loadAutoSyncRules();
         const summary = details.length > 0 ? details.slice(0, 3).join(', ') : 'no changes';
         return { ok: true, name: sh.profileName, summary, details };
       } catch (e) {
@@ -2136,15 +2266,21 @@ export default {
       // user leaves the detail view) so every subsequent openSyncModal in
       // this edit session re-arms the lock. Bypass: openSyncModalAsNew.
       this.profileDetail._editLockedArrProfileId = sh.arrProfileId;
+      // Look up the rule once. ruleData (declared just below) is the
+      // authoritative source for the editor's current state: the user's
+      // saved sync intent, which Save-only updates without touching sync
+      // history. Without this preference, reopening the editor after
+      // Save-only would show stale pre-save values pulled from sh.
+      const ruleForRestore = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+      const ruleData = ruleForRestore || sh;
       // Restore optional CF selections from sync history
       if (sh.selectedCFs && Object.keys(sh.selectedCFs).length > 0) {
         const groups = this.profileDetail?.detail?.trashGroups || [];
-        // Look up the rule's PriorAvailableGroups snapshot — backend stamps
-        // this at every successful sync, and migrates pre-fix rules from
-        // their LastSyncCommit on first AutoSyncAfterPull. We use it to
-        // tell "user explicitly opted out of an existing group" apart
-        // from "group is brand new since last sync (TRaSH restructure)".
-        const ruleForRestore = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId);
+        // priorAvailableGroups: backend stamps this at every successful
+        // sync, and migrates pre-fix rules from their LastSyncCommit on
+        // first AutoSyncAfterPull. Used to distinguish "user opted out
+        // of an existing group" from "group is brand new since last
+        // sync (TRaSH restructure)".
         const priorAvailable = (ruleForRestore && ruleForRestore.priorAvailableGroups) || {};
         // The rule's SelectedCFs is the authoritative source of "what's
         // currently in the rule's sync set". sh.selectedCFs may lag if
@@ -2189,12 +2325,13 @@ export default {
         }
         this.selectedOptionalCFs = { ...this.selectedOptionalCFs };
       }
-      // Restore overrides from sync history. Values are written to pdOverrides;
-      // pdOverridesEnabled is flipped to true at the end if ANY override was
-      // found, so the global toggle reflects the saved state of the rule.
+      // Restore overrides. ruleData prefers the rule (saved intent) over
+      // sync history, so Save-only edits are visible on reopen. Values are
+      // written to pdOverrides; pdOverridesEnabled flips on at the end if
+      // ANY override was found.
       let anyOverride = false;
-      if (sh.overrides) {
-        const ov = sh.overrides;
+      if (ruleData.overrides) {
+        const ov = ruleData.overrides;
         if (ov.language !== undefined) { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; anyOverride = true; }
         if (ov.minFormatScore !== undefined) { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; anyOverride = true; }
         if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; anyOverride = true; }
@@ -2212,20 +2349,24 @@ export default {
         for (const cf of g.cfs) inProfile.add(cf.trashId);
       }
 
-      // Split sh.scoreOverrides into (Extra CF) vs (base-profile override).
+      // Split ruleData.scoreOverrides into (Extra CF) vs (base-profile override).
       // Rule: if trashID is NOT in the base profile, it's an Extra — belongs
       // in extraCFs, NOT cfScoreOverrides. Otherwise it's a base-profile
       // override, and only kept if score differs from TRaSH default (prevents
       // "false-positive" overrides with `default → default` rows that
-      // reappear after every refresh).
+      // reappear after every refresh). "Also selected" guard uses
+      // effectiveSelectedCFs (rule-preferring) defined earlier — fall back
+      // to sh.selectedCFs when no rule (orphaned).
+      const effectiveSelOpt = (ruleForRestore && Array.isArray(ruleForRestore.selectedCFs))
+        ? Object.fromEntries(ruleForRestore.selectedCFs.map(id => [id, true]))
+        : (sh.selectedCFs || {});
       const extras = {};
       const baseOverrides = {};
-      if (sh.scoreOverrides) {
-        for (const [tid, v] of Object.entries(sh.scoreOverrides)) {
+      if (ruleData.scoreOverrides) {
+        for (const [tid, v] of Object.entries(ruleData.scoreOverrides)) {
           if (!inProfile.has(tid)) {
-            // Only add to extras if also selected (legacy sync-history may have
-            // score entries for CFs that are no longer selected).
-            if (sh.selectedCFs && sh.selectedCFs[tid]) {
+            // Only add to extras if also selected.
+            if (effectiveSelOpt[tid]) {
               extras[tid] = v;
             }
             continue;
@@ -2246,8 +2387,8 @@ export default {
       // qualityOverrideActive is the Quality Items editor modal-open flag and
       // must NOT be set here, otherwise the editor would auto-open on every
       // Profile Detail open for any rule with Quality overrides.
-      if (sh.qualityStructure && sh.qualityStructure.length > 0) {
-        this.qualityStructure = sh.qualityStructure.map(it => {
+      if (ruleData.qualityStructure && ruleData.qualityStructure.length > 0) {
+        this.qualityStructure = ruleData.qualityStructure.map(it => {
           const out = { _id: ++this._qsIdCounter, name: it.name, allowed: !!it.allowed };
           if (it.items && it.items.length > 0) out.items = [...it.items];
           return out;
@@ -2262,8 +2403,8 @@ export default {
             if (firstAllowed) this.pdOverrides.cutoffQuality = firstAllowed.name;
           }
         }
-      } else if (sh.qualityOverrides && Object.keys(sh.qualityOverrides).length > 0) {
-        this.qualityOverrides = { ...sh.qualityOverrides };
+      } else if (ruleData.qualityOverrides && Object.keys(ruleData.qualityOverrides).length > 0) {
+        this.qualityOverrides = { ...ruleData.qualityOverrides };
         anyOverride = true;
       }
       // Apply the Extra CFs computed above.
@@ -2274,9 +2415,10 @@ export default {
         const appType = this.profileDetail?.instance?.type;
         if (appType) this.loadExtraCFList();
       }
-      // Restore behavior from sync history
-      if (sh.behavior) {
-        this.syncForm.behavior = { ...this.syncForm.behavior, ...sh.behavior };
+      // Restore behavior — prefer rule's behavior (current intent) over sync
+      // history (last applied).
+      if (ruleData.behavior) {
+        this.syncForm.behavior = { ...this.syncForm.behavior, ...ruleData.behavior };
       }
       // Auto-enable the Profile Detail overrides toggle if ANY override was
       // restored, so the UI reflects the saved state of the rule (no "All
@@ -2609,10 +2751,12 @@ export default {
       const added = all.filter(it => it.isAdded).length;
       const overridden = all.filter(it => it.isOverridden).length;
       const customizations = all.length;
-      // Kept for backward-compat with existing UI bindings; will be
-      // collapsed once the unified section lands.
-      const cfScores = Object.keys(this.cfScoreOverrides).length;
-      const extraCFs = Object.keys(this.extraCFs).length;
+      // Legacy fields — mirror the filtered counts above so any binding
+      // that still references them stays consistent with the unified view
+      // (orphan custom: refs are excluded). Will be removed once confirmed
+      // unused.
+      const cfScores = overridden;
+      const extraCFs = added;
       const optional = this.pdOptionalCount();
       // total = overrides only (profile-level settings the user changed).
       // optional = separate count of TRaSH optional CFs / groups
@@ -2690,18 +2834,30 @@ export default {
             return { name: cf.name, category: 'Custom', groupName: '', defaultScore: cf.score ?? 0, description: cf.description || '', isDangling: false };
           }
         }
-        // Dangling — rule references a CF that no longer exists in TRaSH data
-        // OR in the user's custom-CF store (e.g. user deleted a custom CF
-        // without cleaning up rule.scoreOverrides). Surfacing this clearly
-        // beats rendering a truncated trashId. Backend already skips the
-        // entry at sync-time with a warning; UI just needs to make it
-        // actionable so the user can remove the orphaned override.
-        const shortId = tid.replace(/^custom:/, '').substring(0, 12);
-        return { name: 'Deleted CF (' + shortId + '…)', category: 'Deleted', groupName: '', defaultScore: '?', description: '', isDangling: true };
+        // Dangling — rule references a CF that no longer exists. Two cases:
+        //
+        //   custom:<id>  — user deleted the custom CF. Permanent: it will
+        //     never resolve again. Hide entirely; sync's cfSetDetails diff
+        //     emits "Removed: <id>" once on the next sync (same UX as a
+        //     TRaSH-upstream removal). Backend's
+        //     CleanupDanglingCustomCFsOnRule strips it from rule data on
+        //     the same successful sync so the diff fires exactly once.
+        //
+        //   TRaSH ids    — usually transient: TRaSH cache empty right
+        //     after Reset (until Pull), or upstream restructure moved the
+        //     CF. Will resolve again after the next Pull. Render as a
+        //     placeholder row so the user keeps visibility of their full
+        //     customizations list even while data is mid-refresh.
+        if (tid.startsWith('custom:')) {
+          return null;
+        }
+        const shortId = tid.substring(0, 12);
+        return { name: 'Unknown CF (' + shortId + '…)', category: 'Unknown', groupName: '', defaultScore: '?', description: 'This Custom Format is referenced by the profile but not currently in TRaSH data. It usually means TRaSH cache is empty (Pull pending) or upstream moved the CF.', isDangling: true };
       };
       for (const [tid, score] of Object.entries(this.extraCFs)) {
         if (seen.has(tid)) continue;
         const meta = lookup(tid);
+        if (meta === null) { seen.add(tid); continue; } // permanent orphan (deleted custom CF) — hide
         const def = meta.defaultScore;
         items.push({
           trashId: tid,
@@ -2722,6 +2878,7 @@ export default {
         const def = this.resolveCFDefaultScore(tid);
         if (def !== '?' && score === def) continue; // not actually overridden
         const meta = lookup(tid);
+        if (meta === null) { seen.add(tid); continue; } // permanent orphan (deleted custom CF) — hide
         items.push({
           trashId: tid,
           name: meta.name,

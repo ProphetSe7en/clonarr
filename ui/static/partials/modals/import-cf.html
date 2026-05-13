@@ -1,6 +1,6 @@
 {{define "modals/import-cf"}}
   <!-- Import Custom CFs Modal -->
-  <div class="modal-overlay" x-show="showImportCFModal" @click.self="showImportCFModal = false" @keydown.escape.window="showImportCFModal = false" x-cloak>
+  <div class="modal-overlay" x-show="showImportCFModal" @keydown.escape.window="showImportCFModal = false" x-cloak>
     <div class="modal" style="max-width:600px" role="dialog" aria-modal="true" aria-labelledby="modal-title-import-cf" x-trap.noscroll.inert="showImportCFModal">
       <h2 id="modal-title-import-cf" class="modal-title">Import Custom Formats</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
@@ -8,9 +8,13 @@
       </div>
 
       <!-- Source tabs -->
-      <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
         <button class="btn btn-sm" :class="{ 'btn-primary': importCFSource === 'instance' }" @click="importCFSource = 'instance'">From Instance</button>
         <button class="btn btn-sm" :class="{ 'btn-primary': importCFSource === 'json' }" @click="importCFSource = 'json'">From JSON</button>
+        <span style="font-size:11px;color:var(--accent-red);font-weight:500"
+              x-tt="'CF spec values are app-specific — SourceSpecification value=3 is Web in Sonarr but Telecine in Radarr. Importing the wrong app silently breaks scoring.'">
+          ⚠ Don't mix Radarr and Sonarr CFs
+        </span>
       </div>
 
       <!-- From Instance -->

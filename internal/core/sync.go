@@ -87,6 +87,14 @@ type SyncPlan struct {
 	Summary         SyncSummary   `json:"summary"`
 	QualityPreview  []string      `json:"qualityPreview,omitempty"`  // e.g. "Bluray-2160p: Enabled → Disabled"
 	SettingsPreview []string      `json:"settingsPreview,omitempty"` // e.g. "Upgrade Until: WEB 1080p → WEB 2160p"
+	// DanglingCustomCFs lists "custom:<id>" references on the rule whose
+	// underlying custom CF no longer exists in CustomCFs (the user deleted
+	// it). Apply paths feed this into CleanupDanglingCustomCFsOnRule after
+	// a successful sync to strip the orphans from rule.SelectedCFs and
+	// rule.ScoreOverrides. TRaSH-id orphans are NOT tracked here — they can
+	// transiently disappear during Reset/Pull cycles and must not be
+	// auto-cleaned.
+	DanglingCustomCFs []string `json:"danglingCustomCFs,omitempty"`
 }
 
 // CFAction describes a CF create/update/unchanged action.
@@ -341,6 +349,13 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			specsMatch = func(existing *arr.ArrCF) bool { return arrCFSpecsMatch(arrCF, existing) }
 		} else {
 			log.Printf("Warning: CF %s referenced by profile but not found", cfTrashID)
+			// Only track "custom:" prefixed orphans for auto-cleanup. TRaSH
+			// IDs missing here usually mean TRaSH data is empty (Reset
+			// state) or a structural restructure — both transient. Customs
+			// are local-only; if they're missing, the user deleted them.
+			if strings.HasPrefix(cfTrashID, "custom:") {
+				plan.DanglingCustomCFs = append(plan.DanglingCustomCFs, cfTrashID)
+			}
 			continue
 		}
 
@@ -382,6 +397,31 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 				})
 				plan.Summary.CFsToUpdate++
 			}
+		}
+	}
+
+	// Also scan cfScoreOverrides for orphan custom-CF refs. Normal flows
+	// add custom CFs to req.SelectedCFs as well, so the loop above catches
+	// most orphans — but a rule could carry a score-override on a custom
+	// CF that's not in SelectedCFs (data drift, sync-history rerun, etc.).
+	// De-dupe against what we already collected above.
+	if len(cfScoreOverrides) > 0 {
+		alreadyDangling := make(map[string]bool, len(plan.DanglingCustomCFs))
+		for _, id := range plan.DanglingCustomCFs {
+			alreadyDangling[id] = true
+		}
+		for cfID := range cfScoreOverrides {
+			if !strings.HasPrefix(cfID, "custom:") {
+				continue
+			}
+			if _, ok := customCFMap[cfID]; ok {
+				continue
+			}
+			if alreadyDangling[cfID] {
+				continue
+			}
+			plan.DanglingCustomCFs = append(plan.DanglingCustomCFs, cfID)
+			alreadyDangling[cfID] = true
 		}
 	}
 

@@ -206,6 +206,22 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clean dangling "custom:" refs from the matching auto-sync rule (if any)
+	// after a successful apply — mirrors runAutoSyncRule's post-success
+	// cleanup. No rule = no-op (Save & Sync from a fresh profile-detail
+	// editor without a stored rule). TRaSH-id orphans are left alone.
+	if len(plan.DanglingCustomCFs) > 0 {
+		for _, r := range s.Core.Config.Get().AutoSync.Rules {
+			if r.InstanceID == req.InstanceID && r.ArrProfileID == req.ArrProfileID {
+				if removed := s.Core.CleanupDanglingCustomCFsOnRule(r.ID, plan.DanglingCustomCFs); len(removed) > 0 {
+					log.Printf("Apply: rule %s — cleaned %d dangling custom-CF reference(s) after sync", r.ID, len(removed))
+					s.Core.DebugLog.Logf(core.LogSync, "Apply: rule %s removed %d dangling custom CFs", r.ID, len(removed))
+				}
+				break
+			}
+		}
+	}
+
 	// Apply log line: prefer the Arr profile name (from plan/result)
 	// over the raw ID. result.ArrProfileName is set in update mode;
 	// in create mode the new profile isn't named yet so we fall back
@@ -440,9 +456,17 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 				// failed attempt so the error badge disappears in the UI
 				// once the user has actually fixed the bad config.
 				cfg.AutoSync.Rules[i].LastSyncError = ""
+				// Equalize UpdatedAt with LastSyncTime so the Profiles tab
+				// "● Unsynced changes" indicator clears. The auto-sync
+				// engine path bumps both via UpdateAutoSyncRuleCommit; this
+				// is the manual /api/sync/apply equivalent.
+				nowSync := time.Now().Format(time.RFC3339)
+				cfg.AutoSync.Rules[i].LastSyncTime = nowSync
+				cfg.AutoSync.Rules[i].UpdatedAt = nowSync
 				return
 			}
 		}
+		nowSync := time.Now().Format(time.RFC3339)
 		cfg.AutoSync.Rules = append(cfg.AutoSync.Rules, core.AutoSyncRule{
 			ID:                core.GenerateID(),
 			Enabled:           false,
@@ -458,6 +482,8 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 			QualityStructure:  req.QualityStructure,
 			Behavior:          req.Behavior,
 			Overrides:         req.Overrides,
+			LastSyncTime:      nowSync,
+			UpdatedAt:         nowSync,
 		})
 	})
 

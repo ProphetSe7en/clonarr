@@ -59,7 +59,7 @@
   .compare-stat.wrong { background: var(--accent-orange-bg); color: var(--accent-orange); }
   .compare-stat.match { background: var(--accent-green-bg); color: var(--accent-green); }
   .compare-stat.extra { background: var(--fill-blue-soft); color: var(--accent-blue); }
-  .compare-cf-row { display: flex; align-items: center; padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--bg-card); }
+  .compare-cf-row { display: flex; align-items: center; padding: 5px 14px; font-size: 12px; border-top: 1px solid var(--bg-muted); }
   .compare-cf-name { flex: 1; color: var(--text-body); min-width: 0; }
   .compare-cf-scores { display: flex; gap: 4px; align-items: center; width: 150px; flex-shrink: 0; justify-content: flex-end; font-variant-numeric: tabular-nums; }
   .compare-cf-actions { width: 58px; flex-shrink: 0; text-align: right; display: flex; gap: 4px; justify-content: flex-end; align-items: center; }

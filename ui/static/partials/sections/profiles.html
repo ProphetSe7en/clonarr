@@ -112,6 +112,10 @@
                                     x-text="sh.orphanedAt ? 'orphaned' : (autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.enabled ? 'auto-sync' : 'auto-sync off')"></span>
                           </div>
                           <span style="flex:1;display:flex;gap:8px;align-items:center;justify-content:flex-end">
+                            <template x-if="(() => { const r = autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId); return r && r.updatedAt && (!r.lastSyncTime || r.updatedAt > r.lastSyncTime); })()">
+                              <span style="font-size:11px;padding:1px 6px;border-radius:3px;background:transparent;border:1px solid var(--accent-orange);color:var(--accent-orange);flex-shrink:0;display:inline-flex;align-items:center;gap:4px"
+                                    x-tt="'Settings saved but not synced to Arr yet. Will apply on next Sync All / Sync Now / Auto-Sync.'"><span style="font-size:8px;line-height:1">&#9679;</span> unsynced</span>
+                            </template>
                             <template x-if="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">
                               <span style="font-size:11px;padding:1px 5px;border-radius:3px;background:var(--accent-red-bg);color:var(--accent-red);flex-shrink:0"
                                     x-tt="autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === sh.arrProfileId)?.lastSyncError">error</span>

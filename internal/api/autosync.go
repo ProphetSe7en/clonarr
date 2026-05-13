@@ -5,12 +5,34 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
 )
+
+// autoSyncRuleEquivalent reports whether two AutoSyncRule values carry
+// identical user-facing state. Server-managed fields (LastSyncCommit,
+// LastSyncTime, LastSyncError, UpdatedAt, PriorAvailableGroups, OrphanedAt)
+// are ignored — they live outside the editor's reach and would otherwise
+// produce spurious "changed" verdicts on every PUT. Used by
+// handleUpdateAutoSyncRule on the ?save_only=1 path to avoid bumping
+// UpdatedAt (and triggering the "● unsynced" indicator) when the user
+// clicked Save without making any edits.
+func autoSyncRuleEquivalent(a, b core.AutoSyncRule) bool {
+	clear := func(r core.AutoSyncRule) core.AutoSyncRule {
+		r.LastSyncCommit = ""
+		r.LastSyncTime = ""
+		r.LastSyncError = ""
+		r.UpdatedAt = ""
+		r.PriorAvailableGroups = nil
+		r.OrphanedAt = ""
+		return r
+	}
+	return reflect.DeepEqual(clear(a), clear(b))
+}
 
 // handleGetAutoSyncSettings returns the minimal auto-sync config (notification
 // agents are served by handleListNotificationAgents).
@@ -178,12 +200,32 @@ func (s *Server) handleUpdateAutoSyncRule(w http.ResponseWriter, r *http.Request
 		defer mu.Unlock()
 	}
 
+	// save_only=1 marks this PUT as a "save without sync" action from the
+	// Profile Detail editor. It bumps UpdatedAt so the Profiles tab can show
+	// "● unsynced" on the rule card — but only if the body actually carries
+	// a change (autoSyncRuleEquivalent guards against open-and-Save no-ops
+	// and toggle-on-then-off net-zero edits). Other PUT callers (post-sync
+	// echo from startApply, Compare-flow keepArrCFIDs update, enabled-toggle)
+	// omit the param and the server preserves UpdatedAt from disk — the apply
+	// path already equalized UpdatedAt with LastSyncTime, so the indicator
+	// stays off.
+	saveOnly := r.URL.Query().Get("save_only") == "1"
+
 	found := false
 	if err := s.Core.Config.Update(func(cfg *core.Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == id {
-				rule.LastSyncCommit = cfg.AutoSync.Rules[i].LastSyncCommit
-				rule.LastSyncTime = cfg.AutoSync.Rules[i].LastSyncTime
+				existing := cfg.AutoSync.Rules[i]
+				rule.LastSyncCommit = existing.LastSyncCommit
+				rule.LastSyncTime = existing.LastSyncTime
+				switch {
+				case saveOnly && !autoSyncRuleEquivalent(rule, existing):
+					rule.UpdatedAt = time.Now().Format(time.RFC3339)
+				default:
+					// No real change OR non-save-only caller — preserve
+					// the disk's UpdatedAt so the indicator state survives.
+					rule.UpdatedAt = existing.UpdatedAt
+				}
 				// Frontend controls lastSyncError — passes current value or empty to clear
 				cfg.AutoSync.Rules[i] = rule
 				found = true
@@ -414,6 +456,15 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 		writeError(w, 502, "Failed to recreate profile in Arr: "+err.Error())
 		return
 	}
+
+	// Restore re-creates the Arr profile from the rule's stored intent —
+	// dangling "custom:" refs detected during plan-build are cleaned here
+	// on the same success boundary so the restored rule starts clean. No-op
+	// when nothing was dangling.
+	if removed := s.Core.CleanupDanglingCustomCFsOnRule(id, plan.DanglingCustomCFs); len(removed) > 0 {
+		log.Printf("Restore: rule %s — cleaned %d dangling custom-CF reference(s)", id, len(removed))
+		s.Core.DebugLog.Logf(core.LogAutoSync, "Restore: rule %s removed %d dangling custom CFs", id, len(removed))
+	}
 	if !result.ProfileCreated || result.ArrProfileID == 0 {
 		endResult = "error: profile creation did not succeed"
 		writeError(w, 502, "Profile creation in Arr did not succeed")
@@ -429,9 +480,11 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 	s.Core.Config.Update(func(cfg *core.Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == id {
+				now := time.Now().Format(time.RFC3339)
 				cfg.AutoSync.Rules[i].ArrProfileID = result.ArrProfileID
 				cfg.AutoSync.Rules[i].OrphanedAt = ""
-				cfg.AutoSync.Rules[i].LastSyncTime = time.Now().Format(time.RFC3339)
+				cfg.AutoSync.Rules[i].LastSyncTime = now
+				cfg.AutoSync.Rules[i].UpdatedAt = now
 				cfg.AutoSync.Rules[i].LastSyncError = ""
 				break
 			}

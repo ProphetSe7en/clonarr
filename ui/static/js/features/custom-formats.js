@@ -255,9 +255,14 @@ export default {
 
     async loadCFEditorSchema() {
       const appType = this.cfEditorForm.appType;
-      if (this.cfEditorSchema[appType]) return;
+      if (this.cfEditorSchema[appType] && this.cfEditorSchema[appType].length > 0) {
+        this.cfEditorSchemaError = '';
+        return;
+      }
 
       this.cfEditorSchemaLoading = true;
+      this.cfEditorSchemaError = '';
+      const label = appType.charAt(0).toUpperCase() + appType.slice(1);
       try {
         const res = await fetch(`/api/customformat/schema/${appType}`);
         if (res.ok) {
@@ -278,13 +283,36 @@ export default {
               defaultValue: f.value,
             })),
           }));
-          this.cfEditorSchema = { ...this.cfEditorSchema, [appType]: parsed };
+          if (parsed.length === 0) {
+            this.cfEditorSchemaError = `${label} returned an empty schema. Make sure ${label} is fully started and try again.`;
+          } else {
+            this.cfEditorSchema = { ...this.cfEditorSchema, [appType]: parsed };
+          }
+        } else if (res.status === 404) {
+          this.cfEditorSchemaError = `No ${label} instance configured. Add one in Settings before creating custom formats.`;
+        } else {
+          let detail = '';
+          try { detail = (await res.json())?.error || ''; } catch(_) {}
+          this.cfEditorSchemaError = `Could not reach ${label} (HTTP ${res.status}). ${detail || `Check that ${label} is running and the URL + API key are correct.`}`;
         }
       } catch (e) {
         console.error('Failed to load CF schema:', e);
+        this.cfEditorSchemaError = `Could not reach ${label}. ${e.message || 'Network error.'} Make sure ${label} is running.`;
       } finally {
         this.cfEditorSchemaLoading = false;
       }
+    },
+
+    // Retry schema fetch from the error banner inside the editor.
+    async retryCFEditorSchema() {
+      const appType = this.cfEditorForm.appType;
+      if (!appType) return;
+      // Drop any partial cache so loadCFEditorSchema actually re-fetches
+      if (this.cfEditorSchema[appType] && this.cfEditorSchema[appType].length === 0) {
+        const { [appType]: _, ...rest } = this.cfEditorSchema;
+        this.cfEditorSchema = rest;
+      }
+      await this.loadCFEditorSchema();
     },
 
     mapSchemaFieldType(field) {
@@ -749,20 +777,55 @@ export default {
         radarr: ['ReleaseTypeSpecification'],          // Sonarr-only (Single/Multi-episode/Season pack)
         sonarr: ['QualityModifierSpecification'],      // Radarr-only (Remux modifier)
       };
-      // Source enum per Arr — values diverge between apps. Values verified
-      // against TRaSH CF JSON conventions and Arr source code.
-      const SOURCE_NAMES = {
-        radarr: { 0:'Unknown', 1:'CAM', 2:'Telesync', 3:'Telecine', 4:'Workprint',
-                  5:'DVD', 6:'TV', 7:'WEBDL', 8:'WEBRIP', 9:'Bluray' },
-        sonarr: { 0:'Unknown', 1:'Television', 2:'TelevisionRaw', 3:'WEBDL',
-                  4:'WEBRip', 5:'DVD', 6:'Bluray', 7:'BlurayRaw' },
+      // Source enum per Arr. Values verified against the canonical enum
+      // definitions in each project (Sonarr: QualitySource.cs, Radarr:
+      // QualitySource.cs as of develop). Note: Arr serializes only the
+      // integer — the name is purely a label, so different naming
+      // conventions for the same value are equally valid. Primary-name
+      // (index 0) is used in warning messages.
+      //
+      // Sonarr enum:  Unknown=0, Television=1, TelevisionRaw=2, Web=3,
+      //               WebRip=4, DVD=5, Bluray=6, BlurayRaw=7
+      // Radarr enum:  UNKNOWN=0, CAM=1, TELESYNC=2, TELECINE=3, WORKPRINT=4,
+      //               DVD=5, TV=6, WEBDL=7, WEBRIP=8, BLURAY=9
+      //
+      // Aliases (after normalize() = lowercase + strip non-alphanumeric):
+      //   "Web"/"WEBDL"/"WEB-DL" all → 'web' or 'webdl' (both accepted on
+      //   the value that means web-download in each app).
+      //   "WebRip"/"WEB-Rip"/"WEBRIP" all → 'webrip'.
+      //   "TV"/"Television" interchangeable inside each app where both fit.
+      const SOURCE_VALUE_NAMES = {
+        radarr: {
+          0: ['unknown'],
+          1: ['cam'],
+          2: ['telesync', 'ts'],
+          3: ['telecine', 'tc'],
+          4: ['workprint'],
+          5: ['dvd'],
+          6: ['tv', 'television'],
+          7: ['webdl', 'web', 'webrelease'],
+          8: ['webrip'],
+          9: ['bluray'],
+        },
+        sonarr: {
+          0: ['unknown'],
+          1: ['television', 'tv'],
+          2: ['televisionraw', 'tvraw'],
+          3: ['web', 'webdl', 'webrelease'],
+          4: ['webrip'],
+          5: ['dvd'],
+          6: ['bluray'],
+          7: ['blurayraw'],
+        },
       };
       // Known canonical Source names — only flag mismatch when spec.name
-      // looks like one of these (TRaSH uses these). Unknown names = user
-      // intent unclear, skip the check.
-      const KNOWN_SOURCE = new Set(['webdl','webrip','bluray','blurayraw',
-                                    'remux','blurayremux','dvd','television','tv',
-                                    'cam','telesync','telecine','workprint','web']);
+      // normalizes to one of these (TRaSH uses these). Unknown names =
+      // user intent unclear, skip the check entirely.
+      const KNOWN_SOURCE = new Set(['webdl','web','webrelease','webrip',
+                                    'bluray','blurayraw','remux','blurayremux',
+                                    'dvd','television','tv','tvraw','televisionraw',
+                                    'cam','telesync','ts','telecine','tc',
+                                    'workprint','unknown']);
       // IndexerFlag — TRaSH only uses FreeLeech (1, same in both) and
       // Internal (Radarr=32, Sonarr=8). Cross-import value=32 to Sonarr is
       // out of range and silently broken.
@@ -790,8 +853,8 @@ export default {
 
           // Check 2: SourceSpecification — value out of range OR canonical-name mismatch
           if (impl === 'SourceSpecification') {
-            const targetName = SOURCE_NAMES[targetApp]?.[value];
-            if (!targetName) {
+            const validNames = SOURCE_VALUE_NAMES[targetApp]?.[value];
+            if (!validNames) {
               issues.push({
                 severity: 'error',
                 cf: cf.name, spec: spec.name || '(unnamed)',
@@ -799,11 +862,33 @@ export default {
               });
             } else {
               const specNorm = normalize(spec.name);
-              if (KNOWN_SOURCE.has(specNorm) && specNorm !== normalize(targetName)) {
+              // Skip when the spec name isn't a known source label (user
+              // named it something arbitrary — intent unclear).
+              if (KNOWN_SOURCE.has(specNorm) && !validNames.includes(specNorm)) {
+                // Name doesn't fit the value in target app — try to find
+                // the value where the spec name IS valid, so we can suggest
+                // it. This is the "you meant value=X" hint that catches
+                // the cross-app silent-mismatch case (e.g. Radarr WEBDL=7
+                // imported to Sonarr where 7=BlurayRaw — suggest 3).
+                let suggestedValue = null;
+                for (const [v, names] of Object.entries(SOURCE_VALUE_NAMES[targetApp] || {})) {
+                  if (names.includes(specNorm)) {
+                    suggestedValue = parseInt(v, 10);
+                    break;
+                  }
+                }
+                const targetPrimary = validNames[0];
+                let msg = `Spec named "${spec.name}" with value=${value}, but in ${targetApp} value=${value} means "${targetPrimary}".`;
+                if (suggestedValue !== null) {
+                  const suggestedPrimary = SOURCE_VALUE_NAMES[targetApp][suggestedValue][0];
+                  msg += ` Did you mean value=${suggestedValue} (${suggestedPrimary})?`;
+                } else {
+                  msg += ` "${spec.name}" has no equivalent in ${targetApp}'s SourceSpecification.`;
+                }
                 issues.push({
                   severity: 'warning',
                   cf: cf.name, spec: spec.name || '(unnamed)',
-                  message: `Spec named "${spec.name}" with value=${value}, but in ${targetApp} value=${value} means "${targetName}"`
+                  message: msg,
                 });
               }
             }
