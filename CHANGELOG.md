@@ -17,6 +17,17 @@ pauses the auto-dismiss timer, and a max of three are visible at once
 (the rest queue). Errors and warnings get a louder ARIA role so screen
 readers announce them properly. Thanks Cole.
 
+### Reset TRaSH Data (PR #48 by @ColeSpringer)
+
+New **Reset** button in Settings → TRaSH Guides wipes the cached
+trash-guides repo and forces a fresh clone on the next Pull. Useful
+when the cache gets stuck or you want a clean slate. Your config,
+profiles, and custom CFs are not touched.
+
+While we were at it, deleted custom CFs no longer linger as ghost
+entries — every successful sync now strips orphan references from
+rules automatically. Thanks Cole.
+
 ### CF Customizations card
 
 The Profile Sync editor used to show "Overridden Scores" and
@@ -106,8 +117,8 @@ File Naming page, smarter Scoring Sandbox, simpler Quality editor, and
 an important fix that prevents your CF scores from being reset to zero
 when TRaSH reorganizes their guides.
 
-Thanks to **@ColeSpringer** for the accessibility work and the cleanup
-modal fix.
+Thanks to **@ColeSpringer** for the accessibility work (PR #44) and
+the cleanup modal fix (PR #45).
 
 ### New
 
