@@ -577,9 +577,56 @@ export default {
       return json;
     },
 
+    // Mutually-exclusive cf-group pairs. Both default-on upstream, but only
+    // one should be applied to a given profile (they hold opposite default-on
+    // flags on the same CFs). If a custom profile ends up with both enabled
+    // (e.g. user saved without touching the Golden Rule dropdown), the export
+    // would otherwise tell the user to add the profile to BOTH groups'
+    // quality_profiles.include — which double-blocks x265 content.
+    _resolveMutuallyExclusiveGroups(p, enabledGroups) {
+      const cleaned = { ...enabledGroups };
+      const GR_HD  = 'f8bf8eab4617f12dfdbd16303d8da245';  // [Optional] Golden Rule HD
+      const GR_UHD = 'ff204bbcecdd487d1cefcefdbf0c278d';  // [Optional] Golden Rule UHD
+      const MISC_STD = '9337080378236ce4c0b183e35790d2a7';  // [Optional] Miscellaneous
+      const MISC_SQP = 'c4492eebd0c2ddc14c2c91623aa7f95d';  // [Optional] Miscellaneous SQP
+
+      if (cleaned[GR_HD] && cleaned[GR_UHD]) {
+        const v = p.variantGoldenRule;
+        if (v === 'HD')       delete cleaned[GR_UHD];
+        else if (v === 'UHD') delete cleaned[GR_HD];
+        else if (v === 'none') { delete cleaned[GR_HD]; delete cleaned[GR_UHD]; }
+        else {
+          // No explicit variant — infer from the profile's allowed quality items.
+          // UHD-only profile → keep UHD, drop HD. HD-only → keep HD, drop UHD.
+          // Profile allowing both (Alternative-style) → legitimately keep both.
+          const allowed = [];
+          for (const q of (p.qualities || p.qualityItems || [])) {
+            if (!q.allowed) continue;
+            if (q.items?.length) for (const x of q.items) allowed.push(x.quality || x.name || x);
+            else allowed.push(q.name);
+          }
+          const hasUHD = allowed.some(n => typeof n === 'string' && n.includes('2160'));
+          const hasHD  = allowed.some(n => typeof n === 'string' && (n.includes('1080') || n.includes('720')));
+          if (hasUHD && !hasHD) delete cleaned[GR_HD];
+          else if (hasHD && !hasUHD) delete cleaned[GR_UHD];
+          // else (both / neither) — leave as-is, user can review
+        }
+      }
+
+      if (cleaned[MISC_STD] && cleaned[MISC_SQP]) {
+        const v = p.variantMisc;
+        if (v === 'Standard') delete cleaned[MISC_SQP];
+        else if (v === 'SQP') delete cleaned[MISC_STD];
+        else if (v === 'none') { delete cleaned[MISC_STD]; delete cleaned[MISC_SQP]; }
+        // No quality-item heuristic for Misc — leave both if variant unset
+      }
+
+      return cleaned;
+    },
+
     // Generate group include snippets for enabled groups
     generateGroupIncludes(p) {
-      const enabledGroups = p.enabledGroups || {};
+      const enabledGroups = this._resolveMutuallyExclusiveGroups(p, p.enabledGroups || {});
       if (Object.keys(enabledGroups).length === 0) return [];
       const snippets = [];
       // Use pbCategories (in builder) or raw groups from cfBrowseData

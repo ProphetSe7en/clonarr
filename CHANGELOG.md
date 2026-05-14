@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.5.8
+
+### Fixed
+
+- **Profile Builder export — Golden Rule group includes follow the variant
+  you picked.** Previously, exporting a custom profile and viewing "Show
+  group includes" could list both `[Optional] Golden Rule HD` AND `[Optional]
+  Golden Rule UHD` even when you'd picked just one in the variant dropdown.
+  Following both blocks x265 content twice. Now the export respects the
+  variant choice; if no variant was picked, it infers from the profile's
+  allowed quality items (UHD-only profile → only UHD, HD-only → only HD,
+  Alternative-style profile allowing both → keep both). Same logic for
+  the Miscellaneous Standard / SQP variant pair. Only affects Profile
+  Builder users; regular Profile Sync flows are unaffected.
+
 ## v2.5.7
 
 ### Scheduled pull intervals (PR #46 by @ColeSpringer)
