@@ -174,7 +174,7 @@
               <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:13px">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0">
                 <span style="color:var(--accent-orange);font-weight:600"
-                      x-text="pdOverrideSummary().total === 0 && pdOverrideSummary().optional === 0
+                      x-text="pdOverrideSummary().total === 0
                                 ? 'Override mode — no changes yet'
                                 : 'Override mode &middot; ' + pdOverrideSummary().total + ' change' + (pdOverrideSummary().total === 1 ? '' : 's')"></span>
                 <template x-if="pdOverrideSummary().general > 0">
@@ -192,16 +192,6 @@
                   <span style="font-size:11px;color:var(--accent-orange)"
                         x-tt="'CFs in the profile whose score you changed from the profile default'"
                         x-text="'Custom scores: ' + pdOverrideSummary().overridden"></span>
-                </template>
-                <!-- Optional CFs — separate blue badge, semantically distinct
-                     from overrides. Counts TRaSH optional CFs / groups
-                     activated outside the profile's defaults. Reset clears
-                     these too, but they aren't "overrides" — they're
-                     customizations within TRaSH's spec. -->
-                <template x-if="pdOverrideSummary().optional > 0">
-                  <span style="font-size:11px;color:var(--accent-purple)"
-                        x-tt="'Optional CFs and groups activated outside the profile defaults. Hover the purple dots on each group below to see which.'"
-                        x-text="'Optional CFs: ' + pdOverrideSummary().optional"></span>
                 </template>
               </div>
               <button class="btn"
@@ -1062,16 +1052,24 @@
                     <span x-show="group.exclusive" style="font-size:11px;color:var(--accent-blue);background:var(--fill-blue-soft);padding:1px 5px;border-radius:3px">pick one</span>
                     <span x-show="group.defaultEnabled" style="font-size:11px;color:var(--accent-green);background:var(--fill-green-soft);padding:1px 5px;border-radius:3px">default</span>
                     <span style="font-size:13px;color:var(--text-muted);margin-left:8px"
-                          x-text="(() => { const on = selectedOptionalCFs['__grp_' + group.name] !== undefined ? selectedOptionalCFs['__grp_' + group.name] : group.defaultEnabled; if (!on) return '0/' + group.cfs.length; return group.cfs.filter(cf => cf.required || selectedOptionalCFs[cf.trashId]).length + '/' + group.cfs.length; })()"></span>
-                    <!-- Blue dot — visible when this group has any
-                         optional CFs activated outside the profile's
-                         defaults (group toggle flipped, or non-default
-                         members enabled). Drill-down marker for the
-                         status-bar Optional CFs total. -->
-                    <template x-if="pdGroupOptionalCount(group) > 0">
-                      <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent-purple);margin-left:2px;flex-shrink:0"
-                            x-tt="pdGroupOptionalCount(group) + ' optional CF' + (pdGroupOptionalCount(group) === 1 ? '' : 's') + ' activated outside profile defaults'"></span>
-                    </template>
+                          x-text="(() => {
+                            const grpOn = selectedOptionalCFs['__grp_' + group.name] !== undefined
+                              ? selectedOptionalCFs['__grp_' + group.name]
+                              : group.defaultEnabled;
+                            if (!grpOn) return '0/' + group.cfs.length;
+                            // Per-CF on-state: explicit selectedOptional wins; otherwise
+                            // fall back to cf.default (TRaSH's recommendation). Without
+                            // this fallback, new TRaSH-default CFs added in cf-group
+                            // restructures show as off until the user re-saves the rule.
+                            const n = group.cfs.filter(cf => {
+                              if (cf.required) return true;
+                              const v = selectedOptionalCFs[cf.trashId];
+                              if (v === true) return true;
+                              if (v === false) return false;
+                              return !!cf.default;
+                            }).length;
+                            return n + '/' + group.cfs.length;
+                          })()"></span>
                     <template x-if="group.cfs.some(cf => cfScoreOverrides[cf.trashId] !== undefined)">
                       <span style="font-size:11px;color:var(--accent-orange);margin-right:auto"
                             x-text="(() => { const n = group.cfs.filter(cf => cfScoreOverrides[cf.trashId] !== undefined).length; return n + ' custom score' + (n === 1 ? '' : 's'); })()"></span>
@@ -1121,10 +1119,15 @@
                       <template x-if="cf.required">
                         <span style="font-size:13px;color:var(--text-muted);width:28px;text-align:center;flex-shrink:0" x-tt="'Included when group is active'">🔒</span>
                       </template>
-                      <!-- Optional CFs in group: individual toggle -->
+                      <!-- Optional CFs in group: individual toggle.
+                           Checked state: explicit selectedOptionalCFs value
+                           wins; otherwise fall back to cf.default so new
+                           TRaSH-default CFs render checked before the user
+                           re-saves the rule (matches count formula above). -->
                       <template x-if="!cf.required">
                         <label class="toggle toggle-sm">
-                          <input type="checkbox" :checked="selectedOptionalCFs[cf.trashId]"
+                          <input type="checkbox"
+                                 :checked="selectedOptionalCFs[cf.trashId] === undefined ? !!cf.default : !!selectedOptionalCFs[cf.trashId]"
                                  @change="group.exclusive ? toggleExclusiveCF(cf.trashId, group.cfs) : toggleOptionalCF(cf.trashId)">
                           <span class="slider"></span>
                         </label>

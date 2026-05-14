@@ -70,6 +70,50 @@ export default {
       return extraIds.length > 0 ? [...ids, ...extraIds] : ids;
     },
 
+    // Trash defaults: the set of CF trash_ids the TRaSH-Guides repository
+    // currently considers part of this profile. Sum of:
+    //   - profile.formatItems CFs not categorized into any group (these
+    //     ship to the frontend as detail.formatItemNames)
+    //   - CFs in default-on groups (group.defaultEnabled === true) that are
+    //     either required (cf.required) or default-on within the group
+    //     (cf.default === true)
+    //
+    // Mirrors backend's ComputeTrashDefaults so editor-side decisions
+    // (which list a deselected CF goes into: selectedCFs as opt-in or
+    // excludedCFs as opt-out) line up with the sync engine's view of the
+    // same profile.
+    computeTrashDefaults() {
+      const defaults = new Set();
+      const detail = this.profileDetail?.detail;
+      if (!detail) return defaults;
+      for (const fi of (detail.formatItemNames || [])) {
+        if (fi.trashId) defaults.add(fi.trashId);
+      }
+      for (const group of (detail.trashGroups || [])) {
+        if (!group.defaultEnabled) continue;
+        for (const cf of (group.cfs || [])) {
+          if (cf.required || cf.default) defaults.add(cf.trashId);
+        }
+      }
+      return defaults;
+    },
+
+    // Excluded CFs: trash_ids the user has explicitly toggled OFF that
+    // ARE in TRaSH defaults — opt-outs. Sent alongside selectedCFs in
+    // the sync payload so the engine subtracts them from the effective
+    // synced set. Required CFs in default-on groups still get filtered
+    // out here (they can't be opted out via the toggle UI — the editor
+    // hides their checkbox).
+    getExcludedCFIds() {
+      const defaults = this.computeTrashDefaults();
+      const sel = this.selectedOptionalCFs || {};
+      const excluded = [];
+      for (const tid of defaults) {
+        if (sel[tid] === false) excluded.push(tid);
+      }
+      return excluded;
+    },
+
     // True when tid is a custom: ID that no longer resolves to a live
     // custom CF. Used to strip dead refs from sync payloads + post-sync
     // rule persistence so backend doesn't have to clean up after us.
@@ -660,31 +704,33 @@ export default {
       for (const g of (detail.trashGroups || [])) {
         for (const cf of (g.cfs || [])) inProfile.add(cf.trashId);
       }
-      // selectedCFs → selectedOptionalCFs map. Picks up exactly what the
-      // rule has tracked, so optional-group CFs (default-off members user
-      // explicitly added via Additional CFs picker) come back into the
-      // editor.
+      // selectedCFs → selectedOptionalCFs map. v2.5.8 split: selectedCFs
+      // are PURE opt-ins (CFs not in TRaSH defaults), excludedCFs are
+      // explicit opt-outs from TRaSH defaults. CFs not in either map fall
+      // back to cf.default at render time (handled by the toggle template).
       const selOpt = { ...(this.selectedOptionalCFs || {}) };
       for (const tid of (rule.selectedCFs || [])) selOpt[tid] = true;
-      // Reconstruct group on/off flags from rule membership. Without this,
-      // editor renders default-off groups (e.g. Optional Movie Versions)
-      // as toggled OFF even when the rule clearly wants them on (members
-      // present in selectedCFs). User-visible symptom: editor reports "0
-      // overrides", but Reset-to-Profile-Default still produces a long
-      // diff because reset clears the per-CF entries and the next Save &
-      // Sync drops every member of the (apparently-off) group.
-      // Algorithm: if ANY CF from a default-off group is in selectedCFs,
-      // mark the group toggle on; if NO CF from a default-on group is in
-      // selectedCFs, mark the group toggle off. Otherwise leave alone
-      // (matches default).
-      const ruleSet = new Set(rule.selectedCFs || []);
+      for (const tid of (rule.excludedCFs || [])) selOpt[tid] = false;
+      // Group on/off flags. With v2.5.8 semantics:
+      //   - default-off group + any CF in selectedCFs → user opted in → on
+      //   - default-on group + every CF in excludedCFs → user opted out of
+      //     the whole group → off
+      //   - otherwise leave undefined → display falls back to
+      //     group.defaultEnabled
+      // The pre-v2.5.8 heuristic that flipped default-on groups off when
+      // selectedCFs lacked any group member is wrong here: post-migration
+      // selectedCFs is mostly empty (defaults moved out), and we'd
+      // mis-flag every default-on group as user-off.
+      const ruleSelSet = new Set(rule.selectedCFs || []);
+      const ruleExcSet = new Set(rule.excludedCFs || []);
       for (const g of (detail.trashGroups || [])) {
         const cfTids = (g.cfs || []).map(cf => cf.trashId);
-        const anyInRule = cfTids.some(tid => ruleSet.has(tid));
+        const anyInSelected = cfTids.some(tid => ruleSelSet.has(tid));
+        const allExcluded = cfTids.length > 0 && cfTids.every(tid => ruleExcSet.has(tid));
         const grpKey = '__grp_' + g.name;
-        if (!g.defaultEnabled && anyInRule) {
+        if (!g.defaultEnabled && anyInSelected) {
           selOpt[grpKey] = true;
-        } else if (g.defaultEnabled && !anyInRule && cfTids.length > 0) {
+        } else if (g.defaultEnabled && allExcluded) {
           selOpt[grpKey] = false;
         }
       }
@@ -1484,7 +1530,13 @@ export default {
         instanceId: this.syncForm.instanceId,
         profileTrashId: this.syncForm.profileTrashId,
         arrProfileId: this.syncMode === 'create' ? 0 : parseInt(this.syncForm.arrProfileId),
-        selectedCFs: this.getAllSelectedCFIds()
+        selectedCFs: this.getAllSelectedCFIds(),
+        // Explicit opt-outs — trash_ids the user has toggled OFF among
+        // CFs that ARE in current TRaSH defaults for this profile. Backend
+        // subtracts these from `ComputeTrashDefaults ∪ selectedCFs` so the
+        // resulting Arr profile reflects the user's opt-out choices even
+        // when TRaSH later moves the CFs between formatItems and cf-groups.
+        excludedCFs: this.getExcludedCFIds()
       };
       if (this.syncForm.importedProfileId) {
         body.importedProfileId = this.syncForm.importedProfileId;
@@ -1795,6 +1847,12 @@ export default {
           const updated = {
             ...existingRule,
             selectedCFs: this.getAllSelectedCFIds(),
+            // Echo whatever the sync body just sent — without this, the spread
+            // of `...existingRule` (loaded BEFORE this sync ran) silently
+            // overwrites the excludedCFs that /api/sync/apply just persisted
+            // to the rule. Any opt-out the user made in the editor would be
+            // erased on the very next post-sync PUT.
+            excludedCFs: syncBody.excludedCFs || [],
             arrProfileId: arrId,
             behavior: this.syncForm.behavior || existingRule.behavior,
             overrides: syncBody.overrides || null,
@@ -1882,6 +1940,7 @@ export default {
       const updated = {
         ...existingRule,
         selectedCFs: syncBody.selectedCFs || [],
+        excludedCFs: syncBody.excludedCFs || [],
         arrProfileId: arrId,
         behavior: syncBody.behavior || existingRule.behavior,
         overrides: syncBody.overrides || null,
@@ -1963,12 +2022,21 @@ export default {
       const selectedCFs = (rule && Array.isArray(rule.selectedCFs))
         ? rule.selectedCFs.slice()
         : Object.keys(sh.selectedCFs || {}).filter(k => sh.selectedCFs[k]);
+      // Opt-outs follow the same prefer-rule-then-history pattern as selectedCFs
+      // and keepArrCFIDs. Rollback (useHistoryOnly=true) sets rule=null, so the
+      // history snapshot's excludedCFs is the only source — without this, every
+      // rolled-back sync would silently re-include CFs the user had opted out of
+      // at the time of the original sync.
+      const excludedCFs = (rule && Array.isArray(rule.excludedCFs))
+        ? rule.excludedCFs.slice()
+        : (Array.isArray(sh.excludedCFs) ? sh.excludedCFs.slice() : []);
       const body = {
         instanceId: inst.id,
         profileTrashId: sh.profileTrashId,
         importedProfileId,
         arrProfileId: sh.arrProfileId,
         selectedCFs,
+        excludedCFs,
         // Prefer the live rule when present; fall back to the sync-history
         // snapshot for orphaned-profile reruns (rule may have been deleted
         // since the original sync, but the snapshot still holds the keep
@@ -2083,6 +2151,11 @@ export default {
         arrProfileId: 0, // create mode
         profileName: name.trim(),
         selectedCFs: Object.keys(sh.selectedCFs || {}).filter(k => sh.selectedCFs[k]),
+        // Clone preserves the historical state including user opt-outs so the
+        // copied profile reflects exactly what the source synced — without
+        // this, every CF the user had opted out of at the time of the source
+        // sync would silently re-appear in the cloned profile.
+        excludedCFs: Array.isArray(sh.excludedCFs) ? sh.excludedCFs.slice() : [],
         scoreOverrides: sh.scoreOverrides || null,
         qualityOverrides: sh.qualityOverrides || null,
         qualityStructure: sh.qualityStructure || null,
@@ -2276,12 +2349,27 @@ export default {
       // Restore optional CF selections from sync history
       if (sh.selectedCFs && Object.keys(sh.selectedCFs).length > 0) {
         const groups = this.profileDetail?.detail?.trashGroups || [];
-        // priorAvailableGroups: backend stamps this at every successful
-        // sync, and migrates pre-fix rules from their LastSyncCommit on
-        // first AutoSyncAfterPull. Used to distinguish "user opted out
-        // of an existing group" from "group is brand new since last
-        // sync (TRaSH restructure)".
+        // priorAvailableGroups: per-group snapshot from last successful
+        // sync. Distinguishes "user opted out of an existing group" from
+        // "group is brand new since last sync (TRaSH restructure)".
         const priorAvailable = (ruleForRestore && ruleForRestore.priorAvailableGroups) || {};
+        // priorSyncedCFs: per-CF snapshot from last successful sync — the
+        // trash_ids that ended up in Arr regardless of how they got there
+        // (SelectedCFs, formatItems direct path, or group expansion).
+        // Used to distinguish "CF is new in this group since last sync
+        // (TRaSH restructure — follow default)" from "CF existed and user
+        // chose to leave it off (preserve opt-out)". Without this, NEW
+        // default-on CFs inside KNOWN groups get silently flipped off when
+        // the rule reopens.
+        const priorSyncedCFs = (ruleForRestore && Array.isArray(ruleForRestore.priorSyncedCFs))
+          ? new Set(ruleForRestore.priorSyncedCFs)
+          : new Set();
+        // Explicit opt-outs from the rule. Highest-priority signal — a
+        // CF here is always off regardless of TRaSH defaults or prior
+        // synced state. Persists across syncs and TRaSH restructures.
+        const excludedCFs = (ruleForRestore && Array.isArray(ruleForRestore.excludedCFs))
+          ? new Set(ruleForRestore.excludedCFs)
+          : new Set();
         // The rule's SelectedCFs is the authoritative source of "what's
         // currently in the rule's sync set". sh.selectedCFs may lag if
         // the auto-sync no-changes path skipped the history refresh
@@ -2292,21 +2380,43 @@ export default {
           ? Object.fromEntries(ruleForRestore.selectedCFs.map(id => [id, true]))
           : sh.selectedCFs;
         for (const group of groups) {
-          const groupWasSynced = group.cfs.some(cf => effectiveSelectedCFs[cf.trashId]);
           const groupExistedAtLastSync = group.trashId && (group.trashId in priorAvailable);
+          // Group is considered "synced" if either:
+          //   - any of its CFs are in the current rule.selectedCFs, OR
+          //   - any of its CFs were in priorSyncedCFs (covers CFs that
+          //     reached Arr via profile.formatItems instead of group
+          //     opt-in, e.g. unwanted CFs before TRaSH restructure)
+          const groupWasSynced = group.cfs.some(cf =>
+            effectiveSelectedCFs[cf.trashId] || priorSyncedCFs.has(cf.trashId));
           for (const cf of group.cfs) {
             if (cf.required) continue;
-            if (effectiveSelectedCFs[cf.trashId]) {
+            if (excludedCFs.has(cf.trashId)) {
+              // Explicit opt-out persists — always off, no exceptions.
+              this.selectedOptionalCFs[cf.trashId] = false;
+            } else if (effectiveSelectedCFs[cf.trashId]) {
               // CF is currently in the rule's selection → restore as on.
               this.selectedOptionalCFs[cf.trashId] = true;
+            } else if (priorSyncedCFs.has(cf.trashId)) {
+              // CF was synced last time (via formatItems, or as a group
+              // default) but isn't in selectedCFs today. Restore as on
+              // so a TRaSH structural restructure that moves CFs around
+              // doesn't silently flip the user's effective state.
+              this.selectedOptionalCFs[cf.trashId] = true;
             } else if (groupExistedAtLastSync || !group.defaultEnabled) {
-              // Either the group existed at last sync (user's "off" choice
-              // is preserved) OR the group is opt-in (per-CF default
-              // doesn't apply when group is off). Mark CF off explicitly.
+              // Existing default-on group + CF wasn't synced before AND
+              // isn't in selectedCFs → user has either explicitly opted
+              // out OR has never engaged with this CF. Either way, off.
+              //
+              // Important: we deliberately do NOT auto-enable CFs whose
+              // default flipped from false/null to true since last sync
+              // (e.g. Black and White Editions becoming default=true in
+              // unwanted-formats-german post-PR-2733). If we did, every
+              // editor reopen would re-tick CFs the user just deselected.
+              // New TRaSH defaults are surfaced as available but not
+              // pre-checked — user opts in explicitly.
               this.selectedOptionalCFs[cf.trashId] = false;
             } else if (cf.default) {
-              // Brand-new default-on group + CF is default-on within the
-              // group → default to on (matches TRaSH's recommendation).
+              // Brand-new default-on group + CF is default-on within → on.
               this.selectedOptionalCFs[cf.trashId] = true;
             } else {
               // Brand-new default-on group but CF is opt-in within → off.

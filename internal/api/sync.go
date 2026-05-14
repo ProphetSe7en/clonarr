@@ -61,18 +61,18 @@ func (s *Server) handleDryRun(w http.ResponseWriter, r *http.Request) {
 		}
 		imported = &p
 	}
-	// Mirror handleApply's brand-new-group expansion when ExpandRule is set
-	// (Sync All path). Read-only here — we don't persist the expanded set
-	// back to the rule, just feed it into BuildSyncPlan so the dry-run
-	// preview's "scores zeroed" count matches what apply will actually do.
-	// Without this, Sync All's dry-run would report N zeroed CFs but the
-	// subsequent apply would zero fewer (because expansion includes them in
-	// the synced set), leaving the user staring at a misleading preview.
+	// v2.5.8: pre-sync CF expansion is no longer needed — BuildSyncPlan
+	// resolves the effective set via ComputeTrashDefaults ∪ SelectedCFs -
+	// ExcludedCFs directly from current TRaSH state. We still forward the
+	// rule's ExcludedCFs into the request when running with ExpandRule so
+	// the dry-run preview reflects user opt-outs that the request body
+	// didn't supply (Sync All's frontend doesn't always send them).
 	if req.ExpandRule && ad != nil && req.ArrProfileID > 0 && req.ProfileTrashID != "" {
 		for _, r := range s.Core.Config.Get().AutoSync.Rules {
 			if r.InstanceID == req.InstanceID && r.ArrProfileID == req.ArrProfileID && r.Enabled && r.OrphanedAt == "" {
-				expandedCFs, _ := core.ExpandSelectedCFsForBrandNewGroups(r, ad)
-				req.SelectedCFs = expandedCFs
+				if req.ExcludedCFs == nil {
+					req.ExcludedCFs = append([]string(nil), r.ExcludedCFs...)
+				}
 				break
 			}
 		}
@@ -160,28 +160,20 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		}
 		imported = &p
 	}
-	// Brand-new-group expansion for the manual Sync All path (req.ExpandRule).
-	// runAutoSyncRule already does this on the scheduled cron; without this
-	// branch the manual Sync All button bypasses expansion and ResetMode=
-	// reset_to_zero zeroes CFs that TRaSH moved into a brand-new default-on
-	// group since the rule was last synced. Opt-in: every other caller of
-	// /api/sync/apply leaves req.ExpandRule unset, so they're unaffected.
+	// v2.5.8: pre-sync CF expansion is no longer needed. BuildSyncPlan reads
+	// current TRaSH state via ComputeTrashDefaults at sync time, so CFs that
+	// TRaSH moved into a new default-on group are auto-included without any
+	// rule mutation. We still forward the rule's ExcludedCFs into the
+	// request body if the caller didn't supply them (Sync All's quick-sync
+	// frontend path doesn't always send override fields), so opt-outs are
+	// honored regardless of whether the caller round-tripped them.
 	if req.ExpandRule && ad != nil && req.ArrProfileID > 0 && req.ProfileTrashID != "" {
-		var rule *core.AutoSyncRule
 		for _, r := range s.Core.Config.Get().AutoSync.Rules {
 			if r.InstanceID == req.InstanceID && r.ArrProfileID == req.ArrProfileID && r.Enabled && r.OrphanedAt == "" {
-				ruleCopy := r
-				rule = &ruleCopy
+				if req.ExcludedCFs == nil {
+					req.ExcludedCFs = append([]string(nil), r.ExcludedCFs...)
+				}
 				break
-			}
-		}
-		if rule != nil {
-			expandedCFs, expansionAdded := core.ExpandSelectedCFsForBrandNewGroups(*rule, ad)
-			if len(expansionAdded) > 0 {
-				s.Core.UpdateAutoSyncRuleSelectedCFs(rule.ID, expandedCFs)
-				req.SelectedCFs = expandedCFs
-				log.Printf("Sync All: rule %s — auto-included %d CF(s) from new default-on cf-group(s) (TRaSH restructure detection)", rule.ID, len(expansionAdded))
-				s.Core.DebugLog.Logf(core.LogAutoSync, "Sync All: rule %s expanded selectedCFs by %d CF(s)", rule.ID, len(expansionAdded))
 			}
 		}
 	}
@@ -268,6 +260,12 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	// allCFIDs against the previous entry's SyncedCFs. This catches group-level
 	// changes (e.g. disabling "Streaming Services General" drops 18 CFs) that
 	// the score engine doesn't report when the CFs had score=0.
+	// CF-set diff against previous entry — only report set transitions for
+	// CFs whose score doesn't change either side of zero, since the score
+	// engine's "Score set: X (Y)" / "Score cleared: X (was Y)" lines
+	// already cover any score-bearing activation/deactivation. Reporting
+	// both produces the duplicate "Activated: X" + "Score set: X" noise
+	// the user flagged on PR-2733 history.
 	cfSetDetails := []string{}
 	prevEntry := s.Core.Config.GetLatestSyncEntry(inst.ID, req.ArrProfileID)
 	if prevEntry != nil {
@@ -292,18 +290,33 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 			}
 			return tid[:min(len(tid), 12)]
 		}
+		// Score the engine actually wrote for each CF in this sync — used
+		// to skip CFs that the score-detail block will already mention.
+		newScoreByName := make(map[string]int)
+		for _, sa := range plan.ScoreActions {
+			newScoreByName[sa.CFName] = sa.NewScore
+		}
 		for _, tid := range allCFIDs {
 			if !prevSet[tid] {
-				cfSetDetails = append(cfSetDetails, "Added: "+resolveName(tid))
+				name := resolveName(tid)
+				if score, ok := newScoreByName[name]; ok && score != 0 {
+					continue // score detail will say "Score set: X (Y)"
+				}
+				cfSetDetails = append(cfSetDetails, "Now in profile: "+name)
 			}
 		}
 		for _, tid := range prevEntry.SyncedCFs {
 			if !newSet[tid] {
-				cfSetDetails = append(cfSetDetails, "Removed: "+resolveName(tid))
+				name := resolveName(tid)
+				if score, ok := newScoreByName[name]; ok && score == 0 {
+					// engine likely emits a "Score cleared: X" detail
+					continue
+				}
+				cfSetDetails = append(cfSetDetails, "No longer in profile: "+name)
 			}
 		}
 	}
-	// Merge: cfSetDetails (from set diff) + result.CFDetails (creates/updates)
+	// Merge: cfSetDetails (set diff, zero-score cases) + result.CFDetails (creates/updates)
 	allCFDetails := append(cfSetDetails, result.CFDetails...)
 	var changes *core.SyncChanges
 	if len(allCFDetails) > 0 || len(result.ScoreDetails) > 0 ||
@@ -327,6 +340,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		ArrProfileName:    plan.ArrProfileName,
 		SyncedCFs:         allCFIDs,
 		SelectedCFs:       selectedCFMap,
+		ExcludedCFs:       append([]string(nil), req.ExcludedCFs...),
 		ScoreOverrides:    req.ScoreOverrides,
 		QualityOverrides:  req.QualityOverrides,
 		QualityStructure:  req.QualityStructure,
@@ -438,6 +452,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 				cfg.AutoSync.Rules[i].TrashProfileID = req.ProfileTrashID
 				cfg.AutoSync.Rules[i].ImportedProfileID = req.ImportedProfileID
 				cfg.AutoSync.Rules[i].SelectedCFs = req.SelectedCFs
+				cfg.AutoSync.Rules[i].ExcludedCFs = req.ExcludedCFs
 				cfg.AutoSync.Rules[i].ScoreOverrides = req.ScoreOverrides
 				cfg.AutoSync.Rules[i].QualityOverrides = req.QualityOverrides
 				cfg.AutoSync.Rules[i].QualityStructure = req.QualityStructure
@@ -463,27 +478,67 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 				nowSync := time.Now().Format(time.RFC3339)
 				cfg.AutoSync.Rules[i].LastSyncTime = nowSync
 				cfg.AutoSync.Rules[i].UpdatedAt = nowSync
+				// Mirror auto-sync engine's UpdateAutoSyncRuleCommit so the
+				// manual /api/sync/apply path tracks the same recovery
+				// metadata. Two snapshots needed for TRaSH-restructure
+				// resilience:
+				//   - LastSyncCommit + PriorAvailableGroups: per-group
+				//     state for the brand-new-group detection path.
+				//   - PriorSyncedCFs: per-CF set of everything that ended
+				//     up in the Arr profile. Used by the CF-level recovery
+				//     pass in ExpandSelectedCFsForBrandNewGroups + the
+				//     editor's restoreFromSyncHistory so CFs that reached
+				//     Arr via profile.formatItems (not via SelectedCFs)
+				//     survive a structural restructure that moves them
+				//     into an existing default-on cf-group.
+				if currentCommit := s.Core.Trash.CurrentCommit(); currentCommit != "" {
+					cfg.AutoSync.Rules[i].LastSyncCommit = currentCommit
+					if cfg.AutoSync.Rules[i].TrashProfileID != "" {
+						cfg.AutoSync.Rules[i].PriorAvailableGroups = core.ComputeAvailableGroups(ad, cfg.AutoSync.Rules[i].TrashProfileID)
+					}
+				}
+				syncedCFs := make([]string, 0, len(plan.CFActions))
+				for _, a := range plan.CFActions {
+					syncedCFs = append(syncedCFs, a.TrashID)
+				}
+				cfg.AutoSync.Rules[i].PriorSyncedCFs = syncedCFs
 				return
 			}
 		}
 		nowSync := time.Now().Format(time.RFC3339)
+		// Same commit/snapshot/CF capture for newly-appended rules so the
+		// first sync of a fresh Save-and-Sync flow lands with complete
+		// recovery metadata.
+		currentCommit := s.Core.Trash.CurrentCommit()
+		var priorGroups map[string]bool
+		if currentCommit != "" && req.ProfileTrashID != "" {
+			priorGroups = core.ComputeAvailableGroups(ad, req.ProfileTrashID)
+		}
+		newSyncedCFs := make([]string, 0, len(plan.CFActions))
+		for _, a := range plan.CFActions {
+			newSyncedCFs = append(newSyncedCFs, a.TrashID)
+		}
 		cfg.AutoSync.Rules = append(cfg.AutoSync.Rules, core.AutoSyncRule{
-			ID:                core.GenerateID(),
-			Enabled:           false,
-			InstanceID:        req.InstanceID,
-			ProfileSource:     newSource,
-			TrashProfileID:    req.ProfileTrashID,
-			ImportedProfileID: req.ImportedProfileID,
-			ArrProfileID:      arrID,
-			SelectedCFs:       req.SelectedCFs,
-			KeepArrCFIDs:      req.KeepArrCFIDs,
-			ScoreOverrides:    req.ScoreOverrides,
-			QualityOverrides:  req.QualityOverrides,
-			QualityStructure:  req.QualityStructure,
-			Behavior:          req.Behavior,
-			Overrides:         req.Overrides,
-			LastSyncTime:      nowSync,
-			UpdatedAt:         nowSync,
+			ID:                   core.GenerateID(),
+			Enabled:              false,
+			InstanceID:           req.InstanceID,
+			ProfileSource:        newSource,
+			TrashProfileID:       req.ProfileTrashID,
+			ImportedProfileID:    req.ImportedProfileID,
+			ArrProfileID:         arrID,
+			SelectedCFs:          req.SelectedCFs,
+			ExcludedCFs:          req.ExcludedCFs,
+			KeepArrCFIDs:         req.KeepArrCFIDs,
+			ScoreOverrides:       req.ScoreOverrides,
+			QualityOverrides:    req.QualityOverrides,
+			QualityStructure:     req.QualityStructure,
+			Behavior:             req.Behavior,
+			Overrides:            req.Overrides,
+			LastSyncTime:         nowSync,
+			UpdatedAt:            nowSync,
+			LastSyncCommit:       currentCommit,
+			PriorAvailableGroups: priorGroups,
+			PriorSyncedCFs:       newSyncedCFs,
 		})
 	})
 

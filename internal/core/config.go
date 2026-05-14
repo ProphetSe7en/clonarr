@@ -117,7 +117,20 @@ type AutoSyncRule struct {
 	TrashProfileID    string   `json:"trashProfileId,omitempty"`
 	ImportedProfileID string   `json:"importedProfileId,omitempty"`
 	ArrProfileID      int      `json:"arrProfileId"`          // target Arr profile to update
-	SelectedCFs       []string `json:"selectedCFs,omitempty"` // user's optional CF selections
+	// SelectedCFs: explicit user opt-ins — CFs the user wants synced beyond
+	// what TRaSH already defaults for this profile. Layered additively over
+	// ComputeTrashDefaults at sync time. Pre-v2.5.8 rules stored the full
+	// sync set here (including CFs that were also TRaSH defaults); the v2.5.8
+	// migration splits inherited defaults out so this field becomes pure
+	// opt-ins. Duplicates with trash_defaults are harmless (set union).
+	SelectedCFs []string `json:"selectedCFs,omitempty"`
+	// ExcludedCFs: explicit user opt-outs — CFs that ARE in TRaSH defaults
+	// for this profile (formatItems or default-on group) but the user
+	// chose to remove via the rule editor. Subtracted from the resolved
+	// effective set at sync time. Persists across syncs and across TRaSH
+	// structural changes — opt-outs survive even if TRaSH moves the CF
+	// to a different group. Empty for fresh rules.
+	ExcludedCFs []string `json:"excludedCFs,omitempty"`
 	// KeepArrCFIDs lists Arr CF IDs that must NOT be zeroed by ResetMode='reset_to_zero'.
 	// Populated by Compare-flow apply when the user opts to keep CFs in the "Extra in Arr"
 	// section (Arr-only customs not in any TRaSH cf-group, e.g. user-imported release-group
@@ -151,6 +164,21 @@ type AutoSyncRule struct {
 	// heuristic. Empty for pre-fix rules; populated lazily at startup
 	// via LastSyncCommit + git lookup, then on every successful sync.
 	PriorAvailableGroups map[string]bool `json:"priorAvailableGroups,omitempty"`
+	// PriorSyncedCFs is a CF-level snapshot from the last successful sync —
+	// trash_ids of every CF that ended up scored in the Arr profile, no
+	// matter whether it was reached via profile.formatItems, an explicit
+	// SelectedCF, or a group-default expansion. Populated on every
+	// successful sync (auto + manual). Drives two recovery paths:
+	//   1) ExpandSelectedCFsForBrandNewGroups uses it to re-include CFs
+	//      that TRaSH moved from profile.formatItems INTO an existing
+	//      default-on cf-group — the per-group PriorAvailableGroups check
+	//      misses this case because the group itself isn't "brand new".
+	//   2) restoreFromSyncHistory uses it so the editor preserves CFs
+	//      that were previously synced via the formatItems direct path
+	//      (which never lived in SelectedCFs), instead of silently
+	//      flipping them off after the rule re-opens.
+	// Empty for legacy rules until their first post-fix sync.
+	PriorSyncedCFs []string `json:"priorSyncedCFs,omitempty"`
 	// OrphanedAt is set (RFC3339 timestamp) when clonarr's drift-check
 	// detects that ArrProfileID no longer resolves in the target Arr
 	// instance. Auto-sync skips orphaned rules; the UI exposes Restore
@@ -238,6 +266,14 @@ type SyncHistoryEntry struct {
 	ArrProfileName    string          `json:"arrProfileName"`
 	SyncedCFs         []string        `json:"syncedCFs"`
 	SelectedCFs       map[string]bool `json:"selectedCFs,omitempty"`
+	// ExcludedCFs mirrors the rule's user opt-outs at the time of this sync.
+	// Snapshotted so rollback / orphaned-profile rerun can reconstruct the
+	// historical state correctly — without it, rollback would re-include
+	// every CF the user had previously opted out of (the rollback path
+	// builds the body from this snapshot, not the live rule). Empty for
+	// pre-v2.5.8 entries → omitempty → reset_to_defaults behaviour matches
+	// pre-feature semantics.
+	ExcludedCFs       []string        `json:"excludedCFs,omitempty"`
 	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`
 	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
 	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
@@ -421,6 +457,10 @@ func (cs *ConfigStore) Get() Config {
 		cfg.SyncHistory[i] = sh
 		cfg.SyncHistory[i].SyncedCFs = make([]string, len(sh.SyncedCFs))
 		copy(cfg.SyncHistory[i].SyncedCFs, sh.SyncedCFs)
+		if len(sh.ExcludedCFs) > 0 {
+			cfg.SyncHistory[i].ExcludedCFs = make([]string, len(sh.ExcludedCFs))
+			copy(cfg.SyncHistory[i].ExcludedCFs, sh.ExcludedCFs)
+		}
 		if len(sh.SelectedCFs) > 0 {
 			cfg.SyncHistory[i].SelectedCFs = make(map[string]bool, len(sh.SelectedCFs))
 			for k, v := range sh.SelectedCFs {
@@ -528,6 +568,10 @@ func (cs *ConfigStore) Get() Config {
 			if len(r.SelectedCFs) > 0 {
 				cfg.AutoSync.Rules[i].SelectedCFs = make([]string, len(r.SelectedCFs))
 				copy(cfg.AutoSync.Rules[i].SelectedCFs, r.SelectedCFs)
+			}
+			if len(r.ExcludedCFs) > 0 {
+				cfg.AutoSync.Rules[i].ExcludedCFs = make([]string, len(r.ExcludedCFs))
+				copy(cfg.AutoSync.Rules[i].ExcludedCFs, r.ExcludedCFs)
 			}
 			if len(r.ScoreOverrides) > 0 {
 				cfg.AutoSync.Rules[i].ScoreOverrides = make(map[string]int, len(r.ScoreOverrides))

@@ -111,6 +111,10 @@ export default {
           importedProfileId: this.syncForm.importedProfileId || '',
           arrProfileId: parseInt(this.syncForm.arrProfileId) || 0,
           selectedCFs: this.getAllSelectedCFIds(),
+          // Carry editor opt-outs into the new rule so toggling "Auto-sync this
+          // profile" after deselecting CFs in the editor doesn't silently lose
+          // those opt-outs — next auto-sync would otherwise re-include them.
+          excludedCFs: syncBody.excludedCFs || [],
           behavior: this.syncForm.behavior,
           overrides: syncBody.overrides || null,
           scoreOverrides: syncBody.scoreOverrides || null,

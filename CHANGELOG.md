@@ -2,6 +2,12 @@
 
 ## v2.5.8
 
+### Opt-outs persist across TRaSH restructures (preventive)
+
+Fixed save paths that could lose deactivated CFs when TRaSH moves a CF
+between direct profile inclusion and cf-groups. Mostly preventive;
+existing profiles and rules keep working as before.
+
 ### Fixed
 
 - **Profile Builder export — Golden Rule group includes follow the variant

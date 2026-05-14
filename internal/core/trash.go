@@ -657,6 +657,12 @@ func classifyTrashPath(p string) *PullChange {
 type CommitGroupInfo struct {
 	DefaultEnabled bool     // group.Default == "true" at this commit
 	Includes       []string // profile trash_ids in quality_profiles.include
+	// DefaultCFs lists the CF trash_ids inside this group that were either
+	// required (cf.required == true) or default-on (cf.default == true) at
+	// the commit — i.e. the CFs that would auto-include for profiles in
+	// Includes if the group itself is DefaultEnabled. Used by the v2.5.8
+	// MigrateExcludedCFs path to reconstruct trash_defaults at LastSyncCommit.
+	DefaultCFs []string
 }
 
 // GroupsAtCommit returns cf-group trash_ids and their state at the given git
@@ -705,6 +711,11 @@ func (ts *TrashStore) GroupsAtCommit(commit string) (map[string]CommitGroupInfo,
 				QualityProfiles struct {
 					Include map[string]string `json:"include"`
 				} `json:"quality_profiles"`
+				CustomFormats []struct {
+					TrashID  string `json:"trash_id"`
+					Required bool   `json:"required"`
+					Default  *bool  `json:"default"`
+				} `json:"custom_formats"`
 			}
 			if err := json.Unmarshal(content, &g); err != nil {
 				continue
@@ -716,13 +727,83 @@ func (ts *TrashStore) GroupsAtCommit(commit string) (map[string]CommitGroupInfo,
 			for _, profTID := range g.QualityProfiles.Include {
 				includes = append(includes, profTID)
 			}
+			defaultCFs := make([]string, 0)
+			for _, cf := range g.CustomFormats {
+				if cf.TrashID == "" {
+					continue
+				}
+				isDefault := cf.Default != nil && *cf.Default
+				if !cf.Required && !isDefault {
+					continue
+				}
+				defaultCFs = append(defaultCFs, cf.TrashID)
+			}
 			result[g.TrashID] = CommitGroupInfo{
 				DefaultEnabled: g.Default == "true",
 				Includes:       includes,
+				DefaultCFs:     defaultCFs,
 			}
 		}
 	}
 	return result, true
+}
+
+// CommitProfileFormatItems returns the set of CF trash_ids referenced by the
+// profile's formatItems map at the given git commit. ok=false means the repo /
+// commit could not be read or the profile was not found at that commit.
+//
+// Used by v2.5.8 MigrateExcludedCFs to reconstruct trash_defaults at each
+// rule's LastSyncCommit so implicit opt-outs (pre-fix data) can be migrated
+// into the explicit ExcludedCFs field.
+func (ts *TrashStore) CommitProfileFormatItems(profileTrashID, commit string) (map[string]bool, bool) {
+	if commit == "" || profileTrashID == "" || ts.dataDir == "" {
+		return nil, false
+	}
+	ts.repoMu.RLock()
+	defer ts.repoMu.RUnlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Verify the commit exists first to avoid noisy errors on missing refs.
+	if err := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "cat-file", "-e", commit+"^{commit}").Run(); err != nil {
+		return nil, false
+	}
+
+	for _, app := range []string{"radarr", "sonarr"} {
+		dir := "docs/json/" + app + "/quality-profiles/"
+		listCmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "ls-tree", "--name-only", commit, dir)
+		listOut, err := listCmd.Output()
+		if err != nil {
+			continue
+		}
+		for _, path := range strings.Split(strings.TrimSpace(string(listOut)), "\n") {
+			if !strings.HasSuffix(path, ".json") {
+				continue
+			}
+			showCmd := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "show", commit+":"+path)
+			content, err := showCmd.Output()
+			if err != nil {
+				continue
+			}
+			var p struct {
+				TrashID     string            `json:"trash_id"`
+				FormatItems map[string]string `json:"formatItems"`
+			}
+			if err := json.Unmarshal(content, &p); err != nil {
+				continue
+			}
+			if p.TrashID != profileTrashID {
+				continue
+			}
+			out := make(map[string]bool, len(p.FormatItems))
+			for _, tid := range p.FormatItems {
+				out[tid] = true
+			}
+			return out, true
+		}
+	}
+	return nil, false
 }
 
 // DiffPull runs `git diff --name-status <prev>..<new> -- docs/json/` and

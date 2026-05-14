@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,16 @@ func (app *App) AutoSyncAfterPull(trigger string) {
 	// auto-disabled by restoreFromSyncHistory's "no group activity =
 	// opted out" heuristic. Idempotent — skips rules already migrated.
 	app.MigratePriorAvailableGroups()
+	// CF-level migration for v2.5.8 upgrades. Pre-v2.5.8 rules didn't
+	// populate PriorSyncedCFs; the latest sync history entry is the
+	// next best evidence of "what was synced last time".
+	app.MigratePriorSyncedCFs()
+	// Override-split migration. Reconstructs explicit SelectedCFs +
+	// ExcludedCFs from (lastTrashDefaults @ LastSyncCommit) and
+	// lastSyncedCFs. Required so pre-v2.5.8 implicit opt-outs survive
+	// the upgrade — without this, CFs the user deselected pre-fix would
+	// silently reappear on the first post-fix sync.
+	app.MigrateExcludedCFs()
 
 	cfg := app.Config.Get()
 	if cfg.AutoSync.Paused {
@@ -117,6 +128,8 @@ func (app *App) ForceSyncAllRules() {
 
 	app.CleanupStaleRules()
 	app.MigratePriorAvailableGroups()
+	app.MigratePriorSyncedCFs()
+	app.MigrateExcludedCFs()
 
 	cfg := app.Config.Get()
 	if cfg.AutoSync.Paused {
@@ -324,27 +337,20 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 	}
 
 	// Auto-include CFs from default-on cf-groups that are brand new since
-	// the last successful sync of this rule (TRaSH structural restructure
-	// detection). Without this, CFs that moved from profile.formatItems
-	// into a new default-on group would be dropped by the sync plan and
-	// their scores reset to 0 in Arr — see ExpandSelectedCFsForBrandNewGroups
-	// for full reasoning. We persist the expanded SelectedCFs back to the
-	// rule before plan-building so subsequent syncs keep including them
-	// even after the group is no longer brand-new from
-	// PriorAvailableGroups' perspective.
-	expandedCFs, expansionAdded := ExpandSelectedCFsForBrandNewGroups(rule, ad)
-	if len(expansionAdded) > 0 {
-		app.UpdateAutoSyncRuleSelectedCFs(rule.ID, expandedCFs)
-		rule.SelectedCFs = expandedCFs // local copy for the rest of this run
-		log.Printf("Auto-sync: rule %s — auto-included %d CF(s) from new default-on cf-group(s) (TRaSH restructure detection)", rule.ID, len(expansionAdded))
-	}
+	// v2.5.8: no pre-sync CF expansion needed. BuildSyncPlan now resolves
+	// the effective CF set as ComputeTrashDefaults ∪ SelectedCFs - ExcludedCFs
+	// at sync time, reading the current TRaSH state directly. CFs that TRaSH
+	// moved between formatItems and default-on cf-groups stay included
+	// automatically; demoted CFs drop automatically; user opt-ins and
+	// opt-outs persist via the explicit override lists.
 
 	// Build sync request from rule
 	req := SyncRequest{
 		InstanceID:       rule.InstanceID,
 		ProfileTrashID:   rule.TrashProfileID,
 		ArrProfileID:     rule.ArrProfileID,
-		SelectedCFs:      expandedCFs,
+		SelectedCFs:      rule.SelectedCFs,
+		ExcludedCFs:      rule.ExcludedCFs,
 		KeepArrCFIDs:     rule.KeepArrCFIDs,
 		ScoreOverrides:   rule.ScoreOverrides,
 		QualityOverrides: rule.QualityOverrides,
@@ -434,7 +440,16 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		// extra Logf line here; the per-rule trace stays at 2 lines
 		// (begin + end) for the common no-op path.
 		log.Printf("Auto-sync: rule %s — no changes for %s", rule.ID, inst.Name)
-		app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID))
+		// No-change path: rebuild PriorSyncedCFs from the plan's CFActions so
+		// the snapshot stays current with what's actually in Arr right now —
+		// without this, a no-op tick after a TRaSH structural change (CFs
+		// moved between formatItems and cf-groups) would leave the snapshot
+		// stale and next sync's recovery pass would over- or under-add.
+		noChangeSynced := make([]string, 0, len(plan.CFActions))
+		for _, a := range plan.CFActions {
+			noChangeSynced = append(noChangeSynced, a.TrashID)
+		}
+		app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID), noChangeSynced)
 		// Refresh sync history's SelectedCFs to mirror the rule's current
 		// SelectedCFs. Two reasons:
 		//   1) ExpandSelectedCFsForBrandNewGroups may have just added CFs
@@ -510,7 +525,16 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		return outcomeError, ""
 	}
 
-	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID))
+	// Snapshot the synced CF set for next sync's recovery pass. plan.CFActions
+	// covers everything the engine touched — create/update/unchanged — which
+	// is exactly the set of CFs that ended up in the Arr profile, regardless
+	// of whether they reached it via profile.formatItems, an explicit
+	// SelectedCF, or a default-on group expansion.
+	syncedCFs := make([]string, 0, len(plan.CFActions))
+	for _, a := range plan.CFActions {
+		syncedCFs = append(syncedCFs, a.TrashID)
+	}
+	app.UpdateAutoSyncRuleCommit(rule.ID, currentCommit, ComputeAvailableGroups(ad, rule.TrashProfileID), syncedCFs)
 
 	// Strip dangling "custom:" refs from the rule on the same successful-sync
 	// boundary that records history — keeps rule data clean so the profile
@@ -549,8 +573,11 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 	for _, id := range rule.SelectedCFs {
 		selectedCFMap[id] = true
 	}
-	// CF-set diff against previous entry (catches group-level add/remove
-	// that score engine doesn't report when CFs had score=0).
+	// CF-set diff against previous entry — only report set transitions for
+	// CFs whose score doesn't carry the event via "Score set:" / "Score
+	// cleared:" lines from the score engine. Reporting both produces the
+	// "Activated: X" + "Score set: X" duplicate noise the user flagged on
+	// PR-2733 history.
 	cfSetDetails := []string{}
 	prevEntry := app.Config.GetLatestSyncEntry(inst.ID, req.ArrProfileID)
 	if prevEntry != nil {
@@ -578,14 +605,26 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 			}
 			return tid
 		}
+		newScoreByName := make(map[string]int)
+		for _, sa := range plan.ScoreActions {
+			newScoreByName[sa.CFName] = sa.NewScore
+		}
 		for _, tid := range allCFIDs {
 			if !prevSet[tid] {
-				cfSetDetails = append(cfSetDetails, "Added: "+resolveName(tid))
+				name := resolveName(tid)
+				if score, ok := newScoreByName[name]; ok && score != 0 {
+					continue
+				}
+				cfSetDetails = append(cfSetDetails, "Now in profile: "+name)
 			}
 		}
 		for _, tid := range prevEntry.SyncedCFs {
 			if !newSet[tid] {
-				cfSetDetails = append(cfSetDetails, "Removed: "+resolveName(tid))
+				name := resolveName(tid)
+				if score, ok := newScoreByName[name]; ok && score == 0 {
+					continue
+				}
+				cfSetDetails = append(cfSetDetails, "No longer in profile: "+name)
 			}
 		}
 	}
@@ -611,6 +650,7 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		ArrProfileName:    plan.ArrProfileName,
 		SyncedCFs:         allCFIDs,
 		SelectedCFs:       selectedCFMap,
+		ExcludedCFs:       append([]string(nil), rule.ExcludedCFs...),
 		ScoreOverrides:    rule.ScoreOverrides,
 		QualityOverrides:  rule.QualityOverrides,
 		QualityStructure:  rule.QualityStructure,
@@ -648,10 +688,24 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		log.Printf("Auto-sync: failed to save sync history: %v", err)
 	}
 
-	app.NotifyAutoSync(rule, inst, plan.ProfileName, result, nil)
+	// Notification gate: skip when nothing observable changed on the Arr
+	// profile. A "no-op sync" can still fire when TRaSH restructures group
+	// membership in a way that doesn't affect this profile's effective set
+	// (e.g. a CF whose score stays the same after moving from formatItems
+	// to a default-on cf-group). Those are bookkeeping events, not user-
+	// facing changes, and shouldn't produce Discord/NTFY/Apprise pings.
+	hasObservableChange := result.CFsCreated > 0 || result.CFsUpdated > 0 ||
+		result.ScoresUpdated > 0 || result.ScoresZeroed > 0 ||
+		result.QualityUpdated || result.ProfileCreated ||
+		len(result.SettingsDetails) > 0
+	if hasObservableChange {
+		app.NotifyAutoSync(rule, inst, plan.ProfileName, result, nil)
+	} else {
+		app.DebugLog.Logf(LogAutoSync, "Auto-sync: rule %s — sync ran but no observable change (TRaSH restructure with equivalent effective set); notification suppressed", rule.ID)
+	}
 
 	// Push event to frontend toast queue (only when there are actual changes)
-	if result.CFsCreated > 0 || result.CFsUpdated > 0 || result.ScoresUpdated > 0 || result.QualityUpdated || len(result.SettingsDetails) > 0 {
+	if hasObservableChange {
 		// Collect details for the frontend toast. The UI owns compacting and
 		// expansion, so keep the event payload complete.
 		var details []string
@@ -1148,70 +1202,6 @@ func ComputeRuleCounts(rule AutoSyncRule, detail *ProfileDetailResult) (override
 	return overrides, optional
 }
 
-// The second return value is the list of newly-added CF trash_ids,
-// empty if no expansion was needed. Callers persist these back to
-// rule.SelectedCFs after a successful sync so subsequent syncs (when
-// the group is no longer brand-new) keep including them.
-func ExpandSelectedCFsForBrandNewGroups(rule AutoSyncRule, ad *AppData) ([]string, []string) {
-	if ad == nil || rule.TrashProfileID == "" {
-		return rule.SelectedCFs, nil
-	}
-	// Conservative: only expand when we have a confirmed snapshot from a
-	// prior sync. Without one we can't distinguish "rule never synced
-	// (user's create-rule UI choices are authoritative — they may have
-	// explicitly opted out of a default-on group)" from "TRaSH added a
-	// new group since last sync". Skipping expansion in the unsafe case
-	// means a user with a dead LastSyncCommit might still see the
-	// reset-bug after a structural restructure — they fix it via UI
-	// toggle. That's the lesser evil compared to silently overriding
-	// an explicit opt-out.
-	if len(rule.PriorAvailableGroups) == 0 {
-		return rule.SelectedCFs, nil
-	}
-	expanded := append([]string{}, rule.SelectedCFs...)
-	seen := make(map[string]bool, len(expanded))
-	for _, tid := range expanded {
-		seen[tid] = true
-	}
-	var added []string
-
-	for _, group := range ad.CFGroups {
-		if group.Default != "true" {
-			continue // not a default-on group; user must opt-in explicitly
-		}
-		applies := false
-		for _, profTID := range group.QualityProfiles.Include {
-			if profTID == rule.TrashProfileID {
-				applies = true
-				break
-			}
-		}
-		if !applies {
-			continue
-		}
-		// Skip groups that already existed at the last successful sync.
-		// If user had a chance to toggle and didn't enable, that's an
-		// implicit opt-out — we respect it.
-		if rule.PriorAvailableGroups != nil {
-			if _, existed := rule.PriorAvailableGroups[group.TrashID]; existed {
-				continue
-			}
-		}
-		// Brand-new default-on group. Add its required+default CFs.
-		for _, cf := range group.CustomFormats {
-			isDefault := cf.Default != nil && *cf.Default
-			if !cf.Required && !isDefault {
-				continue
-			}
-			if !seen[cf.TrashID] {
-				expanded = append(expanded, cf.TrashID)
-				seen[cf.TrashID] = true
-				added = append(added, cf.TrashID)
-			}
-		}
-	}
-	return expanded, added
-}
 
 // MigratePriorAvailableGroups scans all rules and populates
 // PriorAvailableGroups for any rule that has a LastSyncCommit but no
@@ -1292,6 +1282,286 @@ func (app *App) MigratePriorAvailableGroups() {
 
 	if migrated > 0 {
 		log.Printf("Migration: populated PriorAvailableGroups for %d rule(s) from LastSyncCommit", migrated)
+	}
+}
+
+// MigrateExcludedCFs reconstructs the explicit ExcludedCFs override list for
+// rules upgraded from a pre-v2.5.8 Clonarr where opt-outs were tracked only
+// implicitly (a CF that was a TRaSH default at the rule's LastSyncCommit but
+// didn't appear in the actual synced set was an "implicit opt-out"). The
+// v2.5.8 sync model splits user overrides into two explicit lists:
+//
+//	rule.SelectedCFs  — opt-ins (CFs the user added beyond TRaSH defaults)
+//	rule.ExcludedCFs  — opt-outs (CFs the user removed from TRaSH defaults)
+//
+// Migration math:
+//
+//	T_last  = trash_defaults at LastSyncCommit
+//	          = profile.formatItems @ LastSyncCommit
+//	            ∪ {cf : cf default+true OR required in default-on group g
+//	                    AND g.quality_profiles.include[profile] @ LastSyncCommit}
+//	S_last  = lastSyncedCFs  (rule.PriorSyncedCFs, or sync history fallback)
+//	new_selectedCFs = S_last - T_last  (pure opt-ins)
+//	new_excludedCFs = T_last - S_last  (pure opt-outs)
+//
+// After migration, the v2.5.8 sync formula
+//
+//	effective = current_trash_defaults ∪ selectedCFs - excludedCFs
+//
+// produces the same effective set the user had pre-upgrade IF TRaSH is
+// unchanged, AND preserves user overrides across future TRaSH restructures.
+//
+// Idempotent — rules where ExcludedCFs is already set OR LastSyncCommit is
+// empty are skipped. Rules whose commit can't be located in git history are
+// also skipped (best-effort migration, fallback is that selectedCFs becomes
+// the union of opt-ins + inherited-defaults — sub-optimal but correct in the
+// effective-set sense).
+func (app *App) MigrateExcludedCFs() {
+	cfg := app.Config.Get()
+	if len(cfg.AutoSync.Rules) == 0 {
+		return
+	}
+
+	// Cache by commit hash — many rules share the same LastSyncCommit, so
+	// we git-read each commit's group inventory + profile formatItems once.
+	type commitLookup struct {
+		groups       map[string]CommitGroupInfo
+		formatItems  map[string]map[string]bool // profileTrashID → formatItems set
+		groupsOK     bool
+		formatItemsResolved map[string]bool // profileTrashID → already-attempted lookup
+	}
+	commitCache := make(map[string]*commitLookup)
+
+	var migrated int
+	for _, rule := range cfg.AutoSync.Rules {
+		// Rule already has explicit ExcludedCFs (post-v2.5.8 sync, or
+		// previous migration run). Skip.
+		if rule.ExcludedCFs != nil {
+			continue
+		}
+		// Imported-profile rules don't use cf-group resolution — no
+		// implicit opt-outs to recover. Initialize as empty slice so the
+		// migration doesn't keep re-running.
+		if rule.TrashProfileID == "" {
+			ruleID := rule.ID
+			app.Config.Update(func(cfg *Config) {
+				for i := range cfg.AutoSync.Rules {
+					if cfg.AutoSync.Rules[i].ID == ruleID && cfg.AutoSync.Rules[i].ExcludedCFs == nil {
+						cfg.AutoSync.Rules[i].ExcludedCFs = []string{}
+					}
+				}
+			})
+			continue
+		}
+		// Build T_last (trash_defaults at the rule's last sync). We try
+		// LastSyncCommit's git state first for precision; if no commit
+		// is recorded (pre-v2.5.8 manual-only rules), we fall back to
+		// CURRENT TRaSH state on disk. The fallback works because
+		// migrations run BEFORE AutoSyncAfterPull processes new commits,
+		// so the repo is still at the commit the rule was synced
+		// against (or close enough that the structural deltas haven't
+		// reached this profile yet).
+		var lastTrashDefaults map[string]bool
+		if rule.LastSyncCommit != "" {
+			lk, ok := commitCache[rule.LastSyncCommit]
+			if !ok {
+				groups, gOK := app.Trash.GroupsAtCommit(rule.LastSyncCommit)
+				lk = &commitLookup{
+					groups:              groups,
+					groupsOK:            gOK,
+					formatItems:         make(map[string]map[string]bool),
+					formatItemsResolved: make(map[string]bool),
+				}
+				commitCache[rule.LastSyncCommit] = lk
+			}
+			if lk.groupsOK {
+				if !lk.formatItemsResolved[rule.TrashProfileID] {
+					fi, ok := app.Trash.CommitProfileFormatItems(rule.TrashProfileID, rule.LastSyncCommit)
+					if ok {
+						lk.formatItems[rule.TrashProfileID] = fi
+					}
+					lk.formatItemsResolved[rule.TrashProfileID] = true
+				}
+				profileFI := lk.formatItems[rule.TrashProfileID]
+				if profileFI == nil {
+					profileFI = map[string]bool{}
+				}
+				lastTrashDefaults = make(map[string]bool, len(profileFI))
+				for tid := range profileFI {
+					lastTrashDefaults[tid] = true
+				}
+				for _, info := range lk.groups {
+					if !info.DefaultEnabled {
+						continue
+					}
+					applies := false
+					for _, profTID := range info.Includes {
+						if profTID == rule.TrashProfileID {
+							applies = true
+							break
+						}
+					}
+					if !applies {
+						continue
+					}
+					for _, cfTID := range info.DefaultCFs {
+						lastTrashDefaults[cfTID] = true
+					}
+				}
+			}
+		}
+		if lastTrashDefaults == nil {
+			// Fallback: current TRaSH on disk. Resolve instance type via
+			// the rule's InstanceID so we look up the right AppData.
+			inst, ok := app.Config.GetInstance(rule.InstanceID)
+			if !ok {
+				continue // instance gone — leave migration for next pass
+			}
+			ad := app.Trash.GetAppData(inst.Type)
+			if ad == nil {
+				continue // no TRaSH data — try again later
+			}
+			var profile *TrashQualityProfile
+			for _, p := range ad.Profiles {
+				if p.TrashID == rule.TrashProfileID {
+					profile = p
+					break
+				}
+			}
+			if profile == nil {
+				continue // profile not found in current TRaSH
+			}
+			lastTrashDefaults = ComputeTrashDefaults(profile, ad)
+		}
+
+		// S_last — pull from PriorSyncedCFs if present, otherwise fall
+		// back to the latest sync history entry's SyncedCFs.
+		lastSynced := rule.PriorSyncedCFs
+		if len(lastSynced) == 0 {
+			history := app.Config.GetSyncHistory(rule.InstanceID)
+			for _, h := range history {
+				if h.ArrProfileID == rule.ArrProfileID && len(h.SyncedCFs) > 0 {
+					lastSynced = h.SyncedCFs
+					break
+				}
+			}
+		}
+		// No usable signal? Leave ExcludedCFs nil so a future sync
+		// populates it (best-effort).
+		if len(lastSynced) == 0 {
+			continue
+		}
+		lastSyncedSet := make(map[string]bool, len(lastSynced))
+		for _, tid := range lastSynced {
+			lastSyncedSet[tid] = true
+		}
+
+		// Derive new override sets via the migration formula
+		newExcluded := make([]string, 0)
+		for tid := range lastTrashDefaults {
+			if !lastSyncedSet[tid] {
+				newExcluded = append(newExcluded, tid)
+			}
+		}
+		newSelected := make([]string, 0)
+		for tid := range lastSyncedSet {
+			if !lastTrashDefaults[tid] {
+				newSelected = append(newSelected, tid)
+			}
+		}
+		// Stable order for deterministic JSON diffs and easier debugging
+		sort.Strings(newExcluded)
+		sort.Strings(newSelected)
+
+		ruleID := rule.ID
+		app.Config.Update(func(cfg *Config) {
+			for i := range cfg.AutoSync.Rules {
+				if cfg.AutoSync.Rules[i].ID != ruleID {
+					continue
+				}
+				// Only overwrite SelectedCFs if we have a confident T_last
+				// reconstruction; otherwise leave the existing list alone
+				// (it's a superset of opt-ins and the union math still
+				// produces the right effective set).
+				if cfg.AutoSync.Rules[i].ExcludedCFs == nil {
+					if newExcluded == nil {
+						cfg.AutoSync.Rules[i].ExcludedCFs = []string{}
+					} else {
+						cfg.AutoSync.Rules[i].ExcludedCFs = newExcluded
+					}
+					cfg.AutoSync.Rules[i].SelectedCFs = newSelected
+				}
+				return
+			}
+		})
+		migrated++
+	}
+
+	if migrated > 0 {
+		log.Printf("Migration: split %d rule(s) into explicit SelectedCFs/ExcludedCFs from LastSyncCommit + sync history", migrated)
+	}
+}
+
+// MigratePriorSyncedCFs backfills the CF-level snapshot for any rule
+// whose PriorSyncedCFs is still empty after an upgrade to v2.5.8. The
+// signal is the latest sync history entry's SyncedCFs — that field
+// has been tracked since long before v2.5.8 and reflects what was last
+// written to the Arr profile, regardless of whether the source was
+// profile.formatItems, an explicit SelectedCF, or a group default.
+//
+// Why: ExpandSelectedCFsForBrandNewGroups PASS 2 needs prior-CF state
+// to detect CFs that TRaSH moved from formatItems into an existing
+// default-on cf-group (PR #2733 scenario). Pre-v2.5.8 rules never had
+// PriorSyncedCFs populated. Without this migration, those rules would
+// silently drop the moved CFs on the next pull-and-sync cycle.
+//
+// Idempotent — rules with non-empty PriorSyncedCFs are skipped.
+func (app *App) MigratePriorSyncedCFs() {
+	cfg := app.Config.Get()
+	if len(cfg.AutoSync.Rules) == 0 {
+		return
+	}
+
+	var migrated int
+	for _, rule := range cfg.AutoSync.Rules {
+		if len(rule.PriorSyncedCFs) > 0 {
+			continue // already migrated
+		}
+		// Find the latest sync history entry for this rule's
+		// instance + Arr profile. Latest entry = most recent
+		// successful sync = best evidence of "what CFs we wrote".
+		var latestSynced []string
+		history := app.Config.GetSyncHistory(rule.InstanceID)
+		for _, h := range history {
+			if h.ArrProfileID == rule.ArrProfileID {
+				if len(h.SyncedCFs) > 0 {
+					latestSynced = h.SyncedCFs
+				}
+				break // history is ordered newest-first
+			}
+		}
+		if latestSynced == nil {
+			continue // no usable history — leave empty so a future
+			// successful sync can populate it directly
+		}
+
+		ruleID := rule.ID
+		snapshot := append([]string(nil), latestSynced...)
+		app.Config.Update(func(cfg *Config) {
+			for i := range cfg.AutoSync.Rules {
+				if cfg.AutoSync.Rules[i].ID == ruleID {
+					if len(cfg.AutoSync.Rules[i].PriorSyncedCFs) == 0 {
+						cfg.AutoSync.Rules[i].PriorSyncedCFs = snapshot
+					}
+					return
+				}
+			}
+		})
+		migrated++
+	}
+
+	if migrated > 0 {
+		log.Printf("Migration: populated PriorSyncedCFs for %d rule(s) from latest sync history", migrated)
 	}
 }
 
@@ -1413,7 +1683,7 @@ func (app *App) CleanupDanglingCustomCFsOnRule(ruleID string, danglingIDs []stri
 // this sync — written so future loads can distinguish "user opted out of an
 // existing group" from "group is brand new since last sync". Pass nil to leave
 // the snapshot unchanged (e.g. when the caller hasn't computed it).
-func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string, priorGroups map[string]bool) {
+func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string, priorGroups map[string]bool, priorSyncedCFs []string) {
 	app.Config.Update(func(cfg *Config) {
 		for i := range cfg.AutoSync.Rules {
 			if cfg.AutoSync.Rules[i].ID == ruleID {
@@ -1427,6 +1697,9 @@ func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string, priorGroups map[
 				cfg.AutoSync.Rules[i].LastSyncError = ""
 				if priorGroups != nil {
 					cfg.AutoSync.Rules[i].PriorAvailableGroups = priorGroups
+				}
+				if priorSyncedCFs != nil {
+					cfg.AutoSync.Rules[i].PriorSyncedCFs = priorSyncedCFs
 				}
 				return
 			}

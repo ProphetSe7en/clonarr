@@ -178,6 +178,8 @@ func main() {
 			server.AutoSyncQualitySizes()
 			app.CleanupStaleRules()
 			app.MigratePriorAvailableGroups()
+			app.MigratePriorSyncedCFs()
+			app.MigrateExcludedCFs()
 		}
 
 		if (cfg.PullInterval == "0" || cfg.PullInterval == "specific") && repoCloned {

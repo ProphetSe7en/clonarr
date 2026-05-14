@@ -156,7 +156,14 @@ type SyncRequest struct {
 	ImportedProfileID string   `json:"importedProfileId,omitempty"` // alternative: sync from imported/custom profile
 	ArrProfileID      int      `json:"arrProfileId"`                // target Arr profile to set scores on (0 = create new)
 	ProfileName       string   `json:"profileName"`                 // custom name for new profile (optional)
-	SelectedCFs       []string `json:"selectedCFs"`                 // optional: additional CF trash_ids from groups
+	SelectedCFs []string `json:"selectedCFs"` // optional: additional CF trash_ids from groups
+	// ExcludedCFs: trash_ids of CFs that ARE in TRaSH defaults for this
+	// profile but the user has explicitly opted out of via the rule editor.
+	// Subtracted from the effective set after merging trash_defaults +
+	// selectedCFs at sync time. Persists across syncs and TRaSH structural
+	// changes — an opt-out survives even if TRaSH moves the CF to a
+	// different group.
+	ExcludedCFs []string `json:"excludedCFs,omitempty"`
 	// ExpandRule, when true, tells handleApply to look up the auto-sync rule
 	// for (instanceId, arrProfileId), run ExpandSelectedCFsForBrandNewGroups
 	// to auto-include CFs from brand-new default-on TRaSH cf-groups, and
@@ -218,6 +225,62 @@ func resolveScore(trashID string, trashCF *TrashCF, scoreCtx string, cfScoreOver
 // logging emits via op.Logf so lines are tagged with the operation ID for
 // post-mortem extraction. Nil op disables structured logging (fall-back path
 // used by the test suite + any caller that doesn't open an operation).
+// ComputeTrashDefaults returns the trash_id set of CFs that TRaSH considers
+// defaults for the given profile. The set is the union of:
+//   - profile.FormatItems (CFs explicitly listed in the profile JSON)
+//   - CFs in default-on cf-groups (group.Default == "true") whose
+//     quality_profiles.include lists this profile's trash_id, where the
+//     CF itself is either required (cf.Required == true) or default-on
+//     within the group (cf.Default == true)
+//
+// This is the "what TRaSH says belongs in this profile right now" snapshot.
+// Sync plan resolution layers the user's overrides on top:
+//
+//	effective_synced_cfs = ComputeTrashDefaults(profile, ad)
+//	                       ∪ rule.SelectedCFs   (explicit opt-ins)
+//	                       - rule.ExcludedCFs   (explicit opt-outs)
+//
+// For imported profiles (profile.TrashID == ""), only FormatItems
+// contribute — cf-group default-on expansion doesn't apply.
+func ComputeTrashDefaults(profile *TrashQualityProfile, ad *AppData) map[string]bool {
+	out := make(map[string]bool)
+	if profile == nil {
+		return out
+	}
+	// FormatItems — TRaSH's direct CF listing for this profile
+	for _, tid := range profile.FormatItems {
+		out[tid] = true
+	}
+	if ad == nil || profile.TrashID == "" {
+		return out
+	}
+	// Default-on cf-groups that include this profile in their
+	// quality_profiles.include map — TRaSH's structured CF inclusion path
+	for _, group := range ad.CFGroups {
+		if group.Default != "true" {
+			continue
+		}
+		applies := false
+		for _, profTID := range group.QualityProfiles.Include {
+			if profTID == profile.TrashID {
+				applies = true
+				break
+			}
+		}
+		if !applies {
+			continue
+		}
+		for _, cf := range group.CustomFormats {
+			isDefault := cf.Default != nil && *cf.Default
+			if !cf.Required && !isDefault {
+				continue
+			}
+			out[cf.TrashID] = true
+		}
+	}
+	return out
+}
+
 func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *ImportedProfile, customCFs []CustomCF, lastSyncedCFs []string, httpClient *http.Client, op *Operation) (*SyncPlan, error) {
 	if ad == nil {
 		return nil, fmt.Errorf("no TRaSH data for %s", instance.Type)
@@ -321,16 +384,29 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 		ScoreActions: []ScoreAction{},
 	}
 
-	// Merge core formatItems + selectedCFs into one set, keyed by trash_id (C2: no name collisions)
-	allCFTrashIDs := make(map[string]bool)
-	for _, cfTrashID := range profile.FormatItems {
-		allCFTrashIDs[cfTrashID] = true
-	}
+	// Resolve the effective CF set: trash_defaults ∪ selectedCFs - excludedCFs.
+	//
+	// trash_defaults captures everything TRaSH currently considers part of
+	// this profile (profile.FormatItems + default-on group CFs where the
+	// group's quality_profiles.include lists this profile). Layering the
+	// rule's SelectedCFs (explicit opt-ins) and ExcludedCFs (explicit
+	// opt-outs) on top gives the final synced set.
+	//
+	// This is what makes the sync engine survive TRaSH structural changes:
+	// if TRaSH moves a CF from profile.formatItems into a default-on group,
+	// trash_defaults still contains it via the group path → no drop. If
+	// TRaSH demotes a CF (default → opt-in), trash_defaults no longer
+	// contains it → drop, following TRaSH's new recommendation. The user's
+	// explicit choices override either way.
+	allCFTrashIDs := ComputeTrashDefaults(profile, ad)
 	for _, trashID := range req.SelectedCFs {
 		allCFTrashIDs[trashID] = true
 	}
-	log.Printf("Sync plan: %d core formatItems + %d selectedCFs = %d total CFs",
-		len(profile.FormatItems), len(req.SelectedCFs), len(allCFTrashIDs))
+	for _, trashID := range req.ExcludedCFs {
+		delete(allCFTrashIDs, trashID)
+	}
+	log.Printf("Sync plan: %d trash defaults + %d selected - %d excluded = %d total CFs",
+		len(profile.FormatItems), len(req.SelectedCFs), len(req.ExcludedCFs), len(allCFTrashIDs))
 
 	// Map: CF name → Arr CF ID (for score assignment)
 	cfNameToArrID := make(map[string]int)
@@ -993,9 +1069,17 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		selectedCFsMap := make(map[string]bool)
+		// Effective CF set for profile creation mirrors BuildSyncPlan:
+		// trash_defaults ∪ selectedCFs - excludedCFs. Without this, a
+		// fresh-created Arr profile would only carry user opt-ins and miss
+		// CFs reached via default-on cf-groups, AND would re-include any
+		// CFs the user opted out of via the editor.
+		selectedCFsMap := ComputeTrashDefaults(profile, ad)
 		for _, id := range req.SelectedCFs {
 			selectedCFsMap[id] = true
+		}
+		for _, id := range req.ExcludedCFs {
+			delete(selectedCFsMap, id)
 		}
 
 		arrProfile, err := BuildArrProfile(profile, ad, qualityDefs, languages, nameToID, selectedCFsMap, req.ProfileName, cfScoreOverrides, customCFs, req.QualityStructure)
@@ -1221,17 +1305,16 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Merge core formatItems + selectedCFs for score assignment.
-		// Mirror BuildSyncPlan's set including auto-included CFs from
-		// default-enabled cf-groups, otherwise score-assignment + reset-
-		// mode disagree with the plan and CFs the plan said to include
-		// get reset to 0 here.
-		allTrashIDs := make(map[string]bool)
-		for _, cfTrashID := range profile.FormatItems {
-			allTrashIDs[cfTrashID] = true
-		}
+		// Resolve effective set the same way BuildSyncPlan does, so score
+		// assignment + reset-mode operate on the same CFs the plan touched.
+		// trash_defaults includes default-on group CFs naturally — no need
+		// for ad-hoc expansion. ExcludedCFs are subtracted to honor opt-outs.
+		allTrashIDs := ComputeTrashDefaults(profile, ad)
 		for _, cfTrashID := range req.SelectedCFs {
 			allTrashIDs[cfTrashID] = true
+		}
+		for _, cfTrashID := range req.ExcludedCFs {
+			delete(allTrashIDs, cfTrashID)
 		}
 
 		// Build current score map for allow_custom check
@@ -1273,7 +1356,25 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			fi := &targetProfile.FormatItems[i]
 			if newScore, ok := scoreMap[fi.Format]; ok {
 				if fi.Score != newScore {
-					result.ScoreDetails = append(result.ScoreDetails, fmt.Sprintf("%s: %d → %d", fi.Name, fi.Score, newScore))
+					// Neutral wording for the two zero-boundary cases —
+					// 0 → X doesn't imply the CF was "deactivated" before
+					// (it simply wasn't in the profile's effective set
+					// yet, e.g. TRaSH made it default for this profile in
+					// a cf-group restructure), and X → 0 doesn't imply
+					// removal from TRaSH (it may still live in the group
+					// as opt-in, just not scored here anymore). Genuine
+					// score changes between two non-zero values keep the
+					// explicit "before → after" form.
+					var detail string
+					switch {
+					case fi.Score == 0 && newScore != 0:
+						detail = fmt.Sprintf("Score set: %s (%+d)", fi.Name, newScore)
+					case fi.Score != 0 && newScore == 0:
+						detail = fmt.Sprintf("Score cleared: %s (was %+d)", fi.Name, fi.Score)
+					default:
+						detail = fmt.Sprintf("%s: %+d → %+d", fi.Name, fi.Score, newScore)
+					}
+					result.ScoreDetails = append(result.ScoreDetails, detail)
 					fi.Score = newScore
 					updated = true
 					result.ScoresUpdated++
@@ -1729,10 +1830,12 @@ func BuildArrProfile(
 		scoreCtx = "default"
 	}
 
-	allTrashIDs := make(map[string]bool)
-	for _, trashID := range profile.FormatItems {
-		allTrashIDs[trashID] = true
-	}
+	// selectedCFs is the resolved effective set (trash_defaults ∪ opt-ins − opt-outs)
+	// computed by the caller via ComputeTrashDefaults. profile.FormatItems is already
+	// folded into selectedCFs there, so unioning it again would re-include CFs the
+	// caller explicitly subtracted via ExcludedCFs. Trust the caller's set; if a CF
+	// is missing from selectedCFs it's intentional (opt-out or demoted by TRaSH).
+	allTrashIDs := make(map[string]bool, len(selectedCFs))
 	for trashID := range selectedCFs {
 		allTrashIDs[trashID] = true
 	}
