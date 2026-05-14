@@ -99,6 +99,9 @@ rule card so you can spot the pending ones.
 - CF category colors refreshed: **Required** is now slate teal,
   **SQP** indigo, **Miscellaneous** iron-blue steel. Other stays the
   neutral grey it was.
+- **Clickable commit hashes** in the TRaSH update dropdown — click the
+  `prev → new` commit pair to jump straight to the change on GitHub.
+  Thanks @xopez for the request.
 
 ## v2.5.6
 

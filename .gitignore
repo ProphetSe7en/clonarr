@@ -2,3 +2,4 @@ dev/
 config/
 ui/clonarr
 run-dev.cmd
+.claude/
