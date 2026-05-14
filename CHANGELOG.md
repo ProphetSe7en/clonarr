@@ -21,12 +21,14 @@ readers announce them properly. Thanks Cole.
 
 New **Reset** button in Settings → TRaSH Guides wipes the cached
 trash-guides repo and forces a fresh clone on the next Pull. Useful
-when the cache gets stuck or you want a clean slate. Your config,
-profiles, and custom CFs are not touched.
+when the cache gets stuck. Your config, profiles, and custom CFs are
+not touched. Thanks Cole.
 
-While we were at it, deleted custom CFs no longer linger as ghost
-entries — every successful sync now strips orphan references from
-rules automatically. Thanks Cole.
+### Deleted custom CFs no longer linger
+
+When you delete a custom CF, it now disappears from sync rules
+automatically on the next sync — no more "ghost" entries pointing at
+CFs that no longer exist. Your sync rules stay clean.
 
 ### CF Customizations card
 
@@ -39,23 +41,17 @@ you can scan at a glance.
 
 ### Auto-sync, friendlier and more resilient
 
-- Auto-sync **no longer runs at container restart**. The first sync
-  happens on the next scheduled trigger instead, so a routine update
-  doesn't fire a Discord notification for every rule.
+- Auto-sync **no longer runs at container restart** — first sync
+  happens on the next scheduled trigger, so a routine update doesn't
+  spam Discord with a notification per rule.
 - When an Arr instance briefly drops off the network, clonarr now
-  **retries with backoff** (up to 30 minutes per pass) before giving
-  up. You get **one notification per instance** ("Radarr is not
-  reachable — will retry on next sync") rather than 20 errors for 20
-  rules.
-- New **Auto-sync Schedule** (Settings) lets you periodically
-  force-resync everything on a clock, independent of the pull
-  schedule. Default OFF. Useful for catching CF drift even when TRaSH
-  hasn't changed.
-- **Plain-language error messages** in Discord, NTFY, Apprise, and on
-  the rule card. Raw Go errors like
-  `plan failed: list CFs: request failed: Get "http://...": EOF` are
-  now `Radarr became unreachable during sync — will retry on next
-  sync` or similar.
+  **retries with backoff** (up to 30 min) and sends **one notification
+  per instance** instead of one per rule.
+- New **Auto-sync Schedule** (Settings) lets you force-resync
+  everything on a clock, independent of the pull schedule. Default
+  off — useful for catching CF drift when TRaSH hasn't changed.
+- **Plain-language error messages** on the rule card and in Discord /
+  NTFY / Apprise. No more raw Go stack-text in notifications.
 
 ### Sync All / per-rule Sync Now
 
@@ -65,16 +61,11 @@ generic "Failed to build sync plan" errors.
 
 ### Compare tab redesigned
 
-The Compare tab is now a read-only view that highlights differences
-between your Arr profile and the TRaSH profile. To act on what you see,
-click **Edit & Sync →** — it opens the standard profile editor with
-the differences pre-loaded as overrides, so you can review and adjust
-before applying. Compare and Profile Sync now share the same code
-path, so they always produce the same result for the same intent.
-
-Filter chips (Wrong score / Missing / Extra) apply only to CFs —
-General and Quality cards stay hidden under those filters since they
-aren't score concepts.
+Compare is now a read-only diff between your Arr profile and the TRaSH
+profile. To act on it, click **Edit &amp; Sync →** — opens the
+standard profile editor with the differences pre-loaded as overrides.
+Same code path as Profile Sync, so same intent always produces the
+same result.
 
 ### Editor improvements
 

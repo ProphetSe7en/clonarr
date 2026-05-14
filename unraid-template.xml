@@ -21,13 +21,13 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/ui/static/icons/clonarr.png</Icon>
-  <Date>2026-05-09</Date>
+  <Date>2026-05-14</Date>
   <Changes>
+### 2026-05-14
+- v2.5.7: Big update. New **Save** button on the rule editor saves changes without syncing (applied on next Sync). Scheduled TRaSH pull intervals (Daily / Weekly / Monthly at a chosen time). Auto-sync is more resilient — retries on transient errors and sends one friendly notification per instance instead of one per rule. New Reset button to wipe the TRaSH cache. Compare tab redesigned as a read-only diff with Edit and Sync action. Click commit hashes in the TRaSH update dropdown to jump to GitHub. Deleted custom CFs are auto-stripped from rules. Thanks @ColeSpringer for PRs #46, #47, #48 and @xopez for the commit-link idea.
+
 ### 2026-05-09
 - v2.5.6: Small fixes. Imported Custom Formats no longer bloat your config (auto-cleaned on first startup). Required CFs card padding fixed. Maintenance confirm popups respond to Cancel and Delete again.
-
-### 2026-05-05
-- v2.5.5: New light theme and accessibility improvements (keyboard navigation, screen-reader support). File Naming page redesigned. Important fix: when TRaSH moves Custom Formats between profiles and groups (like the May 8 French Unwanted change), Clonarr preserves your sync state instead of resetting CF scores to zero.
 
 For full version history, see CHANGELOG.md on GitHub.
   </Changes>
