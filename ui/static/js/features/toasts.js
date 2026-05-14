@@ -189,8 +189,14 @@ export default {
 
     toastClass(toast) {
       const type = normalizeType(toast?.type);
-      const compactBody = `${toast?.title || ''} ${toast?.fullText || ''}`.trim();
-      const compact = !toast?.expandable && compactBody.length <= 110;
+      // Compact mode triggers on line count rather than character count.
+      // Char count was unstable — a one-char difference (e.g. an extra digit
+      // in a profile id) could flip a toast between compact and full-width
+      // mid-batch, making Sync All toasts look randomly sized. Line count
+      // is the actual structural signal: 1-2 profile syncs (3-4 lines incl.
+      // title + summary) feel right as compact; 3+ profiles need full width.
+      const lineCount = 1 + (toast?.fullText || '').split('\n').filter((l) => l.trim()).length;
+      const compact = !toast?.expandable && lineCount <= 4;
       return [
         'toast',
         `toast-${type}`,

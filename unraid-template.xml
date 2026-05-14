@@ -24,6 +24,7 @@
   <Date>2026-05-14</Date>
   <Changes>
 ### 2026-05-14
+- v2.5.9: Toast notifications stack consistently again. The 110-char threshold introduced in v2.5.7's toast manager could flip Sync All toasts between compact and full-width modes based on tiny text-length differences. Switched to a line-count trigger and removed a flexbox layout bug, so toasts in the same batch now have predictable, uniform sizing.
 - v2.5.8: Preventive fix for upcoming TRaSH changes — save paths that could lose deactivated CFs when TRaSH moves a CF between direct profile inclusion and cf-groups are now fixed. Existing profiles and rules keep working as before.
 - v2.5.7: Big update. New **Save** button on the rule editor saves changes without syncing (applied on next Sync). Scheduled TRaSH pull intervals (Daily / Weekly / Monthly at a chosen time). Auto-sync is more resilient — retries on transient errors and sends one friendly notification per instance instead of one per rule. New Reset button to wipe the TRaSH cache. Compare tab redesigned as a read-only diff with Edit and Sync action. Click commit hashes in the TRaSH update dropdown to jump to GitHub. Deleted custom CFs are auto-stripped from rules. Thanks @ColeSpringer for PRs #46, #47, #48 and @xopez for the commit-link idea.
 

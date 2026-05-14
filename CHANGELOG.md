@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.5.9
+
+### Fixed
+
+- **Toast notifications stack consistently again.** A 110-character
+  threshold introduced in v2.5.7's toast manager could flip Sync All
+  toasts between compact and full-width modes based on tiny text-length
+  differences (a single extra digit in a profile id was enough), and
+  the compact mode itself had a flexbox bug that laid out title and
+  message side-by-side. Switched to a line-count trigger so the mode
+  follows structure (1-2 profile syncs stay compact, 3+ profiles go
+  full-width) and removed the flex layout entirely so multi-line
+  toasts stack vertically as expected.
+
 ## v2.5.8
 
 ### Opt-outs persist across TRaSH restructures (preventive)
