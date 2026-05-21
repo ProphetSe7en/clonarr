@@ -1,0 +1,4 @@
+blank_issues_enabled: false
+  - name: Support via Discord
+    url: https://trash-guides.info/discord/
+    about: Chat with users and devs on support and setup related topics
