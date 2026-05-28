@@ -11,7 +11,7 @@
 # Volumes:
 #   - /config : Persistent storage for Clonarr's database and configuration
 
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 ARG VERSION=2.5.10
 
@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
-FROM alpine:3.21
+FROM alpine:3.23
 
 ARG VERSION=2.5.10
 
