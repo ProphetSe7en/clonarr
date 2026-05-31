@@ -99,20 +99,44 @@ func TestCFTrashIDManagedByRules_DefaultOffNotManaged(t *testing.T) {
 
 func TestCFTrashIDManagedByRules_ExcludedRejected(t *testing.T) {
 	cfg, ad := makeCFDriftFixture()
-	cfg.AutoSync.Rules[0].ExcludedCFs = []string{"managed-default"}
+	// Single-rule setup so the exclusion path is the only enrollment
+	// candidate. With multiple rules on the same instance, a CF
+	// excluded by one rule may still be enrolled by another — that
+	// case is covered separately.
+	cfg.AutoSync.Rules = []core.AutoSyncRule{
+		{ID: "r-A", InstanceID: "inst-A", TrashProfileID: "p1", Enabled: true,
+			ExcludedCFs: []string{"managed-default"}},
+	}
 	if cfTrashIDManagedByRules("managed-default", "inst-A", cfg, ad) {
-		t.Errorf("excluded CF should NOT be managed even if default-on")
+		t.Errorf("excluded CF should NOT be managed even if default-on, when no other rule enrolls it")
 	}
 }
 
-func TestCFTrashIDManagedByRules_DisabledRuleIgnored(t *testing.T) {
+func TestCFTrashIDManagedByRules_ExcludedInOneRuleEnrolledByAnother(t *testing.T) {
+	cfg, ad := makeCFDriftFixture()
+	// r-A excludes the CF, but r-disabled (also on inst-A) doesn't —
+	// and with the post-Enabled-filter change, disabled rules count.
+	// "Managed by ANY rule on this instance" is the contract: if any
+	// rule needs the CF, it's a candidate for Apply.
+	cfg.AutoSync.Rules[0].ExcludedCFs = []string{"managed-default"}
+	if !cfTrashIDManagedByRules("managed-default", "inst-A", cfg, ad) {
+		t.Errorf("CF excluded by one rule but enrolled by another should still be managed")
+	}
+}
+
+func TestCFTrashIDManagedByRules_DisabledRuleStillEnrolls(t *testing.T) {
 	cfg, ad := makeCFDriftFixture()
 	// Drop the enabled rule so only the disabled one matches.
+	// Enabled=false means "paused auto-sync schedule" — the rule is
+	// still configured and its CFs still belong to clonarr's saved
+	// spec, so drift detection processes them AND Apply must accept
+	// them. Locks in that auto-sync state is irrelevant to "is this
+	// CF managed" semantics.
 	cfg.AutoSync.Rules = []core.AutoSyncRule{
 		{ID: "r-disabled", InstanceID: "inst-A", TrashProfileID: "p1", Enabled: false},
 	}
-	if cfTrashIDManagedByRules("managed-default", "inst-A", cfg, ad) {
-		t.Errorf("disabled rule must not enroll CFs for Apply")
+	if !cfTrashIDManagedByRules("managed-default", "inst-A", cfg, ad) {
+		t.Errorf("disabled rule should still enroll CFs for Apply — paused auto-sync is not a reason to refuse")
 	}
 }
 

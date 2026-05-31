@@ -182,21 +182,32 @@ func DiffCFSpecs(before, after *TrashCF) *CFSpecDiff {
 				After:  strconv.FormatBool(as.Required),
 			})
 		}
-		// Compare on the RENDERED value rather than raw JSON bytes:
-		// Arr's API returns Fields in the [{name,value},...] shape
-		// while TRaSH JSON stores them as flat {value:...} objects, so
-		// raw-byte comparison flags every spec as "changed" even when
-		// nothing moved. The rendered value uses shape-agnostic
-		// extraction (see extractField) and only differs when the
-		// underlying value actually differs.
-		beforeVal := renderSpecValue(bs.Implementation, bs.Fields)
-		afterVal := renderSpecValue(as.Implementation, as.Fields)
-		if beforeVal != afterVal {
+		// Equality gate uses ExtractFieldValue + valuesEqual — the
+		// SAME comparison sync.go's cfSpecsMatch uses to decide if a CF
+		// needs pushing. Using renderSpecValue here previously caused
+		// false-positive drift: renderSpecValue's `default` case
+		// (any spec implementation not in its switch) falls through to
+		// renderRaw which re-marshals the raw bytes. TRaSH disk shape
+		// {"value":X} and Arr live shape [{"name":"value","value":X}]
+		// then produce different strings even when the underlying
+		// value is identical, and every such CF instantly flags drift
+		// the moment any Arr-only spec-type ships (typical: new Sonarr
+		// implementation, future Radarr addition).
+		//
+		// Aligning to sync's comparator guarantees the invariant:
+		// any CF sync would skip with Action="unchanged" must
+		// ALSO be considered "no drift" by detection. Strings shown
+		// in the Before/After fields still use renderSpecValue so the
+		// History UI keeps its human-readable rendering — those are
+		// only computed when an actual change is detected.
+		beforeRaw := ExtractFieldValue(bs.Fields)
+		afterRaw := ExtractFieldValue(as.Fields)
+		if !valuesEqual(beforeRaw, afterRaw) {
 			d.ChangedConditions = append(d.ChangedConditions, ConditionChange{
 				Name: name, Implementation: as.Implementation,
 				Field:  "value",
-				Before: beforeVal,
-				After:  afterVal,
+				Before: renderSpecValue(bs.Implementation, bs.Fields),
+				After:  renderSpecValue(as.Implementation, as.Fields),
 			})
 		}
 	}
@@ -485,6 +496,13 @@ var languageLabels = map[int]string{
 	30: "Portuguese (Brazil)",
 	31: "Arabic",
 	32: "Ukrainian",
+}
+
+// ArrCFToTrashCFExported is the public wrapper for arrCFToTrashCF
+// so the api package's diff-detail handler can reuse the conversion
+// without exporting the lowercase implementation.
+func ArrCFToTrashCFExported(a *arr.ArrCF) *TrashCF {
+	return arrCFToTrashCF(a)
 }
 
 // arrCFToTrashCF converts an Arr-side CustomFormat into the

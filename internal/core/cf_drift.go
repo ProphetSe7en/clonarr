@@ -219,7 +219,19 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 			}
 
 			liveAsTrashCF := arrCFToTrashCF(live)
-			diff := DiffCFSpecs(diskSpec, liveAsTrashCF)
+			// Strip TrashScores from the disk-side spec before diffing.
+			// arrCFToTrashCF leaves TrashScores nil (Arr's CF API never
+			// returns scores — they live on profile.formatItems instead).
+			// Without stripping, every CF that has trash_scores on disk
+			// produces N ScoreChange entries pointing at "missing" scores
+			// → fingerprint non-empty → drift fires on virtually every
+			// CF the first Check after enabling drift detection. The
+			// score channel is profile-drift's responsibility; this pass
+			// only covers spec content (name, includeCustomFormatWhenRenaming,
+			// and per-condition fields).
+			diskSpecForDiff := *diskSpec
+			diskSpecForDiff.TrashScores = nil
+			diff := DiffCFSpecs(&diskSpecForDiff, liveAsTrashCF)
 			if !diff.HasAny() {
 				continue
 			}

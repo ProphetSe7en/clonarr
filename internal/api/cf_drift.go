@@ -208,7 +208,11 @@ func (s *Server) handleCFDriftApply(w http.ResponseWriter, r *http.Request) {
 // silently destroy user-curated Arr CFs.
 func cfTrashIDManagedByRules(trashID, instanceID string, cfg core.Config, appData *core.AppData) bool {
 	for _, rule := range cfg.AutoSync.Rules {
-		if !rule.Enabled || rule.OrphanedAt != "" {
+		// rule.Enabled=false (paused auto-sync) is NOT a reason to
+		// refuse Apply — the rule is still configured and clonarr
+		// still owns the saved spec. Only OrphanedAt (the underlying
+		// Arr profile was deleted) makes Apply meaningless.
+		if rule.OrphanedAt != "" {
 			continue
 		}
 		if rule.InstanceID != instanceID {
