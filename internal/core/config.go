@@ -647,7 +647,15 @@ func (cs *ConfigStore) Get() Config {
 		cfg.ProfileSync = &ps
 	}
 	cfg.Instances = make([]Instance, len(cs.config.Instances))
-	copy(cfg.Instances, cs.config.Instances)
+	for i, inst := range cs.config.Instances {
+		cfg.Instances[i] = inst
+		if len(inst.CFDriftFingerprints) > 0 {
+			cfg.Instances[i].CFDriftFingerprints = make(map[string]string, len(inst.CFDriftFingerprints))
+			for k, v := range inst.CFDriftFingerprints {
+				cfg.Instances[i].CFDriftFingerprints[k] = v
+			}
+		}
+	}
 	cfg.SyncHistory = make([]SyncHistoryEntry, len(cs.config.SyncHistory))
 	for i, sh := range cs.config.SyncHistory {
 		cfg.SyncHistory[i] = sh
@@ -1064,13 +1072,23 @@ func (cs *ConfigStore) DeleteNotificationAgent(id string) error {
 	return fmt.Errorf("notification agent %s not found", id)
 }
 
-// GetInstance returns an instance by ID.
+// GetInstance returns an instance by ID. Map fields on the returned value
+// are deep-copied so callers can iterate without racing in-closure writes
+// from Update (CFDriftFingerprints is mutated in-place by the drift apply
+// path and by the drift detection persistence step).
 func (cs *ConfigStore) GetInstance(id string) (Instance, bool) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	for _, inst := range cs.config.Instances {
 		if inst.ID == id {
-			return inst, true
+			out := inst
+			if len(inst.CFDriftFingerprints) > 0 {
+				out.CFDriftFingerprints = make(map[string]string, len(inst.CFDriftFingerprints))
+				for k, v := range inst.CFDriftFingerprints {
+					out.CFDriftFingerprints[k] = v
+				}
+			}
+			return out, true
 		}
 	}
 	return Instance{}, false

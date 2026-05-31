@@ -26,7 +26,17 @@ import (
 // is loaded from the user's CustomCFs registry). Both flows resolve
 // the same TrashCF shape; the arr.ArrClient.UpdateCustomFormat call
 // is the same regardless of source.
+//
+// Guard rails:
+//   - Body capped at 4 KiB (the request is two short strings).
+//   - trashId must be managed by at least one enabled non-orphaned
+//     rule on the target instance. Without this gate an authenticated
+//     user could overwrite an unmanaged Arr CF spec by passing any
+//     trashId; with it, Apply mirrors detection's "managed" semantic.
+//   - Reconciled is only dispatched when the closure observed an
+//     actual fingerprint entry. Apply-on-clean-state stays silent.
 func (s *Server) handleCFDriftApply(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var body struct {
 		InstanceID string `json:"instanceId"`
 		TrashID    string `json:"trashId"`
@@ -53,16 +63,29 @@ func (s *Server) handleCFDriftApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve disk spec: TRaSH or custom. resolveCFForApply mirrors the
-	// detection-side resolveCFDiskSpec helper so apply and detection
-	// can't disagree about what "clonarr's saved state" looks like.
 	appData := s.Core.Trash.GetAppData(inst.Type)
+
+	// Managed-rule gate. Walk every enabled non-orphaned rule on this
+	// instance, derive its effective CF set the same way runCFSpecDriftPass
+	// does, and require the trashId to land in that union (minus
+	// excludedCFs). Refusing here prevents a malicious or stale client
+	// from overwriting a CF Arr-side that no rule on this instance
+	// actually manages — the worst case is destroying user-curated CF
+	// edits.
+	if !cfTrashIDManagedByRules(body.TrashID, body.InstanceID, cfg, appData) {
+		writeError(w, http.StatusForbidden, "trash id is not managed by any enabled rule on this instance")
+		return
+	}
+
 	customs := s.Core.CustomCFs.List(inst.Type)
 	customsByID := make(map[string]core.CustomCF, len(customs))
 	for _, c := range customs {
 		customsByID[c.ID] = c
 	}
 
+	// Resolve disk spec: TRaSH first, custom fallback. Mirrors the
+	// detection-side resolveCFDiskSpec helper so apply and detection
+	// can't disagree about what "clonarr's saved state" looks like.
 	var diskCFName string
 	var arrCFPayload *arr.ArrCF
 	if appData != nil {
@@ -108,19 +131,21 @@ func (s *Server) handleCFDriftApply(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	// Clear the fingerprint entry so the next Check sees in-sync state,
-	// and write a one-CF history entry so the user has audit trail.
-	// Both go through one Config.Update closure so a reader can't catch
-	// half-applied state.
+	// Clear the fingerprint entry so the next Check sees in-sync state.
+	// Capture hadDrift inside the closure so the Reconciled notification
+	// only fires when we actually transitioned from drifted→clean.
+	// Two-tab/Apply-on-clean callers stay silent instead of firing a
+	// spurious "1 custom format back in sync".
+	hadDrift := false
 	if err := s.Core.Config.Update(func(c *core.Config) {
 		for i := range c.Instances {
 			if c.Instances[i].ID != body.InstanceID {
 				continue
 			}
-			if len(c.Instances[i].CFDriftFingerprints) == 0 {
-				continue
+			if _, ok := c.Instances[i].CFDriftFingerprints[body.TrashID]; ok {
+				hadDrift = true
+				delete(c.Instances[i].CFDriftFingerprints, body.TrashID)
 			}
-			delete(c.Instances[i].CFDriftFingerprints, body.TrashID)
 			if len(c.Instances[i].CFDriftFingerprints) == 0 {
 				// Drop the map entirely so the JSON output stays
 				// quiet — omitempty doesn't fire for an empty (but
@@ -153,20 +178,78 @@ func (s *Server) handleCFDriftApply(w http.ResponseWriter, r *http.Request) {
 
 	// Fire the per-CF reconciled notification using the same path the
 	// drift pass uses. Single event so the aggregator just sends "1
-	// custom format back in sync on <instance>".
-	s.Core.NotifyCFDriftReconciled([]*core.CFDriftEvent{{
-		Event:        core.CFDriftReconciled,
-		InstanceID:   inst.ID,
-		InstanceName: inst.Name,
-		AppType:      inst.Type,
-		TrashID:      body.TrashID,
-		CFName:       diskCFName,
-	}})
+	// custom format back in sync on <instance>". Only when this Apply
+	// actually transitioned the CF from drifted to clean.
+	if hadDrift {
+		s.Core.NotifyCFDriftReconciled([]*core.CFDriftEvent{{
+			Event:        core.CFDriftReconciled,
+			InstanceID:   inst.ID,
+			InstanceName: inst.Name,
+			AppType:      inst.Type,
+			TrashID:      body.TrashID,
+			CFName:       diskCFName,
+		}})
+	}
 
 	writeJSON(w, map[string]any{
 		"appliedAt":  now,
 		"trashId":    body.TrashID,
 		"instanceId": inst.ID,
 		"name":       diskCFName,
+		"hadDrift":   hadDrift,
 	})
+}
+
+// cfTrashIDManagedByRules reports whether body.TrashID falls inside the
+// effective CF set of any enabled, non-orphaned rule targeting
+// body.InstanceID. Derivation mirrors runCFSpecDriftPass and
+// handleCFSyncRules so detection, surface, and apply share one
+// definition of "managed" — diverging them is exactly how Apply could
+// silently destroy user-curated Arr CFs.
+func cfTrashIDManagedByRules(trashID, instanceID string, cfg core.Config, appData *core.AppData) bool {
+	for _, rule := range cfg.AutoSync.Rules {
+		if !rule.Enabled || rule.OrphanedAt != "" {
+			continue
+		}
+		if rule.InstanceID != instanceID {
+			continue
+		}
+		// Excluded short-circuits even if the CF is otherwise in the
+		// default set — user explicitly opted out of syncing it.
+		excluded := false
+		for _, tid := range rule.ExcludedCFs {
+			if tid == trashID {
+				excluded = true
+				break
+			}
+		}
+		if excluded {
+			continue
+		}
+		// Selected wins outright (additive opt-in beyond defaults).
+		for _, tid := range rule.SelectedCFs {
+			if tid == trashID {
+				return true
+			}
+		}
+		// TRaSH defaults for the rule's profile.
+		if appData == nil {
+			continue
+		}
+		var profile *core.TrashQualityProfile
+		for _, p := range appData.Profiles {
+			if p.TrashID == rule.TrashProfileID {
+				profile = p
+				break
+			}
+		}
+		if profile == nil {
+			continue
+		}
+		defaults := core.ComputeTrashDefaults(profile, appData)
+		if defaults[trashID] {
+			return true
+		}
+	}
+	return false
 }

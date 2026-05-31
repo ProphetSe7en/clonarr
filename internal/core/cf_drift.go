@@ -63,6 +63,14 @@ type cfDriftPassResult struct {
 	// An empty string fingerprint means "drift cleared on this CF" and
 	// asks the persistence step to delete the map entry.
 	FingerprintsByInstance map[string]map[string]string
+	// PriorByInstance is the per-instance snapshot of
+	// CFDriftFingerprints taken at the START of this pass. The
+	// persistence step compares each tid's current on-disk value
+	// against this snapshot before writing: when the live value
+	// diverges (an Apply landed mid-pass and cleared the fingerprint),
+	// our stale newFP is discarded so we never resurrect drift state
+	// the user just resolved.
+	PriorByInstance map[string]map[string]string
 	// Events queued for notification dispatch after persistence.
 	Events []*CFDriftEvent
 	// CFCount is the number of currently-drifted CFs across all
@@ -89,6 +97,7 @@ type cfDriftPassResult struct {
 func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*arrSnapshot) *cfDriftPassResult {
 	out := &cfDriftPassResult{
 		FingerprintsByInstance: make(map[string]map[string]string),
+		PriorByInstance:        make(map[string]map[string]string),
 	}
 
 	// Group rules by instance so we walk each instance exactly once.
@@ -111,7 +120,15 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 			continue
 		}
 		snap, ok := instCache[instID]
-		if !ok || snap.err != nil {
+		if !ok {
+			continue
+		}
+		// snap.err may be non-nil from a LATER fetch in the chain (e.g.
+		// Radarr's ListLanguages) while snap.cfs is fully populated.
+		// Profile-drift surfaces the instance-level error separately;
+		// CF drift just needs the CF slice to do its work, so gate on
+		// the slice rather than the overall error.
+		if snap.cfs == nil {
 			continue
 		}
 
@@ -168,7 +185,20 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 		// Build the per-instance fingerprint delta. priorFP carries the
 		// fingerprint from the LAST pass (if any); newFP is what this
 		// pass computes. The state machine compares them per CF.
+		//
+		// Capture the prior snapshot into the result so the persistence
+		// closure can detect mid-pass Apply mutations: if a tid's
+		// on-disk value differs from this snapshot at write time,
+		// Apply (or another writer) intervened and our newFP entry is
+		// already stale relative to the user's intent.
 		priorFP := inst.CFDriftFingerprints
+		if len(priorFP) > 0 {
+			snapshot := make(map[string]string, len(priorFP))
+			for k, v := range priorFP {
+				snapshot[k] = v
+			}
+			out.PriorByInstance[instID] = snapshot
+		}
 		newFP := make(map[string]string)
 
 		for tid := range managedTIDs {
@@ -228,11 +258,20 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 
 		// Reconciled transitions: any CF that had a fingerprint in the
 		// prior pass but is missing from newFP cleared this round.
+		// CFs that fell out of managedTIDs (rule disabled, opted out,
+		// or CF removed from TRaSH data) get the same persistence-side
+		// cleanup (they drop from FingerprintsByInstance) but DO NOT
+		// fire Reconciled — they aren't "back in sync", they're "no
+		// longer in scope". Emitting Reconciled there would say the
+		// drift resolved when really clonarr just stopped looking.
 		for tid, prev := range priorFP {
 			if prev == "" {
 				continue
 			}
 			if _, stillDrifted := newFP[tid]; stillDrifted {
+				continue
+			}
+			if !managedTIDs[tid] || excludedTIDs[tid] {
 				continue
 			}
 			cfName := tid

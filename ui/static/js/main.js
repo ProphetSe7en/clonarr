@@ -648,6 +648,17 @@ export function clonarr() {
           this.loadInstanceQS(appType, this.mediaInstanceId[appType]);
           this.loadInstanceNaming(appType);
         }
+        // Sync Rules → Custom Formats sub-tab: per-app-type fetch, so
+        // an app switch on this sub-tab needs to load the other app's
+        // data on its own. Without this the table is stuck on a
+        // "Loading custom formats..." spinner because the click handler
+        // is the only other fetcher.
+        if (this.currentSection === 'profiles'
+          && this.getProfileTab(appType) === 'sync-rules'
+          && this.syncRulesSubTab === 'cfs'
+          && typeof this.loadCFSyncRules === 'function') {
+          this.loadCFSyncRules(appType);
+        }
         ensureHistory();
       });
       await this.loadConfig();

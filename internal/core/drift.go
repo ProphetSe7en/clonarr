@@ -317,10 +317,37 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 	// just populated so we never re-query Arr in this Check pass.
 	cfPass := runCFSpecDriftPass(d, work, instCache)
 
+	// instancesInScope = the set of instance IDs that had at least one
+	// rule eligible this pass. Instances NOT in this set get their
+	// CFDriftFingerprints map cleared at persistence so a user who
+	// disabled every rule on an instance doesn't leave stale state
+	// behind. Transient-fetch-error instances DO stay in scope (they
+	// have rules + were in work; the per-tid merge already preserves
+	// their existing fingerprints).
+	instancesInScope := make(map[string]bool)
+	for _, w := range work {
+		instancesInScope[w.instance.ID] = true
+	}
+
 	// Persist DriftWatch.LastResult + the per-instance
 	// CFDriftFingerprints map in a single Config.Update closure so a
 	// reader can never see profile-drift and CF-drift state from
 	// different passes.
+	//
+	// Per-tid race-aware merge: an Apply may have landed between
+	// fetchInst (where snap.cfs was captured) and now. If the on-disk
+	// fingerprint for a tid no longer matches our prior snapshot,
+	// Apply cleared it AND fixed the live CF — our newFP for that tid
+	// is stale data. Skip the overwrite so the user's intent (Apply)
+	// wins. Without this guard, Apply's "back in sync" notification is
+	// immediately followed by a stale "drifted" notification from the
+	// pass that started before Apply ran.
+	//
+	// dropped tracks (instID, tid) pairs whose newFP we skipped due
+	// to a concurrent write — used to filter the Detected event queue
+	// below so we never dispatch notifications for tids the user
+	// already resolved during this pass.
+	dropped := make(map[string]map[string]bool)
 	if updErr := d.app.Config.Update(func(c *Config) {
 		if c.DriftWatch == nil {
 			c.DriftWatch = &DriftWatch{}
@@ -330,20 +357,51 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 			DriftsDetected: driftCount,
 			Errors:         errs,
 		}
-		// Apply per-instance fingerprint delta. Entry maps to the
-		// new fingerprint set; an empty inner map clears the field.
-		// CFs missing from the new map but present in the old map
-		// were already turned into Reconciled events by the pass.
 		for i := range c.Instances {
+			// Out-of-scope instances (no eligible rules this pass): clear
+			// any lingering fingerprints. Done before the in-scope merge
+			// branch so a fresh-disabled instance gets cleaned up the
+			// same Check tick the disable lands.
+			if !instancesInScope[c.Instances[i].ID] {
+				if len(c.Instances[i].CFDriftFingerprints) > 0 {
+					c.Instances[i].CFDriftFingerprints = nil
+				}
+				continue
+			}
 			updated, touched := cfPass.FingerprintsByInstance[c.Instances[i].ID]
 			if !touched {
 				continue
 			}
-			if len(updated) == 0 {
+			prior := cfPass.PriorByInstance[c.Instances[i].ID]
+			current := c.Instances[i].CFDriftFingerprints
+			merged := make(map[string]string, len(updated))
+			// Carry forward entries Apply cleared or wrote since pass
+			// start — they're "intent-aware" relative to our stale view.
+			for tid, fp := range current {
+				if prior[tid] != fp {
+					merged[tid] = fp
+				}
+			}
+			// Apply our newly-computed fingerprints only where the
+			// on-disk value still matches our snapshot. The prior may
+			// be empty (we just detected drift on a clean CF) — that's
+			// fine: current[tid]==prior[tid]=="" means no concurrent
+			// write touched this slot.
+			for tid, fp := range updated {
+				if current[tid] != prior[tid] {
+					if dropped[c.Instances[i].ID] == nil {
+						dropped[c.Instances[i].ID] = make(map[string]bool)
+					}
+					dropped[c.Instances[i].ID][tid] = true
+					continue
+				}
+				merged[tid] = fp
+			}
+			if len(merged) == 0 {
 				c.Instances[i].CFDriftFingerprints = nil
 				continue
 			}
-			c.Instances[i].CFDriftFingerprints = updated
+			c.Instances[i].CFDriftFingerprints = merged
 		}
 	}); updErr != nil {
 		return results, fmt.Errorf("persist drift result: %w", updErr)
@@ -366,8 +424,16 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 	// CF drift events are aggregated into one detected + one reconciled
 	// dispatch per Check pass, matching the "3 custom formats drifted"
 	// design instead of one ping per CF.
+	//
+	// Filter out events whose tid was dropped by the per-tid race-aware
+	// merge above — those describe drift the user already resolved via
+	// Apply during this pass, so notifying about them would contradict
+	// Apply's own Reconciled message.
 	var cfDetected, cfReconciled []*CFDriftEvent
 	for _, e := range cfPass.Events {
+		if dropped[e.InstanceID][e.TrashID] {
+			continue
+		}
 		switch e.Event {
 		case CFDriftDetected:
 			cfDetected = append(cfDetected, e)
