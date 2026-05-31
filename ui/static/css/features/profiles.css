@@ -699,3 +699,69 @@ button.v3-status:hover { text-decoration: underline; }
 .tpd-view-list .tpd-card.open > .tpd-card-title-row .tpd-card-chevron { transform: rotate(90deg); }
 .tpd-view-list .tpd-card-body { display: none; padding: 4px 14px 10px 28px; }
 .tpd-view-list .tpd-card.open .tpd-card-body { display: flex; flex-direction: column; gap: 8px; }
+
+/* ===== Sync Rules sub-tab strip =====
+   Profiles | Custom Formats toggle at the top of the Sync Rules page.
+   Two buttons, app-color underline on the active one. */
+.sync-rules-subtabs {
+  display: flex; gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.sync-rules-subtabs button {
+  background: transparent; border: none; outline: none; cursor: pointer;
+  padding: 8px 14px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 150ms, border-color 150ms;
+}
+.sync-rules-subtabs button:hover { color: var(--text-body); }
+.sync-rules-subtabs button.sync-rules-subtab-active {
+  color: var(--app-color, var(--text-body));
+  border-bottom-color: var(--app-color, var(--text-body));
+}
+
+/* ===== Sync Rules → Custom Formats sub-tab table =====
+   Five-column layout: Name | Category | Used by | Status | Actions.
+   Rows alternate row-hover background to scan a long list quickly. */
+.cf-sr-table { display: flex; flex-direction: column; }
+.cf-sr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 140px 100px 140px minmax(140px, auto);
+  align-items: center; gap: 12px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+.cf-sr-row:last-child { border-bottom: none; }
+.cf-sr-row:not(.cf-sr-header):hover { background: var(--bg-row-hover, var(--bg-elevated)); }
+.cf-sr-header {
+  font-size: 11px; font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  background: var(--bg-page);
+}
+.cf-sr-name { font-weight: 500; color: var(--text-body); }
+.cf-sr-cat { color: var(--text-muted); font-size: 12px; }
+.cf-sr-uses { color: var(--text-muted); font-size: 12px; cursor: help; }
+
+/* Pills mirror the Sync Rules row-pill language (In sync / Arr drift)
+   so users only learn one vocabulary across the two sub-tabs. */
+.cf-sr-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 11px; font-weight: 600;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.cf-sr-pill-ok {
+  background: color-mix(in srgb, var(--accent-green) 14%, transparent);
+  color: var(--accent-green);
+}
+.cf-sr-pill-drift {
+  background: color-mix(in srgb, var(--accent-red) 14%, transparent);
+  color: var(--accent-red);
+  cursor: help;
+}

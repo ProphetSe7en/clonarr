@@ -5,6 +5,20 @@ export default function baseState() {
     activeAppType: 'radarr',     // NEW — 'radarr' or 'sonarr', independent of section
     advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'scoring', 'group-builder'
 
+    // Sync Rules sub-tab: 'profiles' (default — existing per-rule cards)
+    // or 'cfs' (new per-CF view powered by /api/cf-sync-rules/{appType}).
+    // Local UI state; not persisted because the user typically wants the
+    // Profiles view as the entry point when opening Sync Rules.
+    syncRulesSubTab: 'profiles',
+    // cfSyncRules: per-app-type cache of the per-CF view. Populated by
+    // loadCFSyncRules and refreshed after a successful applyCFDrift.
+    cfSyncRules: { radarr: [], sonarr: [] },
+    cfSyncRulesLoaded: { radarr: false, sonarr: false },
+    // cfApplyingKey: "<instanceId>:<trashId>" of the in-flight apply, so
+    // the matching button can switch to "Applying..." without racing
+    // multiple Apply clicks on the same row.
+    cfApplyingKey: '',
+
     // Debug-log download options. When true, the Download button hits
     // ?activity=1 and the server bundles activity.log alongside debug.log
     // in a ZIP. Default off — most bug reports only need the operation

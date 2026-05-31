@@ -3403,6 +3403,78 @@ export default {
       }
     },
 
+    // Fetch the per-CF view that drives the Sync Rules → Custom Formats
+    // sub-tab. Lazy-loaded: only fires on first click of the Custom
+    // Formats sub-tab (not on tab mount), so users who never visit the
+    // sub-tab don't pay the per-instance ArrCF list cost. Re-runs after
+    // an Apply succeeds so the row's status pill refreshes without
+    // requiring the user to navigate away and back.
+    async loadCFSyncRules(appType) {
+      if (!appType) return;
+      try {
+        const r = await fetch(`/api/cf-sync-rules/${appType}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        this.cfSyncRules[appType] = data.items || [];
+        this.cfSyncRulesLoaded[appType] = true;
+      } catch (e) {
+        console.error('loadCFSyncRules:', e);
+      }
+    },
+
+    // Number of instances on which the row is currently drifted. Drives
+    // both the per-row pill ("Arr drift (2)") and the per-instance Apply
+    // button cluster (one button per drifted instance).
+    cfRowDriftCount(row) {
+      if (!row || !Array.isArray(row.instances)) return 0;
+      let n = 0;
+      for (const inst of row.instances) {
+        if (inst.drift) n++;
+      }
+      return n;
+    },
+
+    // Number of CFs currently drifted on at least one instance, for the
+    // card-header summary line ("3 drifted" / "All in sync").
+    cfDriftedCount(appType) {
+      const rows = this.cfSyncRules[appType] || [];
+      let n = 0;
+      for (const row of rows) {
+        if (this.cfRowDriftCount(row) > 0) n++;
+      }
+      return n;
+    },
+
+    // Push clonarr's saved spec for one CF back to one instance. The
+    // backend writes a CF-tagged history entry, clears the fingerprint,
+    // and fires NotifyCFDriftReconciled. We refresh the local data so
+    // the row's pill flips to "In sync" without a page reload.
+    async applyCFDrift(instanceId, trashId, cfName, instanceName) {
+      if (!instanceId || !trashId) return;
+      const key = instanceId + ':' + trashId;
+      if (this.cfApplyingKey === key) return;
+      this.cfApplyingKey = key;
+      try {
+        const r = await fetch('/api/cf-drift/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instanceId, trashId }),
+        });
+        if (!r.ok) {
+          let msg = 'Failed to apply drift';
+          try { const j = await r.json(); if (j?.error) msg = j.error; } catch (_) {}
+          this.showToast(msg, 'error', 5000);
+          return;
+        }
+        await this.loadCFSyncRules(this.activeAppType);
+        this.showToast(`"${cfName}" re-synced to ${instanceName}.`, 'success', 4000);
+      } catch (e) {
+        this.showToast('Network error during apply: ' + e.message, 'error', 5000);
+      } finally {
+        this.cfApplyingKey = '';
+      }
+    },
+
     historyEventCount(instId, arrProfileId) {
       return (this.syncHistory[instId] || []).filter(sh => sh.arrProfileId === arrProfileId && sh.changes).length;
     },
@@ -5600,8 +5672,28 @@ export default {
           fetch('/api/drift/check', { method: 'POST' }),
         ]);
         let driftFailed = false;
+        let cfDriftCount = 0;
+        let cfDriftNames = [];
         if (dr.status === 'rejected' || (dr.value && !dr.value.ok)) {
           driftFailed = true;
+        } else if (dr.value && dr.value.ok) {
+          // Drift response carries both profile drift (`results`) AND
+          // CF drift (`cfDrift`) since the Phase 1 cf-drift work. The
+          // toast surfaces the CF channel as a separate line so the
+          // user sees all three signals (TRaSH update / profile drift /
+          // CF drift) without scanning multiple views.
+          try {
+            const drBody = await dr.value.clone().json();
+            const list = Array.isArray(drBody?.cfDrift) ? drBody.cfDrift : [];
+            cfDriftCount = list.length;
+            cfDriftNames = list.map(e => e.name || e.trashId).filter(Boolean);
+          } catch (_) { /* leave cfDriftCount=0 on parse failure */ }
+        }
+        // Refresh the Sync Rules → Custom Formats sub-tab cache if it
+        // was previously loaded so the row pills update right away
+        // when the user is already viewing the sub-tab.
+        if (this.cfSyncRulesLoaded?.[this.activeAppType]) {
+          this.loadCFSyncRules(this.activeAppType);
         }
         const r = tr.status === 'fulfilled' ? tr.value : null;
         if (!r || !r.ok) {
@@ -5661,11 +5753,19 @@ export default {
           : (driftRuleCount > 0
               ? `${driftRuleCount} profile${driftRuleCount === 1 ? '' : 's'} with Arr drift:\n${namesShort(rulesWithDrift)}`
               : '');
+        // CF drift line: lists up to N drifted CF names. Skipped when
+        // empty so a clean Check is a one-line "in sync" message
+        // instead of three reassurance lines.
+        const cfDriftLine = cfDriftCount > 0
+          ? `${cfDriftCount} custom format${cfDriftCount === 1 ? '' : 's'} with Arr drift:\n${cfDriftNames.slice(0, 5).map(n => `• ${n}`).join('\n')}${cfDriftNames.length > 5 ? `\n• +${cfDriftNames.length - 5} more` : ''}`
+          : '';
         if (!upstreamAhead) {
-          if (driftRuleCount > 0) {
-            this.showToast(`TRaSH up to date\n${driftLine}`, 'info', 6000);
-          } else if (driftFailed) {
-            this.showToast(`TRaSH up to date\n${driftLine}`, 'warning', 6000);
+          const channels = [];
+          if (driftRuleCount > 0) channels.push(driftLine);
+          if (cfDriftCount > 0) channels.push(cfDriftLine);
+          if (driftFailed) channels.push(driftLine);
+          if (channels.length > 0) {
+            this.showToast(`TRaSH up to date\n\n${channels.join('\n\n')}`, driftFailed ? 'warning' : 'info', 7000);
           } else {
             this.showToast('TRaSH-Guides is up to date — no upstream changes', 'success', 3000);
           }
@@ -5677,7 +5777,10 @@ export default {
         // with stale state that aren't rendered in the table.
         const affectedRules = rulesByStatus('updates');
         if (affectedRules.length === 0) {
-          const tail = driftLine ? `\n${driftLine}` : '';
+          const extras = [];
+          if (driftLine) extras.push(driftLine);
+          if (cfDriftLine) extras.push(cfDriftLine);
+          const tail = extras.length > 0 ? `\n\n${extras.join('\n\n')}` : '';
           this.showToast(`TRaSH has new commits but none affect your synced profiles${tail}`, 'info', 6000);
           return;
         }
@@ -5701,7 +5804,10 @@ export default {
         // Profile names on their own line for readability — long lists wrap
         // poorly when crammed after the header.
         const updateLine = `Found ${cfLabel} affecting ${updLabel}:\n${namesShort(affectedRules)}`;
-        const tail = driftLine ? `\n\n${driftLine}` : '';
+        const extras = [];
+        if (driftLine) extras.push(driftLine);
+        if (cfDriftLine) extras.push(cfDriftLine);
+        const tail = extras.length > 0 ? `\n\n${extras.join('\n\n')}` : '';
         this.showToast(`${updateLine}\n\nUse Update all / Update profile to apply${tail}`, 'info', 7000);
       } catch (e) {
         this.showToast('Check failed (network error)', 'error', 4000);
