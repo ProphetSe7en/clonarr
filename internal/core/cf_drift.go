@@ -33,12 +33,12 @@ import (
 // transition fires Reconciled. Notification dispatch reuses the
 // existing OnDriftDetected per-agent flag per design decision §10.5.
 
-// cfDriftEvent describes one CF-drift state transition that needs to
+// CFDriftEvent describes one CF-drift state transition that needs to
 // notify an agent. Built during the pass, dispatched after the
 // Config.Update closure releases its lock so provider HTTP calls
 // (Discord, Gotify, NTFY) don't hold locks.
-type cfDriftEvent struct {
-	Event        cfDriftEventKind
+type CFDriftEvent struct {
+	Event        CFDriftEventKind
 	InstanceID   string
 	InstanceName string
 	AppType      string
@@ -47,11 +47,11 @@ type cfDriftEvent struct {
 	Diff         *CFSpecDiff
 }
 
-type cfDriftEventKind int
+type CFDriftEventKind int
 
 const (
-	cfDriftDetected cfDriftEventKind = iota
-	cfDriftReconciled
+	CFDriftDetected CFDriftEventKind = iota
+	CFDriftReconciled
 )
 
 // cfDriftPassResult collects the outcome of a single CF spec drift
@@ -64,7 +64,7 @@ type cfDriftPassResult struct {
 	// asks the persistence step to delete the map entry.
 	FingerprintsByInstance map[string]map[string]string
 	// Events queued for notification dispatch after persistence.
-	Events []*cfDriftEvent
+	Events []*CFDriftEvent
 	// CFCount is the number of currently-drifted CFs across all
 	// instances after this pass. Surfaces in the /api/drift/check
 	// summary block.
@@ -201,8 +201,8 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 			switch {
 			case prev == "":
 				// Newly detected drift.
-				out.Events = append(out.Events, &cfDriftEvent{
-					Event:        cfDriftDetected,
+				out.Events = append(out.Events, &CFDriftEvent{
+					Event:        CFDriftDetected,
 					InstanceID:   inst.ID,
 					InstanceName: inst.Name,
 					AppType:      inst.Type,
@@ -214,8 +214,8 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 				// Drift changed shape — re-notify so the user knows the
 				// state evolved (e.g. one condition resolved while a new
 				// one appeared).
-				out.Events = append(out.Events, &cfDriftEvent{
-					Event:        cfDriftDetected,
+				out.Events = append(out.Events, &CFDriftEvent{
+					Event:        CFDriftDetected,
 					InstanceID:   inst.ID,
 					InstanceName: inst.Name,
 					AppType:      inst.Type,
@@ -239,8 +239,8 @@ func runCFSpecDriftPass(d *DriftRunner, work []ruleWork, instCache map[string]*a
 			if d, _, ok := resolveCFDiskSpec(tid, appData, customsByID); ok {
 				cfName = d.Name
 			}
-			out.Events = append(out.Events, &cfDriftEvent{
-				Event:        cfDriftReconciled,
+			out.Events = append(out.Events, &CFDriftEvent{
+				Event:        CFDriftReconciled,
 				InstanceID:   inst.ID,
 				InstanceName: inst.Name,
 				AppType:      inst.Type,
@@ -363,7 +363,7 @@ func computeCFSpecDiffFingerprint(diff *CFSpecDiff) string {
 // both profile + CF channels. Aggregation across a single Check pass
 // happens at the dispatch level — see runOnceInternal for the call
 // shape that collects N events into a single message per agent.
-func (app *App) NotifyCFDriftDetected(events []*cfDriftEvent) {
+func (app *App) NotifyCFDriftDetected(events []*CFDriftEvent) {
 	if len(events) == 0 {
 		return
 	}
@@ -436,7 +436,7 @@ func (app *App) NotifyCFDriftDetected(events []*cfDriftEvent) {
 // the same per-instance aggregation so a single "3 custom formats are
 // back in sync on Radarr (main)" message lands instead of one ping
 // per CF.
-func (app *App) NotifyCFDriftReconciled(events []*cfDriftEvent) {
+func (app *App) NotifyCFDriftReconciled(events []*CFDriftEvent) {
 	if len(events) == 0 {
 		return
 	}

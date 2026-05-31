@@ -366,12 +366,12 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 	// CF drift events are aggregated into one detected + one reconciled
 	// dispatch per Check pass, matching the "3 custom formats drifted"
 	// design instead of one ping per CF.
-	var cfDetected, cfReconciled []*cfDriftEvent
+	var cfDetected, cfReconciled []*CFDriftEvent
 	for _, e := range cfPass.Events {
 		switch e.Event {
-		case cfDriftDetected:
+		case CFDriftDetected:
 			cfDetected = append(cfDetected, e)
-		case cfDriftReconciled:
+		case CFDriftReconciled:
 			cfReconciled = append(cfReconciled, e)
 		}
 	}

@@ -54,6 +54,7 @@ const (
 	TriggerTrashUpdate  = "trash_update"
 	TriggerManual       = "manual"
 	TriggerDriftApply   = "drift_apply"
+	TriggerCFDriftApply = "cf_drift_apply"
 	TriggerDelayedApply = "delayed_apply"
 	TriggerRestore      = "restore"
 	TriggerRollback     = "rollback"
