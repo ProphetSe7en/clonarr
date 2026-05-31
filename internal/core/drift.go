@@ -27,6 +27,15 @@ type DriftRunner struct {
 	mu  sync.Mutex
 }
 
+// ruleWork pairs a rule with its resolved Instance so per-rule code
+// doesn't have to walk Config.Instances on every iteration. Promoted
+// to package scope (was a local type) so the CF spec drift pass in
+// cf_drift.go can share the eligibility filter without re-deriving it.
+type ruleWork struct {
+	rule     AutoSyncRule
+	instance Instance
+}
+
 // NewDriftRunner constructs a DriftRunner bound to the given App.
 func NewDriftRunner(app *App) *DriftRunner {
 	return &DriftRunner{app: app}
@@ -71,11 +80,10 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 	var indeterminateRules []string
 
 	// Collect eligible rules + resolve their instances up front so the
-	// hot loop below only touches the filtered set.
-	type ruleWork struct {
-		rule     AutoSyncRule
-		instance Instance
-	}
+	// hot loop below only touches the filtered set. ruleWork is
+	// package-level (see drift_types.go) so the CF spec drift pass can
+	// share the same view of "rules to walk this round" without having
+	// to re-derive the eligibility filter.
 	var work []ruleWork
 	for _, r := range cfg.AutoSync.Rules {
 		if r.OrphanedAt != "" || r.ArrProfileID == 0 {
@@ -302,8 +310,17 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		}
 	}
 
-	// Persist aggregate to DriftWatch.LastResult so the UI can render
-	// "last check: X ago" + the count without keeping a runtime cache.
+	// CF spec drift pass — third detection channel after profile drift
+	// (above) and TRaSH-upstream updates (ProfileSyncRunner). Diffs
+	// every managed CF's live spec in Arr against the disk spec
+	// (TRaSH-Guides or user custom). Re-uses the same instCache we
+	// just populated so we never re-query Arr in this Check pass.
+	cfPass := runCFSpecDriftPass(d, work, instCache)
+
+	// Persist DriftWatch.LastResult + the per-instance
+	// CFDriftFingerprints map in a single Config.Update closure so a
+	// reader can never see profile-drift and CF-drift state from
+	// different passes.
 	if updErr := d.app.Config.Update(func(c *Config) {
 		if c.DriftWatch == nil {
 			c.DriftWatch = &DriftWatch{}
@@ -312,6 +329,21 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		c.DriftWatch.LastResult = &DriftRunResult{
 			DriftsDetected: driftCount,
 			Errors:         errs,
+		}
+		// Apply per-instance fingerprint delta. Entry maps to the
+		// new fingerprint set; an empty inner map clears the field.
+		// CFs missing from the new map but present in the old map
+		// were already turned into Reconciled events by the pass.
+		for i := range c.Instances {
+			updated, touched := cfPass.FingerprintsByInstance[c.Instances[i].ID]
+			if !touched {
+				continue
+			}
+			if len(updated) == 0 {
+				c.Instances[i].CFDriftFingerprints = nil
+				continue
+			}
+			c.Instances[i].CFDriftFingerprints = updated
 		}
 	}); updErr != nil {
 		return results, fmt.Errorf("persist drift result: %w", updErr)
@@ -329,6 +361,25 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		case driftEventReconciled:
 			d.app.NotifyDriftReconciled(n.summary())
 		}
+	}
+
+	// CF drift events are aggregated into one detected + one reconciled
+	// dispatch per Check pass, matching the "3 custom formats drifted"
+	// design instead of one ping per CF.
+	var cfDetected, cfReconciled []*cfDriftEvent
+	for _, e := range cfPass.Events {
+		switch e.Event {
+		case cfDriftDetected:
+			cfDetected = append(cfDetected, e)
+		case cfDriftReconciled:
+			cfReconciled = append(cfReconciled, e)
+		}
+	}
+	if len(cfDetected) > 0 {
+		d.app.NotifyCFDriftDetected(cfDetected)
+	}
+	if len(cfReconciled) > 0 {
+		d.app.NotifyCFDriftReconciled(cfReconciled)
 	}
 
 	return results, nil

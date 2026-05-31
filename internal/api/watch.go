@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"time"
 
 	"clonarr/internal/core"
@@ -143,8 +144,78 @@ func (s *Server) handleDriftCheck(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "drift check failed: "+err.Error())
 		return
 	}
+
+	// Read per-instance CF drift fingerprints persisted by the pass we
+	// just ran. The frontend renders a per-CF status pill (one entry
+	// per drifted CF per instance) and the Check completion toast uses
+	// the summary counts to compose a single one-line message instead
+	// of N badges. Empty array (not null) so the frontend can detect
+	// "no drift" cleanly without nil-guarding.
+	cfg := s.Core.Config.Get()
+	type cfDriftEntry struct {
+		InstanceID   string `json:"instanceId"`
+		InstanceName string `json:"instanceName"`
+		AppType      string `json:"appType"`
+		TrashID      string `json:"trashId"`
+		Name         string `json:"name"`
+	}
+	cfDrift := []cfDriftEntry{}
+	for _, inst := range cfg.Instances {
+		if len(inst.CFDriftFingerprints) == 0 {
+			continue
+		}
+		appData := s.Core.Trash.GetAppData(inst.Type)
+		customs := s.Core.CustomCFs.List(inst.Type)
+		customsByID := make(map[string]core.CustomCF, len(customs))
+		for _, c := range customs {
+			customsByID[c.ID] = c
+		}
+		// Stable order so the JSON output round-trips identically on
+		// repeated GETs that didn't actually change state.
+		tids := make([]string, 0, len(inst.CFDriftFingerprints))
+		for tid := range inst.CFDriftFingerprints {
+			tids = append(tids, tid)
+		}
+		sort.Strings(tids)
+		for _, tid := range tids {
+			name := tid
+			if appData != nil {
+				if cf, ok := appData.CustomFormats[tid]; ok && cf != nil {
+					name = cf.Name
+				}
+			}
+			if c, ok := customsByID[tid]; ok {
+				name = c.Name
+			}
+			cfDrift = append(cfDrift, cfDriftEntry{
+				InstanceID:   inst.ID,
+				InstanceName: inst.Name,
+				AppType:      inst.Type,
+				TrashID:      tid,
+				Name:         name,
+			})
+		}
+	}
+
+	// Aggregate counters for the Check completion toast. The frontend
+	// composes the toast from the three channels — profile drift, CF
+	// drift, TRaSH-Guides updates — and omits empty channels so the
+	// message reads "Check complete. Everything is in sync." when all
+	// three are clean.
+	profilesDrifted := 0
+	for _, dr := range results {
+		if dr.DriftDetected {
+			profilesDrifted++
+		}
+	}
+
 	writeJSON(w, map[string]any{
 		"checkedAt": time.Now().UTC().Format(time.RFC3339),
 		"results":   results,
+		"cfDrift":   cfDrift,
+		"summary": map[string]int{
+			"profilesDrifted": profilesDrifted,
+			"cfsDrifted":      len(cfDrift),
+		},
 	})
 }
