@@ -125,6 +125,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/profile-sync/check", s.handleProfileSyncCheck)
 	mux.HandleFunc("POST /api/drift/check", s.handleDriftCheck)
 	mux.HandleFunc("POST /api/cf-drift/apply", s.handleCFDriftApply)
+	mux.HandleFunc("GET /api/cf-drift/diff", s.handleCFDriftDiff)
 	mux.HandleFunc("GET /api/cf-sync-rules/{appType}", s.handleCFSyncRules)
 
 	// Cleanup events
