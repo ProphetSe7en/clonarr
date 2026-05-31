@@ -395,6 +395,18 @@ type SyncHistoryEntry struct {
 	// of rule state (the rule may have been removed while history is
 	// retained for diagnostics).
 	OrphanedAt string `json:"orphanedAt,omitempty"`
+	// Categories classifies what kind of state the sync touched, so the
+	// History tab can filter to one channel at a time:
+	//   - "profile" — entry changed profile-level state (cutoff, upgrade,
+	//     quality items, scores, CF references on the profile).
+	//   - "cf"      — entry touched a CF entity in Arr (created, updated,
+	//     drift-applied).
+	// A regular sync that touches both gets both tags; a drift-only
+	// Apply gets only "cf"; a profile-only sync gets only "profile".
+	// Empty on entries from before the field existed; the History tab
+	// defaults to "All" filter so old rows stay visible without
+	// migration.
+	Categories []string `json:"categories,omitempty"`
 }
 
 // Instance represents a configured Radarr or Sonarr instance.
@@ -411,6 +423,28 @@ type Instance struct {
 	// from the profile editor) are unaffected. Default false. Replaces
 	// the prior global AutoSync.Paused flag — see migrateGlobalPauseToInstances.
 	AutoSyncPaused bool `json:"autoSyncPaused,omitempty"`
+
+	// CFDriftFingerprints stores the sha256 fingerprint of the most
+	// recent CFSpecDiff per managed CF on this instance. Key = CF trash
+	// id; value = hex sha256 of the canonical diff form.
+	//
+	// Used by the CF spec drift detector to de-duplicate notifications:
+	// identical fingerprint between two Check passes means the same
+	// drift, do not re-notify. Fingerprint change means new or evolved
+	// drift, fire NotifyCFDriftDetected. Empty / missing entry means no
+	// drift on that CF, and a transition from non-empty to absent fires
+	// NotifyCFDriftReconciled.
+	//
+	// Mirrors how AutoSyncRule.WatchState.LastDriftFingerprint persists
+	// profile-drift state — kept on the entity the drift attaches to
+	// (per-instance for CFs, per-rule for profiles) so each fingerprint
+	// has a single canonical owner.
+	//
+	// Per-CF storage stays compact: ~64 bytes per drifted CF (trash id
+	// plus hex fingerprint), and omitempty drops the map entirely from
+	// the JSON for installations with no drift, so an instance never
+	// pays storage cost for a feature it has not exercised.
+	CFDriftFingerprints map[string]string `json:"cfDriftFingerprints,omitempty"`
 }
 
 // TrashRepo holds TRaSH-Guides repository settings.

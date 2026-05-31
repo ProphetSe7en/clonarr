@@ -393,6 +393,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		LastSync:          now,
 		Changes:           changes,
 		TriggerType:       core.TriggerTypeFromSource(triggerSource),
+		Categories:        core.DeriveSyncCategories(result),
 	}
 	// AppliedAt freezes the "when changes landed" timestamp. Only set when
 	// the entry carries real changes — baseline / no-op entries leave it

@@ -538,6 +538,7 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 		Changes: &core.SyncChanges{
 			SettingsDetails: []string{fmt.Sprintf("Restored profile (created new ArrProfileID %d)", result.ArrProfileID)},
 		},
+		Categories: core.DeriveSyncCategories(result),
 	}
 	if err := s.Core.Config.UpsertSyncHistory(entry); err != nil {
 		log.Printf("Restore: failed to persist sync history: %v", err)
