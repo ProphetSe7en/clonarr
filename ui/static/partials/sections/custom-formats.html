@@ -1,9 +1,11 @@
 {{define "sections/custom-formats"}}
       <!-- ===== Custom Formats section ===== -->
       <div class="page" x-show="currentSection === 'custom-formats'">
-        <div style="font-size:18px;font-weight:600;margin-bottom:4px">Custom Formats</div>
-        <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">All Custom Formats from TRaSH-Guides, organized by category. Use Create to build a custom format from scratch, or Import to add existing formats from an Arr instance or JSON.</div>
 
+        <!-- ====== Browse sub-tab ====== -->
+        <div x-show="getCustomFormatsTab(activeAppType) === 'browse'">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">Custom Formats</div>
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">Every TRaSH-Guides custom format, plus the ones you've created or imported, organized by category. Browse, read what each CF does, clone a TRaSH CF as a starting point, or build a new one from scratch.</div>
         <template x-if="getCFBrowseGroups(activeAppType).length > 0">
           <div class="cf-browse-shell">
             <!-- Sidebar rail — All + per-category filter. Same look as
@@ -206,5 +208,329 @@
             <div class="desc">Pull TRaSH data to see Custom Formats</div>
           </div>
         </template>
+        </div>
+        <!-- /Browse sub-tab -->
+
+        <!-- ====== Sync Rules sub-tab ======
+             Per-instance cards (one per Arr instance) listing every
+             Custom Format clonarr manages on that instance. Each row
+             shows the CF + which Arr profiles pull it in (with ID +
+             last-sync chip), drift status, and an Update button when
+             drift exists. Mirrors Profiles → Sync Rules' v3-inst-card
+             layout so the two surfaces feel like the same product. -->
+        <div x-show="getCustomFormatsTab(activeAppType) === 'sync-rules'">
+          <div style="font-size:18px;font-weight:600;margin-bottom:4px">Sync Rules</div>
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">Every custom format any of your sync rules pushes to <span x-text="activeAppLabel"></span>. Spot drift, see which profiles use a CF, and re-push the saved spec when someone edits it directly in <span x-text="activeAppLabel"></span>.</div>
+          <template x-if="!cfSyncRulesLoaded[activeAppType]">
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Loading custom formats...</div>
+          </template>
+          <template x-if="cfSyncRulesLoaded[activeAppType] && (cfSyncRules[activeAppType] || []).length === 0">
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No custom formats are managed by your sync rules yet. Sync a profile from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a> to start managing CFs through clonarr.</div>
+          </template>
+          <template x-if="cfSyncRulesLoaded[activeAppType] && (cfSyncRules[activeAppType] || []).length > 0">
+            <div class="cf-sr-layout">
+              <!-- Sidebar: hierarchical category tree (parent ▸ child).
+                   View-filter pins on top (All, Drifted) when applicable;
+                   then per-parent collapsible children, mirroring the
+                   Browse tab's sidebar pattern. localStorage-persisted
+                   chevron state. -->
+              <aside class="cf-sr-side">
+                <!-- View filters (Drifted / etc) sit at the top in
+                     their own visual group, separated from the
+                     categories list by a divider so the user reads
+                     them as distinct from "All categories". Only
+                     render the filters block when at least one filter
+                     is applicable. -->
+                <template x-if="cfSyncRulesDriftedTotal(activeAppType) > 0">
+                  <div class="cf-sr-side-views">
+                    <button type="button" class="cf-sr-side-item cf-sr-side-view"
+                            :class="{ active: cfSyncRulesActiveCat === 'view:drifted' }"
+                            @click="cfSyncRulesActiveCat = 'view:drifted'">
+                      <span class="cf-sr-side-label">Drifted</span>
+                      <span class="cf-sr-side-count" x-text="cfSyncRulesDriftedTotal(activeAppType)"></span>
+                    </button>
+                  </div>
+                </template>
+                <!-- "All categories" sits directly above the parent
+                     list, no separator between, so they read as one
+                     coherent tree. Matches Browse's sidebar layout. -->
+                <button type="button" class="cf-sr-side-item cf-sr-side-all"
+                        :class="{ active: cfSyncRulesActiveCat === 'all' }"
+                        @click="cfSyncRulesActiveCat = 'all'">
+                  <span class="cf-sr-side-label">All categories</span>
+                  <span class="cf-sr-side-count" x-text="(cfSyncRules[activeAppType] || []).length"></span>
+                </button>
+                <template x-for="par in cfSyncRulesCategories(activeAppType)" :key="par.name">
+                  <div class="cf-sr-side-group">
+                    <div class="cf-sr-side-parent-row">
+                      <button type="button" class="cf-sr-side-chevron"
+                              :class="{ open: cfSRSidebarParentOpen(par.name) }"
+                              @click="cfSRToggleSidebarParent(par.name)"
+                              aria-label="Toggle category">&#9654;</button>
+                      <button type="button" class="cf-sr-side-item cf-sr-side-parent"
+                              :class="{ active: cfSyncRulesActiveCat === 'cat:' + par.name }"
+                              @click="cfSRPickParent(par.name)">
+                        <span class="cf-sr-side-label" x-text="par.name"></span>
+                        <span class="cf-sr-side-count" x-text="par.total"></span>
+                      </button>
+                    </div>
+                    <div class="cf-sr-side-children" x-show="cfSRSidebarParentOpen(par.name)" x-cloak>
+                      <template x-for="child in par.children" :key="par.name + '|' + child.name">
+                        <button type="button" class="cf-sr-side-item cf-sr-side-child"
+                                :class="{ active: cfSyncRulesActiveCat === 'sub:' + par.name + '|' + child.name }"
+                                @click="cfSRPickSubcategory(par.name, child.name)">
+                          <span class="cf-sr-side-label" x-text="child.name"></span>
+                          <span class="cf-sr-side-count" x-text="child.total"></span>
+                        </button>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </aside>
+
+              <!-- Main pane: global filter bar (Check + search) + one
+                   v3-inst-card per instance. Each card carries its own
+                   Update all (drift-only) so per-instance scope is
+                   unambiguous. -->
+              <div class="cf-sr-main">
+                <!-- Header row — informative only. Just the total
+                     count. Per-instance drift breakdown lives in
+                     each card header; per-CF state lives in the row
+                     pill; global drift filter+count lives on the
+                     sidebar Drifted pin. No need to repeat it here. -->
+                <div class="cf-sr-header-bar">
+                  <span class="cf-sr-counts">
+                    <span style="font-weight:600" x-text="cfSyncRulesFiltered(activeAppType).length + ' custom format' + (cfSyncRulesFiltered(activeAppType).length === 1 ? '' : 's')"></span>
+                  </span>
+                </div>
+                <!-- Action row — all interactive controls together.
+                     Left-to-right: Expand/Collapse all → Instance
+                     picker → Search → Check. Keeps Expand/Collapse
+                     near the sidebar tree it controls; instance +
+                     search are the most-used filters; Check sits on
+                     the right as the primary "do something" action. -->
+                <div class="cf-sr-filter-bar">
+                  <button type="button" class="cf-browse-expand-toggle"
+                          @click="cfSRToggleAllParents(activeAppType)"
+                          x-text="cfSRAnyParentExpanded(activeAppType) ? 'Collapse all' : 'Expand all'"></button>
+                  <template x-if="cfSyncRulesInstanceOptions(activeAppType).length > 1">
+                    <label class="cf-sr-filter-group">
+                      <span class="cf-sr-filter-label">Instance</span>
+                      <select class="cf-sr-filter-select" x-model="cfSyncRulesActiveInstance">
+                        <option value="">All instances</option>
+                        <template x-for="inst in cfSyncRulesInstanceOptions(activeAppType)" :key="inst.id">
+                          <option :value="inst.id" x-text="inst.name"></option>
+                        </template>
+                      </select>
+                    </label>
+                  </template>
+                  <label class="cf-sr-filter-group cf-sr-filter-search">
+                    <span class="cf-sr-filter-label">Search</span>
+                    <input type="search"
+                           class="cf-sr-filter-input"
+                           placeholder="CF name, TRaSH profile, or Arr profile…"
+                           x-model="cfSyncRulesSearch">
+                    <template x-if="cfSyncRulesSearch">
+                      <button type="button" class="cf-sr-filter-clear"
+                              @click="cfSyncRulesSearch = ''"
+                              aria-label="Clear search">&times;</button>
+                    </template>
+                  </label>
+                  <span class="cf-sr-filter-actions">
+                    <button class="v3-inst-action"
+                            :disabled="checkingUpdates || pulling || cfApplyAllProgress.running"
+                            @click="checkTrashUpdates()"
+                            x-tt="'Check for TRaSH-Guides updates and Arr-side drift. No pull, no Arr writes - just detection.'">Check</button>
+                  </span>
+                </div>
+                <template x-if="cfApplyAllProgress.running && cfApplyAllProgress.label">
+                  <div class="cf-sr-progress" x-text="cfApplyAllProgress.label"></div>
+                </template>
+
+                <!-- One card per Arr instance in this app type -->
+                <template x-for="card in cfSyncRulesByInstance(activeAppType)" :key="'cfsr-card-'+card.id">
+                  <div class="v3-inst-card cf-sr-inst-card">
+                    <div class="v3-inst-header">
+                      <span class="v3-inst-name" x-text="card.name"></span>
+                      <span class="v3-inst-count"
+                            x-text="card.rows.length + ' CF' + (card.rows.length === 1 ? '' : 's')"></span>
+                      <template x-if="cfSRInstanceCardDriftCount(card) > 0">
+                        <span class="cf-sr-card-drift-text"
+                              x-text="cfSRInstanceCardDriftCount(card) + ' drifted'"></span>
+                      </template>
+                      <span class="v3-inst-actions">
+                        <template x-if="cfSRInstanceCardDriftCount(card) > 0">
+                          <button class="v3-inst-action"
+                                  :disabled="checkingUpdates || pulling || cfApplyAllProgress.running"
+                                  @click="applyAllCFDriftForInstance(card)"
+                                  x-tt="'Re-push the saved spec for every drifted custom format on ' + card.name + '. Overwrites the Arr-side edits on each.'">Update all</button>
+                        </template>
+                      </span>
+                    </div>
+                    <div class="cf-sr-table">
+                      <div class="cf-sr-row cf-sr-header">
+                        <span>Name</span>
+                        <span>Category</span>
+                        <span>Used in</span>
+                        <span>Status</span>
+                        <span>Last sync</span>
+                        <span></span>
+                      </div>
+                      <template x-for="r in card.rows" :key="'cfsr-row-'+card.id+'-'+r.trashId">
+                        <div>
+                          <div class="cf-sr-row cf-sr-row-clickable"
+                               :class="{ 'cf-sr-row-expanded': cfSyncRulesExpandedRow === card.id + ':' + r.trashId }"
+                               role="button"
+                               tabindex="0"
+                               :aria-expanded="cfSyncRulesExpandedRow === card.id + ':' + r.trashId ? 'true' : 'false'"
+                               @click="cfSyncRulesToggleExpand(card.id + ':' + r.trashId)"
+                               @keydown.enter.prevent="cfSyncRulesToggleExpand(card.id + ':' + r.trashId)"
+                               @keydown.space.prevent="cfSyncRulesToggleExpand(card.id + ':' + r.trashId)">
+                            <span class="cf-sr-name" x-text="r.name"></span>
+                            <span class="cf-sr-cat">
+                              <span x-text="r.category"></span>
+                              <template x-if="r.subcategory">
+                                <span class="cf-sr-subcat" x-text="' · ' + r.subcategory"></span>
+                              </template>
+                            </span>
+                            <!-- Used in: compact count + chevron only.
+                                 Per-profile breakdown lives in the expand-
+                                 row. Multi-profile chips here previously
+                                 broke the grid by pushing Status into the
+                                 next column. -->
+                            <span class="cf-sr-uses"
+                                  x-tt="'Click anywhere on this row for profile + drift detail.'">
+                              <span x-text="(r.instance.profiles || []).length + ' profile' + ((r.instance.profiles || []).length === 1 ? '' : 's')"></span>
+                              <span class="cf-sr-uses-chev"
+                                    :class="{ open: cfSyncRulesExpandedRow === card.id + ':' + r.trashId }"
+                                    aria-hidden="true">&#9656;</span>
+                            </span>
+                            <span>
+                              <template x-if="!r.instance.drift">
+                                <span class="cf-sr-pill cf-sr-pill-ok">In sync</span>
+                              </template>
+                              <template x-if="r.instance.drift">
+                                <span class="cf-sr-pill cf-sr-pill-drift">Arr drift</span>
+                              </template>
+                            </span>
+                            <span class="cf-sr-lastsync"
+                                  x-text="cfSRInstanceLastSync(r.instance) ? timeAgo(cfSRInstanceLastSync(r.instance)) : 'never'"></span>
+                            <span style="text-align:right">
+                              <template x-if="r.instance.drift">
+                                <button class="v3-inst-action"
+                                        style="font-size:11px"
+                                        :disabled="cfApplyingKey === card.id + ':' + r.trashId || cfApplyAllProgress.running"
+                                        @click.stop="applyCFDrift(card.id, r.trashId, r.name, card.name)"
+                                        x-tt="'Re-push the saved spec back to ' + card.name + ', overwriting the Arr-side edits on this CF.'"
+                                        x-text="cfApplyingKey === card.id + ':' + r.trashId ? 'Updating...' : 'Update'"></button>
+                              </template>
+                            </span>
+                          </div>
+                          <template x-if="cfSyncRulesExpandedRow === card.id + ':' + r.trashId">
+                            <div class="cf-sr-expand">
+                              <template x-if="r.instance.drift">
+                                <div class="cf-sr-expand-section">
+                                  <div class="cf-sr-expand-section-title">Drift detail</div>
+                                  <div class="cf-sr-diff-block">
+                                    <template x-if="(cfDriftDiffCache[card.id + ':' + r.trashId] || {}).loading">
+                                      <div class="cf-sr-diff-status">Loading diff…</div>
+                                    </template>
+                                    <template x-if="(cfDriftDiffCache[card.id + ':' + r.trashId] || {}).error">
+                                      <div class="cf-sr-diff-status cf-sr-diff-status-err"
+                                           x-text="'Could not load diff: ' + cfDriftDiffCache[card.id + ':' + r.trashId].error"></div>
+                                    </template>
+                                    <template x-if="(cfDriftDiffCache[card.id + ':' + r.trashId] || {}).liveMissing">
+                                      <div class="cf-sr-diff-status">Not in Arr yet — next sync will create it.</div>
+                                    </template>
+                                    <template x-if="!((cfDriftDiffCache[card.id + ':' + r.trashId] || {}).loading || (cfDriftDiffCache[card.id + ':' + r.trashId] || {}).error) && (cfDriftDiffCache[card.id + ':' + r.trashId] || {}).diff && !cfDriftDiffHasChanges(cfDriftDiffCache[card.id + ':' + r.trashId].diff)">
+                                      <div class="cf-sr-diff-status cf-sr-diff-status-ok">Drift was already resolved.</div>
+                                    </template>
+                                    <template x-if="((cfDriftDiffCache[card.id + ':' + r.trashId] || {}).diff) && cfDriftDiffHasChanges(cfDriftDiffCache[card.id + ':' + r.trashId].diff)">
+                                      <!-- Flat one-line-per-change list,
+                                           same format Profile Sync Rules uses
+                                           in its status-review modal. Verb
+                                           prefix (Added / Removed / Changed
+                                           / Setting) tells the user the kind
+                                           of change inline so there's no
+                                           need for separate group headers. -->
+                                      <div class="cf-sr-diff-body">
+                                        <template x-for="sc in (cfDriftDiffCache[card.id + ':' + r.trashId].diff.settingsChanges || [])" :key="'set-'+sc.field">
+                                          <div class="cf-sr-diff-line">
+                                            <span class="cf-sr-diff-verb">Setting</span>
+                                            <strong x-text="sc.field"></strong>:
+                                            <span class="cf-sr-diff-val" x-text="sc.before || '(empty)'"></span>
+                                            <span class="cf-sr-diff-arrow">&rarr;</span>
+                                            <span class="cf-sr-diff-val" x-text="sc.after || '(empty)'"></span>
+                                          </div>
+                                        </template>
+                                        <template x-for="ac in (cfDriftDiffCache[card.id + ':' + r.trashId].diff.addedConditions || [])" :key="'add-'+ac.name">
+                                          <div class="cf-sr-diff-line">
+                                            <span class="cf-sr-diff-verb">Added</span>
+                                            <strong x-text="ac.name"></strong>
+                                            <template x-if="ac.value">
+                                              <span>: <span class="cf-sr-diff-val" x-text="ac.value"></span></span>
+                                            </template>
+                                          </div>
+                                        </template>
+                                        <template x-for="rc in (cfDriftDiffCache[card.id + ':' + r.trashId].diff.removedConditions || [])" :key="'rem-'+rc.name">
+                                          <div class="cf-sr-diff-line">
+                                            <span class="cf-sr-diff-verb">Removed</span>
+                                            <strong x-text="rc.name"></strong>
+                                            <template x-if="rc.value">
+                                              <span>: <span class="cf-sr-diff-val" x-text="rc.value"></span></span>
+                                            </template>
+                                          </div>
+                                        </template>
+                                        <template x-for="(cc, i) in (cfDriftDiffCache[card.id + ':' + r.trashId].diff.changedConditions || [])" :key="'chg-'+i">
+                                          <div class="cf-sr-diff-line">
+                                            <strong x-text="cc.name"></strong>
+                                            <span x-text="cc.field"></span>:
+                                            <span class="cf-sr-diff-val" x-text="cc.before || '(empty)'"></span>
+                                            <span class="cf-sr-diff-arrow">&rarr;</span>
+                                            <span class="cf-sr-diff-val" x-text="cc.after || '(empty)'"></span>
+                                          </div>
+                                        </template>
+                                      </div>
+                                    </template>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <div class="cf-sr-expand-section">
+                                <div class="cf-sr-expand-section-title">Used in profiles</div>
+                                <template x-if="(r.instance.profiles || []).length === 0">
+                                  <div class="cf-sr-expand-empty">Not in any profile on this instance.</div>
+                                </template>
+                                <template x-if="(r.instance.profiles || []).length > 0">
+                                  <table class="cf-sr-prof-table">
+                                    <thead>
+                                      <tr><th>TRaSH Profile</th><th></th><th>ID</th><th>Arr Profile</th><th>Last sync</th></tr>
+                                    </thead>
+                                    <tbody>
+                                      <template x-for="p in r.instance.profiles" :key="'profrow-'+p.ruleId">
+                                        <tr>
+                                          <td x-text="p.trashProfileName"></td>
+                                          <td class="cf-sr-prof-arrow">&rarr;</td>
+                                          <td class="cf-sr-prof-id" x-text="p.arrProfileId || '—'"></td>
+                                          <td x-text="p.arrProfileName || '(never synced)'"></td>
+                                          <td x-text="p.lastSync ? timeAgo(p.lastSync) : '—'"></td>
+                                        </tr>
+                                      </template>
+                                    </tbody>
+                                  </table>
+                                </template>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+        <!-- /Sync Rules sub-tab -->
       </div>
 {{end}}

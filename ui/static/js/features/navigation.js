@@ -125,6 +125,7 @@ export default {
       const app = this.activeAppType;
       let hash = '#' + app + '/' + s;
       if (s === 'profiles') hash += '/' + (this.getProfileTab(app) || 'trash-profiles');
+      else if (s === 'custom-formats') hash += '/' + (this.getCustomFormatsTab(app) || 'browse');
       else if (s === 'media-management') hash += '/' + (this.getMediaTab(app) || 'quality');
       else if (s === 'maintenance') hash += '/' + (this.getMaintenanceTab(app) || 'backup');
       else if (s === 'advanced') hash += '/' + (this.advancedTab || 'builder');
@@ -147,6 +148,8 @@ export default {
       let hash = '#' + app + '/' + section;
       if (section === 'profiles') {
         hash += '/' + (opts.profileTab || this.getProfileTab(app) || 'trash-profiles');
+      } else if (section === 'custom-formats') {
+        hash += '/' + (opts.customFormatsTab || this.getCustomFormatsTab(app) || 'browse');
       } else if (section === 'media-management') {
         hash += '/' + (opts.mediaTab || this.getMediaTab(app) || 'quality');
       } else if (section === 'maintenance') {
@@ -209,6 +212,7 @@ export default {
       // bookmarks and hashes keep working after the sub-tab split. Mapped
       // during hash restore below.
       const validProfileTabs = ['trash-profiles','sync-rules','history','compare','trash-sync'];
+      const validCustomFormatsTabs = ['browse','sync-rules'];
       const validMediaTabs = ['quality','naming'];
       const validMaintenanceTabs = ['backup','cleanup'];
       const validAdvancedTabs = ['builder','group-builder','scoring','import'];
@@ -244,6 +248,9 @@ export default {
               // on the profile-browser tab (the more discoverable side).
               const tab = parts[2] === 'trash-sync' ? 'trash-profiles' : parts[2];
               this.setProfileTab(this.activeAppType, tab);
+            }
+            else if (this.currentSection === 'custom-formats' && validCustomFormatsTabs.includes(parts[2])) {
+              this.setCustomFormatsTab(this.activeAppType, parts[2]);
             }
             else if (this.currentSection === 'media-management' && validMediaTabs.includes(parts[2])) {
               this.setMediaTab(this.activeAppType, parts[2]);
@@ -282,6 +289,18 @@ export default {
     },
     setMediaTab(appType, tab) {
       this.mediaTabs = { ...this.mediaTabs, [appType]: tab };
+    },
+
+    // Custom Formats sub-tabs — same per-app pattern as profileTabs.
+    // Default sub-tab is 'browse' (the existing TRaSH + custom CF
+    // catalog) — most visitors come here to browse, not to manage
+    // active sync state. Switching to 'sync-rules' triggers a fetch
+    // of /api/cf-sync-rules so the per-CF state is fresh.
+    getCustomFormatsTab(appType) {
+      return this.customFormatsTabs[appType] || 'browse';
+    },
+    setCustomFormatsTab(appType, tab) {
+      this.customFormatsTabs = { ...this.customFormatsTabs, [appType]: tab };
     },
 
     // Maintenance sub-tabs — Backup & Restore vs Cleanup. Default

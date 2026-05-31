@@ -575,6 +575,22 @@ export function clonarr() {
       this.$watch('profileTabs', maybeLoadCustomizations);
       this.$watch('activeAppType', maybeLoadCustomizations);
 
+      // Custom Formats → Sync Rules sub-tab: load the per-CF state
+      // when the user lands on the sub-tab for the first time (and
+      // on app-type changes while there). The fetch is cheap and the
+      // result is cached per app-type, so re-entering after a switch
+      // away comes back instantly.
+      const maybeLoadCFSyncRules = () => {
+        if (this.currentSection === 'custom-formats'
+            && this.getCustomFormatsTab(this.activeAppType) === 'sync-rules'
+            && typeof this.loadCFSyncRules === 'function'
+            && !this.cfSyncRulesLoaded[this.activeAppType]) {
+          this.loadCFSyncRules(this.activeAppType);
+        }
+      };
+      this.$watch('currentSection', maybeLoadCFSyncRules);
+      this.$watch('customFormatsTabs', maybeLoadCFSyncRules);
+
       // Expanding the sidebar (Ctrl+B or click-toggle) closes the popup —
       // when the inline subnav becomes visible, the popup is redundant.
       // Also cancel any pending show-timer: if user was hovering an icon
@@ -648,14 +664,13 @@ export function clonarr() {
           this.loadInstanceQS(appType, this.mediaInstanceId[appType]);
           this.loadInstanceNaming(appType);
         }
-        // Sync Rules → Custom Formats sub-tab: per-app-type fetch, so
+        // Custom Formats → Sync Rules sub-tab: per-app-type fetch, so
         // an app switch on this sub-tab needs to load the other app's
         // data on its own. Without this the table is stuck on a
         // "Loading custom formats..." spinner because the click handler
         // is the only other fetcher.
-        if (this.currentSection === 'profiles'
-          && this.getProfileTab(appType) === 'sync-rules'
-          && this.syncRulesSubTab === 'cfs'
+        if (this.currentSection === 'custom-formats'
+          && this.getCustomFormatsTab(appType) === 'sync-rules'
           && typeof this.loadCFSyncRules === 'function') {
           this.loadCFSyncRules(appType);
         }

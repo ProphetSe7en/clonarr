@@ -90,10 +90,20 @@
       <a class="sidebar-nav-item" :class="{ active: currentSection === 'custom-formats' }"
          :href="navHref('custom-formats')"
          :aria-current="currentSection === 'custom-formats' ? 'page' : null"
-         x-tt="sidebarCollapsed ? 'Custom Formats' : null">
+         x-tt="sidebarCollapsed ? 'Custom Formats' : null"
+         @mouseenter="showSidebarSubnav('custom-formats', $el)"
+         @mouseleave="scheduleHideSidebarSubnav()">
         <span class="sidebar-nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></span>
         <span class="sidebar-nav-label" x-show="!sidebarCollapsed">Custom Formats</span>
       </a>
+
+      <!-- Sub-nav under Custom Formats, only when sidebar expanded -->
+      <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'custom-formats'">
+        <a class="sidebar-subnav-item" :class="{ active: getCustomFormatsTab(activeAppType) === 'browse' }"
+           :href="navHref('custom-formats', { customFormatsTab: 'browse' })">Browse</a>
+        <a class="sidebar-subnav-item" :class="{ active: getCustomFormatsTab(activeAppType) === 'sync-rules' }"
+           :href="navHref('custom-formats', { customFormatsTab: 'sync-rules' })">Sync Rules</a>
+      </div>
 
       <!-- Media Management — consolidates the former Quality Definitions
            and File Naming top-level sections into a single parent with
@@ -420,7 +430,7 @@
        @mouseleave="scheduleHideSidebarSubnav()"
        @keydown.escape.window="sidebarSubnavPopup = ''"
        role="menu"
-       :aria-label="(sidebarSubnavPopup === 'profiles' ? 'Profiles' : sidebarSubnavPopup === 'media-management' ? 'Media Management' : sidebarSubnavPopup === 'maintenance' ? 'Maintenance' : sidebarSubnavPopup === 'settings' ? 'Settings' : 'Advanced') + ' sub-navigation'">
+       :aria-label="(sidebarSubnavPopup === 'profiles' ? 'Profiles' : sidebarSubnavPopup === 'custom-formats' ? 'Custom Formats' : sidebarSubnavPopup === 'media-management' ? 'Media Management' : sidebarSubnavPopup === 'maintenance' ? 'Maintenance' : sidebarSubnavPopup === 'settings' ? 'Settings' : 'Advanced') + ' sub-navigation'">
     <template x-if="sidebarSubnavPopup === 'profiles'">
       <div>
         <div class="sidebar-subnav-popup-header">Profiles</div>
@@ -432,6 +442,15 @@
            :href="navHref('profiles', { profileTab: 'history' })" @click="sidebarSubnavPopup = ''">History</a>
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'compare' }"
            :href="navHref('profiles', { profileTab: 'compare' })" @click="sidebarSubnavPopup = ''">Compare</a>
+      </div>
+    </template>
+    <template x-if="sidebarSubnavPopup === 'custom-formats'">
+      <div>
+        <div class="sidebar-subnav-popup-header">Custom Formats</div>
+        <a class="sidebar-subnav-popup-item" :class="{ active: getCustomFormatsTab(activeAppType) === 'browse' }"
+           :href="navHref('custom-formats', { customFormatsTab: 'browse' })" @click="sidebarSubnavPopup = ''">Browse</a>
+        <a class="sidebar-subnav-popup-item" :class="{ active: getCustomFormatsTab(activeAppType) === 'sync-rules' }"
+           :href="navHref('custom-formats', { customFormatsTab: 'sync-rules' })" @click="sidebarSubnavPopup = ''">Sync Rules</a>
       </div>
     </template>
     <template x-if="sidebarSubnavPopup === 'media-management'">

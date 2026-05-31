@@ -8,26 +8,10 @@
         <div class="page" x-show="getProfileTab(activeAppType) === 'sync-rules'">
           <div style="font-size:18px;font-weight:600;margin-bottom:4px">Sync Rules</div>
           <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
-            Your active TRaSH sync rules for this <span x-text="activeAppLabel"></span> instance. Toggle auto-sync, edit per-rule overrides, or re-sync on demand. Add new rules from the <strong>TRaSH Profiles</strong> tab.
+            Every TRaSH profile you've set up to sync with this <span x-text="activeAppLabel"></span> instance. Toggle auto-sync, edit per-rule overrides, or update on demand.
+            Add new rules from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a>.
+            For a per-CF view with drift status, see <a class="inline-link" :href="navHref('custom-formats', { customFormatsTab: 'sync-rules' })">Custom Formats &rarr; Sync Rules</a>.
           </div>
-
-          <!-- Sub-tab strip: Profiles (today's per-rule view) and Custom
-               Formats (per-CF view scoped to the active app type). The
-               Custom Formats view is a derived render of /api/cf-sync-rules
-               that shows every CF currently managed by any enabled rule
-               on any instance, with its drift state and used-by list.
-               Switching sub-tabs is local UI state — no nav or routing. -->
-          <div class="sync-rules-subtabs">
-            <button type="button"
-                    :class="syncRulesSubTab === 'profiles' ? 'sync-rules-subtab-active' : ''"
-                    @click="syncRulesSubTab = 'profiles'">Profiles</button>
-            <button type="button"
-                    :class="syncRulesSubTab === 'cfs' ? 'sync-rules-subtab-active' : ''"
-                    @click="syncRulesSubTab = 'cfs'; loadCFSyncRules(activeAppType)">Custom Formats</button>
-          </div>
-
-          <!-- Profiles sub-tab: existing per-instance rule cards. -->
-          <div x-show="syncRulesSubTab === 'profiles'">
 
           <!-- Per-instance cards. Each card carries its own auto-sync
                pause state (v3 — per-instance, not global). When paused,
@@ -221,74 +205,8 @@
             </template>
           </template>
           <template x-if="!instancesOfType(activeAppType).some(inst => sortedSyncRules(inst.id).length > 0)">
-            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No sync rules yet. Sync a profile from the <strong>TRaSH Profiles</strong> tab to get started.</div>
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No sync rules yet. Sync a profile from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a> to get started.</div>
           </template>
-          </div>
-          <!-- /Profiles sub-tab -->
-
-          <!-- Custom Formats sub-tab: per-CF view. Each row is one
-               managed CF; status pill aggregates drift state across all
-               instances the CF is on; Apply re-pushes clonarr's saved
-               spec to whichever instance has drift on this CF. Empty
-               state covers both "no rules yet" and "data still loading
-               after first sub-tab click". -->
-          <div x-show="syncRulesSubTab === 'cfs'">
-            <template x-if="!cfSyncRulesLoaded[activeAppType]">
-              <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Loading custom formats...</div>
-            </template>
-            <template x-if="cfSyncRulesLoaded[activeAppType] && (cfSyncRules[activeAppType] || []).length === 0">
-              <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No custom formats are managed by your sync rules yet. Sync a profile from the <strong>TRaSH Profiles</strong> tab to start managing CFs through clonarr.</div>
-            </template>
-            <template x-if="cfSyncRulesLoaded[activeAppType] && (cfSyncRules[activeAppType] || []).length > 0">
-              <div class="v3-inst-card" style="padding:0">
-                <div style="padding:14px 18px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:baseline;gap:10px">
-                  <span style="font-weight:600" x-text="(cfSyncRules[activeAppType] || []).length + ' custom format' + ((cfSyncRules[activeAppType] || []).length === 1 ? '' : 's') + ' managed'"></span>
-                  <span style="color:var(--text-muted);font-size:12px"
-                        x-text="cfDriftedCount(activeAppType) > 0 ? cfDriftedCount(activeAppType) + ' drifted' : 'All in sync'"
-                        :style="cfDriftedCount(activeAppType) > 0 ? 'color:var(--accent-red)' : ''"></span>
-                </div>
-                <div class="cf-sr-table">
-                  <div class="cf-sr-row cf-sr-header">
-                    <span>Name</span>
-                    <span>Category</span>
-                    <span>Used by</span>
-                    <span>Status</span>
-                    <span></span>
-                  </div>
-                  <template x-for="row in cfSyncRules[activeAppType] || []" :key="row.trashId">
-                    <div class="cf-sr-row">
-                      <span class="cf-sr-name" x-text="row.name"></span>
-                      <span class="cf-sr-cat" x-text="row.category"></span>
-                      <span class="cf-sr-uses"
-                            :title="(row.usedByProfiles || []).map(p => p.profileName).join(', ')"
-                            x-text="(row.usedByProfiles || []).length + ' profile' + ((row.usedByProfiles || []).length === 1 ? '' : 's')"></span>
-                      <span>
-                        <template x-if="cfRowDriftCount(row) === 0">
-                          <span class="cf-sr-pill cf-sr-pill-ok">In sync</span>
-                        </template>
-                        <template x-if="cfRowDriftCount(row) > 0">
-                          <span class="cf-sr-pill cf-sr-pill-drift"
-                                :title="(row.instances || []).filter(i => i.drift).map(i => i.name).join(', ')"
-                                x-text="'Arr drift (' + cfRowDriftCount(row) + ')'"></span>
-                        </template>
-                      </span>
-                      <span style="text-align:right">
-                        <template x-for="inst in (row.instances || []).filter(i => i.drift)" :key="inst.id">
-                          <button class="v3-inst-action"
-                                  style="font-size:11px"
-                                  :disabled="cfApplyingKey === inst.id + ':' + row.trashId"
-                                  @click="applyCFDrift(inst.id, row.trashId, row.name, inst.name)"
-                                  x-tt="'Re-push clonarr's saved spec back to ' + inst.name + ', overwriting the Arr-side edits on this CF.'"
-                                  x-text="cfApplyingKey === inst.id + ':' + row.trashId ? 'Applying...' : 'Apply (' + inst.name + ')'"></button>
-                        </template>
-                      </span>
-                    </div>
-                  </template>
-                </div>
-              </div>
-            </template>
-          </div>
-          <!-- /Custom Formats sub-tab -->
 
         </div>
         <!-- end Sync Rules tab -->

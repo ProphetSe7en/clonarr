@@ -211,6 +211,12 @@
       <a class="topnav-subtab" :class="{ active: getProfileTab(activeAppType) === 'compare' }"
          :href="navHref('profiles', { profileTab: 'compare' })">Compare</a>
     </div>
+    <div class="topnav-subnav" x-show="currentSection === 'custom-formats'">
+      <a class="topnav-subtab" :class="{ active: getCustomFormatsTab(activeAppType) === 'browse' }"
+         :href="navHref('custom-formats', { customFormatsTab: 'browse' })">Browse</a>
+      <a class="topnav-subtab" :class="{ active: getCustomFormatsTab(activeAppType) === 'sync-rules' }"
+         :href="navHref('custom-formats', { customFormatsTab: 'sync-rules' })">Sync Rules</a>
+    </div>
     <div class="topnav-subnav" x-show="currentSection === 'media-management'">
       <a class="topnav-subtab" :class="{ active: getMediaTab(activeAppType) === 'quality' }"
          :href="navHref('media-management', { mediaTab: 'quality' })">Quality Definitions</a>

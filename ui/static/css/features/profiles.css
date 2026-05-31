@@ -700,41 +700,24 @@ button.v3-status:hover { text-decoration: underline; }
 .tpd-view-list .tpd-card-body { display: none; padding: 4px 14px 10px 28px; }
 .tpd-view-list .tpd-card.open .tpd-card-body { display: flex; flex-direction: column; gap: 8px; }
 
-/* ===== Sync Rules sub-tab strip =====
-   Profiles | Custom Formats toggle at the top of the Sync Rules page.
-   Two buttons, app-color underline on the active one. */
-.sync-rules-subtabs {
-  display: flex; gap: 4px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-.sync-rules-subtabs button {
-  background: transparent; border: none; outline: none; cursor: pointer;
-  padding: 8px 14px;
-  font-size: 13px; font-weight: 500;
-  color: var(--text-muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 150ms, border-color 150ms;
-}
-.sync-rules-subtabs button:hover { color: var(--text-body); }
-.sync-rules-subtabs button.sync-rules-subtab-active {
-  color: var(--app-color, var(--text-body));
-  border-bottom-color: var(--app-color, var(--text-body));
-}
-
-/* ===== Sync Rules → Custom Formats sub-tab table =====
+/* ===== Custom Formats → Sync Rules sub-tab table =====
    Five-column layout: Name | Category | Used by | Status | Actions.
    Rows alternate row-hover background to scan a long list quickly. */
 .cf-sr-table { display: flex; flex-direction: column; }
 .cf-sr-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) 140px 100px 140px minmax(140px, auto);
-  align-items: center; gap: 12px;
+  /* 6 columns: Name | Category | Used in | Status | Last sync | Actions
+     Name flexes (min 0 so long names truncate); Last sync is short
+     ("12h ago"); Actions is auto-sized to fit "Update" or "Updating...". */
+  grid-template-columns: minmax(0, 1.5fr) minmax(120px, 0.6fr) 90px 100px 90px minmax(110px, auto);
+  align-items: center; gap: 10px;
   padding: 8px 18px;
   border-bottom: 1px solid var(--border-subtle);
   font-size: 13px;
 }
+.cf-sr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-sr-cat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-sr-lastsync { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
 .cf-sr-row:last-child { border-bottom: none; }
 .cf-sr-row:not(.cf-sr-header):hover { background: var(--bg-row-hover, var(--bg-elevated)); }
 .cf-sr-header {
@@ -761,7 +744,424 @@ button.v3-status:hover { text-decoration: underline; }
   color: var(--accent-green);
 }
 .cf-sr-pill-drift {
-  background: color-mix(in srgb, var(--accent-red) 14%, transparent);
-  color: var(--accent-red);
+  /* Orange family matches Profile Sync Rules' .v3-status.out-of-sync —
+     drift is "needs attention", not "failed". Red stays reserved for
+     genuine errors (failed sync, diff fetch error). */
+  background: color-mix(in srgb, var(--accent-orange) 14%, transparent);
+  color: var(--accent-orange);
   cursor: help;
+}
+
+/* ===== CF sub-tab: sidebar + main pane layout =====
+   Two-column grid mirroring the Custom Formats Browse tab so users
+   carry the same mental model across both surfaces. Sidebar pinned
+   at 200px; main pane fills remaining width. */
+.cf-sr-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.cf-sr-side {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px;
+  position: sticky;
+  top: 10px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+.cf-sr-side-all .cf-sr-side-label { font-weight: 500; }
+
+/* View-filter block (Drifted etc) sits at the top of the sidebar
+   with a divider below so it visually separates from the
+   categories tree. The block only renders when at least one view
+   filter is applicable. */
+.cf-sr-side-views {
+  display: flex; flex-direction: column;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.cf-sr-side-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center; gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-body);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.cf-sr-side-item:hover { background: var(--bg-row-hover, var(--bg-page)); }
+.cf-sr-side-item.active {
+  background: color-mix(in srgb, var(--app-color, var(--accent-blue)) 12%, transparent);
+  color: var(--app-color, var(--text-body));
+  font-weight: 600;
+}
+.cf-sr-side-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cf-sr-side-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.cf-sr-side-item.active .cf-sr-side-count { color: inherit; opacity: 0.8; }
+
+/* View-filter pin variant (Drifted). Orange family — matches the
+   row pill + per-card chip + Profile Sync Rules' "Arr drift" status
+   so the user reads one consistent color across all drift surfaces.
+   Active state pulls the app-color treatment same as a category pin
+   so the picked-state visual language is uniform. */
+.cf-sr-side-view {
+  color: var(--accent-orange);
+}
+.cf-sr-side-view .cf-sr-side-count {
+  color: var(--accent-orange);
+  font-weight: 700;
+  opacity: 0.9;
+}
+.cf-sr-side-view.active {
+  background: color-mix(in srgb, var(--app-color, var(--accent-blue)) 12%, transparent);
+  color: var(--app-color, var(--text-body));
+}
+.cf-sr-side-view.active .cf-sr-side-count {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* Main pane wrapper — owns the header bar above the table so the
+   counts + actions sit visually attached to the table they describe. */
+.cf-sr-main {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cf-sr-header-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px;
+  /* Mirror v3-inst-header's app-color gradient so the CF sub-tab
+     reads as belonging to the active app the same way Sync Rules
+     Profiles cards do. --app-glow fades to transparent so longer
+     header rows stay legible on the right; border-image carries
+     the same fade for the bottom border. */
+  background: linear-gradient(90deg, var(--app-glow) 0%, transparent 60%), var(--bg-elevated);
+  border-bottom: 1px solid var(--border-muted);
+  border-image: linear-gradient(90deg, var(--app-color) 0%, var(--border-muted) 60%, var(--border-muted) 100%) 1;
+  flex-wrap: wrap;
+}
+.cf-sr-counts { display: flex; align-items: baseline; gap: 10px; }
+.cf-sr-counts > span:first-child { color: var(--app-color); }
+.cf-sr-counts-muted { color: var(--text-muted); font-size: 12px; }
+.cf-sr-counts-warn { color: var(--accent-red); }
+.cf-sr-header-actions { display: flex; gap: 8px; }
+
+/* Filter row — instance picker + search. Lighter weight than the
+   action row above so the action buttons read as primary. */
+.cf-sr-filter-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-page);
+  flex-wrap: wrap;
+}
+.cf-sr-filter-group {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px;
+  position: relative;
+}
+.cf-sr-filter-search { flex: 1 1 220px; max-width: 360px; }
+/* Pushes Check (and any future right-side actions) to the far
+   right of the action row so Expand/Collapse + filters live on the
+   left and the primary action sits on the right. */
+.cf-sr-filter-actions { margin-left: auto; display: flex; gap: 8px; }
+.cf-sr-filter-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+.cf-sr-filter-select,
+.cf-sr-filter-input {
+  padding: 5px 10px;
+  font-size: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--text-body);
+}
+.cf-sr-filter-input { flex: 1 1 auto; padding-right: 26px; }
+.cf-sr-filter-input:focus,
+.cf-sr-filter-select:focus {
+  outline: none;
+  border-color: var(--app-color, var(--accent-blue));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-color, var(--accent-blue)) 25%, transparent);
+}
+.cf-sr-filter-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px; height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.cf-sr-filter-clear:hover {
+  background: var(--bg-row-hover, var(--bg-page));
+  color: var(--text-body);
+}
+/* In-flight Apply-all label — shows the CF+instance currently being
+   pushed. Compact one-liner so it doesn't push the table down. */
+.cf-sr-progress {
+  padding: 6px 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--app-color, var(--accent-blue)) 6%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Used-by cell — passive visual indicator now that the entire row
+   is the expand affordance. Chevron flips to indicate open state. */
+.cf-sr-uses {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: help;
+}
+.cf-sr-uses-chev {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--text-muted);
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+.cf-sr-uses-chev.open { transform: rotate(90deg); }
+
+/* Whole-row click affordance. Cursor + hover background + keyboard
+   focus ring so the row reads as "press me to see more". Apply
+   buttons inside the row use @click.stop so the row handler doesn't
+   double-fire when the user is pressing one of those. */
+.cf-sr-row-clickable { cursor: pointer; }
+.cf-sr-row-clickable:hover { background: var(--bg-row-hover, var(--bg-elevated)); }
+.cf-sr-row-clickable:focus-visible {
+  outline: 2px solid var(--app-color, var(--accent-blue));
+  outline-offset: -2px;
+}
+
+/* Expand-row: inline detail panel showing the profile list. Indented
+   under the row it belongs to with a left accent border in app-color
+   so the visual ownership is obvious. */
+.cf-sr-row-expanded { background: var(--bg-row-hover, var(--bg-page)); }
+.cf-sr-expand {
+  padding: 10px 18px 12px 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--app-color, var(--accent-blue));
+  background: var(--bg-page);
+}
+.cf-sr-expand-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.cf-sr-expand-list {
+  list-style: none;
+  margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.cf-sr-expand-list li {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+}
+.cf-sr-expand-prof {
+  color: var(--text-body);
+  font-weight: 500;
+}
+
+/* Expand-row sectioning — distinct visual blocks for "In profiles"
+   and "Drift detail" so the user scans for what they care about.
+   Section title is small + uppercase to read as a label. */
+.cf-sr-expand-section { margin-bottom: 10px; }
+.cf-sr-expand-section:last-child { margin-bottom: 0; }
+.cf-sr-expand-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* Per-instance diff block — one card per drifted instance so the
+   per-instance context is unmistakable in a multi-instance setup. */
+.cf-sr-diff-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  padding: 8px 12px;
+  margin-bottom: 6px;
+}
+.cf-sr-diff-block:last-child { margin-bottom: 0; }
+.cf-sr-diff-inst {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-color, var(--text-body));
+  margin-bottom: 6px;
+}
+.cf-sr-diff-status {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.cf-sr-diff-status-ok { color: var(--accent-green); font-style: normal; }
+.cf-sr-diff-status-err { color: var(--accent-red); font-style: normal; }
+.cf-sr-diff-body {
+  display: flex; flex-direction: column; gap: 3px;
+}
+/* One change per line, plain prose with bold for names and the
+   verb-prefix so the user can scan the list without parsing group
+   headers. Mirrors Profile Sync Rules' status-review modal format. */
+.cf-sr-diff-line {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-body);
+  overflow-wrap: anywhere;
+  padding: 1px 0;
+}
+.cf-sr-diff-verb {
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-right: 2px;
+}
+.cf-sr-diff-val {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-body);
+  overflow-wrap: anywhere;
+}
+.cf-sr-diff-arrow {
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 2px;
+}
+
+/* Hierarchical sidebar — parent + children with chevron toggle.
+   Mirrors Browse tab's tree visually so users carry one mental
+   model across both surfaces. */
+.cf-sr-side-group { display: flex; flex-direction: column; }
+.cf-sr-side-parent-row { display: flex; align-items: center; }
+.cf-sr-side-chevron {
+  background: transparent;
+  border: 0;
+  padding: 6px 4px 6px 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform 0.15s, color 0.12s;
+}
+.cf-sr-side-chevron.open { transform: rotate(90deg); }
+.cf-sr-side-chevron:hover { color: var(--text-body); }
+.cf-sr-side-parent { flex: 1 1 auto; }
+.cf-sr-side-children {
+  display: flex; flex-direction: column;
+  padding-left: 18px;
+}
+.cf-sr-side-child {
+  padding-left: 12px;
+  font-size: 12px;
+}
+
+/* Per-instance card extras — drift chip in header + sub-category tag */
+.cf-sr-inst-card { margin-bottom: 14px; }
+.cf-sr-inst-card:last-child { margin-bottom: 0; }
+/* Plain-text drift indicator in the per-instance card header.
+   No badge background, no accent color — just muted text so it
+   reads as quiet metadata next to the CF count instead of a
+   second pill. The orange family already lives in the row pills
+   + sidebar Drifted filter; we don't need another instance of it
+   in the card header. */
+.cf-sr-card-drift-text {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.cf-sr-subcat {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* Expand-row profile table — rich per-rule breakdown of which
+   profiles use this CF on this instance, with auto-sync state and
+   last-sync timestamp. */
+.cf-sr-prof-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.cf-sr-prof-table th {
+  text-align: left;
+  font-size: 10px; font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.cf-sr-prof-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-body);
+}
+.cf-sr-prof-table tr:last-child td { border-bottom: none; }
+.cf-sr-prof-id {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--text-muted);
+  width: 1%;
+  white-space: nowrap;
+}
+.cf-sr-prof-arrow {
+  color: var(--text-muted);
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+/* Responsive: collapse the sidebar to a horizontal scroll-strip on
+   narrow viewports so the table keeps its width budget. */
+@media (max-width: 900px) {
+  .cf-sr-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cf-sr-side {
+    position: static;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: none;
+    padding: 6px;
+  }
+  .cf-sr-side-header { display: none; }
+  .cf-sr-side-item {
+    flex: 0 0 auto;
+    grid-template-columns: auto auto auto;
+  }
 }
