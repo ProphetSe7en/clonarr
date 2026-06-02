@@ -70,7 +70,11 @@
                 :value="agentModal.config[g.field.name] || ''"
                 @input.stop="agentModal.config[g.field.name] = $event.target.value">
 
-              <!-- stringList: textarea where each line is one entry; bound to a string[] -->
+              <!-- stringList: textarea where each line is one entry; bound to a string[].
+                   Defensive .join via Array.isArray: legacy agents persisted this
+                   field as a plain string (single webhook URL), which crashes the
+                   .join() call without the type check. Falls back to the string
+                   value as-is so the field still shows the user's data. -->
               <textarea
                 x-show="g.field.kind === 'stringList'"
                 class="input"
@@ -78,7 +82,7 @@
                 :placeholder="g.field.placeholder"
                 autocomplete="one-time-code"
                 style="font-family:monospace;font-size:12px"
-                :value="(agentModal.config[g.field.name] || []).join('\n')"
+                :value="(() => { const v = agentModal.config[g.field.name]; if (Array.isArray(v)) return v.join('\n'); return v == null ? '' : String(v); })()"
                 @input="agentModal.config[g.field.name] = $event.target.value.split('\n'); agentModal.testPassed = false"></textarea>
 
               <div x-show="g.field.helpHtml"
