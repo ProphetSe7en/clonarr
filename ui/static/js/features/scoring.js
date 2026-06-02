@@ -297,6 +297,129 @@ export default {
       };
     },
 
+    // Open the Sandbox Export modal. Generates the initial text body
+    // from the current visible+sorted result list with the breakdown
+    // toggle off. Toggle changes are watched via x-effect in the
+    // template so flipping the checkbox re-runs the formatter.
+    //
+    // Blurs the active element first so that when x-trap.inert applies
+    // aria-hidden + inert to <main> on the next render tick, focus
+    // isn't still parked on the trigger button (which would cause
+    // Chrome to log "Blocked aria-hidden on an element because its
+    // descendant retained focus"). x-trap moves focus into the modal
+    // itself once it mounts; blur'ing here just gets it off the
+    // trigger before the inert attribute lands.
+    openSandboxExport(appType) {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      this.sandboxExportModal = {
+        show: true,
+        appType: appType,
+        includeBreakdown: false,
+        text: this.formatSandboxExportText(appType, false),
+        copied: false,
+      };
+    },
+
+    // Build the export string. Follows visibleSandboxResults' sort +
+    // filter order so what the user sees is what gets exported. Three
+    // formatting modes the function picks based on per-release scoring
+    // state + the includeBreakdown toggle:
+    //   • Release has no scoring             → "<title>"
+    //   • Scoring + !includeBreakdown        → "<title>\t<total>"
+    //   • Scoring + includeBreakdown         → header line then per-CF
+    //     rows (alphabetical by CF name for stable diffs across two
+    //     sessions of the same release scored on different profiles)
+    //   • Multi-release output joins blocks with a blank line so diff
+    //     tools align block boundaries cleanly.
+    formatSandboxExportText(appType, includeBreakdown) {
+      const rows = (typeof this.visibleSandboxResults === 'function'
+        ? this.visibleSandboxResults(appType)
+        : (this.sandbox?.[appType]?.results || [])) || [];
+      if (rows.length === 0) return '';
+      // Format the total score with the explicit sign so a +/- diff
+      // shows up cleanly in diff tools' alignment view.
+      const fmtScore = (n) => {
+        if (typeof n !== 'number') return '0';
+        return (n > 0 ? '+' : '') + String(n);
+      };
+      const blocks = rows.map(res => {
+        const title = res.title || '';
+        const scoring = res.scoring;
+        if (!scoring || typeof scoring.total !== 'number') {
+          // No scoring done — just the title. Common when the user
+          // pasted a list and exports before clicking Score.
+          return title;
+        }
+        if (!includeBreakdown) {
+          // Compact single-line: title + total. Tab separator picks
+          // up cleanly in diff tools and in pasted-into-spreadsheet
+          // workflows alike.
+          return `${title}\t${fmtScore(scoring.total)}`;
+        }
+        // Breakdown block: header line, then alphabetical CF rows so
+        // diff tools align same-CF rows across two sessions even when
+        // the scores differ. Unmatched CFs (score==0 from filter) are
+        // skipped — they're noise for a comparison view.
+        const breakdown = (scoring.breakdown || [])
+          .filter(b => b && b.matched && typeof b.score === 'number' && b.score !== 0)
+          .slice()
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        const lines = [`${title}\tTOTAL ${fmtScore(scoring.total)}`];
+        for (const cf of breakdown) {
+          lines.push(`  ${cf.name}\t${fmtScore(cf.score)}`);
+        }
+        return lines.join('\n');
+      });
+      return blocks.join('\n\n');
+    },
+
+    // Re-run the formatter when the toggle flips. Called from the
+    // modal's checkbox @change.
+    rerenderSandboxExport() {
+      const m = this.sandboxExportModal;
+      if (!m || !m.show) return;
+      this.sandboxExportModal.text = this.formatSandboxExportText(m.appType, m.includeBreakdown);
+    },
+
+    // Copy the modal text to the clipboard. Mirrors copySandboxModalText
+    // including the execCommand fallback for non-secure contexts.
+    async copySandboxExportText() {
+      const text = this.sandboxExportModal.text || '';
+      let ok = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try { await navigator.clipboard.writeText(text); ok = true; } catch (_) { /* fall through */ }
+      }
+      if (!ok) {
+        const pre = document.getElementById('sandbox-export-pre');
+        if (pre) {
+          const sel = document.getSelection();
+          const saved = [];
+          if (sel) {
+            for (let i = 0; i < sel.rangeCount; i++) saved.push(sel.getRangeAt(i).cloneRange());
+          }
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(pre);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            ok = document.execCommand('copy');
+          } catch (_) { /* leave ok=false */ }
+          if (sel) {
+            sel.removeAllRanges();
+            for (const r of saved) sel.addRange(r);
+          }
+        }
+      }
+      if (ok) {
+        this.sandboxExportModal.copied = true;
+        setTimeout(() => { this.sandboxExportModal.copied = false; }, 1500);
+      } else if (typeof this.showToast === 'function') {
+        this.showToast('Copy failed. Select the text and copy manually.', 'error', 4000);
+      }
+    },
+
     async copySandboxModalText() {
       const text = this.sandboxCopyModal.text || '';
       let ok = false;

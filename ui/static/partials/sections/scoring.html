@@ -253,6 +253,16 @@
                 <button class="btn btn-sm" x-show="sandboxSelectedCount(activeAppType) > 0"
                         @click="sandbox[activeAppType].results.forEach(r => r._selected = false); sandbox[activeAppType].results = [...sandbox[activeAppType].results]; sandbox[activeAppType].filterToSelected = false"
                         x-tt="'Uncheck all'">Reset filter</button>
+                <!-- Export — opens a modal with the visible result list as
+                     plain text. Includes a toggle for the per-CF breakdown.
+                     Diff-tool friendly (line-per-release for compact mode;
+                     per-release block sorted alphabetical-by-CF when
+                     breakdown is on so two sessions of the same set line up
+                     row-for-row across diffchecker.com paste). -->
+                <button class="btn btn-sm"
+                        @click="openSandboxExport(activeAppType)"
+                        :disabled="(sandbox[activeAppType].results?.length || 0) === 0"
+                        x-tt="'Copy the current result list as plain text. Choose total-only or include the CF breakdown. Use to share runs or diff against a previous session.'">Export</button>
                 <button class="btn btn-sm"
                         style="border-color:var(--accent-red);color:var(--accent-red)"
                         @click="sandboxClearResults(activeAppType)"

@@ -1,0 +1,46 @@
+{{define "modals/sandbox-export"}}
+  <!-- Sandbox Export modal — bulk-export the currently-visible sandbox
+       result list as plain text. Designed to paste into diff tools
+       (diffchecker.com, sdiff, vimdiff) to compare two scoring sessions
+       (same release set against two profiles, or same profile at two
+       points in time) so the user can see exactly which rows scored
+       differently and which CFs contributed.
+
+       Three implicit modes the formatter picks per-row based on data:
+         - Title only          (release has no scoring)
+         - Title + total       (default toggle off)
+         - Title + total + CF  (toggle on; CFs sorted alphabetically
+                                so same-CF rows line up across sessions) -->
+  <div class="modal-overlay" x-show="sandboxExportModal.show" @keydown.escape.window="sandboxExportModal.show = false" x-cloak>
+    <div class="modal" style="max-width:820px;width:92vw" role="dialog" aria-modal="true" aria-labelledby="modal-title-sandbox-export" x-trap.noscroll.inert="sandboxExportModal.show">
+      <h2 id="modal-title-sandbox-export" class="modal-title" style="display:flex;align-items:center;gap:8px">
+        <span>Export Results</span>
+        <span style="font-size:11px;color:var(--text-secondary);font-weight:400">(plain text · paste into a diff tool to compare scoring runs)</span>
+      </h2>
+      <!-- Breakdown toggle — flips the formatter mode. Watching this
+           via @change re-renders the textbox on the fly so the user
+           sees the size of the export before they commit. -->
+      <div style="margin:8px 0 10px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox"
+                 x-model="sandboxExportModal.includeBreakdown"
+                 @change="rerenderSandboxExport()">
+          <span>Include CF breakdown per release</span>
+        </label>
+        <span style="font-size:12px;color:var(--text-muted)">
+          Rows follow the table's current sort and visible-rows filter.
+        </span>
+      </div>
+      <pre id="sandbox-export-pre" style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:12px 14px;margin:0;max-height:60vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;color:var(--text-body);white-space:pre;user-select:text" x-text="sandboxExportModal.text || '(no releases to export)'"></pre>
+      <div class="modal-actions">
+        <button class="btn" @click="sandboxExportModal.show = false">Close</button>
+        <button class="btn btn-primary"
+                @click="copySandboxExportText()"
+                :disabled="!sandboxExportModal.text">
+          <span x-text="sandboxExportModal.copied ? '✓ Copied' : 'Copy'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+{{end}}

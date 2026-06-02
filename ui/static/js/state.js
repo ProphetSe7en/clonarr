@@ -391,6 +391,14 @@ export default function baseState() {
     inputModal: { show: false, title: '', message: '', value: '', placeholder: '', confirmLabel: '', onConfirm: null, onCancel: null },
     cloneProfileModal: { open: false, sh: null, sourceInstanceId: '', appType: '', sourceName: '', name: '', targetInstanceId: '', saving: false, error: '' },
     sandboxCopyModal: { show: false, title: '', text: '', copied: false },
+    // Sandbox export modal — exports the currently-visible-and-sorted
+    // result list as plain text, diff-tool friendly (line-per-release).
+    // includeBreakdown toggles between "title + total only" (compact,
+    // good for high-level diff) and "per-release block with CF rows"
+    // (deep diff for per-CF score comparison across two sessions).
+    // The "no scoring" path is implicit: if a release has no scoring,
+    // its line shows just the title regardless of toggle.
+    sandboxExportModal: { show: false, appType: '', includeBreakdown: false, text: '', copied: false },
     // Import
     importedProfiles: { radarr: [], sonarr: [] },
     showImportModal: false, // false or app type string
