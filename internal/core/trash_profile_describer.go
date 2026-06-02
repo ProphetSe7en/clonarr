@@ -75,10 +75,26 @@ type ProfileHDRSummary struct {
 	OptIns []string `json:"optIns,omitempty"` // e.g. ["DV Boost", "HDR10+ Boost"]
 }
 
-// ProfileAudioSummary reports whether lossless-audio scoring is enabled by
-// default (i.e. [Audio] Audio Formats cf-group has default=true for the profile).
+// ProfileAudioSummary reports the relationship between this profile and
+// the lossless-audio scoring channel ([Audio] Audio Formats cf-group):
+//
+//	Scored = true  → group is INCLUDED in this profile AND default=true
+//	                 (or lossless-audio CFs sit directly in formatItems via
+//	                 the fallback path used by SQP-3 (Audio) etc).
+//	                 User-facing: "Lossless audio".
+//	OptIn  = true  → group is INCLUDED but default is not true.
+//	                 The CFs ship with the profile; user toggles them on
+//	                 to prefer lossless. Common on WEB-2160p (Alternative)
+//	                 and similar profiles where TRaSH lists Audio Formats
+//	                 in quality_profiles.include but leaves it opt-in.
+//	                 User-facing: "Lossless available".
+//	neither        → group is NOT in include list. User-facing: "Lossy audio".
+//
+// Scored takes precedence — if both flags could be set (theoretical), the
+// stronger statement wins.
 type ProfileAudioSummary struct {
 	Scored bool `json:"scored"`
+	OptIn  bool `json:"optIn,omitempty"`
 }
 
 // DescribeProfiles returns ProfileDescription for every profile in the app's
@@ -173,6 +189,15 @@ func describeProfile(
 			if g.TrashID == hdrFormatsTrashID(app) {
 				out.Axes.HDR.Scored = true
 			}
+		} else if g.TrashID == audioFormatsTrashID(app) {
+			// Audio Formats group is listed in the profile's include
+			// map but ships without a default flag (or default=false).
+			// CFs travel with the profile but aren't scored; user opts
+			// in by toggling the group. Surfaces as "Lossless available"
+			// on the profile card and as an extra "What you get" bullet
+			// so users know the capability is there even though the
+			// pill stops short of "Lossless audio".
+			out.Axes.Audio.OptIn = true
 		} else if label := hdrVariantOptInLabel(app, g.TrashID); label != "" {
 			// default=false HDR variant — surface as opt-in on the pill.
 			// Matched by trash_id (stable across TRaSH-Guides updates)
@@ -571,7 +596,7 @@ func composeHighlights(profile *TrashQualityProfile, axes ProfileAxes) []string 
 	//    (TRaSH's own verbatim text from profile.trash_description),
 	//    rendered as a separate notice block above Highlights — not
 	//    duplicated here.
-	if src := sourceHighlight(axes.Sources); src != "" {
+	if src := sourceHighlight(profile, axes.Sources); src != "" {
 		out = append(out, src)
 	}
 
@@ -599,9 +624,17 @@ func composeHighlights(profile *TrashQualityProfile, axes ProfileAxes) []string 
 	}
 
 	// 3) Audio — name the formats users recognise, drop "DTS-HD MA" tail
-	//    which non-cinephiles don't parse anyway.
+	//    which non-cinephiles don't parse anyway. Three states:
+	//    - Scored: lossless is the default behaviour
+	//    - OptIn: lossless CFs are bundled but the user has to enable
+	//      the [Audio] Audio Formats group to prefer them — common on
+	//      WEB profiles where TRaSH lists Audio Formats as available
+	//      but leaves the default off because lossless is rarer on WEB
+	//    - Neither: profile ships lossy-only
 	if axes.Audio.Scored {
 		out = append(out, "Prefers releases with lossless audio (Atmos, DTS-X, TrueHD)")
+	} else if axes.Audio.OptIn {
+		out = append(out, "Lossless audio available — enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD")
 	}
 
 	// 4) Variant-specific tuning. No "Tier 1-8" detail — users don't know
@@ -678,9 +711,51 @@ func joinAnd(items []string) string {
 	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
+// cutoffSource resolves the profile's cutoff item to its canonical source
+// label (the same vocabulary extractSource produces). Returns "" when the
+// profile has no cutoff field or when the cutoff item has no resolvable
+// source (e.g. quality-grouping shells whose own name doesn't carry a
+// source token AND whose children are empty — degenerate case).
+//
+// The cutoff drives "what the profile is ASKING for" — anything ranked
+// lower in the items list is fallback. Without this signal, sourceHighlight
+// and pickSourceClass have to guess from the flat set of allowed sources,
+// which yields wrong answers on profiles like WEB-2160p (Alternative)
+// where Bluray is allowed as fallback but the cutoff is WEB 2160p.
+func cutoffSource(profile *TrashQualityProfile) string {
+	if profile == nil || profile.Cutoff == "" {
+		return ""
+	}
+	for _, it := range profile.Items {
+		if it.Name != profile.Cutoff {
+			continue
+		}
+		// Try the item itself first (covers single-source items like
+		// "Bluray-2160p"). Fall through to sub-items if the parent is
+		// a quality-grouping shell ("WEB 2160p" wrapping WEBRip-2160p
+		// + WEBDL-2160p).
+		if s := extractSource(it.Name); s != "" {
+			return s
+		}
+		for _, sub := range it.Items {
+			if s := extractSource(sub); s != "" {
+				return s
+			}
+		}
+		return ""
+	}
+	return ""
+}
+
 // sourceHighlight returns the canonical primary-source-description bullet
-// derived from the normalised source list. Describes ONLY the cutoff-tier
-// source — the "+ WEB" / fallback wording lives elsewhere:
+// derived from the profile's CUTOFF when available, falling back to the
+// normalised source set for profiles without a recognisable cutoff. The
+// cutoff path matters for "Alternative" variants — WEB-2160p (Alternative)
+// has Bluray allowed as fallback but the cutoff is WEB 2160p, so the
+// primary description must talk about WEB-DL, not Bluray.
+//
+// Describes ONLY the cutoff-tier source — the "+ WEB" / fallback wording
+// lives elsewhere:
 //   - Source pill (e.g. "Bluray Remux + WEB") covers what other sources
 //     are accepted at the same resolution
 //   - fallbackHighlight covers the lower-resolution fallback chain
@@ -690,22 +765,49 @@ func joinAnd(items []string) string {
 // variants that fall through to SDTV/DVD). Keeping primary-source-only
 // makes the three signals — pill, source bullet, fallback bullet —
 // non-overlapping and consistent.
-func sourceHighlight(sources []string) string {
+func sourceHighlight(profile *TrashQualityProfile, sources []string) string {
+	// Two-step resolve: try cutoff first (authoritative answer for
+	// "what is the profile targeting"), then fall back to the set
+	// heuristic when cutoff is empty OR returns a source token the
+	// switch doesn't recognise (e.g. a future TRaSH addition like a
+	// hypothetical HDTV-cutoff profile). Without the fallback on
+	// unknown cutoff values, profile cards would silently drop the
+	// highlight bullet on any TRaSH schema change.
+	primary := cutoffSource(profile)
+	mapPrimaryToBullet := func(p string) string {
+		switch p {
+		case "UHD Bluray Remux":
+			return "Uncompressed 4K Bluray Remux (disc-perfect picture)"
+		case "Bluray Remux":
+			return "Uncompressed 1080p Bluray Remux (disc-perfect picture)"
+		case "UHD Bluray":
+			return "4K Bluray encodes from approved release groups"
+		case "Bluray":
+			return "1080p Bluray encodes from approved release groups"
+		case "WEB-DL", "WEBRip":
+			return "Streaming WEB-DL releases from approved release groups"
+		}
+		return ""
+	}
+	if bullet := mapPrimaryToBullet(primary); bullet != "" {
+		return bullet
+	}
+	// Cutoff empty or unrecognised → derive from full sources set.
 	set := map[string]bool{}
 	for _, s := range sources {
 		set[s] = true
 	}
 	switch {
 	case set["UHD Bluray Remux"]:
-		return "Uncompressed 4K Bluray Remux (disc-perfect picture)"
+		return mapPrimaryToBullet("UHD Bluray Remux")
 	case set["Bluray Remux"]:
-		return "Uncompressed 1080p Bluray Remux (disc-perfect picture)"
+		return mapPrimaryToBullet("Bluray Remux")
 	case set["UHD Bluray"]:
-		return "4K Bluray encodes from approved release groups"
+		return mapPrimaryToBullet("UHD Bluray")
 	case set["Bluray"]:
-		return "1080p Bluray encodes from approved release groups"
-	case set["WEB-DL"] || set["WEBRip"]:
-		return "Streaming WEB-DL releases from approved release groups"
+		return mapPrimaryToBullet("Bluray")
+	case set["WEB-DL"], set["WEBRip"]:
+		return mapPrimaryToBullet("WEB-DL")
 	}
 	return ""
 }
@@ -882,7 +984,7 @@ func composeTagline(profile *TrashQualityProfile, axes ProfileAxes) string {
 	}
 	tier := lowercaseTierAdjective(pickTierAdjective(profile, axes))
 	res := pickResolutionLabel(axes)
-	sourceClass := pickSourceClass(axes)
+	sourceClass := pickSourceClass(profile, axes)
 	parts := []string{tier, res, sourceClass}
 	body := ""
 	for _, p := range parts {
@@ -965,11 +1067,32 @@ func pickResolutionLabel(axes ProfileAxes) string {
 	return axes.Resolution
 }
 
-// pickSourceClass returns the trailing word/phrase for the tagline,
-// chosen by what source class dominates the profile. "Remux" wins when
-// any Remux source is allowed; "WEB-DL" when the profile is WEB-only;
-// otherwise "encodes" (catch-all for Bluray + WEB mixes).
-func pickSourceClass(axes ProfileAxes) string {
+// pickSourceClass returns the trailing word/phrase for the tagline. Uses
+// the profile's CUTOFF source as the authoritative signal — that's what
+// the profile is actually preferring. Falls back to a flat-set heuristic
+// only when the cutoff doesn't resolve (e.g. hand-built profile without
+// a recognisable cutoff item).
+//
+// Cutoff-driven examples (these were all "encodes" before the fix):
+//
+//	Remux 2160p              cutoff = Bluray-2160p Remux  → "Remux"
+//	WEB-2160p (Alternative)  cutoff = WEB 2160p           → "WEB-DL"
+//	Bluray-2160p             cutoff = Bluray-2160p        → "Bluray"
+func pickSourceClass(profile *TrashQualityProfile, axes ProfileAxes) string {
+	// Cutoff first. If cutoff is empty OR returns a token outside the
+	// switch (e.g. a future TRaSH source category we don't yet map),
+	// fall through to the set-based heuristic so the function still
+	// produces a meaningful label instead of the bare "encodes" default.
+	switch cutoffSource(profile) {
+	case "UHD Bluray Remux", "Bluray Remux":
+		return "Remux"
+	case "WEB-DL", "WEBRip":
+		return "WEB-DL"
+	case "UHD Bluray", "Bluray":
+		return "Bluray"
+	}
+	// Fallback heuristic — runs for empty cutoff OR unknown cutoff
+	// source. The order matters: Remux > WEB-only > generic encodes.
 	if hasRemuxSource(axes) {
 		return "Remux"
 	}
