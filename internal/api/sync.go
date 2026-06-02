@@ -560,6 +560,33 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 					syncedCFs = append(syncedCFs, a.TrashID)
 				}
 				cfg.AutoSync.Rules[i].PriorSyncedCFs = syncedCFs
+				// Mirror autosync.go's UpdateAutoSyncRuleCommit fingerprint
+				// clear (introduced 2026-06-02 for Profile Sync ↔ CF Sync
+				// pill consistency). Without this on the manual sync path,
+				// users clicking Sync Now from Profile Sync Rules see the
+				// profile pill flip to "in sync" while the CF Sync Rules
+				// pills stay stuck on "Arr drift" until the next scheduled
+				// drift pass. After a successful push the live Arr spec
+				// matches disk by definition, so prior drift is reconciled.
+				if len(syncedCFs) > 0 {
+					instID := cfg.AutoSync.Rules[i].InstanceID
+					for j := range cfg.Instances {
+						if cfg.Instances[j].ID != instID {
+							continue
+						}
+						fp := cfg.Instances[j].CFDriftFingerprints
+						if len(fp) == 0 {
+							break
+						}
+						for _, tid := range syncedCFs {
+							delete(fp, tid)
+						}
+						if len(fp) == 0 {
+							cfg.Instances[j].CFDriftFingerprints = nil
+						}
+						break
+					}
+				}
 				return
 			}
 		}
@@ -598,6 +625,29 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 			PriorAvailableGroups: priorGroups,
 			PriorSyncedCFs:       newSyncedCFs,
 		})
+		// Same fingerprint clear as the update-existing-rule branch.
+		// Edge case: another rule on this instance was already pushing
+		// these CFs and they had drifted; creating a fresh rule that
+		// pushes them again reconciles Arr ↔ disk for those tids
+		// regardless of which rule owns the push semantically.
+		if len(newSyncedCFs) > 0 {
+			for j := range cfg.Instances {
+				if cfg.Instances[j].ID != req.InstanceID {
+					continue
+				}
+				fp := cfg.Instances[j].CFDriftFingerprints
+				if len(fp) == 0 {
+					break
+				}
+				for _, tid := range newSyncedCFs {
+					delete(fp, tid)
+				}
+				if len(fp) == 0 {
+					cfg.Instances[j].CFDriftFingerprints = nil
+				}
+				break
+			}
+		}
 	})
 
 	writeJSON(w, result)

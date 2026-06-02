@@ -220,7 +220,7 @@
              layout so the two surfaces feel like the same product. -->
         <div x-show="getCustomFormatsTab(activeAppType) === 'sync-rules'">
           <div style="font-size:18px;font-weight:600;margin-bottom:4px">Sync Rules</div>
-          <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">Every custom format any of your sync rules pushes to <span x-text="activeAppLabel"></span>. Spot drift, see which profiles use a CF, and re-push the saved spec when someone edits it directly in <span x-text="activeAppLabel"></span>.</div>
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">Status for every custom format your sync rules manage on <span x-text="activeAppLabel"></span>. Spot drift and pending TRaSH updates, see which profiles use a CF, and re-sync when needed.</div>
           <template x-if="!cfSyncRulesLoaded[activeAppType]">
             <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Loading custom formats...</div>
           </template>
@@ -241,14 +241,24 @@
                      them as distinct from "All categories". Only
                      render the filters block when at least one filter
                      is applicable. -->
-                <template x-if="cfSyncRulesDriftedTotal(activeAppType) > 0">
+                <template x-if="cfSyncRulesDriftedTotal(activeAppType) > 0 || cfSyncRulesUpdatesTotal(activeAppType) > 0">
                   <div class="cf-sr-side-views">
-                    <button type="button" class="cf-sr-side-item cf-sr-side-view"
-                            :class="{ active: cfSyncRulesActiveCat === 'view:drifted' }"
-                            @click="cfSyncRulesActiveCat = 'view:drifted'">
-                      <span class="cf-sr-side-label">Drifted</span>
-                      <span class="cf-sr-side-count" x-text="cfSyncRulesDriftedTotal(activeAppType)"></span>
-                    </button>
+                    <template x-if="cfSyncRulesUpdatesTotal(activeAppType) > 0">
+                      <button type="button" class="cf-sr-side-item cf-sr-side-view-upd"
+                              :class="{ active: cfSyncRulesActiveCat === 'view:updates' }"
+                              @click="cfSyncRulesActiveCat = 'view:updates'">
+                        <span class="cf-sr-side-label">Updates</span>
+                        <span class="cf-sr-side-count" x-text="cfSyncRulesUpdatesTotal(activeAppType)"></span>
+                      </button>
+                    </template>
+                    <template x-if="cfSyncRulesDriftedTotal(activeAppType) > 0">
+                      <button type="button" class="cf-sr-side-item cf-sr-side-view"
+                              :class="{ active: cfSyncRulesActiveCat === 'view:drifted' }"
+                              @click="cfSyncRulesActiveCat = 'view:drifted'">
+                        <span class="cf-sr-side-label">Drifted</span>
+                        <span class="cf-sr-side-count" x-text="cfSyncRulesDriftedTotal(activeAppType)"></span>
+                      </button>
+                    </template>
                   </div>
                 </template>
                 <!-- "All categories" sits directly above the parent
@@ -354,16 +364,34 @@
                       <span class="v3-inst-name" x-text="card.name"></span>
                       <span class="v3-inst-count"
                             x-text="card.rows.length + ' CF' + (card.rows.length === 1 ? '' : 's')"></span>
+                      <template x-if="cfSRInstanceCardUpdateCount(card) > 0">
+                        <span class="cf-sr-card-update-text"
+                              x-text="cfSRInstanceCardUpdateCount(card) + ' with updates'"></span>
+                      </template>
                       <template x-if="cfSRInstanceCardDriftCount(card) > 0">
                         <span class="cf-sr-card-drift-text"
                               x-text="cfSRInstanceCardDriftCount(card) + ' drifted'"></span>
                       </template>
                       <span class="v3-inst-actions">
-                        <template x-if="cfSRInstanceCardDriftCount(card) > 0">
+                        <!-- Update all takes precedence over Apply drift
+                             when there are pending TRaSH updates: a
+                             sync push covers both channels (Arr gets
+                             the new spec, drift resolves naturally
+                             since clonarr's saved state now matches
+                             upstream). When ONLY drift exists, fall
+                             back to the targeted Apply path. -->
+                        <template x-if="cfSRInstanceCardUpdateCount(card) > 0">
+                          <button class="v3-inst-action"
+                                  :disabled="checkingUpdates || pulling || cfApplyAllProgress.running || updatingInstance === card.id"
+                                  @click="(() => { const inst = instances.find(i => i.id === card.id); if (inst) updateAllForInstance(inst); })()"
+                                  x-tt="'Pull latest TRaSH-Guides data, then sync all rules on ' + card.name + ' that have pending updates or drift.'"
+                                  x-text="updatingInstance === card.id ? 'Updating...' : 'Update all'"></button>
+                        </template>
+                        <template x-if="cfSRInstanceCardUpdateCount(card) === 0 && cfSRInstanceCardDriftCount(card) > 0">
                           <button class="v3-inst-action"
                                   :disabled="checkingUpdates || pulling || cfApplyAllProgress.running"
                                   @click="applyAllCFDriftForInstance(card)"
-                                  x-tt="'Re-push the saved spec for every drifted custom format on ' + card.name + '. Overwrites the Arr-side edits on each.'">Update all</button>
+                                  x-tt="'Re-push the saved spec for every drifted custom format on ' + card.name + '. Overwrites the Arr-side edits on each.'">Apply drift</button>
                         </template>
                       </span>
                     </div>
@@ -406,23 +434,52 @@
                                     aria-hidden="true">&#9656;</span>
                             </span>
                             <span>
-                              <template x-if="!r.instance.drift">
+                              <template x-if="!r.instance.drift && !r.instance.updateAvailable">
                                 <span class="cf-sr-pill cf-sr-pill-ok">In sync</span>
                               </template>
-                              <template x-if="r.instance.drift">
+                              <template x-if="r.instance.updateAvailable && !r.instance.drift">
+                                <span class="cf-sr-pill cf-sr-pill-upd">Update</span>
+                              </template>
+                              <template x-if="r.instance.drift && !r.instance.updateAvailable">
                                 <span class="cf-sr-pill cf-sr-pill-drift">Arr drift</span>
+                              </template>
+                              <template x-if="r.instance.drift && r.instance.updateAvailable">
+                                <span class="cf-sr-pill cf-sr-pill-both">Update + drift</span>
                               </template>
                             </span>
                             <span class="cf-sr-lastsync"
                                   x-text="cfSRInstanceLastSync(r.instance) ? timeAgo(cfSRInstanceLastSync(r.instance)) : 'never'"></span>
                             <span style="text-align:right">
-                              <template x-if="r.instance.drift">
+                              <!-- Update wins over Apply when both are
+                                   relevant: a sync push pulls the new
+                                   spec from disk and writes it to Arr,
+                                   covering the upstream change AND
+                                   overwriting any drifted Arr-side
+                                   edits in one operation. -->
+                              <template x-if="r.instance.updateAvailable">
+                                <!-- Only disable when THIS specific row or
+                                     THIS card's batch action is running.
+                                     The global updatingRuleId flag (used
+                                     by Profile Sync Rules' Update profile
+                                     button) intentionally NOT checked here
+                                     — it would otherwise leave every CF
+                                     Update button stuck across the page
+                                     when a stale flag survives from a
+                                     prior hung sync on Profile Sync. -->
+                                <button class="v3-inst-action"
+                                        style="font-size:11px"
+                                        :disabled="cfApplyingKey === card.id + ':' + r.trashId || cfApplyAllProgress.running || updatingInstance === card.id"
+                                        @click.stop="updateCFForInstance(card.id, r.trashId, r.name, card.name, (r.instance.profiles || []).map(p => p.ruleId))"
+                                        x-tt="'Pull latest TRaSH-Guides spec for this CF and push it to ' + card.name + '. Resolves both the upstream update and any Arr drift on this CF.'"
+                                        x-text="cfApplyingKey === card.id + ':' + r.trashId ? 'Updating...' : 'Update'"></button>
+                              </template>
+                              <template x-if="r.instance.drift && !r.instance.updateAvailable">
                                 <button class="v3-inst-action"
                                         style="font-size:11px"
                                         :disabled="cfApplyingKey === card.id + ':' + r.trashId || cfApplyAllProgress.running"
                                         @click.stop="applyCFDrift(card.id, r.trashId, r.name, card.name)"
-                                        x-tt="'Re-push the saved spec back to ' + card.name + ', overwriting the Arr-side edits on this CF.'"
-                                        x-text="cfApplyingKey === card.id + ':' + r.trashId ? 'Updating...' : 'Update'"></button>
+                                        x-tt="'Re-push clonarr&#39;s saved spec back to ' + card.name + ', overwriting the Arr-side edits on this CF.'"
+                                        x-text="cfApplyingKey === card.id + ':' + r.trashId ? 'Applying...' : 'Apply'"></button>
                               </template>
                             </span>
                           </div>
@@ -491,6 +548,17 @@
                                           </div>
                                         </template>
                                       </div>
+                                    </template>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="r.instance.updateAvailable && (r.instance.updateDetails || []).length > 0">
+                                <div class="cf-sr-expand-section">
+                                  <div class="cf-sr-expand-section-title">Upcoming changes on next sync</div>
+                                  <div class="cf-sr-diff-body">
+                                    <template x-for="(d, i) in r.instance.updateDetails" :key="'upd-'+card.id+'-'+r.trashId+'-'+i">
+                                      <div class="cf-sr-diff-line" x-text="d"></div>
                                     </template>
                                   </div>
                                 </div>

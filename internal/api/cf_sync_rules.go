@@ -94,10 +94,15 @@ func (s *Server) handleCFSyncRules(w http.ResponseWriter, r *http.Request) {
 		LastSync         string `json:"lastSync,omitempty"`
 	}
 	type CFRowInstance struct {
-		ID       string         `json:"id"`
-		Name     string         `json:"name"`
-		Drift    bool           `json:"drift"`
-		Profiles []CFRowProfile `json:"profiles"`
+		ID              string         `json:"id"`
+		Name            string         `json:"name"`
+		Drift           bool           `json:"drift"`
+		UpdateAvailable bool           `json:"updateAvailable"`
+		// UpdateDetails carries the per-change human-readable strings
+		// from rule.PendingChanges (source="trash"). Same format as
+		// Profile Sync's "Upcoming changes on next pull" panel uses.
+		UpdateDetails []string       `json:"updateDetails,omitempty"`
+		Profiles      []CFRowProfile `json:"profiles"`
 	}
 	type CFRow struct {
 		TrashID     string           `json:"trashId"`
@@ -178,6 +183,37 @@ func (s *Server) handleCFSyncRules(w http.ResponseWriter, r *http.Request) {
 		// (LastSync empty + no history entry).
 		arrName := arrNameLookup[historyKey{InstanceID: rule.InstanceID, ArrProfileID: rule.ArrProfileID}]
 
+		// Index this rule's TRaSH-source pending changes by trash_id
+		// so each CF row can surface "Update available" + the
+		// per-change human-readable details Profile Sync already
+		// shows. AffectedID shapes (see watch.go):
+		//   <tid>                — generic / fallback / rename-flag
+		//   <tid>:+<condName>   — added condition
+		//   <tid>:-<condName>   — removed condition
+		//   <tid>:~<cond>:<fld> — changed condition field
+		//   <tid>:<ctx>          — score change (ctx is "default" etc)
+		// Splitting on the FIRST colon recovers the trash_id. Custom
+		// CFs use "custom:" prefix but they never have upstream TRaSH
+		// changes, so they're absent from this index — we only care
+		// about TRaSH-source entries.
+		updatesByTID := make(map[string][]string)
+		for _, pc := range rule.PendingChanges {
+			if pc.Source != "trash" {
+				continue
+			}
+			if !strings.HasPrefix(pc.ChangeType, "cf-") {
+				continue
+			}
+			pcTID := pc.AffectedID
+			if i := strings.Index(pcTID, ":"); i > 0 {
+				pcTID = pcTID[:i]
+			}
+			if pcTID == "" {
+				continue
+			}
+			updatesByTID[pcTID] = append(updatesByTID[pcTID], pc.AffectedName)
+		}
+
 		for tid := range managedTIDs {
 			if excluded[tid] {
 				continue
@@ -208,6 +244,25 @@ func (s *Server) handleCFSyncRules(w http.ResponseWriter, r *http.Request) {
 			// the CF on that instance.
 			if _, drifted := inst.CFDriftFingerprints[tid]; drifted {
 				block.Drift = true
+			}
+			// Same union semantic for "Update available" — TRaSH
+			// upstream changes on a CF affect every rule that
+			// includes it on this instance. Dedup details across
+			// rules so the expand-row doesn't show the same
+			// "WEB Tier 01 - added X" line N times.
+			if details, has := updatesByTID[tid]; has {
+				block.UpdateAvailable = true
+				seen := make(map[string]bool, len(block.UpdateDetails))
+				for _, d := range block.UpdateDetails {
+					seen[d] = true
+				}
+				for _, d := range details {
+					if d == "" || seen[d] {
+						continue
+					}
+					seen[d] = true
+					block.UpdateDetails = append(block.UpdateDetails, d)
+				}
 			}
 			// Each rule contributes one Profile entry per
 			// (CF, instance) pair. Dedup by ruleID in case a CF is

@@ -3436,6 +3436,18 @@ export default {
 
     // Number of CFs currently drifted on at least one instance, for the
     // card-header summary line ("3 drifted" / "All in sync").
+    // Number of instances on this row that have a TRaSH upstream
+    // update pending. Symmetric with cfRowDriftCount — feeds the
+    // per-row status pill + "X updates" badges.
+    cfRowUpdateCount(row) {
+      if (!row || !Array.isArray(row.instances)) return 0;
+      let n = 0;
+      for (const inst of row.instances) {
+        if (inst && inst.updateAvailable) n++;
+      }
+      return n;
+    },
+
     cfDriftedCount(appType) {
       // Reflect what's actually in the current view — when the user
       // scopes to one instance via the picker, "drifted" should mean
@@ -3446,6 +3458,17 @@ export default {
       let n = 0;
       for (const row of rows) {
         if (this.cfRowDriftCount(row) > 0) n++;
+      }
+      return n;
+    },
+
+    // Update-available row count for the currently-visible scope.
+    // Symmetric with cfDriftedCount.
+    cfUpdatesCount(appType) {
+      const rows = this.cfSyncRulesFiltered(appType) || [];
+      let n = 0;
+      for (const row of rows) {
+        if (this.cfRowUpdateCount(row) > 0) n++;
       }
       return n;
     },
@@ -3656,6 +3679,15 @@ export default {
           })
           .filter(Boolean);
       }
+      if (cat === 'view:updates') {
+        rows = rows
+          .map(r => {
+            const updOnly = (r.instances || []).filter(i => i.updateAvailable);
+            if (updOnly.length === 0) return null;
+            return { ...r, instances: updOnly };
+          })
+          .filter(Boolean);
+      }
       const q = (this.cfSyncRulesSearch || '').trim().toLowerCase();
       if (q) {
         rows = rows.filter(r => {
@@ -3710,6 +3742,127 @@ export default {
         if (r.instance && r.instance.drift) n++;
       }
       return n;
+    },
+
+    // Update-available count for the per-instance card.
+    cfSRInstanceCardUpdateCount(card) {
+      let n = 0;
+      for (const r of (card.rows || [])) {
+        if (r.instance && r.instance.updateAvailable) n++;
+      }
+      return n;
+    },
+
+    // Pull TRaSH then sync the rule(s) on this instance that pull
+    // this CF in. The pull step is shared (a single Update click on
+    // any CF gets the whole TRaSH-Guides advance), but only the
+    // specific rules tied to this CF run their per-Arr sync — other
+    // rules on the instance stay at their previous lastSyncCommit
+    // so the user can opt in CF-by-CF instead of having to commit
+    // to "sync everything".
+    async updateCFForInstance(instanceId, trashId, cfName, instanceName, ruleIds) {
+      if (!instanceId || !trashId || !Array.isArray(ruleIds) || ruleIds.length === 0) return;
+      const key = instanceId + ':' + trashId;
+      if (this.cfApplyingKey === key) return;
+      // updatingRuleId intentionally NOT guarded — see comment on the
+      // button's :disabled binding. updatingInstance is still checked
+      // since a card-level Update all on the same instance is a real
+      // mutex (both flows pull TRaSH).
+      if (this.updatingInstance === instanceId) return;
+      this.cfApplyingKey = key;
+      try {
+        const inst = this.instances.find(i => i.id === instanceId);
+        if (!inst) return;
+        await fetch('/api/trash/pull', { method: 'POST' });
+        await this._waitForPullDone();
+        if (this.trashStatus?.pullError) {
+          this.showToast(`Update CF: pull failed — ${this.trashStatus.pullError}`, 'error', 8000);
+          return;
+        }
+        await this.loadCFBrowse(inst.type);
+        await this.loadTrashProfiles(inst.type);
+        // Narrow the candidate rule set to ONLY rules that actually
+        // have a TRaSH-side pending change matching this trashId.
+        // Without this filter, every rule that pulls the CF into its
+        // profile would re-sync — bumping their LastSyncTime to "just
+        // now" and burning Arr API calls even when those rules had no
+        // upstream change to act on. The split-on-first-colon mirrors
+        // the backend's affectedId → trash_id recovery in cf_sync_rules.go.
+        const ruleHasPendingForCF = (rule) => {
+          for (const pc of (rule.pendingChanges || [])) {
+            if (pc.source !== 'trash') continue;
+            if (!pc.changeType || !pc.changeType.startsWith('cf-')) continue;
+            const aid = pc.affectedId || '';
+            const ci = aid.indexOf(':');
+            const pcTid = ci > 0 ? aid.slice(0, ci) : aid;
+            if (pcTid === trashId) return true;
+          }
+          return false;
+        };
+        const filteredRuleIds = ruleIds.filter(rid => {
+          const rule = this.autoSyncRules.find(r => r.id === rid);
+          return rule && ruleHasPendingForCF(rule);
+        });
+        // Defensive fallback: if nothing matches (stale state, dedup
+        // edge case), fall back to the full list so the user's click
+        // does SOMETHING rather than silently no-op'ing.
+        const effectiveRuleIds = filteredRuleIds.length > 0 ? filteredRuleIds : ruleIds;
+        let succeeded = 0;
+        const failures = [];
+        // Reuse syncAllForInstance's ruleToHistoryShape adapter so the
+        // sh body sent to quickSync is byte-identical to the working
+        // Update all path. Earlier attempt at hand-rolling the shape
+        // missed selectedCFs map + override fields, which quickSync
+        // would then read as undefined and the backend would reject
+        // silently → "Update button does nothing".
+        const ruleToShape = (r) => {
+          const cfMap = {};
+          for (const id of (r.selectedCFs || [])) cfMap[id] = true;
+          const arrName = (typeof this.resolveArrProfileName === 'function')
+            ? this.resolveArrProfileName(r.instanceId, r.arrProfileId)
+            : '';
+          const profileName = arrName
+            ? `${arrName} (#${r.arrProfileId})`
+            : `Arr profile #${r.arrProfileId}`;
+          return {
+            profileTrashId: r.trashProfileId || '',
+            importedProfileId: r.importedProfileId || '',
+            arrProfileId: r.arrProfileId,
+            arrProfileName: arrName,
+            profileName: profileName,
+            selectedCFs: cfMap,
+            scoreOverrides: r.scoreOverrides || null,
+            qualityOverrides: r.qualityOverrides || null,
+            qualityStructure: r.qualityStructure || null,
+            overrides: r.overrides || null,
+            behavior: r.behavior || null,
+          };
+        };
+        for (const rid of effectiveRuleIds) {
+          const rule = this.autoSyncRules.find(r => r.id === rid);
+          if (!rule) continue;
+          const sh = ruleToShape(rule);
+          try {
+            const res = await this.quickSync(inst, sh, /* silent */ true);
+            if (res && res.ok) {
+              succeeded++;
+            } else {
+              failures.push(`${sh.profileName}: ${res?.error || 'unknown'}`);
+            }
+          } catch (e) {
+            failures.push(`${sh.profileName || rule.id}: ${e.message}`);
+          }
+        }
+        await this.loadAutoSyncRules();
+        await this.loadCFSyncRules(this.activeAppType);
+        if (failures.length === 0) {
+          this.showToast(`"${cfName}" updated on ${instanceName}.`, 'success', 4000);
+        } else {
+          this.showToast(`"${cfName}" partial update on ${instanceName}: ${succeeded} ok, ${failures.length} failed.`, 'warning', 6000);
+        }
+      } finally {
+        this.cfApplyingKey = '';
+      }
     },
 
     // Most recent sync timestamp across all profiles pulling this CF
@@ -3807,6 +3960,26 @@ export default {
       let n = 0;
       for (const row of rows) {
         if (this.cfRowDriftCount(row) > 0) n++;
+      }
+      return n;
+    },
+
+    // Mirror of cfSyncRulesDriftedTotal for upstream-update view-pin.
+    cfSyncRulesUpdatesTotal(appType) {
+      let rows = this.cfSyncRules[appType] || [];
+      const instId = this.cfSyncRulesActiveInstance || '';
+      if (instId) {
+        rows = rows
+          .map(r => {
+            const filtered = (r.instances || []).filter(i => i.id === instId);
+            if (filtered.length === 0) return null;
+            return { ...r, instances: filtered };
+          })
+          .filter(Boolean);
+      }
+      let n = 0;
+      for (const row of rows) {
+        if (this.cfRowUpdateCount(row) > 0) n++;
       }
       return n;
     },
@@ -6131,6 +6304,14 @@ export default {
         await this.loadTrashProfiles(inst.type);
         // Now run the existing per-instance sync-all loop
         await this.syncAllForInstance(inst);
+        // Refresh CF Sync Rules cache so its pills (Updates / Arr
+        // drift) reflect the post-sync state. Without this the user
+        // sees stale Update/drift indicators on Custom Formats →
+        // Sync Rules even though backend cleared PendingChanges +
+        // CFDriftFingerprints during the sync.
+        if (typeof this.loadCFSyncRules === 'function' && this.cfSyncRulesLoaded?.[inst.type]) {
+          await this.loadCFSyncRules(inst.type);
+        }
         if (this.trashStatus?.commitHash && this.trashStatus.commitHash !== prevCommit) {
           this.showToast(`Update all complete (${inst.name}) — TRaSH advanced to ${this.trashStatus.commitHash}`, 'success', 4000);
         }
@@ -6160,6 +6341,12 @@ export default {
         // Reuse the existing quickSync path for the actual Arr write.
         await this.quickSync(inst, sh);
         await this.loadAutoSyncRules();
+        // Same CF Sync Rules refresh as updateAllForInstance — without
+        // this, a user updating one profile sees its pills clear on the
+        // Profile Sync surface but the CF surface stays stuck.
+        if (typeof this.loadCFSyncRules === 'function' && this.cfSyncRulesLoaded?.[inst.type]) {
+          await this.loadCFSyncRules(inst.type);
+        }
       } finally {
         this.updatingRuleId = '';
       }

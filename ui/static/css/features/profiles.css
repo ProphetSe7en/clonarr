@@ -167,14 +167,16 @@
   white-space: nowrap; font-weight: 500;
 }
 .v3-status.ok { color: var(--accent-green); }
-/* Three distinct labels share the same accent-orange — they belong to
-   the same "needs attention" family — but the labels (rendered in the
-   markup) tell the user the CAUSE + action:
-     pending     → user saved local edits, click Sync/Apply to push
-     updates     → TRaSH-Guides has upstream updates for this rule
-     out-of-sync → Arr-side drift (Phase D — reserved colour) */
+/* Three "needs attention"-class labels with a deliberate hue split
+   between informational and action-needed:
+     pending     → orange. User saved local edits, click Sync/Apply to push.
+     updates     → blue. TRaSH-Guides has upstream updates for this rule;
+                   informational — you may or may not want to adopt them.
+     out-of-sync → orange. Arr-side drift; needs Apply or Update.
+   Matches the CF Sync Rules pill family so users learn one color
+   vocabulary across both surfaces. Red stays reserved for failure. */
 .v3-status.pending { color: var(--accent-orange); }
-.v3-status.updates { color: var(--accent-orange); }
+.v3-status.updates { color: var(--accent-blue); }
 .v3-status.out-of-sync { color: var(--accent-orange); }
 .v3-status.failed { color: var(--accent-red); }
 /* Clickable variant for places where the pill should act as a button
@@ -730,24 +732,31 @@ button.v3-status:hover { text-decoration: underline; }
 .cf-sr-cat { color: var(--text-muted); font-size: 12px; }
 .cf-sr-uses { color: var(--text-muted); font-size: 12px; cursor: help; }
 
-/* Pills mirror the Sync Rules row-pill language (In sync / Arr drift)
-   so users only learn one vocabulary across the two sub-tabs. */
+/* Status indicators — plain colored text, no pill background.
+   Reads quieter on the eye when the table is full and matches the
+   Profile Sync Rules' inline .v3-status pattern. Colors carry the
+   meaning; weight (600) gives enough visual weight to stand out. */
 .cf-sr-pill {
-  display: inline-block;
-  padding: 3px 10px;
-  font-size: 11px; font-weight: 600;
-  border-radius: 12px;
+  font-size: 12px; font-weight: 600;
   white-space: nowrap;
 }
-.cf-sr-pill-ok {
-  background: color-mix(in srgb, var(--accent-green) 14%, transparent);
-  color: var(--accent-green);
-}
+.cf-sr-pill-ok { color: var(--accent-green); }
 .cf-sr-pill-drift {
-  /* Orange family matches Profile Sync Rules' .v3-status.out-of-sync —
-     drift is "needs attention", not "failed". Red stays reserved for
-     genuine errors (failed sync, diff fetch error). */
-  background: color-mix(in srgb, var(--accent-orange) 14%, transparent);
+  /* Orange — matches Profile Sync Rules' .v3-status.out-of-sync.
+     Red stays reserved for true errors (failed sync, diff fetch). */
+  color: var(--accent-orange);
+  cursor: help;
+}
+.cf-sr-pill-upd {
+  /* Blue — informational; TRaSH-Guides has new content not yet
+     synced. Distinct hue from the orange drift family so the user
+     reads "informational" vs "action needed" at a glance. */
+  color: var(--accent-blue);
+}
+.cf-sr-pill-both {
+  /* Combined update + drift: orange wins (drift dominates the
+     visual hierarchy) with a "+ update" suffix so the user still
+     knows there's upstream content waiting. */
   color: var(--accent-orange);
   cursor: help;
 }
@@ -828,6 +837,24 @@ button.v3-status:hover { text-decoration: underline; }
   color: var(--accent-orange);
   font-weight: 700;
   opacity: 0.9;
+}
+/* Updates view-pin — blue family to match the row pill so the user
+   reads both as the same "informational / upstream-ready" channel. */
+.cf-sr-side-view-upd {
+  color: var(--accent-blue);
+}
+.cf-sr-side-view-upd .cf-sr-side-count {
+  color: var(--accent-blue);
+  font-weight: 700;
+  opacity: 0.9;
+}
+.cf-sr-side-view-upd.active {
+  background: color-mix(in srgb, var(--app-color, var(--accent-blue)) 12%, transparent);
+  color: var(--app-color, var(--text-body));
+}
+.cf-sr-side-view-upd.active .cf-sr-side-count {
+  color: inherit;
+  opacity: 0.85;
 }
 .cf-sr-side-view.active {
   background: color-mix(in srgb, var(--app-color, var(--accent-blue)) 12%, transparent);
@@ -1098,7 +1125,8 @@ button.v3-status:hover { text-decoration: underline; }
    second pill. The orange family already lives in the row pills
    + sidebar Drifted filter; we don't need another instance of it
    in the card header. */
-.cf-sr-card-drift-text {
+.cf-sr-card-drift-text,
+.cf-sr-card-update-text {
   font-size: 11.5px;
   color: var(--text-muted);
   font-weight: 400;

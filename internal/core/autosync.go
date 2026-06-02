@@ -1753,6 +1753,34 @@ func (app *App) UpdateAutoSyncRuleCommit(ruleID, commit string, priorGroups map[
 				if priorSyncedCFs != nil {
 					cfg.AutoSync.Rules[i].PriorSyncedCFs = priorSyncedCFs
 				}
+				// Clear per-CF drift fingerprints on this rule's
+				// instance for every CF the sync just pushed. Without
+				// this the CF Sync Rules view keeps showing "Arr drift"
+				// even after a successful sync — Profile Sync Rules
+				// would say "in sync" (WatchState cleared above) but
+				// the per-CF surface stays stuck until the next Check
+				// pass recomputes Instance.CFDriftFingerprints. After
+				// a successful push the live Arr spec matches disk by
+				// definition, so the prior drift is reconciled.
+				if len(priorSyncedCFs) > 0 {
+					instID := cfg.AutoSync.Rules[i].InstanceID
+					for j := range cfg.Instances {
+						if cfg.Instances[j].ID != instID {
+							continue
+						}
+						fp := cfg.Instances[j].CFDriftFingerprints
+						if len(fp) == 0 {
+							break
+						}
+						for _, tid := range priorSyncedCFs {
+							delete(fp, tid)
+						}
+						if len(fp) == 0 {
+							cfg.Instances[j].CFDriftFingerprints = nil
+						}
+						break
+					}
+				}
 				return
 			}
 		}
