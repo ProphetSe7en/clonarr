@@ -425,6 +425,8 @@ export default function baseState() {
     // The "no scoring" path is implicit: if a release has no scoring,
     // its line shows just the title regardless of toggle.
     sandboxExportModal: { show: false, appType: '', includeScore: true, includeBreakdown: false, text: '', copied: false },
+    // Scoring Sandbox: share/import the Score Editor config (test-only snapshot).
+    sandboxConfigModal: { show: false, appType: '', exportText: '', importText: '', copied: false, error: '' },
     // Import
     importedProfiles: { radarr: [], sonarr: [] },
     showImportModal: false, // false or app type string

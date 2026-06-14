@@ -107,8 +107,10 @@
               </template>
             </div>
             <!-- Add CF button -->
-            <div style="padding:6px 14px;border-top:1px solid var(--bg-muted)">
+            <div style="padding:6px 14px;border-top:1px solid var(--bg-muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <button class="btn btn-sm" style="font-size:13px;border-color:var(--accent-orange);color:var(--accent-orange)" @click="openSandboxCFBrowser(activeAppType)">+ Add Custom Formats</button>
+              <div style="flex:1"></div>
+              <button class="btn btn-sm" style="font-size:13px" @click="openSandboxConfigModal(activeAppType)" x-tt="'Copy this config to share, or paste someone else\'s to load the identical setup'">Share / Import config</button>
             </div>
           </div>
 

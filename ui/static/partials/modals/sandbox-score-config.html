@@ -1,0 +1,33 @@
+{{define "modals/sandbox-score-config"}}
+  <!-- Scoring Sandbox: share / import the Score Editor config. Pure
+       client-side and test-only — exports a self-contained snapshot of the
+       current edit-state (every CF with its final score, on/off, added flag,
+       plus min score) so another user can paste it and reproduce the exact
+       setup in their own Score Editor without a screenshot. Never writes to a
+       profile or to Arr. -->
+  <div class="modal-overlay" x-show="sandboxConfigModal.show" @keydown.escape.window="sandboxConfigModal.show = false" x-cloak>
+    <div class="modal" style="max-width:760px;width:92vw" role="dialog" aria-modal="true" aria-labelledby="modal-title-sandbox-config" x-trap.noscroll.inert="sandboxConfigModal.show">
+      <h2 id="modal-title-sandbox-config" class="modal-title" style="display:flex;align-items:center;gap:8px">
+        <span>Share / Import score config</span>
+        <span style="font-size:11px;color:var(--text-secondary);font-weight:400">(test-only · never changes a profile)</span>
+      </h2>
+
+      <div style="font-size:13px;color:var(--text-muted);margin:4px 0 6px">Copy this to share your tweaked scores. Anyone can paste it below to load the identical setup in their own Score Editor.</div>
+      <pre id="sandbox-config-pre" style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:10px 12px;margin:0;max-height:30vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;color:var(--text-body);white-space:pre;user-select:text" x-text="sandboxConfigModal.exportText"></pre>
+      <div style="margin-top:6px;display:flex;justify-content:flex-end">
+        <button class="btn btn-sm btn-primary" @click="copySandboxConfigText()"><span x-text="sandboxConfigModal.copied ? '✓ Copied' : 'Copy'"></span></button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border-subtle);margin:14px 0">
+
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px">Paste a shared config here and Apply to load it into the editor. This replaces your current edits (still temporary — nothing is saved to a profile).</div>
+      <textarea x-model="sandboxConfigModal.importText" rows="6" placeholder="Paste a clonarr score config (JSON) here..." style="width:100%;box-sizing:border-box;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:8px 10px;color:var(--text-body);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px"></textarea>
+      <div x-show="sandboxConfigModal.error" style="color:var(--accent-red);font-size:12px;margin-top:4px" x-text="sandboxConfigModal.error"></div>
+
+      <div class="modal-actions">
+        <button class="btn" @click="sandboxConfigModal.show = false">Close</button>
+        <button class="btn btn-primary" @click="applySandboxConfigImport(sandboxConfigModal.appType)" :disabled="!sandboxConfigModal.importText.trim()">Apply config</button>
+      </div>
+    </div>
+  </div>
+{{end}}

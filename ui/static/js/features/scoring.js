@@ -335,6 +335,84 @@ export default {
       };
     },
 
+    // --- Share / Import the Score Editor config (test-only) ---
+    // Self-contained snapshot of the current edit-state so another user can
+    // reproduce the exact CF/score/on-off/min-score setup from a paste instead
+    // of a screenshot. Pure client-side: never touches a profile or Arr.
+    buildSandboxConfigObject(appType) {
+      const sb = this.sandbox[appType];
+      const orig = sb.editOriginal || { scores: [], minScore: 0 };
+      const cfs = [];
+      for (const s of orig.scores || []) {
+        const key = s.trashId || s.name;
+        cfs.push({ trashId: s.trashId || '', name: s.name, score: sb.editScores[key] ?? s.score, enabled: sb.editToggles[key] !== false, added: false });
+      }
+      for (const key of Object.keys(sb.editToggles || {})) {
+        if (sb.editToggles[key] === 'added') {
+          cfs.push({ trashId: key, name: (sb._addedCFNames || {})[key] || key, score: sb.editScores[key] ?? 0, enabled: true, added: true });
+        }
+      }
+      cfs.sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
+      return { clonarrScoreConfig: 1, appType, profile: sb.profileKey || '', minScore: sb.editMinScore ?? orig.minScore ?? 0, cfs };
+    },
+
+    openSandboxConfigModal(appType) {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+      this.sandboxConfigModal = { show: true, appType, exportText: JSON.stringify(this.buildSandboxConfigObject(appType), null, 2), importText: '', copied: false, error: '' };
+    },
+
+    async copySandboxConfigText() {
+      const text = this.sandboxConfigModal.exportText || '';
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          this.sandboxConfigModal.copied = true;
+          setTimeout(() => { this.sandboxConfigModal.copied = false; }, 1500);
+          return;
+        }
+      } catch (_) { /* fall through to selection copy */ }
+      const pre = document.getElementById('sandbox-config-pre');
+      if (pre) {
+        const sel = document.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        try { document.execCommand('copy'); this.sandboxConfigModal.copied = true; setTimeout(() => { this.sandboxConfigModal.copied = false; }, 1500); } catch (_) { /* noop */ }
+        sel.removeAllRanges();
+      }
+    },
+
+    applySandboxConfigImport(appType) {
+      const sb = this.sandbox[appType];
+      const m = this.sandboxConfigModal;
+      m.error = '';
+      let data;
+      try { data = JSON.parse(m.importText); } catch (e) { m.error = 'Could not read that — it is not valid JSON.'; return; }
+      if (!data || !Array.isArray(data.cfs) || data.clonarrScoreConfig == null) { m.error = 'That does not look like a clonarr score config.'; return; }
+      const scores = [], editToggles = {}, editScores = {}, addedNames = {};
+      for (const cf of data.cfs) {
+        if (!cf || !cf.name) continue;
+        const key = cf.trashId || cf.name;
+        if (cf.added) {
+          editToggles[key] = 'added';
+          editScores[key] = cf.score ?? 0;
+          addedNames[key] = cf.name;
+        } else {
+          scores.push({ trashId: cf.trashId || '', name: cf.name, score: cf.score ?? 0 });
+          if (cf.enabled === false) editToggles[key] = false;
+        }
+      }
+      sb.editOriginal = { scores, minScore: data.minScore ?? 0 };
+      sb.editScores = editScores;
+      sb.editToggles = editToggles;
+      sb.editMinScore = data.minScore ?? 0;
+      sb._addedCFNames = { ...(sb._addedCFNames || {}), ...addedNames };
+      sb.editOpen = true;
+      this.applySandboxEdit(appType);
+      m.show = false;
+    },
+
     // Build the export string. Two independent toggles drive the
     // output shape, so the user can pick what to share with whom:
     //   • includeScore   - include the release total score
