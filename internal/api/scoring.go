@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -605,6 +606,17 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	result.Scores = filtered
+
+	// Deterministic alphabetical order (case-insensitive) so the Scoring
+	// Sandbox editor lists the same CFs in the same place on every fetch,
+	// profile, and machine. The trash + imported sources above range over
+	// Go maps, which iterate in random order, so without this the editor
+	// reshuffled on each open. A stable order lets a user replicate someone
+	// else's scores CF-for-CF (e.g. from a shared screenshot) without
+	// hunting a reshuffled list.
+	sort.SliceStable(result.Scores, func(i, j int) bool {
+		return strings.ToLower(result.Scores[i].Name) < strings.ToLower(result.Scores[j].Name)
+	})
 
 	writeJSON(w, result)
 }
