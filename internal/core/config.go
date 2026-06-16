@@ -17,22 +17,24 @@ import (
 
 // Config holds the full application configuration, persisted to JSON.
 type Config struct {
-	Instances            []Instance                       `json:"instances"`
-	TrashRepo            TrashRepo                        `json:"trashRepo"`
-	PullInterval         string                           `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
-	PullSchedule         *PullSchedule                    `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
-	SyncSchedule         *SyncSchedule                    `json:"syncSchedule,omitempty"`         // DEPRECATED — retained only to migrate v2 configs; converted to Auto-sync drift detection on load, then cleared
-	DevMode              bool                             `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
-	TrashSchemaFields    bool                             `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
-	DebugLogging         bool                             `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
-	QualitySizeOverrides map[string]map[string]QSOverride `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
-	QualitySizeAutoSync  map[string]QSAutoSync            `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
-	SyncHistory          []SyncHistoryEntry               `json:"syncHistory,omitempty"`
-	CleanupKeep          map[string][]string              `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
-	AutoSync             AutoSyncConfig                   `json:"autoSync,omitempty"`
-	DriftWatch           *DriftWatch                      `json:"driftWatch,omitempty"`           // Arr-side drift detection state; populated by the drift-detection runner
-	ProfileSync          *ProfileSync                     `json:"profileSync,omitempty"`          // Unified Profile Sync subsystem. Populated via migration from PullInterval/PullSchedule on first load after upgrade. nil = pre-migration state.
-	Prowlarr             ProwlarrConfig                   `json:"prowlarr,omitempty"`
+	Instances            []Instance                               `json:"instances"`
+	TrashRepo            TrashRepo                                `json:"trashRepo"`
+	PullInterval         string                                   `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
+	PullSchedule         *PullSchedule                            `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
+	SyncSchedule         *SyncSchedule                            `json:"syncSchedule,omitempty"`         // DEPRECATED — retained only to migrate v2 configs; converted to Auto-sync drift detection on load, then cleared
+	DevMode              bool                                     `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
+	TrashSchemaFields    bool                                     `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
+	DebugLogging         bool                                     `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
+	QualitySizeOverrides map[string]map[string]QSOverride         `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
+	QualitySizeAutoSync  map[string]QSAutoSync                    `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
+	NamingAutoSync       map[string]map[string]NamingFieldBinding `json:"namingAutoSync,omitempty"`       // instanceID → naming-field key → binding (opt-in, per-field; #5)
+	NamingHistory        map[string][]NamingSnapshot              `json:"namingHistory,omitempty"`        // instanceID → naming snapshots (newest last) for rollback
+	SyncHistory          []SyncHistoryEntry                       `json:"syncHistory,omitempty"`
+	CleanupKeep          map[string][]string                      `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
+	AutoSync             AutoSyncConfig                           `json:"autoSync,omitempty"`
+	DriftWatch           *DriftWatch                              `json:"driftWatch,omitempty"`  // Arr-side drift detection state; populated by the drift-detection runner
+	ProfileSync          *ProfileSync                             `json:"profileSync,omitempty"` // Unified Profile Sync subsystem. Populated via migration from PullInterval/PullSchedule on first load after upgrade. nil = pre-migration state.
+	Prowlarr             ProwlarrConfig                           `json:"prowlarr,omitempty"`
 	// Authentication — matches Radarr/Sonarr Security panel model.
 	// Credentials (bcrypt password hash, API key) live separately in
 	// /config/auth.json, NOT here, so this file can be exported/shared
@@ -70,10 +72,10 @@ type PullSchedule struct {
 // match the codebase convention (LastSyncTime / LastSync etc. on
 // AutoSyncRule and SyncHistoryEntry) — keeps JSON output uniform.
 type DriftWatch struct {
-	Mode       string          `json:"mode"`                 // "off" | "detect" | "fix"
+	Mode       string          `json:"mode"` // "off" | "detect" | "fix"
 	Schedule   *PullSchedule   `json:"schedule,omitempty"`
-	LastRun    string          `json:"lastRun,omitempty"`    // RFC3339 timestamp
-	NextRun    string          `json:"nextRun,omitempty"`    // RFC3339 timestamp — set by scheduler so UI can render countdown without recomputing
+	LastRun    string          `json:"lastRun,omitempty"` // RFC3339 timestamp
+	NextRun    string          `json:"nextRun,omitempty"` // RFC3339 timestamp — set by scheduler so UI can render countdown without recomputing
 	LastResult *DriftRunResult `json:"lastResult,omitempty"`
 }
 
@@ -170,13 +172,13 @@ type NotificationConfig = agents.Config
 
 // AutoSyncRule defines one auto-sync binding (profile → instance).
 type AutoSyncRule struct {
-	ID                string   `json:"id"`
-	Enabled           bool     `json:"enabled"`
-	InstanceID        string   `json:"instanceId"`
-	ProfileSource     string   `json:"profileSource"` // "trash" or "imported"
-	TrashProfileID    string   `json:"trashProfileId,omitempty"`
-	ImportedProfileID string   `json:"importedProfileId,omitempty"`
-	ArrProfileID      int      `json:"arrProfileId"`          // target Arr profile to update
+	ID                string `json:"id"`
+	Enabled           bool   `json:"enabled"`
+	InstanceID        string `json:"instanceId"`
+	ProfileSource     string `json:"profileSource"` // "trash" or "imported"
+	TrashProfileID    string `json:"trashProfileId,omitempty"`
+	ImportedProfileID string `json:"importedProfileId,omitempty"`
+	ArrProfileID      int    `json:"arrProfileId"` // target Arr profile to update
 	// SelectedCFs: explicit user opt-ins — CFs the user wants synced beyond
 	// what TRaSH already defaults for this profile. Layered additively over
 	// ComputeTrashDefaults at sync time. Pre-v2.5.8 rules stored the full
@@ -208,7 +210,7 @@ type AutoSyncRule struct {
 	// Markdown supported (rendered via the same minimal subset as CF
 	// descriptions). Surfaced as a hover-info icon next to the Arr
 	// profile name in the Sync Rules table.
-	Description string `json:"description,omitempty"`
+	Description    string `json:"description,omitempty"`
 	LastSyncCommit string `json:"lastSyncCommit,omitempty"`
 	// LastSyncTime is the timestamp of the last SUCCESSFUL sync — bumped by
 	// the auto-sync engine (UpdateAutoSyncRuleCommit), manual /api/sync/apply,
@@ -313,6 +315,28 @@ type QSOverride struct {
 	Max       float64 `json:"max"`
 }
 
+// NamingFieldBinding: one auto-synced naming field's binding to a TRaSH scheme (#5).
+// Per-field — Config.NamingAutoSync is instanceID → fieldKey → binding. Opt-in:
+// a field absent from the map is NOT auto-synced (the default for everyone). The
+// map key being the field enforces one scheme per field (no Plex+Emby on the same
+// field). Mirrors QSAutoSync, but per naming field rather than per instance.
+type NamingFieldBinding struct {
+	Scheme          string `json:"scheme"`                    // TRaSH scheme/preset key driving this field
+	LastFingerprint string `json:"lastFingerprint,omitempty"` // hash of this field's last-applied pattern
+	LastAppliedAt   string `json:"lastAppliedAt,omitempty"`
+	LastError       string `json:"lastError,omitempty"` // per-field; never touches an AutoSyncRule
+}
+
+// NamingSnapshot: the instance's naming captured BEFORE an apply (manual or auto),
+// for one-click rollback. Stores raw pattern strings so it restores even a
+// custom/hand-edited prior state. Config.NamingHistory is instanceID → []snapshot
+// (newest last, capped).
+type NamingSnapshot struct {
+	TakenAt    string            `json:"takenAt"`
+	Naming     map[string]string `json:"naming"`               // Arr naming-field key → pattern (pre-apply)
+	ReplacedBy string            `json:"replacedBy,omitempty"` // what was applied next ("scheme: plex" / "manual")
+}
+
 // SyncChanges captures the detailed changes made during a sync.
 // Stored only when the sync actually modified something (not on no-op syncs).
 // The string slices come directly from the sync result's *Details fields,
@@ -331,7 +355,7 @@ type SyncChanges struct {
 	// Created entry. Keyed by CF name so the History UI joins it with
 	// the matching "Updated: <CF>" or "Created: <CF>" row. Nil on
 	// pre-Phase-2 entries; the UI skips rendering when absent.
-	CFSpecDiffs     map[string]*CFSpecDiff      `json:"cfSpecDiffs,omitempty"`
+	CFSpecDiffs map[string]*CFSpecDiff `json:"cfSpecDiffs,omitempty"`
 }
 
 // HasChanges returns true if any change category has entries.
@@ -358,12 +382,12 @@ type SyncHistoryEntry struct {
 	// builds the body from this snapshot, not the live rule). Empty for
 	// pre-v2.5.8 entries → omitempty → reset_to_defaults behaviour matches
 	// pre-feature semantics.
-	ExcludedCFs       []string        `json:"excludedCFs,omitempty"`
-	ScoreOverrides    map[string]int  `json:"scoreOverrides,omitempty"`
-	QualityOverrides  map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
-	QualityStructure  []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
-	Overrides         *SyncOverrides  `json:"overrides,omitempty"`
-	Behavior          *SyncBehavior   `json:"behavior,omitempty"`
+	ExcludedCFs      []string        `json:"excludedCFs,omitempty"`
+	ScoreOverrides   map[string]int  `json:"scoreOverrides,omitempty"`
+	QualityOverrides map[string]bool `json:"qualityOverrides,omitempty"` // legacy flat override (name → allowed)
+	QualityStructure []QualityItem   `json:"qualityStructure,omitempty"` // full structure override (trumps QualityOverrides)
+	Overrides        *SyncOverrides  `json:"overrides,omitempty"`
+	Behavior         *SyncBehavior   `json:"behavior,omitempty"`
 	// KeepArrCFIDs mirrors the rule's pinned-extras list. Snapshotted on
 	// every sync so a rerun from sync history (e.g. when the user has
 	// deleted the rule, or for orphaned profiles) can still preserve the
