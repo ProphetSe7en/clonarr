@@ -16,6 +16,7 @@
                        if (_inst) testInstance(_inst);
                        loadInstanceQS(activeAppType, $event.target.value);
                        loadInstanceNaming(activeAppType);
+                       loadNamingAutoSync(activeAppType);
                      }">
       <option value="" :selected="!mediaInstanceId[activeAppType]">Select instance…</option>
       <template x-for="inst in instancesOfType(activeAppType)" :key="inst.id">

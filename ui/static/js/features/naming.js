@@ -1,3 +1,51 @@
+// Scheme labels + display order, shared by getNamingSections (the manual
+// scheme list) and the auto-sync scheme picker (which lists ALL schemes for a
+// field, unfiltered by the media-server tab, since a binding targets one scheme
+// key independent of the active tab).
+const NAMING_SCHEME_LABELS = {
+  'standard': 'Standard',
+  'default': 'Default',
+  'original': 'Original Title',
+  'p2p-scene': 'P2P / Scene',
+  'plex-imdb': 'Plex (IMDb)',
+  'plex-tmdb': 'Plex (TMDb)',
+  'plex-tvdb': 'Plex (TVDb)',
+  'plex-anime-imdb': 'Plex Anime (IMDb)',
+  'plex-anime-tmdb': 'Plex Anime (TMDb)',
+  'plex-edition-alt-imdb': 'Plex Edition Alternative (IMDb)',
+  'plex-edition-alt-tmdb': 'Plex Edition Alternative (TMDb)',
+  'emby-imdb': 'Emby (IMDb)',
+  'emby-tmdb': 'Emby (TMDb)',
+  'emby-tvdb': 'Emby (TVDb)',
+  'emby-anime-imdb': 'Emby Anime (IMDb)',
+  'emby-anime-tmdb': 'Emby Anime (TMDb)',
+  'jellyfin-imdb': 'Jellyfin (IMDb)',
+  'jellyfin-tmdb': 'Jellyfin (TMDb)',
+  'jellyfin-tvdb': 'Jellyfin (TVDb)',
+  'jellyfin-anime-imdb': 'Jellyfin Anime (IMDb)',
+  'jellyfin-anime-tmdb': 'Jellyfin Anime (TMDb)',
+};
+const NAMING_KEY_ORDER = ['standard', 'default', 'plex-imdb', 'plex-tmdb', 'plex-anime-imdb', 'plex-anime-tmdb',
+  'plex-edition-alt-imdb', 'plex-edition-alt-tmdb', 'plex-tvdb',
+  'emby-imdb', 'emby-tmdb', 'emby-anime-imdb', 'emby-anime-tmdb', 'emby-tvdb',
+  'jellyfin-imdb', 'jellyfin-tmdb', 'jellyfin-anime-imdb', 'jellyfin-anime-tmdb', 'jellyfin-tvdb',
+  'original', 'p2p-scene'];
+const namingSchemeLabel = (key) =>
+  NAMING_SCHEME_LABELS[key] || key.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+// Maps a UI section key to the canonical auto-sync field key the backend uses
+// (internal/api/naming.go namingArrKey). Auto-syncable fields only — specials
+// is intentionally manual-only and absent here.
+const NAMING_SECTION_FIELD = {
+  'file': 'movieFile',
+  'folder': 'movieFolder',
+  'episodes-standard': 'standardEpisode',
+  'episodes-daily': 'dailyEpisode',
+  'episodes-anime': 'animeEpisode',
+  'series': 'seriesFolder',
+  'season': 'seasonFolder',
+};
+
 export default {
   state: {
     namingData: {},
@@ -10,6 +58,14 @@ export default {
     // appType. Default: undefined (treated as collapsed). Lets each card
     // open independently so users only see the section they're working on.
     namingSectionExpanded: {},
+    // Auto-sync (#5): per-appType map of canonical field key -> binding
+    // {scheme, lastFingerprint, lastAppliedAt, lastError}. Opt-in, default
+    // empty (nothing auto-syncs). Mirrors the backend NamingAutoSync map.
+    namingAutoSync: {},
+    namingAutoSyncBusy: false,
+    // Rollback history: per-appType array of snapshots (newest last).
+    namingHistory: {},
+    namingHistoryModal: { show: false, appType: '' },
   },
 
   methods: {
@@ -27,10 +83,9 @@ export default {
       return this.namingData[appType] || null;
     },
 
-    getNamingSections(appType, mediaServer) {
+    getNamingSections(appType) {
       const n = this.getNaming(appType);
       if (!n) return [];
-      const ms = mediaServer || 'standard';
 
       // Labels only — descriptions are sourced from TRaSH JSON if present
       // (currently absent across all keys; TRaSH plans to add descriptions per
@@ -39,45 +94,22 @@ export default {
       // up automatically (HTML uses x-show="scheme.description" / "section.description").
       // No "recommended" flag — Clonarr does not editorialize on top of TRaSH's
       // own JSON; users decide which variant suits them.
-      const schemeDesc = {
-        'standard': { label: 'Standard' },
-        'default': { label: 'Default' },
-        'original': { label: 'Original Title' },
-        'p2p-scene': { label: 'P2P / Scene' },
-        'plex-imdb': { label: 'Plex (IMDb)' },
-        'plex-tmdb': { label: 'Plex (TMDb)' },
-        'plex-tvdb': { label: 'Plex (TVDb)' },
-        'plex-anime-imdb': { label: 'Plex Anime (IMDb)' },
-        'plex-anime-tmdb': { label: 'Plex Anime (TMDb)' },
-        'plex-edition-alt-imdb': { label: 'Plex Edition Alternative (IMDb)' },
-        'plex-edition-alt-tmdb': { label: 'Plex Edition Alternative (TMDb)' },
-        'emby-imdb': { label: 'Emby (IMDb)' },
-        'emby-tmdb': { label: 'Emby (TMDb)' },
-        'emby-tvdb': { label: 'Emby (TVDb)' },
-        'emby-anime-imdb': { label: 'Emby Anime (IMDb)' },
-        'emby-anime-tmdb': { label: 'Emby Anime (TMDb)' },
-        'jellyfin-imdb': { label: 'Jellyfin (IMDb)' },
-        'jellyfin-tmdb': { label: 'Jellyfin (TMDb)' },
-        'jellyfin-tvdb': { label: 'Jellyfin (TVDb)' },
-        'jellyfin-anime-imdb': { label: 'Jellyfin Anime (IMDb)' },
-        'jellyfin-anime-tmdb': { label: 'Jellyfin Anime (TMDb)' },
-      };
+      // Single source of truth: module-level NAMING_SCHEME_LABELS (also used by
+      // the auto-sync picker). Adapted to the {label} shape this code expects.
+      const schemeDesc = Object.fromEntries(
+        Object.entries(NAMING_SCHEME_LABELS).map(([k, label]) => [k, { label }])
+      );
 
-      // Per-section media-server filter. Each variant-having section
-      // gets its OWN tab bar in the UI (section-scoped, not page-level)
-      // so the active tab is always visible alongside its content. The
-      // shared `mediaServer` arg drives all of them — clicking a tab
-      // anywhere flips them all together. Sections that don't vary per
-      // server (Episode types, Season Folder) ignore the filter entirely
-      // and always show their `main` schemes.
-      const msFilters = {
-        standard: k => !k.includes('-') || k === 'default' || k === 'original' || k === 'p2p-scene',
-        plex: k => k.startsWith('plex-'),
-        emby: k => k.startsWith('emby-'),
-        jellyfin: k => k.startsWith('jellyfin-'),
-      };
-      // Standard/main keys (server-agnostic — no prefix)
-      const standardKeys = new Set(['standard', 'default', 'original', 'p2p-scene']);
+      // Each scheme is tagged with its media-server group. The UI renders ALL
+      // schemes once and shows/hides them per the section's own tab via x-show —
+      // so switching tabs never changes the section.schemes array, the x-for
+      // never tears down, and the scroll position never jumps. Each variant-having
+      // section has its OWN tab (section-scoped), so flipping one card's tab does
+      // not touch another's. Sections that don't vary always show their schemes.
+      const groupOf = (key) =>
+        key.startsWith('plex-') ? 'plex' :
+          key.startsWith('emby-') ? 'emby' :
+            key.startsWith('jellyfin-') ? 'jellyfin' : 'standard';
 
       // A section "varies per server" if its key map contains any
       // plex-/emby-/jellyfin- prefixed keys. Used to decide whether
@@ -135,26 +167,17 @@ export default {
         }
       };
 
-      // Enforce consistent ordering
-      const keyOrder = ['standard', 'default', 'plex-imdb', 'plex-tmdb', 'plex-anime-imdb', 'plex-anime-tmdb',
-        'plex-edition-alt-imdb', 'plex-edition-alt-tmdb', 'plex-tvdb',
-        'emby-imdb', 'emby-tmdb', 'emby-anime-imdb', 'emby-anime-tmdb', 'emby-tvdb',
-        'jellyfin-imdb', 'jellyfin-tmdb', 'jellyfin-anime-imdb', 'jellyfin-anime-tmdb', 'jellyfin-tvdb',
-        'original', 'p2p-scene'];
+      // Enforce consistent ordering (shared module-level order)
+      const keyOrder = NAMING_KEY_ORDER;
 
       // Pattern values can be plain strings (current TRaSH JSON shape) OR
       // objects with `pattern`/`description` once TRaSH adds per-scheme
       // descriptions. Code handles both shapes so the future migration is
       // a no-op for us.
-      const makeSchemes = (map, sectionKey, examplesMap, varies) => {
-        // For variant-having sections, filter by active tab (`ms`).
-        // For sections that don't vary, ignore the filter and show all
-        // their (main) schemes — they have only one set of schemes
-        // regardless of server.
-        const filterFn = varies
-          ? (ms === 'standard' ? k => standardKeys.has(k) : (msFilters[ms] || (() => true)))
-          : (() => true);
-        const entries = Object.entries(map || {}).filter(([key]) => filterFn(key));
+      const makeSchemes = (map, sectionKey, examplesMap) => {
+        // Return ALL schemes (no tab filtering here — the template shows/hides
+        // by group via x-show, which keeps the array stable across tab switches).
+        const entries = Object.entries(map || {});
         entries.sort((a, b) => {
           const ai = keyOrder.indexOf(a[0]), bi = keyOrder.indexOf(b[0]);
           return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
@@ -177,6 +200,7 @@ export default {
             pattern,
             example: examplesMap?.[key] || '',
             tier,
+            group: groupOf(key),
           };
         });
       };
@@ -498,6 +522,291 @@ export default {
         }
       } catch (e) {
         this.namingApplyResult = { ...this.namingApplyResult, [appType]: `Error: ${e.message}` };
+      }
+    },
+
+    // ===== Auto-sync (#5): keep a naming field on a TRaSH scheme automatically =====
+
+    namingFieldKey(sectionKey) {
+      return NAMING_SECTION_FIELD[sectionKey] || null;
+    },
+
+    // The current binding for a section/field, or null when not auto-syncing.
+    namingBindingFor(appType, sectionKey) {
+      const field = this.namingFieldKey(sectionKey);
+      if (!field) return null;
+      return this.namingAutoSync[appType]?.[field] || null;
+    },
+
+    // Binding looked up directly by canonical field key (the "Currently on
+    // instance" card keys rows by their canonical field).
+    namingBindingForField(appType, field) {
+      return this.namingAutoSync[appType]?.[field] || null;
+    },
+
+    // The raw TRaSH scheme map for a canonical field (for reverse-matching the
+    // instance's current pattern back to a scheme).
+    namingRawMapForField(appType, field) {
+      const n = this.getNaming(appType);
+      if (!n) return null;
+      switch (field) {
+        case 'movieFile': return n.file;
+        case 'movieFolder': return n.folder;
+        case 'seriesFolder': return n.series;
+        case 'seasonFolder': return n.season;
+        case 'standardEpisode': return n.episodes?.standard;
+        case 'dailyEpisode': return n.episodes?.daily;
+        case 'animeEpisode': return n.episodes?.anime;
+      }
+      return null;
+    },
+
+    // Reverse-match: which TRaSH scheme does the instance's CURRENT pattern for
+    // this field equal? Returns {key, label} or null (custom / hand-edited).
+    namingMatchedScheme(appType, arrField, canonField) {
+      const cur = this.namingInstanceData[appType]?.[arrField];
+      if (!cur) return null;
+      const map = this.namingRawMapForField(appType, canonField);
+      if (!map) return null;
+      for (const [key, val] of Object.entries(map)) {
+        const pattern = typeof val === 'string' ? val : (val?.pattern || '');
+        if (pattern === cur) return { key, label: namingSchemeLabel(key) };
+      }
+      return null;
+    },
+
+    // Status descriptor for a "Currently on instance" row. kind is one of:
+    //  autosync — this field auto-syncs (shows ⟳ + its scheme)
+    //  manual   — not auto-syncing; current pattern matches a known scheme
+    //  custom   — current pattern matches no known TRaSH scheme
+    // (Active Arr-side drift detection is deferred to phase 2; we don't flag it.)
+    namingFieldStatus(appType, row) {
+      const binding = this.namingBindingForField(appType, row.field);
+      if (binding) return { kind: 'autosync', label: namingSchemeLabel(binding.scheme) };
+      const matched = this.namingMatchedScheme(appType, row.arr, row.field);
+      if (matched) return { kind: 'manual', label: matched.label };
+      return { kind: 'custom', label: 'Custom' };
+    },
+
+    // Rows for the "Currently on instance" card: {label, arr (Arr field on
+    // namingInstanceData), field (canonical key for the auto-sync binding)}.
+    namingCurrentRows(appType) {
+      if (appType === 'radarr') return [
+        { label: 'File', arr: 'standardMovieFormat', field: 'movieFile' },
+        { label: 'Folder', arr: 'movieFolderFormat', field: 'movieFolder' },
+      ];
+      return [
+        { label: 'Episode (Standard)', arr: 'standardEpisodeFormat', field: 'standardEpisode' },
+        { label: 'Episode (Anime)', arr: 'animeEpisodeFormat', field: 'animeEpisode' },
+        { label: 'Episode (Daily)', arr: 'dailyEpisodeFormat', field: 'dailyEpisode' },
+        { label: 'Series Folder', arr: 'seriesFolderFormat', field: 'seriesFolder' },
+        { label: 'Season Folder', arr: 'seasonFolderFormat', field: 'seasonFolder' },
+      ];
+    },
+
+    async loadNamingAutoSync(appType) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) {
+        this.namingAutoSync = { ...this.namingAutoSync, [appType]: {} };
+        return;
+      }
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/auto-sync`);
+        if (r.ok) {
+          const data = await r.json();
+          this.namingAutoSync = { ...this.namingAutoSync, [appType]: data || {} };
+        }
+      } catch (e) { /* ignore — toggle just shows off */ }
+    },
+
+    // Build the {field: {scheme}} payload the PUT expects from the current
+    // in-memory binding map (server owns fingerprint/appliedAt/error).
+    buildNamingAutoSyncPayload(map) {
+      const out = {};
+      for (const [field, b] of Object.entries(map || {})) {
+        if (b && b.scheme) out[field] = { scheme: b.scheme };
+      }
+      return out;
+    },
+
+    async saveNamingAutoSyncMap(appType, nextMap) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) return;
+      this.namingAutoSyncBusy = true;
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/auto-sync`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.buildNamingAutoSyncPayload(nextMap)),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          // The backend applies newly-enabled fields immediately (enabling
+          // auto-sync brings the field to the scheme now, then follows updates).
+          if (data.error) this.showToast(`Auto-sync saved, but applying now failed: ${data.error}`, 'error');
+          else if (data.applied > 0) {
+            this.showToast('Auto-sync on — scheme applied now and will follow TRaSH updates', 'success');
+            this.loadInstanceNaming(appType); // refresh the "currently on instance" card
+          }
+        } else {
+          this.showToast(`Auto-sync save failed: ${data.error || r.statusText}`, 'error');
+        }
+      } catch (e) {
+        this.showToast(`Auto-sync save failed: ${e.message}`, 'error');
+      } finally {
+        await this.loadNamingAutoSync(appType); // always resync UI to server truth
+        this.namingAutoSyncBusy = false;
+      }
+    },
+
+    // Is this exact scheme the one the field is auto-syncing to?
+    isNamingAutoSyncing(appType, sectionKey, schemeKey) {
+      return this.namingBindingFor(appType, sectionKey)?.scheme === schemeKey;
+    },
+
+    // Per-row toggle: clicking the active scheme turns auto-sync off; clicking
+    // any other scheme binds the field to it (replacing any prior scheme — one
+    // scheme per field). The backend applies it immediately.
+    async toggleNamingAutoSyncScheme(appType, sectionKey, schemeKey) {
+      const field = this.namingFieldKey(sectionKey);
+      if (!field || !schemeKey) return;
+      const cur = { ...(this.namingAutoSync[appType] || {}) };
+      if (cur[field]?.scheme === schemeKey) delete cur[field];
+      else cur[field] = { scheme: schemeKey };
+      await this.saveNamingAutoSyncMap(appType, cur);
+    },
+
+    // Turn auto-sync off for a field (from the card summary line).
+    async disableNamingAutoSync(appType, sectionKey) {
+      const field = this.namingFieldKey(sectionKey);
+      if (!field) return;
+      const cur = { ...(this.namingAutoSync[appType] || {}) };
+      delete cur[field];
+      await this.saveNamingAutoSyncMap(appType, cur);
+    },
+
+    // Readable label of the scheme a field is bound to (for the summary line).
+    namingActiveSchemeLabel(appType, sectionKey) {
+      const b = this.namingBindingFor(appType, sectionKey);
+      return b ? namingSchemeLabel(b.scheme) : '';
+    },
+
+    // ===== Rollback history =====
+
+    async loadNamingHistory(appType) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) {
+        this.namingHistory = { ...this.namingHistory, [appType]: [] };
+        return;
+      }
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/history`);
+        if (r.ok) {
+          const data = await r.json();
+          this.namingHistory = { ...this.namingHistory, [appType]: Array.isArray(data) ? data : [] };
+        }
+      } catch (e) { /* ignore */ }
+    },
+
+    openNamingHistory(appType) {
+      this.loadNamingHistory(appType);
+      this.namingHistoryModal = { show: true, appType };
+    },
+
+    // Newest-first for display, but each item keeps its true array index
+    // (the stored array is newest-last) so restore targets the right snapshot.
+    namingHistoryView(appType) {
+      const snaps = this.namingHistory[appType] || [];
+      return snaps.map((s, i) => ({ ...s, _index: i })).reverse();
+    },
+
+    // Comma-joined human field labels captured in a snapshot.
+    namingSnapshotFields(snap) {
+      const labels = {
+        movieFile: 'Movie file', movieFolder: 'Movie folder',
+        standardEpisode: 'Episode (Standard)', dailyEpisode: 'Episode (Daily)', animeEpisode: 'Episode (Anime)',
+        seriesFolder: 'Series folder', seasonFolder: 'Season folder', specialsFolder: 'Specials folder',
+      };
+      return Object.keys(snap.naming || {}).map(k => labels[k] || k).join(', ');
+    },
+
+    closeNamingHistory() {
+      this.namingHistoryModal = { show: false, appType: '' };
+    },
+
+    // Locale-aware snapshot timestamp (server stores UTC/ISO; format client-side).
+    namingSnapshotTime(ts) {
+      if (!ts) return '';
+      try { return new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+      catch (e) { return ts; }
+    },
+
+    // Human label for a snapshot's origin.
+    namingSnapshotOrigin(replacedBy) {
+      if (replacedBy === 'manual') return 'Manual sync';
+      if (replacedBy === 'auto-sync') return 'Auto-sync';
+      if (replacedBy === 'rollback') return 'Restore';
+      return replacedBy || 'Change';
+    },
+
+    // Restore a snapshot (newest-last array; index into namingHistory[appType]).
+    // Confirms with a list of the fields it will write back first.
+    confirmRestoreNamingSnapshot(appType, index) {
+      const snaps = this.namingHistory[appType] || [];
+      const snap = snaps[index];
+      if (!snap) return;
+      const instId = this.mediaInstanceId[appType];
+      const instName = this.getInstanceName(appType, instId);
+      const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const fieldLabels = {
+        movieFile: 'Movie file', movieFolder: 'Movie folder',
+        standardEpisode: 'Episode (Standard)', dailyEpisode: 'Episode (Daily)', animeEpisode: 'Episode (Anime)',
+        seriesFolder: 'Series folder', seasonFolder: 'Season folder', specialsFolder: 'Specials folder',
+      };
+      const rows = Object.entries(snap.naming || {}).map(([k, v]) =>
+        '<div style="margin-top:8px"><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">' +
+        escapeHtml(fieldLabels[k] || k) + '</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' +
+        escapeHtml(v) + '</div></div>'
+      ).join('');
+      const message =
+        '<div style="margin-bottom:6px">Restore the naming captured on <strong>' + escapeHtml(this.namingSnapshotTime(snap.takenAt)) + '</strong> back to <strong>' + escapeHtml(instName) + '</strong>?</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">These fields will be written back:</div>' +
+        rows +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:12px;font-style:italic">This does not turn off auto-sync. If a field is still set to follow a scheme, the next TRaSH update can change it again.</div>';
+      this.confirmModal = {
+        show: true,
+        title: 'Restore naming',
+        message,
+        html: true,
+        wide: true,
+        confirmLabel: 'Restore',
+        cancelLabel: 'Cancel',
+        onConfirm: () => this.restoreNamingSnapshot(appType, index),
+        onCancel: () => {},
+      };
+    },
+
+    async restoreNamingSnapshot(appType, index) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) return;
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/restore`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index }),
+        });
+        if (r.ok) {
+          this.showToast('Naming restored', 'success');
+          this.loadInstanceNaming(appType);
+          this.loadNamingHistory(appType);
+          this.closeNamingHistory();
+        } else {
+          const err = await r.json().catch(() => ({}));
+          this.showToast(`Restore failed: ${err.error || r.statusText}`, 'error');
+        }
+      } catch (e) {
+        this.showToast(`Restore failed: ${e.message}`, 'error');
       }
     },
   },

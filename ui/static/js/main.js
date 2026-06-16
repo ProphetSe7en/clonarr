@@ -677,6 +677,7 @@ export function clonarr() {
         if (this.mediaInstanceId[appType]) {
           this.loadInstanceQS(appType, this.mediaInstanceId[appType]);
           this.loadInstanceNaming(appType);
+          this.loadNamingAutoSync(appType);
         }
         // Custom Formats → Sync Rules sub-tab: per-app-type fetch, so
         // an app switch on this sub-tab needs to load the other app's
@@ -790,6 +791,7 @@ export function clonarr() {
         this.loadInstanceProfiles(inst);
         this.loadInstanceQS(type, inst.id);
         this.loadInstanceNaming(type);
+        this.loadNamingAutoSync(type);
       }
       // Maintenance: auto-select based on current app type
       const currentType = this.activeAppType;

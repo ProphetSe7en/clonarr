@@ -1,0 +1,47 @@
+{{define "modals/naming-history"}}
+  <!-- Naming history / undo (#5) — lists the naming snapshots clonarr captured
+       before each apply (manual, auto-sync, or restore) so the user can roll a
+       field's naming back to a known prior state. Newest first. -->
+  <div class="modal-overlay" x-show="namingHistoryModal.show" @keydown.escape.window="closeNamingHistory()" x-cloak>
+    <div class="modal" style="max-width:640px" role="dialog" aria-modal="true" aria-labelledby="modal-title-naming-history" x-trap.noscroll.inert="namingHistoryModal.show">
+      <h2 id="modal-title-naming-history" class="modal-title">Naming history</h2>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+        Clonarr saves the instance's naming before each change. Restore any entry to put those exact patterns back.
+      </div>
+
+      <template x-if="namingHistoryView(namingHistoryModal.appType).length === 0">
+        <div style="text-align:center;padding:24px 0;font-size:13px;color:var(--text-muted)">
+          No naming history yet. The first entry appears after a sync or auto-sync changes this instance's naming.
+        </div>
+      </template>
+
+      <template x-if="namingHistoryView(namingHistoryModal.appType).length > 0">
+        <div style="max-height:380px;overflow-y:auto;border:1px solid var(--bg-muted);border-radius:6px">
+          <template x-for="snap in namingHistoryView(namingHistoryModal.appType)" :key="snap._index">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--bg-muted)">
+              <div style="min-width:0;flex:1">
+                <div style="font-size:13px;color:var(--text-body)">
+                  <span x-text="namingSnapshotTime(snap.takenAt)"></span>
+                  <span style="color:var(--text-secondary)"> · </span>
+                  <span style="color:var(--text-muted)" x-text="namingSnapshotOrigin(snap.replacedBy)"></span>
+                </div>
+                <div style="font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="namingSnapshotFields(snap)"></div>
+              </div>
+              <button type="button" class="btn btn-sm"
+                      :disabled="instanceStatus[mediaInstanceId[namingHistoryModal.appType]] !== 'connected'"
+                      @click="confirmRestoreNamingSnapshot(namingHistoryModal.appType, snap._index)">Restore</button>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="instanceStatus[mediaInstanceId[namingHistoryModal.appType]] !== 'connected'">
+        <div style="font-size:12px;color:var(--accent-orange);margin-top:10px">Connect the instance to restore a snapshot.</div>
+      </template>
+
+      <div class="modal-actions">
+        <button class="btn" @click="closeNamingHistory()">Close</button>
+      </div>
+    </div>
+  </div>
+{{end}}

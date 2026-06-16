@@ -128,28 +128,38 @@
                 <template x-if="namingInstanceData[activeAppType]">
                   <div style="border:1px solid var(--border-subtle);border-left:3px solid var(--app-color);border-radius:6px;padding:8px 12px;margin-bottom:12px;background:var(--app-glow)">
                     <div style="font-size:11px;color:var(--app-color);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Currently on instance</div>
-                    <template x-if="activeAppType === 'radarr'">
-                      <div style="display:grid;grid-template-columns:70px minmax(0, 1fr);gap:3px 10px;font-size:12px;align-items:baseline">
-                        <span style="color:var(--text-muted)">File:</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.standardMovieFormat || '(not set)'"></span>
-                        <span style="color:var(--text-muted)">Folder:</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.movieFolderFormat || '(not set)'"></span>
-                      </div>
-                    </template>
-                    <template x-if="activeAppType === 'sonarr'">
-                      <div style="display:grid;grid-template-columns:130px minmax(0, 1fr);gap:3px 10px;font-size:12px;align-items:baseline">
-                        <span style="color:var(--text-muted)">Episode (Standard):</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.standardEpisodeFormat || '(not set)'"></span>
-                        <span style="color:var(--text-muted)">Episode (Anime):</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.animeEpisodeFormat || '(not set)'"></span>
-                        <span style="color:var(--text-muted)">Episode (Daily):</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.dailyEpisodeFormat || '(not set)'"></span>
-                        <span style="color:var(--text-muted)">Series Folder:</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.seriesFolderFormat || '(not set)'"></span>
-                        <span style="color:var(--text-muted)">Season Folder:</span>
-                        <span style="font-family:monospace;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="namingInstanceData[activeAppType]?.seasonFolderFormat || '(not set)'"></span>
-                      </div>
-                    </template>
+                    <!-- Stacked per-field blocks: a label line (field name + the
+                         active auto-sync scheme, if any), then the full current
+                         pattern on its own line in a scrollable monospace field so
+                         the whole value is readable. -->
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <template x-for="row in namingCurrentRows(activeAppType)" :key="row.field">
+                        <div>
+                          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+                            <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="row.label + ':'"></span>
+                            <!-- Reverse-matched scheme + auto-sync marker. ⟳ marks the
+                                 fields that auto-sync; plain text = matches a scheme but
+                                 set manually; "drifted" = auto-sync on but the instance
+                                 no longer matches its scheme. -->
+                            <template x-for="st in [namingFieldStatus(activeAppType, row)]" :key="row.field">
+                              <span style="font-size:11px;display:inline-flex;align-items:center;gap:5px">
+                                <template x-if="st.kind === 'autosync'">
+                                  <span style="color:var(--app-color);font-weight:600" x-text="'⟳ ' + st.label" x-tt="'This field auto-syncs to this scheme'"></span>
+                                </template>
+                                <template x-if="st.kind === 'manual'">
+                                  <span style="color:var(--text-secondary)" x-text="st.label"></span>
+                                </template>
+                                <template x-if="st.kind === 'custom'">
+                                  <span style="color:var(--text-muted);font-style:italic">Custom</span>
+                                </template>
+                              </span>
+                            </template>
+                          </div>
+                          <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:3px;padding:5px 8px"
+                               x-text="namingInstanceData[activeAppType]?.[row.arr] || '(not set)'"></div>
+                        </div>
+                      </template>
+                    </div>
                   </div>
                 </template>
 
@@ -157,6 +167,15 @@
                 <template x-if="namingApplyResult[activeAppType]">
                   <div style="padding:8px 12px;margin-bottom:12px;border-left:3px solid var(--accent-green);background:var(--bg-page);border-radius:4px">
                     <div style="font-size:13px;color:var(--accent-green)" x-text="namingApplyResult[activeAppType]"></div>
+                  </div>
+                </template>
+
+                <!-- Naming history / undo — opens the rollback modal (#5) -->
+                <template x-if="mediaInstanceId[activeAppType]">
+                  <div style="margin-bottom:12px">
+                    <button type="button" class="inline-action" style="font-size:12px;color:var(--accent-blue)"
+                      @click="openNamingHistory(activeAppType)"
+                      x-tt="'View and restore naming clonarr saved before each change'">Naming history / undo</button>
                   </div>
                 </template>
 
@@ -168,7 +187,11 @@
                    (top) and alternative (below a divider). -->
               <div style="font-weight:600;margin:8px 0 12px;color:var(--text-primary);font-size:14px">Recommended Naming Schemes</div>
 
-              <template x-for="section in getNamingSections(activeAppType, namingMediaServer[activeAppType] || 'standard')" :key="section.key + ':' + (namingMediaServer[activeAppType] || 'standard')">
+              <!-- Stable :key (section.key only). Previously the media-server was
+                   in the key, so switching the Plex/Emby/Jellyfin tab changed every
+                   card's key and Alpine tore down + rebuilt all cards, scrolling the
+                   page to the top. The inner scheme list still updates reactively. -->
+              <template x-for="section in getNamingSections(activeAppType)" :key="section.key">
                 <div class="detail-section naming-card-scheme">
                   <!-- Card header — click to expand/collapse -->
                   <button type="button" class="detail-section-header"
@@ -181,18 +204,57 @@
                   <div x-show="namingSectionExpanded[activeAppType + ':' + section.key]" x-cloak style="padding:0 14px 12px;border-top:1px solid var(--bg-muted)">
                     <div x-show="section.description" style="font-size:13px;color:var(--text-muted);margin:10px 0;line-height:1.5" x-text="section.description"></div>
 
-                    <!-- Section-scoped media-server tab bar (only when section varies per server) -->
-                    <template x-if="section.varies">
-                      <div style="display:flex;align-items:center;gap:0;margin:10px 0 12px;border-bottom:1px solid var(--bg-muted)">
-                        <button type="button" class="subtab" :class="{ active: (namingMediaServer[activeAppType] || 'standard') === 'standard' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'standard'}">Standard</button>
-                        <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'plex' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'plex'}">Plex</button>
-                        <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'emby' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'emby'}">Emby</button>
-                        <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType] === 'jellyfin' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType]: 'jellyfin'}">Jellyfin</button>
+                    <!-- Auto-sync summary (#5) — always visible at the top of the
+                         card so the active binding shows even when it points at a
+                         scheme on another media-server tab. The on/off control is
+                         the per-scheme "Auto-sync" button on each row below. -->
+                    <template x-if="mediaInstanceId[activeAppType]">
+                      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:7px 10px;border-radius:4px"
+                           :style="namingBindingFor(activeAppType, section.key) ? 'background:var(--app-glow);border:1px solid var(--app-color)' : 'background:var(--bg-page);border:1px solid var(--bg-muted)'">
+                        <!-- Not auto-syncing -->
+                        <template x-if="!namingBindingFor(activeAppType, section.key)">
+                          <span style="font-size:12px;color:var(--text-muted)"><span x-text="'Auto-sync is off for ' + section.label + '.'"></span> Turn it on for a scheme below to keep it following TRaSH automatically.</span>
+                        </template>
+                        <!-- Auto-syncing -->
+                        <template x-if="namingBindingFor(activeAppType, section.key)">
+                          <span style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px">
+                            <span style="color:var(--app-color);font-weight:600">Auto-syncing to <span x-text="namingActiveSchemeLabel(activeAppType, section.key)"></span></span>
+                            <template x-if="namingBindingFor(activeAppType, section.key).lastError">
+                              <span style="color:var(--accent-red)" x-text="'· last sync failed: ' + namingBindingFor(activeAppType, section.key).lastError"></span>
+                            </template>
+                            <template x-if="!namingBindingFor(activeAppType, section.key).lastError && namingBindingFor(activeAppType, section.key).lastAppliedAt">
+                              <span style="color:var(--text-muted)" x-text="'· last applied ' + namingSnapshotTime(namingBindingFor(activeAppType, section.key).lastAppliedAt)"></span>
+                            </template>
+                            <button type="button" class="inline-action" style="font-size:11px;color:var(--accent-orange)"
+                              :disabled="namingAutoSyncBusy || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
+                              @click="disableNamingAutoSync(activeAppType, section.key)">Turn off</button>
+                          </span>
+                        </template>
+                        <template x-if="instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'">
+                          <span style="font-size:12px;color:var(--accent-orange)">· connect the instance to change auto-sync</span>
+                        </template>
                       </div>
                     </template>
 
+                    <!-- Section-scoped media-server tab bar (only when section varies
+                         per server). Tab state is keyed per section (activeAppType +
+                         ':' + section.key) so flipping one card's tab does NOT change
+                         another card's tab. -->
+                    <template x-if="section.varies">
+                      <div style="display:flex;align-items:center;gap:0;margin:10px 0 12px;border-bottom:1px solid var(--bg-muted)">
+                        <button type="button" class="subtab" :class="{ active: (namingMediaServer[activeAppType + ':' + section.key] || 'standard') === 'standard' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType + ':' + section.key]: 'standard'}">Standard</button>
+                        <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType + ':' + section.key] === 'plex' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType + ':' + section.key]: 'plex'}">Plex</button>
+                        <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType + ':' + section.key] === 'emby' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType + ':' + section.key]: 'emby'}">Emby</button>
+                        <button type="button" class="subtab" :class="{ active: namingMediaServer[activeAppType + ':' + section.key] === 'jellyfin' }" @click="namingMediaServer = {...namingMediaServer, [activeAppType + ':' + section.key]: 'jellyfin'}">Jellyfin</button>
+                      </div>
+                    </template>
+
+                    <!-- All schemes render once; the section's own tab shows/hides
+                         them by group via x-show. section.schemes never changes on a
+                         tab switch, so the x-for never tears down and the scroll
+                         position never jumps. -->
                     <template x-for="(scheme, schemeIdx) in section.schemes" :key="scheme.key">
-                      <div>
+                      <div x-show="!section.varies || scheme.group === (namingMediaServer[activeAppType + ':' + section.key] || 'standard')">
                         <!-- "Alternative Naming Options" divider — appears between
                              recommended and alternative schemes. Only renders on
                              the boundary (first alternative after a recommended).
@@ -202,29 +264,44 @@
                           <div style="font-size:11px;color:var(--text-muted-secondary);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin:14px 0 6px">Alternative Naming Options</div>
                         </template>
 
-                        <!-- Compact scheme card: tighter padding, pattern +
-                             example combined into a single bordered area
-                             with the example as a sub-line under the
-                             pattern (smaller, muted). -->
+                        <!-- Compact scheme card. Actions live in a footer row below
+                             the pattern/example (not on the label line) so long
+                             patterns can't visually swallow them — the buttons keep
+                             a fixed, separated position on every card. -->
                         <div style="margin-bottom:6px;padding:6px 8px;background:var(--bg-page);border-radius:4px;border:1px solid var(--bg-muted)">
-                          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                          <!-- Label + actions on one line. The pattern sits in its own
+                               inset box below, so the buttons keep a clear, fixed line
+                               of their own and don't blend into a long pattern. -->
+                          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
                             <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="scheme.label"></span>
-                            <span style="margin-left:auto;display:flex;gap:10px;align-items:center">
+                            <span style="margin-left:auto;display:flex;gap:14px;align-items:center">
                               <button type="button" class="inline-action" style="font-size:11px;color:var(--accent-blue)" @click="copyToClipboard(scheme.pattern)">Copy</button>
                               <template x-if="mediaInstanceId[activeAppType]">
                                 <button type="button" class="inline-action" style="font-size:11px;color:var(--text-secondary)"
                                   @click="compareNamingScheme(activeAppType, section.key, scheme)"
-                                  x-tt="'Compare this scheme with what is currently set on the instance — view diff without applying'">Compare</button>
+                                  x-tt="'Compare this scheme with what is currently set on the instance, without applying'">Compare</button>
                               </template>
                               <template x-if="mediaInstanceId[activeAppType]">
                                 <button type="button" class="inline-action" style="font-size:11px;color:var(--accent-orange)"
-                                  @click="confirmApplyNamingScheme(activeAppType, section.key, scheme)">Sync</button>
+                                  @click="confirmApplyNamingScheme(activeAppType, section.key, scheme)"
+                                  x-tt="'Apply this scheme to the instance once, now'">Sync</button>
+                              </template>
+                              <!-- Auto-sync this scheme (#5): apply now + keep following.
+                                   Active scheme shows "Auto-syncing"; click to turn off. -->
+                              <template x-if="mediaInstanceId[activeAppType]">
+                                <button type="button" class="inline-action"
+                                  :style="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'font-size:11px;color:var(--app-color);font-weight:600' : 'font-size:11px;color:var(--text-secondary)'"
+                                  :disabled="namingAutoSyncBusy || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
+                                  @click="toggleNamingAutoSyncScheme(activeAppType, section.key, scheme.key)"
+                                  x-tt="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'This field follows this scheme automatically. Click to turn off.' : 'Apply this scheme now and keep this field following it as TRaSH updates'"
+                                  x-text="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'Auto-syncing ✓' : 'Auto-sync'"></button>
                               </template>
                             </span>
                           </div>
                           <div x-show="scheme.description" style="font-size:12px;color:var(--text-muted);margin-bottom:4px;line-height:1.4" x-text="scheme.description"></div>
-                          <div style="font-family:monospace;font-size:12px;color:var(--code-string);white-space:nowrap;overflow-x:auto" x-text="scheme.pattern"></div>
-                          <div x-show="scheme.example" style="font-family:monospace;font-size:11px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow-x:auto">
+                          <!-- Pattern in an inset box (same look as the currently-on-instance fields) -->
+                          <div style="font-family:monospace;font-size:12px;color:var(--code-string);white-space:nowrap;overflow-x:auto;background:var(--bg-app);border:1px solid var(--border-subtle);border-radius:3px;padding:5px 8px" x-text="scheme.pattern"></div>
+                          <div x-show="scheme.example" style="font-family:monospace;font-size:11px;color:var(--text-muted);margin-top:3px;white-space:nowrap;overflow-x:auto" x-bind:title="scheme.example">
                             <span x-text="(section.exampleLabel || 'Example') + ': '"></span><span x-text="scheme.example"></span>
                           </div>
                         </div>
