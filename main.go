@@ -194,7 +194,10 @@ func main() {
 		// neither writes to Arr.
 		runStartupMaintenance := func() {
 			server.AutoSyncQualitySizes()
-			server.AutoSyncNaming()
+			// Naming auto-sync is intentionally NOT run at startup — it follows
+			// the pull schedule (AfterPullCallback) + manual actions only, so a
+			// restart never re-touches naming. A guide change that landed while
+			// the container was down is picked up at the next scheduled pull.
 			app.CleanupStaleRules()
 			app.MigratePriorAvailableGroups()
 			app.MigratePriorSyncedCFs()

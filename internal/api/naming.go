@@ -223,6 +223,21 @@ func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// A field is "newly enabled or re-pointed" when it wasn't bound before or its
+	// scheme changed — those get applied immediately below (enabling auto-sync
+	// brings the field to the scheme now, then follows future updates). Fields
+	// with an unchanged scheme keep their apply state and are left alone.
+	existing := map[string]core.NamingFieldBinding{}
+	if cur := s.Core.Config.Get().NamingAutoSync; cur != nil {
+		existing = cur[id]
+	}
+	toApply := []string{}
+	for field, b := range incoming {
+		if old, ok := existing[field]; !ok || old.Scheme != b.Scheme {
+			toApply = append(toApply, field)
+		}
+	}
+
 	err := s.Core.Config.Update(func(cfg *core.Config) {
 		if cfg.NamingAutoSync == nil {
 			cfg.NamingAutoSync = make(map[string]map[string]core.NamingFieldBinding)
@@ -231,11 +246,11 @@ func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request
 			delete(cfg.NamingAutoSync, id)
 			return
 		}
-		existing := cfg.NamingAutoSync[id]
+		ex := cfg.NamingAutoSync[id]
 		next := make(map[string]core.NamingFieldBinding, len(incoming))
 		for field, b := range incoming {
 			nb := core.NamingFieldBinding{Scheme: b.Scheme}
-			if old, ok := existing[field]; ok && old.Scheme == b.Scheme {
+			if old, ok := ex[field]; ok && old.Scheme == b.Scheme {
 				// Same scheme — keep the apply state so we don't re-apply needlessly.
 				nb.LastFingerprint = old.LastFingerprint
 				nb.LastAppliedAt = old.LastAppliedAt
@@ -248,7 +263,56 @@ func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request
 		writeError(w, 500, "Failed to save naming auto-sync settings")
 		return
 	}
-	writeJSON(w, map[string]string{"status": "saved"})
+
+	// Apply newly-enabled/re-pointed fields now. Enabling auto-sync that didn't
+	// take effect until the next pull wouldn't be auto-sync — the field must
+	// reach the chosen scheme immediately, then follow future guide changes.
+	applied := 0
+	var applyErrMsg string
+	if len(toApply) > 0 && s.Core.Trash != nil {
+		ad := s.Core.Trash.GetAppData(inst.Type)
+		fields := map[string]string{}
+		fp := map[string]string{}
+		for _, field := range toApply {
+			pattern, ok := resolveNamingField(ad, inst.Type, field, incoming[field].Scheme)
+			if !ok || pattern == "" {
+				continue // guide has no pattern for this (field, scheme) — never guess
+			}
+			fields[field] = pattern
+			fp[field] = namingFingerprint(pattern)
+		}
+		if len(fields) > 0 {
+			_, applyErr := s.applyNamingFields(inst, fields, "auto-sync", true)
+			now := time.Now().UTC().Format(time.RFC3339)
+			s.Core.Config.Update(func(c *core.Config) {
+				m := c.NamingAutoSync[id]
+				if m == nil {
+					return
+				}
+				for field := range fields {
+					nb, ok := m[field]
+					if !ok {
+						continue
+					}
+					if applyErr != nil {
+						nb.LastError = applyErr.Error()
+					} else {
+						nb.LastFingerprint = fp[field]
+						nb.LastAppliedAt = now
+						nb.LastError = ""
+					}
+					m[field] = nb
+				}
+			})
+			if applyErr != nil {
+				applyErrMsg = applyErr.Error()
+				s.Core.DebugLog.Logf(core.LogError, "Naming [%s]: apply-on-enable failed: %v", inst.Name, applyErr)
+			} else {
+				applied = len(fields)
+			}
+		}
+	}
+	writeJSON(w, map[string]any{"status": "saved", "applied": applied, "error": applyErrMsg})
 }
 
 // handleGetNamingHistory returns the instance's rollback snapshots, newest last.
