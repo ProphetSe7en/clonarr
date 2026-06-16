@@ -333,7 +333,7 @@ type NamingFieldBinding struct {
 // (newest last, capped).
 type NamingSnapshot struct {
 	TakenAt    string            `json:"takenAt"`
-	Naming     map[string]string `json:"naming"`               // Arr naming-field key → pattern (pre-apply)
+	Naming     map[string]string `json:"naming"`               // canonical naming-field key → pattern (pre-apply)
 	ReplacedBy string            `json:"replacedBy,omitempty"` // what was applied next ("scheme: plex" / "manual")
 }
 

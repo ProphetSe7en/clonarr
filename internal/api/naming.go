@@ -107,7 +107,10 @@ func extractNamingPatterns(instType string, current arr.ArrNamingConfig) map[str
 		return out
 	}
 	fields := namingFieldsForType(instType)
-	fields = append(fields, "specialsFolder")
+	if instType != "radarr" {
+		// sonarr-only; manual-set (not auto-syncable), captured for rollback completeness
+		fields = append(fields, "specialsFolder")
+	}
 	for _, field := range fields {
 		if key, ok := namingArrKey[field]; ok {
 			if v, ok := current[key].(string); ok && v != "" {
@@ -142,13 +145,23 @@ func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string,
 	if err != nil {
 		return nil, err
 	}
+	// Capture the pre-apply state now (before we mutate current), but only
+	// PERSIST it after the write succeeds — a failed UpdateNaming must not leave
+	// an orphan rollback snapshot (matters once the loop drives this at volume).
+	var prev map[string]string
 	if snapshot {
-		prev := extractNamingPatterns(inst.Type, current)
+		prev = extractNamingPatterns(inst.Type, current)
+	}
+	applyFieldsToArrNaming(inst.Type, current, fields)
+	result, err := client.UpdateNaming(current)
+	if err != nil {
+		return nil, err
+	}
+	if snapshot {
 		now := time.Now().UTC().Format(time.RFC3339)
 		s.Core.Config.Update(func(cfg *core.Config) {
 			appendNamingSnapshot(cfg, inst.ID, prev, replacedBy, now, namingHistoryKeep)
 		})
 	}
-	applyFieldsToArrNaming(inst.Type, current, fields)
-	return client.UpdateNaming(current)
+	return result, nil
 }
