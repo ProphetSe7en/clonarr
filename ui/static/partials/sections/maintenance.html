@@ -52,9 +52,10 @@
                   <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:4px">Backup &amp; Restore</div>
                   <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Download instance profiles and custom formats as JSON, or restore from a previous backup. Backups are a safe point-in-time snapshot - make one before any destructive cleanup action.</div>
                   <div style="display:flex;gap:8px">
-                    <button class="btn btn-sm btn-primary" @click="openBackupModal(maintenanceInstance)">Backup</button>
-                    <button class="btn btn-sm" @click="openRestoreModal(maintenanceInstance)">Restore</button>
+                    <button class="btn btn-sm btn-primary" :disabled="instanceStatus[maintenanceInstance.id] !== 'connected'" @click="openBackupModal(maintenanceInstance)" x-tt="instanceStatus[maintenanceInstance.id] !== 'connected' ? maintenanceInstance.name + ' is not reachable — start it to back up' : 'Download this instance\'s profiles and custom formats'">Backup</button>
+                    <button class="btn btn-sm" :disabled="instanceStatus[maintenanceInstance.id] !== 'connected'" @click="openRestoreModal(maintenanceInstance)" x-tt="instanceStatus[maintenanceInstance.id] !== 'connected' ? maintenanceInstance.name + ' is not reachable — start it to restore' : 'Restore profiles and custom formats from a backup'">Restore</button>
                   </div>
+                  <div x-show="instanceStatus[maintenanceInstance.id] === 'failed'" style="margin-top:8px;font-size:12px;color:var(--accent-orange)" x-cloak>&#9888; <span x-text="maintenanceInstance.name"></span> is offline — backup and restore need a running instance.</div>
                 </div>
               </template>
               <template x-if="!maintenanceInstance || maintenanceInstance.type !== activeAppType">

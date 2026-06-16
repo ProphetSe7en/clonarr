@@ -13,6 +13,15 @@
             For a per-CF view with drift status, see <a class="inline-link" :href="navHref('custom-formats', { customFormatsTab: 'in-use' })">Custom Formats &rarr; In use</a>.
           </div>
 
+          <!-- Offline notice: this table needs a reachable instance for live state. Sync rules
+               are stored in clonarr and are NOT removed when an instance is merely offline (only a
+               reachable-but-deleted Arr profile is soft-tombstoned). Reassure rather than alarm. -->
+          <div x-show="instancesOfType(activeAppType).some(i => instanceStatus[i.id] === 'failed')"
+               style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--accent-orange);border-radius:6px;background:var(--bg-card);font-size:13px;color:var(--text-body)" x-cloak>
+            <span style="color:var(--accent-orange);flex-shrink:0">&#9888;</span>
+            <span><strong x-text="instancesOfType(activeAppType).filter(i => instanceStatus[i.id] === 'failed').map(i => i.name).join(', ')"></strong> offline — your sync rules are safe in clonarr and nothing is removed. This view needs a running instance for live state; start it to see them here.</span>
+          </div>
+
           <!-- Per-instance cards. Each card carries its own auto-sync
                pause state (v3 — per-instance, not global). When paused,
                the Pause action flips to Resume + a chip in the header
@@ -338,6 +347,12 @@
           <div style="font-size:18px;font-weight:600;margin-bottom:4px">Sync History</div>
           <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
             Each sync that touched a profile is recorded here. Click a row to see the timeline of change events and roll back to a previous state.
+          </div>
+
+          <div x-show="instancesOfType(activeAppType).some(i => instanceStatus[i.id] === 'failed')"
+               style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--accent-orange);border-radius:6px;background:var(--bg-card);font-size:13px;color:var(--text-body)" x-cloak>
+            <span style="color:var(--accent-orange);flex-shrink:0">&#9888;</span>
+            <span><strong x-text="instancesOfType(activeAppType).filter(i => instanceStatus[i.id] === 'failed').map(i => i.name).join(', ')"></strong> offline — your sync history is stored in clonarr and nothing is removed. This view needs a running instance for live state; start it to see it here.</span>
           </div>
 
           <template x-for="inst in instancesOfType(activeAppType)" :key="'hist-'+inst.id">
