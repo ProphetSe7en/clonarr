@@ -215,7 +215,7 @@ export default {
         // File format first, folder second. Both vary per media server,
         // so each gets its own section-scoped tab bar in the UI.
         const fileVaries = sectionVaries(n.file);
-        const fileSchemes = makeSchemes(n.file, 'file', radarrExamples.file, fileVaries);
+        const fileSchemes = makeSchemes(n.file, 'file', radarrExamples.file);
         if (fileSchemes.length > 0) {
           sections.push({
             key: 'file',
@@ -227,7 +227,7 @@ export default {
           });
         }
         const folderVaries = sectionVaries(n.folder);
-        const folderSchemes = makeSchemes(n.folder, 'folder', radarrExamples.folder, folderVaries);
+        const folderSchemes = makeSchemes(n.folder, 'folder', radarrExamples.folder);
         if (folderSchemes.length > 0) {
           sections.push({
             key: 'folder',
@@ -250,7 +250,7 @@ export default {
           if (!schemes) continue;
           const epLabel = epType.charAt(0).toUpperCase() + epType.slice(1);
           const epVaries = sectionVaries(schemes);
-          const epSchemes = makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType], epVaries);
+          const epSchemes = makeSchemes(schemes, epType, sonarrExamples.episodes?.[epType]);
           if (epSchemes.length > 0) {
             sections.push({
               key: 'episodes-' + epType,
@@ -263,7 +263,7 @@ export default {
           }
         }
         const seriesVaries = sectionVaries(n.series);
-        const seriesSchemes = makeSchemes(n.series, 'series', sonarrExamples.series, seriesVaries);
+        const seriesSchemes = makeSchemes(n.series, 'series', sonarrExamples.series);
         if (seriesSchemes.length > 0) sections.push({
           key: 'series',
           label: 'Series Folder Format',

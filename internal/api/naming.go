@@ -380,7 +380,7 @@ func (s *Server) handleRestoreNaming(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "restored"})
 }
 
-// AutoSyncNaming runs after a TRaSH pull (and at startup). For each instance with
+// AutoSyncNaming runs after a TRaSH pull (scheduled + manual; NOT at startup). For each instance with
 // opted-in naming fields, it re-applies any field whose TRaSH pattern has changed
 // since the last apply (fingerprint differs) — so a field keeps following its
 // scheme as the guide evolves. Fields whose pattern is unchanged are skipped (the
