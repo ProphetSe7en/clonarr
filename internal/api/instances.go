@@ -1303,50 +1303,25 @@ func (s *Server) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
-
-	// Fetch current config first (we need id and other fields)
-	current, err := client.GetNaming()
-	if err != nil {
-		writeError(w, 502, "Failed to fetch current naming: "+err.Error())
-		return
-	}
-
-	// Apply the requested changes based on instance type
+	// Build the canonical field map from the (preset-resolved) request, then apply
+	// via the shared path — which snapshots the prior naming first for rollback.
+	// applyFieldsToArrNaming skips empty patterns, so unset fields are untouched
+	// (same as the old per-field `if != ""` guards).
+	var fields map[string]string
 	if inst.Type == "radarr" {
-		current["renameMovies"] = true
-		current["replaceIllegalCharacters"] = true
-		if req.File != "" {
-			current["standardMovieFormat"] = req.File
-		}
-		if req.Folder != "" {
-			current["movieFolderFormat"] = req.Folder
-		}
+		fields = map[string]string{"movieFile": req.File, "movieFolder": req.Folder}
 	} else {
-		// Sonarr
-		current["renameEpisodes"] = true
-		current["replaceIllegalCharacters"] = true
-		if req.File != "" {
-			current["standardEpisodeFormat"] = req.File
-		}
-		if req.Season != "" {
-			current["seasonFolderFormat"] = req.Season
-		}
-		if req.Series != "" {
-			current["seriesFolderFormat"] = req.Series
-		}
-		if req.Daily != "" {
-			current["dailyEpisodeFormat"] = req.Daily
-		}
-		if req.Anime != "" {
-			current["animeEpisodeFormat"] = req.Anime
-		}
-		if req.Special != "" {
-			current["specialsFolderFormat"] = req.Special
+		fields = map[string]string{
+			"standardEpisode": req.File,
+			"seasonFolder":    req.Season,
+			"seriesFolder":    req.Series,
+			"dailyEpisode":    req.Daily,
+			"animeEpisode":    req.Anime,
+			"specialsFolder":  req.Special,
 		}
 	}
 
-	result, err := client.UpdateNaming(current)
+	result, err := s.applyNamingFields(inst, fields, "manual", true)
 	if err != nil {
 		writeError(w, 502, "Failed to apply naming: "+err.Error())
 		return
@@ -1666,7 +1641,7 @@ type ProfileComparison struct {
 	FormatItems []CompareFormatItem `json:"formatItems"`
 	Groups      []CompareGroup      `json:"groups"`
 	// Profile settings and quality comparison
-	SettingsDiffs []SettingDiff          `json:"settingsDiffs,omitempty"`
+	SettingsDiffs []SettingDiff     `json:"settingsDiffs,omitempty"`
 	QualityDiffs  []QualityItemDiff `json:"qualityDiffs,omitempty"`
 	// LEGACY (keep for now)
 	OptionalCategories []CompareCategory `json:"optionalCategories"` // optional CF groups categorized
