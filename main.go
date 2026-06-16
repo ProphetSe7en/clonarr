@@ -165,7 +165,10 @@ func main() {
 	// after CloneOrPull succeeds, so server-level helpers (which live in api
 	// package and aren't reachable from core) still run on every scheduled
 	// pull. Same call-site as today's pull-scheduler closure.
-	app.AfterPullCallback = server.AutoSyncQualitySizes
+	app.AfterPullCallback = func() {
+		server.AutoSyncQualitySizes()
+		server.AutoSyncNaming()
+	}
 
 	// Background: clone/pull TRaSH repo on startup.
 	//
@@ -191,6 +194,7 @@ func main() {
 		// neither writes to Arr.
 		runStartupMaintenance := func() {
 			server.AutoSyncQualitySizes()
+			server.AutoSyncNaming()
 			app.CleanupStaleRules()
 			app.MigratePriorAvailableGroups()
 			app.MigratePriorSyncedCFs()

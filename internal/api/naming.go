@@ -5,6 +5,9 @@ import (
 	"clonarr/internal/core"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"log"
+	"net/http"
 	"time"
 )
 
@@ -164,4 +167,234 @@ func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string,
 		})
 	}
 	return result, nil
+}
+
+// --- #5 phase 2: per-field auto-sync bindings, rollback history, scheduled loop ---
+
+// handleGetNamingAutoSync returns the instance's field → binding map (empty when
+// nothing is opted in — the default for everyone).
+func (s *Server) handleGetNamingAutoSync(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	cfg := s.Core.Config.Get()
+	out := map[string]core.NamingFieldBinding{}
+	if cfg.NamingAutoSync != nil {
+		if v, ok := cfg.NamingAutoSync[id]; ok {
+			for field, b := range v {
+				out[field] = b
+			}
+		}
+	}
+	writeJSON(w, out)
+}
+
+// handleSaveNamingAutoSync replaces the instance's per-field bindings. The client
+// sends field → {scheme}; the server owns LastFingerprint/LastAppliedAt/LastError.
+// An empty body clears all bindings for the instance (opt-out). Validates that
+// every field is auto-syncable for the instance type, and preserves the apply
+// state for fields whose scheme is unchanged (a scheme change resets it so the
+// next tick re-applies). The map key being the field enforces one scheme per field.
+func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	inst, ok := s.Core.Config.GetInstance(id)
+	if !ok {
+		writeError(w, 404, "Instance not found")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	var incoming map[string]core.NamingFieldBinding
+	if err := json.NewDecoder(r.Body).Decode(&incoming); err != nil {
+		writeError(w, 400, "Invalid JSON")
+		return
+	}
+
+	allowed := map[string]bool{}
+	for _, f := range namingFieldsForType(inst.Type) {
+		allowed[f] = true
+	}
+	for field, b := range incoming {
+		if !allowed[field] {
+			writeError(w, 400, "Field not auto-syncable for this instance type: "+field)
+			return
+		}
+		if b.Scheme == "" {
+			writeError(w, 400, "Scheme is required for field: "+field)
+			return
+		}
+	}
+
+	err := s.Core.Config.Update(func(cfg *core.Config) {
+		if cfg.NamingAutoSync == nil {
+			cfg.NamingAutoSync = make(map[string]map[string]core.NamingFieldBinding)
+		}
+		if len(incoming) == 0 {
+			delete(cfg.NamingAutoSync, id)
+			return
+		}
+		existing := cfg.NamingAutoSync[id]
+		next := make(map[string]core.NamingFieldBinding, len(incoming))
+		for field, b := range incoming {
+			nb := core.NamingFieldBinding{Scheme: b.Scheme}
+			if old, ok := existing[field]; ok && old.Scheme == b.Scheme {
+				// Same scheme — keep the apply state so we don't re-apply needlessly.
+				nb.LastFingerprint = old.LastFingerprint
+				nb.LastAppliedAt = old.LastAppliedAt
+			}
+			next[field] = nb
+		}
+		cfg.NamingAutoSync[id] = next
+	})
+	if err != nil {
+		writeError(w, 500, "Failed to save naming auto-sync settings")
+		return
+	}
+	writeJSON(w, map[string]string{"status": "saved"})
+}
+
+// handleGetNamingHistory returns the instance's rollback snapshots, newest last.
+func (s *Server) handleGetNamingHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	cfg := s.Core.Config.Get()
+	snaps := []core.NamingSnapshot{}
+	if cfg.NamingHistory != nil {
+		if v, ok := cfg.NamingHistory[id]; ok {
+			snaps = append(snaps, v...)
+		}
+	}
+	writeJSON(w, snaps)
+}
+
+// handleRestoreNaming restores a previous naming snapshot back to the instance.
+// Body: {"index": N} selects a snapshot (default: most recent). The restore writes
+// through the same apply path, so it takes its own snapshot first and is itself
+// reversible. It does NOT change auto-sync bindings — restore is a value recovery,
+// not an opt-out; disable auto-sync separately to stop following a scheme.
+func (s *Server) handleRestoreNaming(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	inst, ok := s.Core.Config.GetInstance(id)
+	if !ok {
+		writeError(w, 404, "Instance not found")
+		return
+	}
+
+	cfg := s.Core.Config.Get()
+	snaps := cfg.NamingHistory[id]
+	if len(snaps) == 0 {
+		writeError(w, 404, "No naming history for this instance")
+		return
+	}
+
+	idx := len(snaps) - 1
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, 1024)
+		var req struct {
+			Index *int `json:"index"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Index != nil {
+			idx = *req.Index
+		}
+	}
+	if idx < 0 || idx >= len(snaps) {
+		writeError(w, 400, "Invalid snapshot index")
+		return
+	}
+
+	snap := snaps[idx]
+	if len(snap.Naming) == 0 {
+		writeError(w, 400, "Selected snapshot has no naming to restore")
+		return
+	}
+
+	if _, err := s.applyNamingFields(inst, snap.Naming, "rollback", true); err != nil {
+		log.Printf("Naming restore [%s]: failed: %v", inst.Name, err)
+		s.Core.DebugLog.Logf(core.LogError, "Naming restore [%s]: failed: %v", inst.Name, err)
+		writeError(w, 502, "Failed to restore naming on the instance")
+		return
+	}
+	log.Printf("Naming restore [%s]: restored snapshot from %s", inst.Name, snap.TakenAt)
+	s.Core.DebugLog.Logf(core.LogAutoSync, "Naming restore [%s]: restored snapshot from %s", inst.Name, snap.TakenAt)
+	writeJSON(w, map[string]string{"status": "restored"})
+}
+
+// AutoSyncNaming runs after a TRaSH pull (and at startup). For each instance with
+// opted-in naming fields, it re-applies any field whose TRaSH pattern has changed
+// since the last apply (fingerprint differs) — so a field keeps following its
+// scheme as the guide evolves. Fields whose pattern is unchanged are skipped (the
+// common case, so most ticks are no-ops). It reacts only to guide changes; Arr-side
+// drift is deferred. Default-off: instances absent from NamingAutoSync do nothing.
+func (s *Server) AutoSyncNaming() {
+	cfg := s.Core.Config.Get()
+	if len(cfg.NamingAutoSync) == 0 {
+		return
+	}
+
+	for instID, bindings := range cfg.NamingAutoSync {
+		if len(bindings) == 0 {
+			continue
+		}
+		inst, ok := s.Core.Config.GetInstance(instID)
+		if !ok {
+			continue
+		}
+		ad := s.Core.Trash.GetAppData(inst.Type)
+		if ad == nil {
+			continue
+		}
+
+		fieldsToApply := map[string]string{}
+		newFingerprint := map[string]string{}
+		for field, b := range bindings {
+			pattern, ok := resolveNamingField(ad, inst.Type, field, b.Scheme)
+			if !ok || pattern == "" {
+				continue // guide has no pattern for this (field, scheme) — never guess
+			}
+			fp := namingFingerprint(pattern)
+			if fp == b.LastFingerprint {
+				continue // unchanged since last apply
+			}
+			fieldsToApply[field] = pattern
+			newFingerprint[field] = fp
+		}
+		if len(fieldsToApply) == 0 {
+			continue
+		}
+
+		now := time.Now().UTC().Format(time.RFC3339)
+		_, err := s.applyNamingFields(inst, fieldsToApply, "auto-sync", true)
+		if err != nil {
+			log.Printf("Auto-sync naming [%s]: apply failed: %v", inst.Name, err)
+			s.Core.DebugLog.Logf(core.LogError, "Naming [%s]: apply failed: %v", inst.Name, err)
+			s.Core.Config.Update(func(c *core.Config) {
+				m := c.NamingAutoSync[instID]
+				if m == nil {
+					return
+				}
+				for field := range fieldsToApply {
+					if nb, ok := m[field]; ok {
+						nb.LastError = err.Error()
+						m[field] = nb
+					}
+				}
+			})
+			continue
+		}
+
+		// Record success: bump fingerprints, stamp time, clear any prior error.
+		s.Core.Config.Update(func(c *core.Config) {
+			m := c.NamingAutoSync[instID]
+			if m == nil {
+				return
+			}
+			for field, fp := range newFingerprint {
+				if nb, ok := m[field]; ok {
+					nb.LastFingerprint = fp
+					nb.LastAppliedAt = now
+					nb.LastError = ""
+					m[field] = nb
+				}
+			}
+		})
+		log.Printf("Auto-sync naming [%s]: applied %d field(s)", inst.Name, len(fieldsToApply))
+		s.Core.DebugLog.Logf(core.LogAutoSync, "Naming [%s]: applied %d field(s)", inst.Name, len(fieldsToApply))
+	}
 }
