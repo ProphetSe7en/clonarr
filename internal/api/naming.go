@@ -359,7 +359,6 @@ func (s *Server) AutoSyncNaming() {
 			continue
 		}
 
-		now := time.Now().UTC().Format(time.RFC3339)
 		_, err := s.applyNamingFields(inst, fieldsToApply, "auto-sync", true)
 		if err != nil {
 			log.Printf("Auto-sync naming [%s]: apply failed: %v", inst.Name, err)
@@ -380,6 +379,7 @@ func (s *Server) AutoSyncNaming() {
 		}
 
 		// Record success: bump fingerprints, stamp time, clear any prior error.
+		now := time.Now().UTC().Format(time.RFC3339)
 		s.Core.Config.Update(func(c *core.Config) {
 			m := c.NamingAutoSync[instID]
 			if m == nil {

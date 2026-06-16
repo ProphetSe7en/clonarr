@@ -403,3 +403,46 @@ func TestDriftWatch_GetReturnsDeepCopy(t *testing.T) {
 	}
 }
 
+// TestGetDeepCopiesNaming verifies Get() returns NamingAutoSync and NamingHistory
+// maps that callers can mutate without corrupting the store — required because the
+// AutoSyncNaming loop iterates these maps outside the store lock while handlers
+// write them under Update (a shared map would be a fatal concurrent map panic).
+func TestGetDeepCopiesNaming(t *testing.T) {
+	dir := t.TempDir()
+	cs := NewConfigStore(dir)
+	if err := cs.Load(); err != nil {
+		t.Fatalf("Load(): %v", err)
+	}
+
+	if err := cs.Update(func(c *Config) {
+		c.NamingAutoSync = map[string]map[string]NamingFieldBinding{
+			"inst1": {"movieFile": {Scheme: "plex", LastFingerprint: "fp"}},
+		}
+		c.NamingHistory = map[string][]NamingSnapshot{
+			"inst1": {{TakenAt: "t0", Naming: map[string]string{"movieFile": "ORIG"}}},
+		}
+	}); err != nil {
+		t.Fatalf("seed Update(): %v", err)
+	}
+
+	got := cs.Get()
+	// Mutate everything the caller can reach on the returned copy.
+	got.NamingAutoSync["inst1"]["movieFile"] = NamingFieldBinding{Scheme: "HACKED"}
+	got.NamingAutoSync["inst2"] = map[string]NamingFieldBinding{"x": {Scheme: "y"}}
+	got.NamingHistory["inst1"][0].Naming["movieFile"] = "HACKED"
+	got.NamingHistory["inst1"] = append(got.NamingHistory["inst1"], NamingSnapshot{TakenAt: "t1"})
+
+	fresh := cs.Get()
+	if b := fresh.NamingAutoSync["inst1"]["movieFile"]; b.Scheme != "plex" || b.LastFingerprint != "fp" {
+		t.Errorf("NamingAutoSync leaked mutation: %#v", b)
+	}
+	if _, ok := fresh.NamingAutoSync["inst2"]; ok {
+		t.Error("NamingAutoSync leaked a new instance key")
+	}
+	if v := fresh.NamingHistory["inst1"][0].Naming["movieFile"]; v != "ORIG" {
+		t.Errorf("NamingHistory snapshot leaked mutation: %q", v)
+	}
+	if n := len(fresh.NamingHistory["inst1"]); n != 1 {
+		t.Errorf("NamingHistory slice leaked append: len = %d", n)
+	}
+}

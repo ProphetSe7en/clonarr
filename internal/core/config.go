@@ -914,6 +914,39 @@ func (cs *ConfigStore) Get() Config {
 			cfg.QualitySizeAutoSync[k] = v
 		}
 	}
+	// Deep-copy NamingAutoSync (nested map). The AutoSyncNaming loop iterates this
+	// outside the store lock while handlers write it under Update — without a copy
+	// that's a concurrent map iteration+write (fatal panic).
+	if cs.config.NamingAutoSync != nil {
+		cfg.NamingAutoSync = make(map[string]map[string]NamingFieldBinding, len(cs.config.NamingAutoSync))
+		for k, v := range cs.config.NamingAutoSync {
+			inner := make(map[string]NamingFieldBinding, len(v))
+			for ik, iv := range v {
+				inner[ik] = iv
+			}
+			cfg.NamingAutoSync[k] = inner
+		}
+	}
+	// Deep-copy NamingHistory (map of slices; each snapshot has its own Naming map).
+	// Restore hands snap.Naming straight into the apply path — the copy keeps it
+	// self-contained so it can never leak a mutation back into the store.
+	if cs.config.NamingHistory != nil {
+		cfg.NamingHistory = make(map[string][]NamingSnapshot, len(cs.config.NamingHistory))
+		for k, snaps := range cs.config.NamingHistory {
+			cp := make([]NamingSnapshot, len(snaps))
+			for i, s := range snaps {
+				cp[i] = s
+				if len(s.Naming) > 0 {
+					m := make(map[string]string, len(s.Naming))
+					for nk, nv := range s.Naming {
+						m[nk] = nv
+					}
+					cp[i].Naming = m
+				}
+			}
+			cfg.NamingHistory[k] = cp
+		}
+	}
 	// Deep-copy CleanupKeep
 	if cs.config.CleanupKeep != nil {
 		cfg.CleanupKeep = make(map[string][]string, len(cs.config.CleanupKeep))
