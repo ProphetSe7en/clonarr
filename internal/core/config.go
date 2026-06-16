@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"clonarr/internal/core/agents"
 	"crypto/rand"
 	"encoding/json"
@@ -8,7 +9,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
+	"time"
 )
 
 // Config holds the full application configuration, persisted to JSON.
@@ -499,12 +503,19 @@ type ConfigStore struct {
 	mu       sync.Mutex // single mutex for all reads, writes, and saves
 	config   *Config
 	filePath string
+
+	// Auto-backup tuning (see backupConfigBytes). Set by NewConfigStore;
+	// overridable in tests.
+	backupKeep        int           // most-recent rotated backups to keep
+	backupMinInterval time.Duration // skip a new backup if the newest is younger than this
 }
 
 func NewConfigStore(dir string) *ConfigStore {
 	return &ConfigStore{
-		config:   DefaultConfig(),
-		filePath: filepath.Join(dir, "clonarr.json"),
+		config:            DefaultConfig(),
+		filePath:          filepath.Join(dir, "clonarr.json"),
+		backupKeep:        10,
+		backupMinInterval: 5 * time.Minute,
 	}
 }
 
@@ -631,7 +642,100 @@ func (cs *ConfigStore) saveLocked() error {
 	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return fmt.Errorf("write temp config: %w", err)
 	}
-	return os.Rename(tmp, cs.filePath)
+	if err := os.Rename(tmp, cs.filePath); err != nil {
+		return err
+	}
+
+	// Best-effort rotated backup of the just-persisted config. The save has
+	// already succeeded above — a backup failure must never fail or delay it.
+	cs.backupConfigBytes(data)
+	return nil
+}
+
+// backupConfigBytes writes a rotated, timestamped copy of the just-saved
+// config to <configDir>/backups/clonarr/ so a corrupted or lost clonarr.json
+// (the single source of truth for instances + sync rules) can be recovered.
+//
+// Best-effort: every error is logged and swallowed. It is called from
+// saveLocked AFTER the atomic write succeeds and runs under cs.mu, so it can
+// neither fail/delay the save nor race the writer. Throttled (skip if the
+// newest backup is younger than backupMinInterval) and deduped (skip if
+// identical to the newest) to bound churn from frequent small saves; pruned to
+// the newest backupKeep. Ordering uses file modtime, not name, so it stays
+// correct even if several backups land in the same second.
+func (cs *ConfigStore) backupConfigBytes(data []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("config backup: recovered from panic: %v", r)
+		}
+	}()
+
+	keep := cs.backupKeep
+	if keep <= 0 {
+		keep = 10
+	}
+
+	backupDir := filepath.Join(filepath.Dir(cs.filePath), "backups", "clonarr")
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		log.Printf("config backup: cannot create %s: %v", backupDir, err)
+		return
+	}
+
+	type bak struct {
+		path    string
+		modTime time.Time
+	}
+	var existing []bak
+	if entries, err := os.ReadDir(backupDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasPrefix(e.Name(), "clonarr-") || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			existing = append(existing, bak{filepath.Join(backupDir, e.Name()), info.ModTime()})
+		}
+	}
+	sort.Slice(existing, func(i, j int) bool { return existing[i].modTime.Before(existing[j].modTime) })
+
+	// Throttle + dedup against the newest existing backup.
+	if len(existing) > 0 {
+		newest := existing[len(existing)-1]
+		if cs.backupMinInterval > 0 && time.Since(newest.modTime) < cs.backupMinInterval {
+			return
+		}
+		if prev, err := os.ReadFile(newest.path); err == nil && bytes.Equal(prev, data) {
+			return
+		}
+	}
+
+	// Collision-safe, human-readable name. The throttle means production never
+	// collides; the suffix only guards tight loops (tests / throttle disabled).
+	base := "clonarr-" + time.Now().UTC().Format("2006-01-02T15-04-05Z")
+	name := base + ".json"
+	for n := 1; ; n++ {
+		if _, err := os.Stat(filepath.Join(backupDir, name)); os.IsNotExist(err) {
+			break
+		}
+		name = fmt.Sprintf("%s-%02d.json", base, n)
+	}
+	if err := os.WriteFile(filepath.Join(backupDir, name), data, 0600); err != nil {
+		log.Printf("config backup: write failed: %v", err)
+		return
+	}
+
+	// Prune oldest beyond keep (existing + the one just written).
+	existing = append(existing, bak{filepath.Join(backupDir, name), time.Now()})
+	if len(existing) > keep {
+		sort.Slice(existing, func(i, j int) bool { return existing[i].modTime.Before(existing[j].modTime) })
+		for _, b := range existing[:len(existing)-keep] {
+			if err := os.Remove(b.path); err != nil {
+				log.Printf("config backup: prune %s failed: %v", filepath.Base(b.path), err)
+			}
+		}
+	}
 }
 
 // Get returns a deep copy of the current config.
