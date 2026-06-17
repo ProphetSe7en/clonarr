@@ -826,7 +826,18 @@ export default {
           await this.loadInstances();
           await this.loadInstanceNaming(appType);
           await this.loadNamingApplied(appType);
-          this.showToast('Naming check complete', 'success');
+          // Summarise for the selected instance (the page the user is on).
+          const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
+          const nDrift = Object.keys(inst?.namingDriftFingerprints || {}).length;
+          const nUpd = Object.keys(inst?.namingUpdateFingerprints || {}).length;
+          if (nDrift === 0 && nUpd === 0) {
+            this.showToast('Naming is in sync', 'success');
+          } else {
+            const parts = [];
+            if (nDrift) parts.push(`${nDrift} field${nDrift === 1 ? '' : 's'} drifted`);
+            if (nUpd) parts.push(`${nUpd} update${nUpd === 1 ? '' : 's'} available`);
+            this.showToast('Naming check: ' + parts.join(', '), nDrift ? 'error' : 'info');
+          }
         } else {
           const err = await r.json().catch(() => ({}));
           this.showToast(`Naming check failed: ${err.error || r.statusText}`, 'error');

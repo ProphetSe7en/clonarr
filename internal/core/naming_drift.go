@@ -2,12 +2,20 @@ package core
 
 import "clonarr/internal/arr"
 
+// namingDriftField: one newly-drifted field, with the patterns so the notification
+// can show what changed (Now vs what Sync would re-apply).
+type namingDriftField struct {
+	Field    string
+	Current  string // the instance's current (drifted) pattern
+	Expected string // the intended scheme's current guide pattern (what Sync re-applies)
+}
+
 // namingDriftEvent: a newly-detected naming drift on one instance, for notification.
 type namingDriftEvent struct {
 	InstanceID   string
 	InstanceName string
 	AppType      string
-	Fields       []string // canonical field keys newly found drifted
+	Fields       []namingDriftField
 }
 
 // namingDriftPassResult carries what to persist + what to notify after the pass.
@@ -81,24 +89,34 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 
 		drift := map[string]string{}
 		updates := map[string]string{}
+		curPattern := map[string]string{}      // field -> current Arr pattern (drifted)
+		expectedPattern := map[string]string{} // field -> scheme's current guide pattern
 		for field, rec := range merged {
 			arrKey, ok := NamingArrKey[field]
 			if !ok {
 				continue
 			}
+			// Resolve the intended scheme's current guide pattern once (used for the
+			// update check + the drift notification's "what Sync would apply").
+			expected := ""
+			if rec.scheme != "" {
+				if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.scheme); ok {
+					expected = gp
+				}
+			}
+			expectedPattern[field] = expected
 			// DRIFT — current Arr pattern differs from what clonarr applied.
 			if cur, _ := current[arrKey].(string); cur != "" {
+				curPattern[field] = cur
 				if fp := NamingFingerprint(cur); fp != rec.fingerprint {
 					drift[field] = fp
 				}
 			}
 			// UPDATE — the intended scheme's current guide pattern differs from
 			// what clonarr applied (a guide update is available for this field).
-			if rec.scheme != "" {
-				if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.scheme); ok && gp != "" {
-					if fp := NamingFingerprint(gp); fp != rec.fingerprint {
-						updates[field] = fp
-					}
+			if expected != "" {
+				if fp := NamingFingerprint(expected); fp != rec.fingerprint {
+					updates[field] = fp
 				}
 			}
 		}
@@ -111,10 +129,10 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 
 		// Newly-drifted vs the previously-stored fingerprints → notify (dedup so a
 		// standing drift isn't re-notified on every check).
-		var newly []string
+		var newly []namingDriftField
 		for field, fp := range drift {
 			if inst.NamingDriftFingerprints[field] != fp {
-				newly = append(newly, field)
+				newly = append(newly, namingDriftField{Field: field, Current: curPattern[field], Expected: expectedPattern[field]})
 			}
 		}
 		if len(newly) > 0 {

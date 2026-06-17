@@ -85,11 +85,15 @@ func (app *App) NotifyNamingDriftDetected(events []namingDriftEvent) {
 	}
 
 	for _, ev := range events {
-		lines := []string{"Naming was changed directly in **" + ev.InstanceName + "** on a field clonarr has synced:", ""}
+		lines := []string{"Naming was changed directly in **" + ev.InstanceName + "**, so it no longer matches what clonarr applied:"}
 		for _, f := range ev.Fields {
-			lines = append(lines, "• "+NamingFieldLabel(f))
+			lines = append(lines, "", "**"+NamingFieldLabel(f.Field)+"**")
+			lines = append(lines, "Now: `"+f.Current+"`")
+			if f.Expected != "" {
+				lines = append(lines, "Should be: `"+f.Expected+"`")
+			}
 		}
-		lines = append(lines, "", "It no longer matches the scheme. Use Sync in clonarr to re-apply.")
+		lines = append(lines, "", "Use Sync in clonarr to re-apply.")
 
 		payload := NotificationPayload{
 			Title:    "Clonarr: naming drift detected on " + ev.InstanceName,
