@@ -767,23 +767,24 @@ export default {
       this.namingHistoryModal = { show: true, appType };
     },
 
-    // Run a drift check now (the same DriftRunner.RunOnce the sidebar Check + the
-    // schedule use), then refresh instances (for the persisted naming-drift flags)
-    // and the current naming so the "drifted" markers reflect this check.
+    // Naming-only check: runs ONLY the naming drift+update pass (not CF/profile
+    // drift), then refreshes instances (persisted drift/update flags) + current
+    // naming + applied records so the markers reflect this check.
     async checkNamingDrift(appType) {
       this.namingDriftChecking = true;
       try {
-        const r = await fetch('/api/drift/check', { method: 'POST' });
+        const r = await fetch('/api/naming/drift-check', { method: 'POST' });
         if (r.ok) {
           await this.loadInstances();
           await this.loadInstanceNaming(appType);
-          this.showToast('Drift check complete', 'success');
+          await this.loadNamingApplied(appType);
+          this.showToast('Naming check complete', 'success');
         } else {
           const err = await r.json().catch(() => ({}));
-          this.showToast(`Drift check failed: ${err.error || r.statusText}`, 'error');
+          this.showToast(`Naming check failed: ${err.error || r.statusText}`, 'error');
         }
       } catch (e) {
-        this.showToast(`Drift check failed: ${e.message}`, 'error');
+        this.showToast(`Naming check failed: ${e.message}`, 'error');
       } finally {
         this.namingDriftChecking = false;
       }

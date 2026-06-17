@@ -135,7 +135,7 @@
                         <button type="button" class="btn btn-sm"
                           :disabled="namingDriftChecking || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                           @click="checkNamingDrift(activeAppType)"
-                          x-tt="'Check your connected instances now for naming changed directly in Radarr/Sonarr (Arr drift). Same check as the sidebar.'">
+                          x-tt="'Check your connected instances now for naming updates (guide changed) and drift (changed in Radarr/Sonarr). Naming only.'">
                           <span x-text="namingDriftChecking ? 'Checking…' : 'Check'"></span>
                         </button>
                         <button type="button" class="btn btn-sm"

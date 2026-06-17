@@ -448,11 +448,21 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		d.app.NotifyCFDriftReconciled(cfReconciled)
 	}
 
-	// Naming drift pass (#5): per-instance, flag-only. Compares each auto-synced
-	// naming field's current Arr pattern against what clonarr last applied. Runs
-	// on both the scheduled check and the manual sidebar Check (this is RunOnce).
+	// Naming drift+update pass (#5): per-instance, flag-only. Runs on both the
+	// universal check (this RunOnce) and the naming-only card Check.
+	if err := d.runNamingDrift(); err != nil {
+		return results, err
+	}
+
+	return results, nil
+}
+
+// runNamingDrift runs the naming drift+update pass, persists the per-instance
+// flags, and fires drift notifications. Shared by RunOnce (universal check) and
+// RunNamingDriftOnce (the naming-only card Check) so both behave identically.
+func (d *DriftRunner) runNamingDrift() error {
 	namingPass := runNamingDriftPass(d)
-	if updErr := d.app.Config.Update(func(c *Config) {
+	if err := d.app.Config.Update(func(c *Config) {
 		for i := range c.Instances {
 			id := c.Instances[i].ID
 			if namingPass.checkedOK[id] {
@@ -466,14 +476,22 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 			}
 			// else: has applied fields but was unreachable this pass → leave existing.
 		}
-	}); updErr != nil {
-		return results, fmt.Errorf("persist naming drift result: %w", updErr)
+	}); err != nil {
+		return fmt.Errorf("persist naming drift result: %w", err)
 	}
 	if len(namingPass.detected) > 0 {
 		d.app.NotifyNamingDriftDetected(namingPass.detected)
 	}
+	return nil
+}
 
-	return results, nil
+// RunNamingDriftOnce runs ONLY the naming drift+update pass (not CF/profile drift),
+// for the naming-section "Check" — so it checks naming and nothing else. Serialized
+// with the same mutex as RunOnce.
+func (d *DriftRunner) RunNamingDriftOnce() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.runNamingDrift()
 }
 
 // driftNotificationEvent identifies which lifecycle event to fire for a

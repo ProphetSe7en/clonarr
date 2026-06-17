@@ -171,6 +171,21 @@ func (s *Server) handleGetNamingAutoSync(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, out)
 }
 
+// handleNamingDriftCheck runs ONLY the naming drift+update pass (not CF/profile
+// drift) — the naming-section "Check". Persists the per-instance flags; the UI
+// reloads instances afterwards to read them.
+func (s *Server) handleNamingDriftCheck(w http.ResponseWriter, r *http.Request) {
+	if s.Core.DriftRunner == nil {
+		writeError(w, 500, "drift runner not initialised")
+		return
+	}
+	if err := s.Core.DriftRunner.RunNamingDriftOnce(); err != nil {
+		writeError(w, 500, "naming check failed: "+err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "checked"})
+}
+
 // handleGetNamingApplied returns what clonarr last applied per field (scheme +
 // fingerprint + appliedAt), for any field it has synced (manual OR auto). The UI
 // uses the scheme to label/Sync manually-synced fields and to compute the Expected
