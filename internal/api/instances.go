@@ -1305,8 +1305,8 @@ func (s *Server) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build the canonical field map from the (preset-resolved) request, then apply
-	// via the shared path — which snapshots the prior naming first for rollback.
-	// applyFieldsToArrNaming skips empty patterns, so unset fields are untouched
+	// via the shared path — which records the applied scheme + a per-field history
+	// event. applyFieldsToArrNaming skips empty patterns, so unset fields are untouched
 	// (same as the old per-field `if != ""` guards).
 	var fields map[string]string
 	if inst.Type == "radarr" {

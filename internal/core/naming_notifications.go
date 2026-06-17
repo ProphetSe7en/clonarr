@@ -85,7 +85,7 @@ func (app *App) NotifyNamingDriftDetected(events []namingDriftEvent) {
 	}
 
 	for _, ev := range events {
-		lines := []string{"Naming was changed directly in **" + ev.InstanceName + "** on a field clonarr auto-syncs:", ""}
+		lines := []string{"Naming was changed directly in **" + ev.InstanceName + "** on a field clonarr has synced:", ""}
 		for _, f := range ev.Fields {
 			lines = append(lines, "• "+NamingFieldLabel(f))
 		}

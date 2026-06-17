@@ -171,7 +171,7 @@
                                       x-text="(st.auto ? '⟳ ' : '') + st.label"
                                       x-tt="st.auto ? 'This field auto-syncs to this scheme' : 'Synced to this scheme manually via clonarr'"></span>
                                     <template x-if="st.drifted">
-                                      <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'Changed directly in Radarr/Sonarr — no longer matches. Use Sync to re-apply.'">drifted</span>
+                                      <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'Changed directly in Radarr/Sonarr, no longer matches. Use Sync to re-apply.'">drifted</span>
                                     </template>
                                     <template x-if="st.updatable">
                                       <span style="color:var(--accent-blue);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'The guide published a newer pattern for this scheme. Use Sync to apply it.'">update</span>

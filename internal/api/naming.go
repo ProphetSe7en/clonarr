@@ -10,10 +10,11 @@ import (
 )
 
 // Naming auto-sync (#5) shared core: resolving a TRaSH scheme to a single naming
-// field, applying fields to an instance (per-field; others preserved), capturing
-// a pre-apply snapshot for rollback, and fingerprinting. Used by both the manual
-// apply handler and (later phases) the scheduled AutoSyncNaming loop, so there is
-// one apply path. Field keys are clonarr's canonical naming-field identifiers.
+// field, applying fields to an instance (per-field; others preserved), recording
+// the applied scheme/fingerprint + a per-field change-history event, and
+// fingerprinting. Used by the manual apply handler, the scheduled AutoSyncNaming
+// loop, Sync now / Update all, and restore — one apply path. Field keys are
+// clonarr's canonical naming-field identifiers.
 
 const namingChangeKeep = 10 // per-field change events kept (newest), for history + restore
 
@@ -64,8 +65,8 @@ func applyFieldsToArrNaming(instType string, current arr.ArrNamingConfig, fields
 }
 
 // extractNamingPatterns reads the current Arr naming config back into canonical
-// field → pattern, for the pre-apply rollback snapshot. Only the fields clonarr
-// manages are captured.
+// field → pattern (the pre-apply state). Used as the `from` side of each history
+// event and returned to callers as `prev`. Only the fields clonarr manages.
 func extractNamingPatterns(instType string, current arr.ArrNamingConfig) map[string]string {
 	out := map[string]string{}
 	if current == nil {
