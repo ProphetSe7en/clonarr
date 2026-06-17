@@ -165,10 +165,11 @@ func main() {
 	// after CloneOrPull succeeds, so server-level helpers (which live in api
 	// package and aren't reachable from core) still run on every scheduled
 	// pull. Same call-site as today's pull-scheduler closure.
-	app.AfterPullCallback = func() {
-		server.AutoSyncQualitySizes()
-		server.AutoSyncNaming()
-	}
+	// QS auto-sync runs on every pull (incl. the data-only Pull) — unchanged.
+	app.AfterPullCallback = server.AutoSyncQualitySizes
+	// Naming auto-sync writes to Arr, so it runs ONLY on the scheduled Pull-and-sync
+	// (+ the naming card's Update all), never on the data-only Pull button.
+	app.AfterSyncCallback = server.AutoSyncNaming
 
 	// Background: clone/pull TRaSH repo on startup.
 	//

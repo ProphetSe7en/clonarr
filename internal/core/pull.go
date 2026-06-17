@@ -107,6 +107,11 @@ func (app *App) RunPullAndSync(source string) error {
 	if app.AfterPullCallback != nil {
 		app.AfterPullCallback()
 	}
+	// Scheduled-sync-only: naming auto-sync writes to Arr, so it runs here (the
+	// Pull-and-sync path) but NOT on the data-only Pull (RunPullOnly).
+	if app.AfterSyncCallback != nil {
+		app.AfterSyncCallback()
+	}
 	app.DebugLog.Logf(LogAutoSync, "Running auto-sync")
 	// AutoSyncAfterPull opens its own AUTOSYNC operation; it is not a
 	// child of this TRASH op so the trace clearly separates the pull

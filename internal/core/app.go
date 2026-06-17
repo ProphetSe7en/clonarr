@@ -72,8 +72,15 @@ type App struct {
 	// or not), before AutoSyncAfterPull. Lets main.go register server-level
 	// helpers like api.Server.AutoSyncQualitySizes — which lives in the api
 	// package and is not callable from core — without core depending on api.
-	// Nil-safe.
+	// Fires on BOTH the data-only Pull (RunPullOnly) and the scheduled
+	// Pull-and-sync (RunPullAndSync). Nil-safe.
 	AfterPullCallback func()
+
+	// AfterSyncCallback runs only on the scheduled Pull-and-sync path
+	// (RunPullAndSync), NOT on the data-only Pull (RunPullOnly). Used for
+	// instance-level auto-sync that writes to Arr (naming auto-sync), so the
+	// manual Pull button stays data-only. Nil-safe.
+	AfterSyncCallback func()
 }
 
 // IsShuttingDown returns true once ShutdownCh has been closed (graceful
