@@ -68,6 +68,7 @@ export default {
     namingApplied: {},
     namingAutoSyncBusy: false,
     namingDriftChecking: false,
+    namingSyncing: false,
     // Rollback history: per-appType array of snapshots (newest last).
     namingHistory: {},
     namingHistoryModal: { show: false, appType: '' },
@@ -788,6 +789,49 @@ export default {
       } finally {
         this.namingDriftChecking = false;
       }
+    },
+
+    // Apply fields' intended schemes now + clear their drift/update flags.
+    // fields = array of canonical field keys (per-field Sync); omitted = Update all
+    // (every auto-sync field with a drift/update flag).
+    async syncNaming(appType, fields) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) return;
+      this.namingSyncing = true;
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fields ? { fields } : {}),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) {
+          if (data.applied > 0) this.showToast(`Synced ${data.applied} naming field${data.applied === 1 ? '' : 's'}`, 'success');
+          else this.showToast('Nothing to sync', 'info');
+          await this.loadInstances();
+          await this.loadInstanceNaming(appType);
+          await this.loadNamingApplied(appType);
+        } else {
+          this.showToast(`Sync failed: ${data.error || r.statusText}`, 'error');
+        }
+      } catch (e) {
+        this.showToast(`Sync failed: ${e.message}`, 'error');
+      } finally {
+        this.namingSyncing = false;
+      }
+    },
+
+    // True if any auto-sync field on the selected instance currently has a drift
+    // or update flag — i.e. "Update all" would do something. Drives that button.
+    namingAnyPending(appType) {
+      const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
+      if (!inst) return false;
+      const auto = this.namingAutoSync[appType] || {};
+      for (const field of Object.keys(auto)) {
+        if ((inst.namingDriftFingerprints && inst.namingDriftFingerprints[field]) ||
+            (inst.namingUpdateFingerprints && inst.namingUpdateFingerprints[field])) return true;
+      }
+      return false;
     },
 
     // Newest-first for display, but each item keeps its true array index

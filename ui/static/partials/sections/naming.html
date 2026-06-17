@@ -138,6 +138,16 @@
                           x-tt="'Check your connected instances now for naming updates (guide changed) and drift (changed in Radarr/Sonarr). Naming only.'">
                           <span x-text="namingDriftChecking ? 'Checking…' : 'Check'"></span>
                         </button>
+                        <!-- Update all: re-applies every auto-sync field that has an
+                             update or drift. Only shown when there's something to do. -->
+                        <template x-if="namingAnyPending(activeAppType)">
+                          <button type="button" class="btn btn-sm btn-primary"
+                            :disabled="namingSyncing || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
+                            @click="syncNaming(activeAppType)"
+                            x-tt="'Re-apply every auto-sync field that has an update or drift, to its scheme. Manual-only fields are not touched.'">
+                            <span x-text="namingSyncing ? 'Syncing…' : 'Update all'"></span>
+                          </button>
+                        </template>
                         <button type="button" class="btn btn-sm"
                           @click="openNamingHistory(activeAppType)"
                           x-tt="'View and restore naming clonarr saved before each change'">History</button>
@@ -178,6 +188,16 @@
                                   <span style="color:var(--text-muted);font-style:italic">Custom</span>
                                 </template>
                               </span>
+                            </template>
+                            <!-- Per-field Sync now — re-applies this field's scheme.
+                                 Shown only when it has something to apply (drift/update). -->
+                            <template x-for="st in [namingFieldStatus(activeAppType, row)]" :key="row.field + ':sync'">
+                              <template x-if="st.drifted || st.updatable">
+                                <button type="button" class="btn btn-sm" style="margin-left:auto;padding:2px 8px"
+                                  :disabled="namingSyncing || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
+                                  @click="syncNaming(activeAppType, [row.field])"
+                                  x-tt="st.drifted ? 'Re-apply this scheme to the field (it was changed in Radarr/Sonarr)' : 'Apply the newer guide pattern for this field'">Sync now</button>
+                              </template>
                             </template>
                           </div>
                           <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-page);border-radius:3px;padding:5px 8px"

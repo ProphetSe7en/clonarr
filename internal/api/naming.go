@@ -171,6 +171,83 @@ func (s *Server) handleGetNamingAutoSync(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, out)
 }
 
+// handleNamingSync applies fields' intended schemes (the scheme's current guide
+// pattern) to the instance now, and clears their drift/update flags.
+//   - body {"fields":[...]} → apply exactly those fields (per-field "Sync now";
+//     works for any synced field, manual or auto, via its applied/bound scheme).
+//   - empty body → "Update all": every AUTO-SYNC-ON field that currently has a
+//     drift or update flag (manual fields are excluded — they have no auto-scheme
+//     to apply on a bulk action; sync them individually).
+func (s *Server) handleNamingSync(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	inst, ok := s.Core.Config.GetInstance(id)
+	if !ok {
+		writeError(w, 404, "Instance not found")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var req struct {
+		Fields []string `json:"fields"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req) // empty body is valid (Update all)
+
+	cfg := s.Core.Config.Get()
+	bindings := cfg.NamingAutoSync[id]
+	applied := cfg.NamingApplied[id]
+	ad := s.Core.Trash.GetAppData(inst.Type)
+
+	targets := req.Fields
+	if len(targets) == 0 {
+		// Update all: auto-sync-ON fields flagged with drift or update.
+		for field := range bindings {
+			if inst.NamingDriftFingerprints[field] != "" || inst.NamingUpdateFingerprints[field] != "" {
+				targets = append(targets, field)
+			}
+		}
+	}
+
+	fields := map[string]string{}
+	schemes := map[string]string{}
+	for _, field := range targets {
+		scheme := bindings[field].Scheme
+		if scheme == "" {
+			scheme = applied[field].Scheme // manually-synced field
+		}
+		if scheme == "" {
+			continue
+		}
+		pattern, ok := resolveNamingField(ad, inst.Type, field, scheme)
+		if !ok || pattern == "" {
+			continue
+		}
+		fields[field] = pattern
+		schemes[field] = scheme
+	}
+	if len(fields) == 0 {
+		writeJSON(w, map[string]any{"status": "noop", "applied": 0})
+		return
+	}
+
+	if _, _, err := s.applyNamingFields(inst, fields, schemes, "manual", true); err != nil {
+		writeError(w, 502, "Failed to apply naming: "+err.Error())
+		return
+	}
+	// Applied fields now match their scheme — clear their drift/update flags so the
+	// markers disappear without waiting for the next check.
+	s.Core.Config.Update(func(c *core.Config) {
+		for i := range c.Instances {
+			if c.Instances[i].ID != id {
+				continue
+			}
+			for field := range fields {
+				delete(c.Instances[i].NamingDriftFingerprints, field)
+				delete(c.Instances[i].NamingUpdateFingerprints, field)
+			}
+		}
+	})
+	writeJSON(w, map[string]any{"status": "synced", "applied": len(fields)})
+}
+
 // handleNamingDriftCheck runs ONLY the naming drift+update pass (not CF/profile
 // drift) — the naming-section "Check". Persists the per-instance flags; the UI
 // reloads instances afterwards to read them.

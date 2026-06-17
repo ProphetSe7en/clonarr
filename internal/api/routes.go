@@ -44,6 +44,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/instances/{id}/naming/auto-sync", s.handleSaveNamingAutoSync)
 	mux.HandleFunc("GET /api/instances/{id}/naming/applied", s.handleGetNamingApplied)
 	mux.HandleFunc("POST /api/naming/drift-check", s.handleNamingDriftCheck)
+	mux.HandleFunc("POST /api/instances/{id}/naming/sync", s.handleNamingSync)
 	mux.HandleFunc("GET /api/instances/{id}/naming/history", s.handleGetNamingHistory)
 	mux.HandleFunc("POST /api/instances/{id}/naming/restore", s.handleRestoreNaming)
 	mux.HandleFunc("GET /api/instances/{id}/compare", s.handleCompareProfile)
