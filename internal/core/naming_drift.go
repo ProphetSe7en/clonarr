@@ -35,8 +35,34 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 		updateFP:  map[string]map[string]string{},
 		checkedOK: map[string]bool{},
 	}
-	for instID, applied := range cfg.NamingApplied {
-		if len(applied) == 0 {
+	// An instance is in scope if clonarr has synced ANY naming field on it — either
+	// an applied record (manual or auto) OR an auto-sync binding. Bindings are
+	// included so fields auto-synced before the per-field applied-record existed
+	// (or not yet re-applied) are still drift-checked, using the binding's
+	// fingerprint/scheme as the applied baseline.
+	instIDs := map[string]bool{}
+	for instID := range cfg.NamingApplied {
+		instIDs[instID] = true
+	}
+	for instID := range cfg.NamingAutoSync {
+		instIDs[instID] = true
+	}
+
+	for instID := range instIDs {
+		// Merge per-field {scheme, fingerprint}: applied record wins; else binding.
+		type fieldState struct{ scheme, fingerprint string }
+		merged := map[string]fieldState{}
+		for field, b := range cfg.NamingAutoSync[instID] {
+			if b.LastFingerprint != "" {
+				merged[field] = fieldState{scheme: b.Scheme, fingerprint: b.LastFingerprint}
+			}
+		}
+		for field, rec := range cfg.NamingApplied[instID] {
+			if rec.Fingerprint != "" {
+				merged[field] = fieldState{scheme: rec.Scheme, fingerprint: rec.Fingerprint}
+			}
+		}
+		if len(merged) == 0 {
 			continue
 		}
 		inst, ok := d.app.Config.GetInstance(instID)
@@ -55,25 +81,22 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 
 		drift := map[string]string{}
 		updates := map[string]string{}
-		for field, rec := range applied {
-			if rec.Fingerprint == "" {
-				continue
-			}
+		for field, rec := range merged {
 			arrKey, ok := NamingArrKey[field]
 			if !ok {
 				continue
 			}
 			// DRIFT — current Arr pattern differs from what clonarr applied.
 			if cur, _ := current[arrKey].(string); cur != "" {
-				if fp := NamingFingerprint(cur); fp != rec.Fingerprint {
+				if fp := NamingFingerprint(cur); fp != rec.fingerprint {
 					drift[field] = fp
 				}
 			}
 			// UPDATE — the intended scheme's current guide pattern differs from
 			// what clonarr applied (a guide update is available for this field).
-			if rec.Scheme != "" {
-				if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.Scheme); ok && gp != "" {
-					if fp := NamingFingerprint(gp); fp != rec.Fingerprint {
+			if rec.scheme != "" {
+				if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.scheme); ok && gp != "" {
+					if fp := NamingFingerprint(gp); fp != rec.fingerprint {
 						updates[field] = fp
 					}
 				}

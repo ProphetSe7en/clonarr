@@ -469,8 +469,8 @@ func (d *DriftRunner) runNamingDrift() error {
 				// Replace with the freshly-computed maps (nil clears = reconciled).
 				c.Instances[i].NamingDriftFingerprints = namingPass.driftFP[id]
 				c.Instances[i].NamingUpdateFingerprints = namingPass.updateFP[id]
-			} else if len(c.NamingApplied[id]) == 0 {
-				// Nothing applied → no drift/update state to keep (clear stale).
+			} else if len(c.NamingApplied[id]) == 0 && len(c.NamingAutoSync[id]) == 0 {
+				// Nothing synced (no applied record, no binding) → clear stale state.
 				c.Instances[i].NamingDriftFingerprints = nil
 				c.Instances[i].NamingUpdateFingerprints = nil
 			}
