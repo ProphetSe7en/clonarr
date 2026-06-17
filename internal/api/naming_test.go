@@ -5,7 +5,6 @@ import (
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -188,22 +187,5 @@ func TestHandleSaveNamingAutoSync_OptOutAndSchemeReset(t *testing.T) {
 	putNamingAutoSync(t, server, radarr.ID, map[string]core.NamingFieldBinding{})
 	if _, ok := app.Config.Get().NamingAutoSync[radarr.ID]; ok {
 		t.Error("empty body should remove the instance's bindings")
-	}
-}
-
-func TestAppendNamingSnapshot_Caps(t *testing.T) {
-	cfg := &core.Config{}
-	for i := 0; i < 8; i++ {
-		appendNamingSnapshot(cfg, "inst", map[string]string{"movieFile": fmt.Sprintf("v%d", i)}, "manual", fmt.Sprintf("t%d", i), 5)
-	}
-	got := cfg.NamingHistory["inst"]
-	if len(got) != 5 {
-		t.Fatalf("kept %d snapshots, want 5", len(got))
-	}
-	if got[len(got)-1].Naming["movieFile"] != "v7" {
-		t.Errorf("newest snapshot = %q, want v7", got[len(got)-1].Naming["movieFile"])
-	}
-	if got[0].Naming["movieFile"] != "v3" {
-		t.Errorf("oldest kept = %q, want v3 (8 added, keep 5)", got[0].Naming["movieFile"])
 	}
 }

@@ -1333,7 +1333,7 @@ func (s *Server) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, _, err := s.applyNamingFields(inst, fields, schemes, "manual", true)
+	result, _, err := s.applyNamingFields(inst, fields, schemes, "manual")
 	if err != nil {
 		writeError(w, 502, "Failed to apply naming: "+err.Error())
 		return

@@ -148,9 +148,6 @@
                             <span x-text="namingSyncing ? 'Syncing…' : 'Update all'"></span>
                           </button>
                         </template>
-                        <button type="button" class="btn btn-sm"
-                          @click="openNamingHistory(activeAppType)"
-                          x-tt="'View and restore naming clonarr saved before each change'">History</button>
                       </div>
                     </div>
                     <!-- Stacked per-field blocks: a label line (field name + the
@@ -217,6 +214,33 @@
                                   x-text="st.expected"></div>
                               </div>
                             </template>
+                          </template>
+                          <!-- Per-field history: each change shown as from → to, newest
+                               first, with a restore to the value before that change. -->
+                          <template x-if="namingFieldChanges(activeAppType, row.field).length > 0">
+                            <div style="margin-top:4px">
+                              <button type="button" class="inline-action" style="font-size:11px;color:var(--accent-blue)"
+                                @click="toggleNamingFieldHistory(activeAppType, row.field)"
+                                x-text="(isNamingFieldHistoryOpen(activeAppType, row.field) ? '▾ Hide history (' : '▸ History (') + namingFieldChanges(activeAppType, row.field).length + ')'"></button>
+                              <div x-show="isNamingFieldHistoryOpen(activeAppType, row.field)" x-cloak style="margin-top:5px;display:flex;flex-direction:column;gap:7px">
+                                <template x-for="(ev, evIdx) in namingFieldChanges(activeAppType, row.field)" :key="evIdx">
+                                  <div style="border-left:2px solid var(--border-subtle);padding-left:8px">
+                                    <div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px">
+                                      <span x-text="namingSnapshotTime(ev.at)"></span> · <span x-text="namingChangeVia(ev.via)"></span>
+                                    </div>
+                                    <div style="font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="ev.from || '(not set)'"></div>
+                                    <div style="font-size:10px;color:var(--text-secondary);line-height:1">&#8595;</div>
+                                    <div style="font-family:monospace;font-size:11px;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="ev.to"></div>
+                                    <template x-if="ev.from">
+                                      <button type="button" class="btn btn-sm" style="margin-top:4px;padding:1px 7px"
+                                        :disabled="instanceStatus[mediaInstanceId[activeAppType]] !== 'connected' || (namingInstanceData[activeAppType]?.[row.arr] || '') === ev.from"
+                                        @click="confirmRestoreNamingField(activeAppType, row.field, row.label, ev.from)"
+                                        x-tt="'Set this field back to the value it had before this change'">Restore to before</button>
+                                    </template>
+                                  </div>
+                                </template>
+                              </div>
+                            </div>
                           </template>
                         </div>
                       </template>

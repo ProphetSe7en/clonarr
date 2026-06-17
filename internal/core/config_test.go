@@ -418,8 +418,8 @@ func TestGetDeepCopiesNaming(t *testing.T) {
 		c.NamingAutoSync = map[string]map[string]NamingFieldBinding{
 			"inst1": {"movieFile": {Scheme: "plex", LastFingerprint: "fp"}},
 		}
-		c.NamingHistory = map[string][]NamingSnapshot{
-			"inst1": {{TakenAt: "t0", Naming: map[string]string{"movieFile": "ORIG"}}},
+		c.NamingChanges = map[string]map[string][]NamingChangeEvent{
+			"inst1": {"movieFile": {{At: "t0", From: "OLD", To: "ORIG", Via: "manual"}}},
 		}
 	}); err != nil {
 		t.Fatalf("seed Update(): %v", err)
@@ -429,8 +429,9 @@ func TestGetDeepCopiesNaming(t *testing.T) {
 	// Mutate everything the caller can reach on the returned copy.
 	got.NamingAutoSync["inst1"]["movieFile"] = NamingFieldBinding{Scheme: "HACKED"}
 	got.NamingAutoSync["inst2"] = map[string]NamingFieldBinding{"x": {Scheme: "y"}}
-	got.NamingHistory["inst1"][0].Naming["movieFile"] = "HACKED"
-	got.NamingHistory["inst1"] = append(got.NamingHistory["inst1"], NamingSnapshot{TakenAt: "t1"})
+	got.NamingChanges["inst1"]["movieFile"][0].To = "HACKED"
+	got.NamingChanges["inst1"]["movieFile"] = append(got.NamingChanges["inst1"]["movieFile"], NamingChangeEvent{At: "t1"})
+	got.NamingChanges["inst1"]["movieFolder"] = []NamingChangeEvent{{At: "t2"}}
 
 	fresh := cs.Get()
 	if b := fresh.NamingAutoSync["inst1"]["movieFile"]; b.Scheme != "plex" || b.LastFingerprint != "fp" {
@@ -439,10 +440,13 @@ func TestGetDeepCopiesNaming(t *testing.T) {
 	if _, ok := fresh.NamingAutoSync["inst2"]; ok {
 		t.Error("NamingAutoSync leaked a new instance key")
 	}
-	if v := fresh.NamingHistory["inst1"][0].Naming["movieFile"]; v != "ORIG" {
-		t.Errorf("NamingHistory snapshot leaked mutation: %q", v)
+	if v := fresh.NamingChanges["inst1"]["movieFile"][0].To; v != "ORIG" {
+		t.Errorf("NamingChanges event leaked mutation: %q", v)
 	}
-	if n := len(fresh.NamingHistory["inst1"]); n != 1 {
-		t.Errorf("NamingHistory slice leaked append: len = %d", n)
+	if n := len(fresh.NamingChanges["inst1"]["movieFile"]); n != 1 {
+		t.Errorf("NamingChanges slice leaked append: len = %d", n)
+	}
+	if _, ok := fresh.NamingChanges["inst1"]["movieFolder"]; ok {
+		t.Error("NamingChanges leaked a new field key")
 	}
 }

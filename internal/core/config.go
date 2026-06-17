@@ -29,7 +29,7 @@ type Config struct {
 	QualitySizeAutoSync  map[string]QSAutoSync                     `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
 	NamingAutoSync       map[string]map[string]NamingFieldBinding  `json:"namingAutoSync,omitempty"`       // instanceID → naming-field key → binding (opt-in, per-field; #5)
 	NamingApplied        map[string]map[string]NamingAppliedRecord `json:"namingApplied,omitempty"`        // instanceID → field → what clonarr last applied (manual OR auto): the intended scheme + fingerprint. Source for drift + update detection (#5)
-	NamingHistory        map[string][]NamingSnapshot               `json:"namingHistory,omitempty"`        // instanceID → naming snapshots (newest last) for rollback
+	NamingChanges        map[string]map[string][]NamingChangeEvent `json:"namingChanges,omitempty"`        // instanceID → field → change events (newest last, capped) for per-field history + restore (#5)
 	SyncHistory          []SyncHistoryEntry                        `json:"syncHistory,omitempty"`
 	CleanupKeep          map[string][]string                       `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
 	AutoSync             AutoSyncConfig                            `json:"autoSync,omitempty"`
@@ -341,14 +341,15 @@ type NamingAppliedRecord struct {
 	AppliedAt   string `json:"appliedAt,omitempty"`
 }
 
-// NamingSnapshot: the instance's naming captured BEFORE an apply (manual or auto),
-// for one-click rollback. Stores raw pattern strings so it restores even a
-// custom/hand-edited prior state. Config.NamingHistory is instanceID → []snapshot
-// (newest last, capped).
-type NamingSnapshot struct {
-	TakenAt    string            `json:"takenAt"`
-	Naming     map[string]string `json:"naming"`               // canonical naming-field key → pattern (pre-apply)
-	ReplacedBy string            `json:"replacedBy,omitempty"` // what was applied next ("scheme: plex" / "manual")
+// NamingChangeEvent: one per-field change clonarr made, for per-field history +
+// restore. From = the pattern before this change, To = the pattern applied, so the
+// UI shows "from → to" and a restore puts the field back to a known prior value.
+// Config.NamingChanges is instanceID → field → []event (newest last, capped).
+type NamingChangeEvent struct {
+	At   string `json:"at"`             // RFC3339 timestamp
+	From string `json:"from,omitempty"` // pattern before this change ("" if unset)
+	To   string `json:"to"`             // pattern applied
+	Via  string `json:"via,omitempty"`  // "manual" | "auto-sync" | "rollback"
 }
 
 // SyncChanges captures the detailed changes made during a sync.
@@ -981,24 +982,18 @@ func (cs *ConfigStore) Get() Config {
 			cfg.NamingApplied[k] = inner
 		}
 	}
-	// Deep-copy NamingHistory (map of slices; each snapshot has its own Naming map).
-	// Restore hands snap.Naming straight into the apply path — the copy keeps it
-	// self-contained so it can never leak a mutation back into the store.
-	if cs.config.NamingHistory != nil {
-		cfg.NamingHistory = make(map[string][]NamingSnapshot, len(cs.config.NamingHistory))
-		for k, snaps := range cs.config.NamingHistory {
-			cp := make([]NamingSnapshot, len(snaps))
-			for i, s := range snaps {
-				cp[i] = s
-				if len(s.Naming) > 0 {
-					m := make(map[string]string, len(s.Naming))
-					for nk, nv := range s.Naming {
-						m[nk] = nv
-					}
-					cp[i].Naming = m
-				}
+	// Deep-copy NamingChanges (instanceID → field → []event). Nested map+slice;
+	// copy each level so the drift pass / handlers can't leak mutations into the store.
+	if cs.config.NamingChanges != nil {
+		cfg.NamingChanges = make(map[string]map[string][]NamingChangeEvent, len(cs.config.NamingChanges))
+		for inst, byField := range cs.config.NamingChanges {
+			fm := make(map[string][]NamingChangeEvent, len(byField))
+			for field, events := range byField {
+				cp := make([]NamingChangeEvent, len(events))
+				copy(cp, events)
+				fm[field] = cp
 			}
-			cfg.NamingHistory[k] = cp
+			cfg.NamingChanges[inst] = fm
 		}
 	}
 	// Deep-copy CleanupKeep

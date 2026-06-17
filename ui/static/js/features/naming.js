@@ -69,9 +69,9 @@ export default {
     namingAutoSyncBusy: false,
     namingDriftChecking: false,
     namingSyncing: false,
-    // Rollback history: per-appType array of snapshots (newest last).
-    namingHistory: {},
-    namingHistoryModal: { show: false, appType: '' },
+    // Per-appType map of field -> [change events]; inline per-field history.
+    namingChanges: {},
+    namingFieldHistoryOpen: {},
   },
 
   methods: {
@@ -524,6 +524,7 @@ export default {
           this.namingApplyResult = { ...this.namingApplyResult, [appType]: `Applied "${scheme.label}" ${sectionKey} naming to ${instName}` };
           this.loadInstanceNaming(appType);
           this.loadNamingApplied(appType); // refresh the recorded scheme/fingerprint
+          this.loadNamingChanges(appType);
           setTimeout(() => { this.namingApplyResult = { ...this.namingApplyResult, [appType]: '' }; }, 5000);
         } else {
           const err = await r.json().catch(() => ({}));
@@ -660,6 +661,7 @@ export default {
         }
       } catch (e) { /* ignore — toggle just shows off */ }
       this.loadNamingApplied(appType);
+      this.loadNamingChanges(appType);
     },
 
     async loadNamingApplied(appType) {
@@ -746,26 +748,71 @@ export default {
       return b ? namingSchemeLabel(b.scheme) : '';
     },
 
-    // ===== Rollback history =====
+    // ===== Per-field change history + restore =====
 
-    async loadNamingHistory(appType) {
+    async loadNamingChanges(appType) {
       const instId = this.mediaInstanceId[appType];
-      if (!instId) {
-        this.namingHistory = { ...this.namingHistory, [appType]: [] };
-        return;
-      }
+      if (!instId) { this.namingChanges = { ...this.namingChanges, [appType]: {} }; return; }
       try {
-        const r = await fetch(`/api/instances/${instId}/naming/history`);
+        const r = await fetch(`/api/instances/${instId}/naming/changes`);
         if (r.ok) {
           const data = await r.json();
-          this.namingHistory = { ...this.namingHistory, [appType]: Array.isArray(data) ? data : [] };
+          this.namingChanges = { ...this.namingChanges, [appType]: data || {} };
         }
       } catch (e) { /* ignore */ }
     },
 
-    openNamingHistory(appType) {
-      this.loadNamingHistory(appType);
-      this.namingHistoryModal = { show: true, appType };
+    // A field's change events, newest first (the stored array is newest-last).
+    namingFieldChanges(appType, field) {
+      const ev = (this.namingChanges[appType] || {})[field] || [];
+      return ev.slice().reverse();
+    },
+
+    // Inline history disclosure per field on the card.
+    toggleNamingFieldHistory(appType, field) {
+      const key = appType + ':' + field;
+      this.namingFieldHistoryOpen = { ...this.namingFieldHistoryOpen, [key]: !this.namingFieldHistoryOpen[key] };
+    },
+    isNamingFieldHistoryOpen(appType, field) {
+      return !!this.namingFieldHistoryOpen[appType + ':' + field];
+    },
+
+    // Confirm + restore one field to a prior pattern (from its history). High-stakes
+    // (renames files), so it shows exactly what it will set before applying.
+    confirmRestoreNamingField(appType, field, fieldLabel, toPattern) {
+      const instName = this.getInstanceName(appType, this.mediaInstanceId[appType]);
+      const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const message =
+        '<div style="margin-bottom:6px">Restore <strong>' + escapeHtml(fieldLabel) + '</strong> on <strong>' + escapeHtml(instName) + '</strong> to:</div>' +
+        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' + escapeHtml(toPattern) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-top:12px;font-style:italic">Existing files in ' + escapeHtml(instName) + ' are renamed on next sync if Rename is enabled there. This does not turn off auto-sync.</div>';
+      this.confirmModal = {
+        show: true, title: 'Restore naming', message, html: true, wide: true,
+        confirmLabel: 'Restore', cancelLabel: 'Cancel',
+        onConfirm: () => this.restoreNamingField(appType, field, toPattern),
+        onCancel: () => {},
+      };
+    },
+
+    async restoreNamingField(appType, field, toPattern) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) return;
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/restore-field`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ field, to: toPattern }),
+        });
+        if (r.ok) {
+          this.showToast('Naming restored', 'success');
+          await this.loadInstances();
+          await this.loadInstanceNaming(appType);
+          await this.loadNamingApplied(appType);
+          await this.loadNamingChanges(appType);
+        } else {
+          const err = await r.json().catch(() => ({}));
+          this.showToast(`Restore failed: ${err.error || r.statusText}`, 'error');
+        }
+      } catch (e) { this.showToast(`Restore failed: ${e.message}`, 'error'); }
     },
 
     // Naming-only check: runs ONLY the naming drift+update pass (not CF/profile
@@ -810,7 +857,7 @@ export default {
           else this.showToast('Nothing to sync', 'info');
           await this.loadInstances();
           await this.loadInstanceNaming(appType);
-          await this.loadNamingApplied(appType);
+          await this.loadNamingChanges(appType);
         } else {
           this.showToast(`Sync failed: ${data.error || r.statusText}`, 'error');
         }
@@ -834,102 +881,20 @@ export default {
       return false;
     },
 
-    // Newest-first for display, but each item keeps its true array index
-    // (the stored array is newest-last) so restore targets the right snapshot.
-    namingHistoryView(appType) {
-      const snaps = this.namingHistory[appType] || [];
-      return snaps.map((s, i) => ({ ...s, _index: i })).reverse();
-    },
-
-    // Comma-joined human field labels captured in a snapshot.
-    namingSnapshotFields(snap) {
-      const labels = {
-        movieFile: 'Movie file', movieFolder: 'Movie folder',
-        standardEpisode: 'Episode (Standard)', dailyEpisode: 'Episode (Daily)', animeEpisode: 'Episode (Anime)',
-        seriesFolder: 'Series folder', seasonFolder: 'Season folder', specialsFolder: 'Specials folder',
-      };
-      return Object.keys(snap.naming || {}).map(k => labels[k] || k).join(', ');
-    },
-
-    closeNamingHistory() {
-      this.namingHistoryModal = { show: false, appType: '' };
-    },
-
-    // Locale-aware snapshot timestamp (server stores UTC/ISO; format client-side).
+    // Locale-aware timestamp (server stores UTC/ISO; format client-side).
     namingSnapshotTime(ts) {
       if (!ts) return '';
       try { return new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
       catch (e) { return ts; }
     },
 
-    // Human label for a snapshot's origin.
-    namingSnapshotOrigin(replacedBy) {
-      if (replacedBy === 'manual') return 'Manual sync';
-      if (replacedBy === 'auto-sync') return 'Auto-sync';
-      if (replacedBy === 'rollback') return 'Restore';
-      return replacedBy || 'Change';
-    },
 
-    // Restore a snapshot (newest-last array; index into namingHistory[appType]).
-    // Confirms with a list of the fields it will write back first.
-    confirmRestoreNamingSnapshot(appType, index) {
-      const snaps = this.namingHistory[appType] || [];
-      const snap = snaps[index];
-      if (!snap) return;
-      const instId = this.mediaInstanceId[appType];
-      const instName = this.getInstanceName(appType, instId);
-      const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      const fieldLabels = {
-        movieFile: 'Movie file', movieFolder: 'Movie folder',
-        standardEpisode: 'Episode (Standard)', dailyEpisode: 'Episode (Daily)', animeEpisode: 'Episode (Anime)',
-        seriesFolder: 'Series folder', seasonFolder: 'Season folder', specialsFolder: 'Specials folder',
-      };
-      const rows = Object.entries(snap.naming || {}).map(([k, v]) =>
-        '<div style="margin-top:8px"><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">' +
-        escapeHtml(fieldLabels[k] || k) + '</div>' +
-        '<div style="font-family:monospace;font-size:12px;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:3px;padding:6px 8px;white-space:nowrap;overflow-x:auto;color:var(--text-body)">' +
-        escapeHtml(v) + '</div></div>'
-      ).join('');
-      const message =
-        '<div style="margin-bottom:6px">Restore the naming captured on <strong>' + escapeHtml(this.namingSnapshotTime(snap.takenAt)) + '</strong> back to <strong>' + escapeHtml(instName) + '</strong>?</div>' +
-        '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">These fields will be written back:</div>' +
-        rows +
-        '<div style="font-size:11px;color:var(--text-secondary);margin-top:12px;font-style:italic">This does not turn off auto-sync. If a field is still set to follow a scheme, the next TRaSH update can change it again.</div>';
-      this.confirmModal = {
-        show: true,
-        title: 'Restore naming',
-        message,
-        html: true,
-        wide: true,
-        confirmLabel: 'Restore',
-        cancelLabel: 'Cancel',
-        onConfirm: () => this.restoreNamingSnapshot(appType, index),
-        onCancel: () => {},
-      };
-    },
-
-    async restoreNamingSnapshot(appType, index) {
-      const instId = this.mediaInstanceId[appType];
-      if (!instId) return;
-      try {
-        const r = await fetch(`/api/instances/${instId}/naming/restore`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ index }),
-        });
-        if (r.ok) {
-          this.showToast('Naming restored', 'success');
-          this.loadInstanceNaming(appType);
-          this.loadNamingApplied(appType);
-          this.loadNamingHistory(appType);
-          this.closeNamingHistory();
-        } else {
-          const err = await r.json().catch(() => ({}));
-          this.showToast(`Restore failed: ${err.error || r.statusText}`, 'error');
-        }
-      } catch (e) {
-        this.showToast(`Restore failed: ${e.message}`, 'error');
-      }
+    // Human label for a change event's origin (the Via field).
+    namingChangeVia(via) {
+      if (via === 'manual') return 'Manual sync';
+      if (via === 'auto-sync') return 'Auto-sync';
+      if (via === 'rollback') return 'Restore';
+      return via || 'Change';
     },
   },
 };
