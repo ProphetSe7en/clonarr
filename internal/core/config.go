@@ -474,6 +474,15 @@ type Instance struct {
 	// pays storage cost for a feature it has not exercised.
 	CFDriftFingerprints map[string]string `json:"cfDriftFingerprints,omitempty"`
 
+	// NamingDriftFingerprints stores, per auto-synced naming field key, the
+	// fingerprint of the instance's current Arr naming pattern AT THE TIME the
+	// last drift check found it diverging from what clonarr last applied. Present
+	// => that field was flagged as drifted by the last check; absent => in sync.
+	// Mirrors CFDriftFingerprints (per-instance, set by DriftRunner.RunOnce). The
+	// UI shows the "drifted" marker only when this is set, so drift never appears
+	// without a scheduled or manual check having run. #5 phase-2.
+	NamingDriftFingerprints map[string]string `json:"namingDriftFingerprints,omitempty"`
+
 	// PushedCFs records every CF that clonarr has pushed to this Arr
 	// instance via the "Add to Arr" path (the "+" button on the Custom
 	// Formats Browse tab and the Sandbox Add Custom Formats picker),
@@ -810,6 +819,12 @@ func (cs *ConfigStore) Get() Config {
 			cfg.Instances[i].CFDriftFingerprints = make(map[string]string, len(inst.CFDriftFingerprints))
 			for k, v := range inst.CFDriftFingerprints {
 				cfg.Instances[i].CFDriftFingerprints[k] = v
+			}
+		}
+		if len(inst.NamingDriftFingerprints) > 0 {
+			cfg.Instances[i].NamingDriftFingerprints = make(map[string]string, len(inst.NamingDriftFingerprints))
+			for k, v := range inst.NamingDriftFingerprints {
+				cfg.Instances[i].NamingDriftFingerprints[k] = v
 			}
 		}
 	}
@@ -1276,6 +1291,12 @@ func (cs *ConfigStore) GetInstance(id string) (Instance, bool) {
 				out.CFDriftFingerprints = make(map[string]string, len(inst.CFDriftFingerprints))
 				for k, v := range inst.CFDriftFingerprints {
 					out.CFDriftFingerprints[k] = v
+				}
+			}
+			if len(inst.NamingDriftFingerprints) > 0 {
+				out.NamingDriftFingerprints = make(map[string]string, len(inst.NamingDriftFingerprints))
+				for k, v := range inst.NamingDriftFingerprints {
+					out.NamingDriftFingerprints[k] = v
 				}
 			}
 			return out, true

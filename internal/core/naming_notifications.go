@@ -61,3 +61,48 @@ func (app *App) NotifyNamingAutoSync(instanceName string, changes []NamingChange
 		app.DispatchNotificationAgent(agent, payload)
 	}
 }
+
+// NotifyNamingDriftDetected fires the Arr-drift notification for naming: a field
+// that auto-syncs was changed directly in Arr, so it no longer matches the scheme.
+// Reuses the existing "Arr drift detected" (OnDriftDetected) event so drift on
+// profiles, custom formats, and naming all land under one toggle. One message per
+// instance; no opt-in → cheap no-op. Flag only — never rewrites Arr.
+func (app *App) NotifyNamingDriftDetected(events []namingDriftEvent) {
+	if len(events) == 0 {
+		return
+	}
+	cfg := app.Config.Get()
+
+	hasOptIn := false
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if agent.Events.OnDriftDetected {
+			hasOptIn = true
+			break
+		}
+	}
+	if !hasOptIn {
+		return
+	}
+
+	for _, ev := range events {
+		lines := []string{"Naming was changed directly in **" + ev.InstanceName + "** on a field clonarr auto-syncs:", ""}
+		for _, f := range ev.Fields {
+			lines = append(lines, "• "+NamingFieldLabel(f))
+		}
+		lines = append(lines, "", "It no longer matches the scheme. Use Sync in clonarr to re-apply.")
+
+		payload := NotificationPayload{
+			Title:    "Clonarr: naming drift detected on " + ev.InstanceName,
+			Message:  strings.Join(lines, "\n"),
+			Color:    0xff7b00, // accent-orange (matches the drift badge)
+			Severity: NotificationSeverityWarning,
+			Route:    NotificationRouteDefault,
+		}
+		for _, agent := range cfg.AutoSync.NotificationAgents {
+			if !agent.Events.OnDriftDetected {
+				continue
+			}
+			app.DispatchNotificationAgent(agent, payload)
+		}
+	}
+}

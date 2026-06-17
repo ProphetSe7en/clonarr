@@ -448,6 +448,29 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		d.app.NotifyCFDriftReconciled(cfReconciled)
 	}
 
+	// Naming drift pass (#5): per-instance, flag-only. Compares each auto-synced
+	// naming field's current Arr pattern against what clonarr last applied. Runs
+	// on both the scheduled check and the manual sidebar Check (this is RunOnce).
+	namingPass := runNamingDriftPass(d)
+	if updErr := d.app.Config.Update(func(c *Config) {
+		for i := range c.Instances {
+			id := c.Instances[i].ID
+			if namingPass.checkedOK[id] {
+				// Replace with the freshly-computed drift map (nil clears = reconciled).
+				c.Instances[i].NamingDriftFingerprints = namingPass.fingerprints[id]
+			} else if len(c.NamingAutoSync[id]) == 0 {
+				// No bindings → no drift state to keep (clear stale).
+				c.Instances[i].NamingDriftFingerprints = nil
+			}
+			// else: has bindings but was unreachable this pass → leave existing.
+		}
+	}); updErr != nil {
+		return results, fmt.Errorf("persist naming drift result: %w", updErr)
+	}
+	if len(namingPass.detected) > 0 {
+		d.app.NotifyNamingDriftDetected(namingPass.detected)
+	}
+
 	return results, nil
 }
 

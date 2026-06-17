@@ -127,7 +127,22 @@
                      rarely customized, defaults to "Specials". -->
                 <template x-if="namingInstanceData[activeAppType]">
                   <div style="border:1px solid var(--border-subtle);border-left:3px solid var(--app-color);border-radius:6px;padding:8px 12px;margin-bottom:12px;background:var(--app-glow)">
-                    <div style="font-size:11px;color:var(--app-color);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:600">Currently on instance</div>
+                    <!-- Header: label + actions (Check for drift / Naming history),
+                         same btn-sm format as the Sync Rules toolbar. -->
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                      <div style="font-size:11px;color:var(--app-color);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Currently on instance</div>
+                      <div style="margin-left:auto;display:flex;gap:6px">
+                        <button type="button" class="btn btn-sm"
+                          :disabled="namingDriftChecking || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
+                          @click="checkNamingDrift(activeAppType)"
+                          x-tt="'Check your connected instances now for naming changed directly in Radarr/Sonarr (Arr drift). Same check as the sidebar.'">
+                          <span x-text="namingDriftChecking ? 'Checking…' : 'Check'"></span>
+                        </button>
+                        <button type="button" class="btn btn-sm"
+                          @click="openNamingHistory(activeAppType)"
+                          x-tt="'View and restore naming clonarr saved before each change'">History</button>
+                      </div>
+                    </div>
                     <!-- Stacked per-field blocks: a label line (field name + the
                          active auto-sync scheme, if any), then the full current
                          pattern on its own line in a scrollable monospace field so
@@ -137,14 +152,20 @@
                         <div>
                           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
                             <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="row.label + ':'"></span>
-                            <!-- Reverse-matched scheme + auto-sync marker. ⟳ marks the
-                                 fields that auto-sync; plain text = matches a scheme but
-                                 set manually; "drifted" = auto-sync on but the instance
-                                 no longer matches its scheme. -->
+                            <!-- Reverse-matched scheme + auto-sync marker. ⟳ = auto-sync;
+                                 plain text = matches a scheme but set manually; "drifted"
+                                 = auto-sync on but the instance no longer matches (the
+                                 Expected row below shows what auto-sync would apply). -->
                             <template x-for="st in [namingFieldStatus(activeAppType, row)]" :key="row.field">
-                              <span style="font-size:11px;display:inline-flex;align-items:center;gap:5px">
+                              <span style="font-size:12px;display:inline-flex;align-items:center;gap:6px;line-height:1.4">
                                 <template x-if="st.kind === 'autosync'">
                                   <span style="color:var(--app-color);font-weight:600" x-text="'⟳ ' + st.label" x-tt="'This field auto-syncs to this scheme'"></span>
+                                </template>
+                                <template x-if="st.kind === 'autosync-drift'">
+                                  <span style="display:inline-flex;align-items:center;gap:6px">
+                                    <span style="color:var(--app-color);font-weight:600" x-text="'⟳ ' + st.label"></span>
+                                    <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'The instance no longer matches this scheme. The Expected row shows what auto-sync would apply; use Sync to re-apply now.'">drifted</span>
+                                  </span>
                                 </template>
                                 <template x-if="st.kind === 'manual'">
                                   <span style="color:var(--text-secondary)" x-text="st.label"></span>
@@ -155,8 +176,16 @@
                               </span>
                             </template>
                           </div>
-                          <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:3px;padding:5px 8px"
+                          <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-page);border-radius:3px;padding:5px 8px"
+                               :style="{ border: namingDrift(activeAppType, row).drifted ? '1px solid var(--accent-orange)' : '1px solid var(--border-subtle)' }"
                                x-text="namingInstanceData[activeAppType]?.[row.arr] || '(not set)'"></div>
+                          <!-- Drift diff: what auto-sync expects (the bound scheme's pattern) -->
+                          <template x-if="namingDrift(activeAppType, row).drifted">
+                            <div style="margin-top:3px">
+                              <div style="font-size:10px;color:var(--accent-orange);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px" x-text="'Expected (' + namingDrift(activeAppType, row).label + ')'"></div>
+                              <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-app);border:1px dashed var(--accent-orange);border-radius:3px;padding:5px 8px" x-text="namingDrift(activeAppType, row).expected"></div>
+                            </div>
+                          </template>
                         </div>
                       </template>
                     </div>
@@ -170,14 +199,6 @@
                   </div>
                 </template>
 
-                <!-- Naming history / undo — opens the rollback modal (#5) -->
-                <template x-if="mediaInstanceId[activeAppType]">
-                  <div style="margin-bottom:12px">
-                    <button type="button" class="inline-action" style="font-size:12px;color:var(--accent-blue)"
-                      @click="openNamingHistory(activeAppType)"
-                      x-tt="'View and restore naming clonarr saved before each change'">Naming history / undo</button>
-                  </div>
-                </template>
 
               <!-- Recommended Naming Schemes — TRaSH guide's own heading.
                    Each section is a collapsible card, default closed. Tab
@@ -210,7 +231,7 @@
                          the per-scheme "Auto-sync" button on each row below. -->
                     <template x-if="mediaInstanceId[activeAppType]">
                       <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:7px 10px;border-radius:4px"
-                           :style="namingBindingFor(activeAppType, section.key) ? 'background:var(--app-glow);border:1px solid var(--app-color)' : 'background:var(--bg-page);border:1px solid var(--bg-muted)'">
+                           :style="{ background: namingBindingFor(activeAppType, section.key) ? 'var(--app-glow)' : 'var(--bg-page)', border: namingBindingFor(activeAppType, section.key) ? '1px solid var(--app-color)' : '1px solid var(--bg-muted)' }">
                         <!-- Not auto-syncing -->
                         <template x-if="!namingBindingFor(activeAppType, section.key)">
                           <span style="font-size:12px;color:var(--text-muted)"><span x-text="'Auto-sync is off for ' + section.label + '.'"></span> Turn it on for a scheme below to keep it following TRaSH automatically.</span>

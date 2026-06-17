@@ -63,6 +63,7 @@ export default {
     // empty (nothing auto-syncs). Mirrors the backend NamingAutoSync map.
     namingAutoSync: {},
     namingAutoSyncBusy: false,
+    namingDriftChecking: false,
     // Rollback history: per-appType array of snapshots (newest last).
     namingHistory: {},
     namingHistoryModal: { show: false, appType: '' },
@@ -575,14 +576,45 @@ export default {
       return null;
     },
 
+    // Compact drift descriptor for the "Currently on instance" row, so the
+    // template can read it without nesting an x-for (which broke the layout).
+    namingDrift(appType, row) {
+      const st = this.namingFieldStatus(appType, row);
+      return { drifted: st.kind === 'autosync-drift', expected: st.expected || '', label: st.label || '' };
+    },
+
+    // The TRaSH pattern a field is bound to (what auto-sync would apply), or '' .
+    namingExpectedPattern(appType, field, scheme) {
+      const map = this.namingRawMapForField(appType, field);
+      if (!map) return '';
+      const val = map[scheme];
+      return typeof val === 'string' ? val : (val?.pattern || '');
+    },
+
     // Status descriptor for a "Currently on instance" row. kind is one of:
-    //  autosync — this field auto-syncs (shows ⟳ + its scheme)
-    //  manual   — not auto-syncing; current pattern matches a known scheme
-    //  custom   — current pattern matches no known TRaSH scheme
-    // (Active Arr-side drift detection is deferred to phase 2; we don't flag it.)
+    //  autosync       — auto-syncs and the instance matches its bound scheme (⟳ + scheme)
+    //  autosync-drift — auto-syncs but a drift check flagged it as diverged; `.expected`
+    //                   carries the bound scheme's pattern so the card can show the diff
+    //  manual         — not auto-syncing; current pattern matches a known scheme
+    //  custom         — current pattern matches no known TRaSH scheme
+    // Drift is gated on the backend flag (instance.namingDriftFingerprints, set by a
+    // scheduled or manual drift check) so it never appears without a check having
+    // run — same model as CF/profile drift. The live compare is ANDed in so a field
+    // that was fixed (but not re-checked yet) doesn't keep showing a false drift.
     namingFieldStatus(appType, row) {
       const binding = this.namingBindingForField(appType, row.field);
-      if (binding) return { kind: 'autosync', label: namingSchemeLabel(binding.scheme) };
+      if (binding) {
+        const expected = this.namingExpectedPattern(appType, row.field, binding.scheme);
+        const current = this.namingInstanceData[appType]?.[row.arr] || '';
+        const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
+        const flagged = !!(inst && inst.namingDriftFingerprints && inst.namingDriftFingerprints[row.field]);
+        const drifted = flagged && expected !== '' && current !== expected;
+        return {
+          kind: drifted ? 'autosync-drift' : 'autosync',
+          label: namingSchemeLabel(binding.scheme),
+          expected,
+        };
+      }
       const matched = this.namingMatchedScheme(appType, row.arr, row.field);
       if (matched) return { kind: 'manual', label: matched.label };
       return { kind: 'custom', label: 'Custom' };
@@ -711,6 +743,28 @@ export default {
     openNamingHistory(appType) {
       this.loadNamingHistory(appType);
       this.namingHistoryModal = { show: true, appType };
+    },
+
+    // Run a drift check now (the same DriftRunner.RunOnce the sidebar Check + the
+    // schedule use), then refresh instances (for the persisted naming-drift flags)
+    // and the current naming so the "drifted" markers reflect this check.
+    async checkNamingDrift(appType) {
+      this.namingDriftChecking = true;
+      try {
+        const r = await fetch('/api/drift/check', { method: 'POST' });
+        if (r.ok) {
+          await this.loadInstances();
+          await this.loadInstanceNaming(appType);
+          this.showToast('Drift check complete', 'success');
+        } else {
+          const err = await r.json().catch(() => ({}));
+          this.showToast(`Drift check failed: ${err.error || r.statusText}`, 'error');
+        }
+      } catch (e) {
+        this.showToast(`Drift check failed: ${e.message}`, 'error');
+      } finally {
+        this.namingDriftChecking = false;
+      }
     },
 
     // Newest-first for display, but each item keeps its true array index

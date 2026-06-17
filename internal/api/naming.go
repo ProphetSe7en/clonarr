@@ -3,8 +3,6 @@ package api
 import (
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -20,16 +18,9 @@ import (
 const namingHistoryKeep = 5 // rollback snapshots kept per instance
 
 // namingArrKey maps a canonical field key → the Arr /config/naming key.
-var namingArrKey = map[string]string{
-	"movieFile":       "standardMovieFormat",
-	"movieFolder":     "movieFolderFormat",
-	"standardEpisode": "standardEpisodeFormat",
-	"dailyEpisode":    "dailyEpisodeFormat",
-	"animeEpisode":    "animeEpisodeFormat",
-	"seriesFolder":    "seriesFolderFormat",
-	"seasonFolder":    "seasonFolderFormat",
-	"specialsFolder":  "specialsFolderFormat",
-}
+// Single source of truth lives in core (the drift runner needs it too, and core
+// cannot import api); aliased here so existing call sites keep the short name.
+var namingArrKey = core.NamingArrKey
 
 // namingFieldsForType lists the auto-syncable canonical field keys per app type.
 func namingFieldsForType(instType string) []string {
@@ -70,12 +61,8 @@ func resolveNamingField(ad *core.AppData, instType, field, scheme string) (strin
 	return "", false
 }
 
-// namingFingerprint is a short, stable hash of an applied pattern, stored on the
-// binding so the loop can tell "TRaSH changed this field" from "no change".
-func namingFingerprint(pattern string) string {
-	sum := sha256.Sum256([]byte(pattern))
-	return hex.EncodeToString(sum[:])[:16]
-}
+// namingFingerprint hashes an applied pattern (single source in core).
+func namingFingerprint(pattern string) string { return core.NamingFingerprint(pattern) }
 
 // applyFieldsToArrNaming sets the provided canonical fields onto a fetched Arr
 // naming config in place — only those fields change; everything else the instance
@@ -464,7 +451,7 @@ func (s *Server) AutoSyncNaming() {
 		var changes []core.NamingChange
 		for field, newPattern := range fieldsToApply {
 			changes = append(changes, core.NamingChange{
-				FieldLabel: namingFieldLabel(field),
+				FieldLabel: core.NamingFieldLabel(field),
 				Scheme:     bindings[field].Scheme,
 				OldPattern: prev[field],
 				NewPattern: newPattern,
@@ -472,28 +459,4 @@ func (s *Server) AutoSyncNaming() {
 		}
 		s.Core.NotifyNamingAutoSync(inst.Name, changes)
 	}
-}
-
-// namingFieldLabel is the human label for a canonical naming field key, used in
-// the auto-sync notification.
-func namingFieldLabel(field string) string {
-	switch field {
-	case "movieFile":
-		return "Movie file"
-	case "movieFolder":
-		return "Movie folder"
-	case "standardEpisode":
-		return "Episode (Standard)"
-	case "dailyEpisode":
-		return "Episode (Daily)"
-	case "animeEpisode":
-		return "Episode (Anime)"
-	case "seriesFolder":
-		return "Series folder"
-	case "seasonFolder":
-		return "Season folder"
-	case "specialsFolder":
-		return "Specials folder"
-	}
-	return field
 }
