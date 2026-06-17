@@ -506,7 +506,9 @@ export default {
         this.namingApplyResult = { ...this.namingApplyResult, [appType]: `Unknown section: ${sectionKey}` };
         return;
       }
-      const body = { [field]: scheme.pattern };
+      // schemeKey is recorded (not used to resolve) so this manual sync is
+      // drift/update-tracked like an auto-synced field.
+      const body = { [field]: scheme.pattern, schemeKey: scheme.key };
       try {
         const r = await fetch(`/api/instances/${instId}/naming`, {
           method: 'PUT',

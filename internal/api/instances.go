@@ -1240,14 +1240,15 @@ func (s *Server) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req, ok := decodeJSON[struct {
-		Preset  string `json:"preset"` // convenience: e.g. "plex-tmdb" — resolves from TRaSH data
-		Folder  string `json:"folder"`
-		File    string `json:"file"`
-		Season  string `json:"season,omitempty"`
-		Series  string `json:"series,omitempty"`
-		Daily   string `json:"daily,omitempty"`
-		Anime   string `json:"anime,omitempty"`
-		Special string `json:"special,omitempty"`
+		Preset    string `json:"preset"`              // convenience: e.g. "plex-tmdb" — resolves from TRaSH data
+		SchemeKey string `json:"schemeKey,omitempty"` // recorded as the applied field's intended scheme (NOT used to resolve; that's Preset)
+		Folder    string `json:"folder"`
+		File      string `json:"file"`
+		Season    string `json:"season,omitempty"`
+		Series    string `json:"series,omitempty"`
+		Daily     string `json:"daily,omitempty"`
+		Anime     string `json:"anime,omitempty"`
+		Special   string `json:"special,omitempty"`
 	}](w, r, 1<<20)
 	if !ok {
 		return
@@ -1321,7 +1322,18 @@ func (s *Server) handleApplyNaming(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, _, err := s.applyNamingFields(inst, fields, "manual", true)
+	// Record the chosen scheme on each field actually applied (non-empty pattern),
+	// so this manual sync is drift/update-tracked like an auto-synced field.
+	schemes := map[string]string{}
+	if req.SchemeKey != "" {
+		for field, pattern := range fields {
+			if pattern != "" {
+				schemes[field] = req.SchemeKey
+			}
+		}
+	}
+
+	result, _, err := s.applyNamingFields(inst, fields, schemes, "manual", true)
 	if err != nil {
 		writeError(w, 502, "Failed to apply naming: "+err.Error())
 		return

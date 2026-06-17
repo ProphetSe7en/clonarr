@@ -17,24 +17,25 @@ import (
 
 // Config holds the full application configuration, persisted to JSON.
 type Config struct {
-	Instances            []Instance                               `json:"instances"`
-	TrashRepo            TrashRepo                                `json:"trashRepo"`
-	PullInterval         string                                   `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
-	PullSchedule         *PullSchedule                            `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
-	SyncSchedule         *SyncSchedule                            `json:"syncSchedule,omitempty"`         // DEPRECATED — retained only to migrate v2 configs; converted to Auto-sync drift detection on load, then cleared
-	DevMode              bool                                     `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
-	TrashSchemaFields    bool                                     `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
-	DebugLogging         bool                                     `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
-	QualitySizeOverrides map[string]map[string]QSOverride         `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
-	QualitySizeAutoSync  map[string]QSAutoSync                    `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
-	NamingAutoSync       map[string]map[string]NamingFieldBinding `json:"namingAutoSync,omitempty"`       // instanceID → naming-field key → binding (opt-in, per-field; #5)
-	NamingHistory        map[string][]NamingSnapshot              `json:"namingHistory,omitempty"`        // instanceID → naming snapshots (newest last) for rollback
-	SyncHistory          []SyncHistoryEntry                       `json:"syncHistory,omitempty"`
-	CleanupKeep          map[string][]string                      `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
-	AutoSync             AutoSyncConfig                           `json:"autoSync,omitempty"`
-	DriftWatch           *DriftWatch                              `json:"driftWatch,omitempty"`  // Arr-side drift detection state; populated by the drift-detection runner
-	ProfileSync          *ProfileSync                             `json:"profileSync,omitempty"` // Unified Profile Sync subsystem. Populated via migration from PullInterval/PullSchedule on first load after upgrade. nil = pre-migration state.
-	Prowlarr             ProwlarrConfig                           `json:"prowlarr,omitempty"`
+	Instances            []Instance                                `json:"instances"`
+	TrashRepo            TrashRepo                                 `json:"trashRepo"`
+	PullInterval         string                                    `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
+	PullSchedule         *PullSchedule                             `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
+	SyncSchedule         *SyncSchedule                             `json:"syncSchedule,omitempty"`         // DEPRECATED — retained only to migrate v2 configs; converted to Auto-sync drift detection on load, then cleared
+	DevMode              bool                                      `json:"devMode"`                        // Advanced Mode — enables Profile Builder, Scoring Sandbox, CF Group Builder and Prowlarr settings
+	TrashSchemaFields    bool                                      `json:"trashSchemaFields"`              // Show TRaSH-schema fields (trash_id, trash_scores, group, description) in CF editor, Profile Builder, CF Group Builder
+	DebugLogging         bool                                      `json:"debugLogging"`                   // Write detailed operations to /config/debug.log
+	QualitySizeOverrides map[string]map[string]QSOverride          `json:"qualitySizeOverrides,omitempty"` // instanceID → quality name → override
+	QualitySizeAutoSync  map[string]QSAutoSync                     `json:"qualitySizeAutoSync,omitempty"`  // instanceID → auto-sync settings
+	NamingAutoSync       map[string]map[string]NamingFieldBinding  `json:"namingAutoSync,omitempty"`       // instanceID → naming-field key → binding (opt-in, per-field; #5)
+	NamingApplied        map[string]map[string]NamingAppliedRecord `json:"namingApplied,omitempty"`        // instanceID → field → what clonarr last applied (manual OR auto): the intended scheme + fingerprint. Source for drift + update detection (#5)
+	NamingHistory        map[string][]NamingSnapshot               `json:"namingHistory,omitempty"`        // instanceID → naming snapshots (newest last) for rollback
+	SyncHistory          []SyncHistoryEntry                        `json:"syncHistory,omitempty"`
+	CleanupKeep          map[string][]string                       `json:"cleanupKeep,omitempty"` // instanceID → CF names to keep during delete-all
+	AutoSync             AutoSyncConfig                            `json:"autoSync,omitempty"`
+	DriftWatch           *DriftWatch                               `json:"driftWatch,omitempty"`  // Arr-side drift detection state; populated by the drift-detection runner
+	ProfileSync          *ProfileSync                              `json:"profileSync,omitempty"` // Unified Profile Sync subsystem. Populated via migration from PullInterval/PullSchedule on first load after upgrade. nil = pre-migration state.
+	Prowlarr             ProwlarrConfig                            `json:"prowlarr,omitempty"`
 	// Authentication — matches Radarr/Sonarr Security panel model.
 	// Credentials (bcrypt password hash, API key) live separately in
 	// /config/auth.json, NOT here, so this file can be exported/shared
@@ -325,6 +326,19 @@ type NamingFieldBinding struct {
 	LastFingerprint string `json:"lastFingerprint,omitempty"` // hash of this field's last-applied pattern
 	LastAppliedAt   string `json:"lastAppliedAt,omitempty"`
 	LastError       string `json:"lastError,omitempty"` // per-field; never touches an AutoSyncRule
+}
+
+// NamingAppliedRecord: what clonarr last applied to one naming field, recorded on
+// EVERY apply (manual Sync, auto-sync, enable, rollback) in Config.NamingApplied
+// [instanceID][field]. Unlike the auto-sync binding (which only exists for fields
+// the user opted into), this exists for any field clonarr has synced — so drift +
+// update detection cover manually-synced fields too. Scheme is the intended scheme
+// (so the UI can offer "Sync now" / detect guide updates); Fingerprint is the hash
+// of the applied pattern (drift = current Arr pattern differs from it). #5.
+type NamingAppliedRecord struct {
+	Scheme      string `json:"scheme,omitempty"` // intended scheme key ("" when restored from a custom snapshot)
+	Fingerprint string `json:"fingerprint"`      // hash of the pattern clonarr applied
+	AppliedAt   string `json:"appliedAt,omitempty"`
 }
 
 // NamingSnapshot: the instance's naming captured BEFORE an apply (manual or auto),
@@ -940,6 +954,18 @@ func (cs *ConfigStore) Get() Config {
 				inner[ik] = iv
 			}
 			cfg.NamingAutoSync[k] = inner
+		}
+	}
+	// Deep-copy NamingApplied (nested map; same concurrency reasoning — the drift
+	// pass reads it outside the lock while apply paths write it under Update).
+	if cs.config.NamingApplied != nil {
+		cfg.NamingApplied = make(map[string]map[string]NamingAppliedRecord, len(cs.config.NamingApplied))
+		for k, v := range cs.config.NamingApplied {
+			inner := make(map[string]NamingAppliedRecord, len(v))
+			for ik, iv := range v {
+				inner[ik] = iv
+			}
+			cfg.NamingApplied[k] = inner
 		}
 	}
 	// Deep-copy NamingHistory (map of slices; each snapshot has its own Naming map).

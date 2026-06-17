@@ -131,7 +131,11 @@ func appendNamingSnapshot(cfg *core.Config, instID string, patterns map[string]s
 // apply and the scheduled loop. fields maps canonical field key → pattern.
 // Returns the pre-apply patterns (canonical field → pattern) so callers can show
 // what changed (e.g. the auto-sync old → new notification); empty on a failed read.
-func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string, replacedBy string, snapshot bool) (arr.ArrNamingConfig, map[string]string, error) {
+// schemes maps a canonical field key → the intended scheme key for that apply.
+// A field present in `schemes` records that scheme on NamingApplied; a field
+// absent (e.g. rollback restoring a custom pattern) PRESERVES the existing scheme
+// and only updates the fingerprint.
+func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string, schemes map[string]string, replacedBy string, snapshot bool) (arr.ArrNamingConfig, map[string]string, error) {
 	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
 	current, err := client.GetNaming()
 	if err != nil {
@@ -146,12 +150,31 @@ func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string,
 	if err != nil {
 		return nil, prev, err
 	}
-	if snapshot {
-		now := time.Now().UTC().Format(time.RFC3339)
-		s.Core.Config.Update(func(cfg *core.Config) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	s.Core.Config.Update(func(cfg *core.Config) {
+		if snapshot {
 			appendNamingSnapshot(cfg, inst.ID, prev, replacedBy, now, namingHistoryKeep)
-		})
-	}
+		}
+		// Record what clonarr applied, per field, for drift + update detection.
+		if cfg.NamingApplied == nil {
+			cfg.NamingApplied = map[string]map[string]core.NamingAppliedRecord{}
+		}
+		if cfg.NamingApplied[inst.ID] == nil {
+			cfg.NamingApplied[inst.ID] = map[string]core.NamingAppliedRecord{}
+		}
+		for field, pattern := range fields {
+			if pattern == "" {
+				continue // unset field wasn't applied — don't record it
+			}
+			rec := cfg.NamingApplied[inst.ID][field]
+			if sc, ok := schemes[field]; ok {
+				rec.Scheme = sc // explicit (manual/auto/enable); absent => preserve (rollback)
+			}
+			rec.Fingerprint = namingFingerprint(pattern)
+			rec.AppliedAt = now
+			cfg.NamingApplied[inst.ID][field] = rec
+		}
+	})
 	return result, prev, nil
 }
 
@@ -268,7 +291,11 @@ func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request
 			fp[field] = namingFingerprint(pattern)
 		}
 		if len(fields) > 0 {
-			_, _, applyErr := s.applyNamingFields(inst, fields, "auto-sync", true)
+			enSchemes := map[string]string{}
+			for field := range fields {
+				enSchemes[field] = incoming[field].Scheme
+			}
+			_, _, applyErr := s.applyNamingFields(inst, fields, enSchemes, "auto-sync", true)
 			now := time.Now().UTC().Format(time.RFC3339)
 			s.Core.Config.Update(func(c *core.Config) {
 				m := c.NamingAutoSync[id]
@@ -355,7 +382,9 @@ func (s *Server) handleRestoreNaming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, _, err := s.applyNamingFields(inst, snap.Naming, "rollback", true); err != nil {
+	// Rollback restores prior patterns; pass no schemes so each field's existing
+	// intended scheme is preserved (only the applied fingerprint updates).
+	if _, _, err := s.applyNamingFields(inst, snap.Naming, nil, "rollback", true); err != nil {
 		log.Printf("Naming restore [%s]: failed: %v", inst.Name, err)
 		s.Core.DebugLog.Logf(core.LogError, "Naming restore [%s]: failed: %v", inst.Name, err)
 		writeError(w, 502, "Failed to restore naming on the instance")
@@ -409,7 +438,11 @@ func (s *Server) AutoSyncNaming() {
 			continue
 		}
 
-		_, prev, err := s.applyNamingFields(inst, fieldsToApply, "auto-sync", true)
+		schemes := map[string]string{}
+		for field := range fieldsToApply {
+			schemes[field] = bindings[field].Scheme
+		}
+		_, prev, err := s.applyNamingFields(inst, fieldsToApply, schemes, "auto-sync", true)
 		if err != nil {
 			log.Printf("Auto-sync naming [%s]: apply failed: %v", inst.Name, err)
 			s.Core.DebugLog.Logf(core.LogError, "Naming [%s]: apply failed: %v", inst.Name, err)
