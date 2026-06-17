@@ -131,24 +131,22 @@
                          same btn-sm format as the Sync Rules toolbar. -->
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
                       <div style="font-size:13px;color:var(--app-color);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Currently on instance</div>
-                      <div style="margin-left:auto;display:flex;gap:6px">
-                        <button type="button" class="btn btn-sm"
+                      <span class="v3-inst-actions">
+                        <button type="button" class="v3-inst-action"
                           :disabled="namingDriftChecking || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                           @click="checkNamingDrift(activeAppType)"
-                          x-tt="'Check your connected instances now for naming updates (guide changed) and drift (changed in Radarr/Sonarr). Naming only.'">
-                          <span x-text="namingDriftChecking ? 'Checking…' : 'Check'"></span>
-                        </button>
+                          x-tt="'Check your connected instances now for naming updates (guide changed) and drift (changed in Radarr/Sonarr). Naming only.'"
+                          x-text="namingDriftChecking ? 'Checking…' : 'Check'"></button>
                         <!-- Update all: re-applies every auto-sync field that has an
                              update or drift. Only shown when there's something to do. -->
                         <template x-if="namingAnyPending(activeAppType)">
-                          <button type="button" class="btn btn-sm btn-primary"
+                          <button type="button" class="v3-inst-action"
                             :disabled="namingSyncing || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                             @click="syncNaming(activeAppType)"
-                            x-tt="'Re-apply every auto-sync field that has an update or drift, to its scheme. Manual-only fields are not touched.'">
-                            <span x-text="namingSyncing ? 'Syncing…' : 'Update all'"></span>
-                          </button>
+                            x-tt="'Re-apply every auto-sync field that has an update or drift, to its scheme. Manual-only fields are not touched.'"
+                            x-text="namingSyncing ? 'Syncing…' : 'Update all'"></button>
                         </template>
-                      </div>
+                      </span>
                     </div>
                     <!-- Stacked per-field blocks: a label line (field name + the
                          active auto-sync scheme, if any), then the full current
@@ -192,7 +190,7 @@
                                  this field, not the card header. -->
                             <template x-for="st in [namingFieldStatus(activeAppType, row)]" :key="row.field + ':sync'">
                               <template x-if="st.drifted || st.updatable">
-                                <button type="button" class="btn btn-sm" style="padding:1px 8px"
+                                <button type="button" class="v3-inst-action"
                                   :disabled="namingSyncing || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                                   @click="syncNaming(activeAppType, [row.field])"
                                   x-tt="st.drifted ? 'Re-apply this scheme to the field (it was changed in Radarr/Sonarr)' : 'Apply the newer guide pattern for this field'">Sync now</button>
