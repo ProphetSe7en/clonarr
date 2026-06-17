@@ -171,6 +171,24 @@ func (s *Server) handleGetNamingAutoSync(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, out)
 }
 
+// handleGetNamingApplied returns what clonarr last applied per field (scheme +
+// fingerprint + appliedAt), for any field it has synced (manual OR auto). The UI
+// uses the scheme to label/Sync manually-synced fields and to compute the Expected
+// pattern for the drift diff.
+func (s *Server) handleGetNamingApplied(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	cfg := s.Core.Config.Get()
+	out := map[string]core.NamingAppliedRecord{}
+	if cfg.NamingApplied != nil {
+		if v, ok := cfg.NamingApplied[id]; ok {
+			for field, rec := range v {
+				out[field] = rec
+			}
+		}
+	}
+	writeJSON(w, out)
+}
+
 // handleSaveNamingAutoSync replaces the instance's per-field bindings. The client
 // sends field → {scheme}; the server owns LastFingerprint/LastAppliedAt/LastError.
 // An empty body clears all bindings for the instance (opt-out). Validates that

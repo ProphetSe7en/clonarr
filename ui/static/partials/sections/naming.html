@@ -152,22 +152,26 @@
                         <div>
                           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
                             <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="row.label + ':'"></span>
-                            <!-- Reverse-matched scheme + auto-sync marker. ⟳ = auto-sync;
-                                 plain text = matches a scheme but set manually; "drifted"
-                                 = auto-sync on but the instance no longer matches (the
-                                 Expected row below shows what auto-sync would apply). -->
+                            <!-- Scheme marker for fields clonarr has synced (⟳ = auto-sync;
+                                 plain = manual). "drifted" = changed in Arr since; "update"
+                                 = guide has a newer pattern. Both flags come from the last
+                                 check. Non-synced fields show their reverse-matched scheme. -->
                             <template x-for="st in [namingFieldStatus(activeAppType, row)]" :key="row.field">
-                              <span style="font-size:12px;display:inline-flex;align-items:center;gap:6px;line-height:1.4">
-                                <template x-if="st.kind === 'autosync'">
-                                  <span style="color:var(--app-color);font-weight:600" x-text="'⟳ ' + st.label" x-tt="'This field auto-syncs to this scheme'"></span>
-                                </template>
-                                <template x-if="st.kind === 'autosync-drift'">
-                                  <span style="display:inline-flex;align-items:center;gap:6px">
-                                    <span style="color:var(--app-color);font-weight:600" x-text="'⟳ ' + st.label"></span>
-                                    <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'The instance no longer matches this scheme. The Expected row shows what auto-sync would apply; use Sync to re-apply now.'">drifted</span>
+                              <span style="font-size:12px;display:inline-flex;align-items:center;gap:6px;line-height:1.4;flex-wrap:wrap">
+                                <template x-if="st.kind === 'managed'">
+                                  <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                    <span :style="{ color: st.auto ? 'var(--app-color)' : 'var(--text-secondary)', fontWeight: st.auto ? 600 : 500 }"
+                                      x-text="(st.auto ? '⟳ ' : '') + st.label"
+                                      x-tt="st.auto ? 'This field auto-syncs to this scheme' : 'Synced to this scheme manually via clonarr'"></span>
+                                    <template x-if="st.drifted">
+                                      <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'Changed directly in Radarr/Sonarr — no longer matches. Use Sync to re-apply.'">drifted</span>
+                                    </template>
+                                    <template x-if="st.updatable">
+                                      <span style="color:var(--accent-blue);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'The guide published a newer pattern for this scheme. Use Sync to apply it.'">update</span>
+                                    </template>
                                   </span>
                                 </template>
-                                <template x-if="st.kind === 'manual'">
+                                <template x-if="st.kind === 'matched'">
                                   <span style="color:var(--text-secondary)" x-text="st.label"></span>
                                 </template>
                                 <template x-if="st.kind === 'custom'">
@@ -177,14 +181,22 @@
                             </template>
                           </div>
                           <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-page);border-radius:3px;padding:5px 8px"
-                               :style="{ border: namingDrift(activeAppType, row).drifted ? '1px solid var(--accent-orange)' : '1px solid var(--border-subtle)' }"
+                               :style="{ border: namingFieldStatus(activeAppType, row).drifted ? '1px solid var(--accent-orange)' : '1px solid var(--border-subtle)' }"
                                x-text="namingInstanceData[activeAppType]?.[row.arr] || '(not set)'"></div>
-                          <!-- Drift diff: what auto-sync expects (the bound scheme's pattern) -->
-                          <template x-if="namingDrift(activeAppType, row).drifted">
-                            <div style="margin-top:3px">
-                              <div style="font-size:10px;color:var(--accent-orange);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px" x-text="'Expected (' + namingDrift(activeAppType, row).label + ')'"></div>
-                              <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-app);border:1px dashed var(--accent-orange);border-radius:3px;padding:5px 8px" x-text="namingDrift(activeAppType, row).expected"></div>
-                            </div>
+                          <!-- What Sync would apply: orange when drifted (Arr changed),
+                               blue when only a guide update is available. Both show the
+                               scheme's current guide pattern. -->
+                          <template x-for="st in [namingFieldStatus(activeAppType, row)]" :key="row.field + ':exp'">
+                            <template x-if="(st.drifted || st.updatable) && st.expected">
+                              <div style="margin-top:3px">
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px"
+                                  :style="{ color: st.drifted ? 'var(--accent-orange)' : 'var(--accent-blue)' }"
+                                  x-text="(st.drifted ? 'Expected (' : 'Update available (') + st.label + ')'"></div>
+                                <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-app);border-radius:3px;padding:5px 8px"
+                                  :style="{ border: st.drifted ? '1px dashed var(--accent-orange)' : '1px dashed var(--accent-blue)' }"
+                                  x-text="st.expected"></div>
+                              </div>
+                            </template>
                           </template>
                         </div>
                       </template>

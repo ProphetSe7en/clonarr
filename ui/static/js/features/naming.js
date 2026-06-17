@@ -62,6 +62,10 @@ export default {
     // {scheme, lastFingerprint, lastAppliedAt, lastError}. Opt-in, default
     // empty (nothing auto-syncs). Mirrors the backend NamingAutoSync map.
     namingAutoSync: {},
+    // Per-appType map of field -> {scheme, fingerprint, appliedAt}: what clonarr
+    // last applied (manual or auto). Source for the scheme label + Sync-now on
+    // fields that were synced manually (no auto-sync binding).
+    namingApplied: {},
     namingAutoSyncBusy: false,
     namingDriftChecking: false,
     // Rollback history: per-appType array of snapshots (newest last).
@@ -518,6 +522,7 @@ export default {
         if (r.ok) {
           this.namingApplyResult = { ...this.namingApplyResult, [appType]: `Applied "${scheme.label}" ${sectionKey} naming to ${instName}` };
           this.loadInstanceNaming(appType);
+          this.loadNamingApplied(appType); // refresh the recorded scheme/fingerprint
           setTimeout(() => { this.namingApplyResult = { ...this.namingApplyResult, [appType]: '' }; }, 5000);
         } else {
           const err = await r.json().catch(() => ({}));
@@ -582,7 +587,7 @@ export default {
     // template can read it without nesting an x-for (which broke the layout).
     namingDrift(appType, row) {
       const st = this.namingFieldStatus(appType, row);
-      return { drifted: st.kind === 'autosync-drift', expected: st.expected || '', label: st.label || '' };
+      return { drifted: st.drifted, expected: st.expected || '', label: st.label || '' };
     },
 
     // The TRaSH pattern a field is bound to (what auto-sync would apply), or '' .
@@ -594,32 +599,33 @@ export default {
     },
 
     // Status descriptor for a "Currently on instance" row. kind is one of:
-    //  autosync       — auto-syncs and the instance matches its bound scheme (⟳ + scheme)
-    //  autosync-drift — auto-syncs but a drift check flagged it as diverged; `.expected`
-    //                   carries the bound scheme's pattern so the card can show the diff
-    //  manual         — not auto-syncing; current pattern matches a known scheme
-    //  custom         — current pattern matches no known TRaSH scheme
-    // Drift is gated on the backend flag (instance.namingDriftFingerprints, set by a
-    // scheduled or manual drift check) so it never appears without a check having
-    // run — same model as CF/profile drift. The live compare is ANDed in so a field
-    // that was fixed (but not re-checked yet) doesn't keep showing a false drift.
+    //  managed — clonarr has synced this field (auto OR manual). `.auto` = auto-sync
+    //            on. `.drifted` / `.updatable` come from the last drift/update CHECK
+    //            (Instance.namingDrift/UpdateFingerprints) so they never appear
+    //            without a check having run. `.expected` = the intended scheme's
+    //            current guide pattern (what Sync would re-apply), for the diff row.
+    //  matched — not synced by clonarr; current pattern matches a known scheme (info)
+    //  custom  — not synced by clonarr; matches no known scheme
     namingFieldStatus(appType, row) {
+      const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
+      const drifted = !!(inst && inst.namingDriftFingerprints && inst.namingDriftFingerprints[row.field]);
+      const updatable = !!(inst && inst.namingUpdateFingerprints && inst.namingUpdateFingerprints[row.field]);
       const binding = this.namingBindingForField(appType, row.field);
-      if (binding) {
-        const expected = this.namingExpectedPattern(appType, row.field, binding.scheme);
-        const current = this.namingInstanceData[appType]?.[row.arr] || '';
-        const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
-        const flagged = !!(inst && inst.namingDriftFingerprints && inst.namingDriftFingerprints[row.field]);
-        const drifted = flagged && expected !== '' && current !== expected;
+      const appliedScheme = this.namingApplied[appType]?.[row.field]?.scheme || '';
+      const scheme = binding ? binding.scheme : appliedScheme; // intended scheme
+      if (binding || appliedScheme) {
         return {
-          kind: drifted ? 'autosync-drift' : 'autosync',
-          label: namingSchemeLabel(binding.scheme),
-          expected,
+          kind: 'managed',
+          auto: !!binding,
+          label: scheme ? namingSchemeLabel(scheme) : '',
+          drifted,
+          updatable,
+          expected: scheme ? this.namingExpectedPattern(appType, row.field, scheme) : '',
         };
       }
       const matched = this.namingMatchedScheme(appType, row.arr, row.field);
-      if (matched) return { kind: 'manual', label: matched.label };
-      return { kind: 'custom', label: 'Custom' };
+      if (matched) return { kind: 'matched', auto: false, label: matched.label, drifted: false, updatable: false, expected: '' };
+      return { kind: 'custom', auto: false, label: 'Custom', drifted: false, updatable: false, expected: '' };
     },
 
     // Rows for the "Currently on instance" card: {label, arr (Arr field on
@@ -642,6 +648,7 @@ export default {
       const instId = this.mediaInstanceId[appType];
       if (!instId) {
         this.namingAutoSync = { ...this.namingAutoSync, [appType]: {} };
+        this.namingApplied = { ...this.namingApplied, [appType]: {} };
         return;
       }
       try {
@@ -651,6 +658,19 @@ export default {
           this.namingAutoSync = { ...this.namingAutoSync, [appType]: data || {} };
         }
       } catch (e) { /* ignore — toggle just shows off */ }
+      this.loadNamingApplied(appType);
+    },
+
+    async loadNamingApplied(appType) {
+      const instId = this.mediaInstanceId[appType];
+      if (!instId) { this.namingApplied = { ...this.namingApplied, [appType]: {} }; return; }
+      try {
+        const r = await fetch(`/api/instances/${instId}/naming/applied`);
+        if (r.ok) {
+          const data = await r.json();
+          this.namingApplied = { ...this.namingApplied, [appType]: data || {} };
+        }
+      } catch (e) { /* ignore */ }
     },
 
     // Build the {field: {scheme}} payload the PUT expects from the current
@@ -855,6 +875,7 @@ export default {
         if (r.ok) {
           this.showToast('Naming restored', 'success');
           this.loadInstanceNaming(appType);
+          this.loadNamingApplied(appType);
           this.loadNamingHistory(appType);
           this.closeNamingHistory();
         } else {
