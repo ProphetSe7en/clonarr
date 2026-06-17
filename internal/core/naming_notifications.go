@@ -41,7 +41,7 @@ func (app *App) NotifyNamingAutoSync(instanceName string, changes []NamingChange
 		}
 		lines = append(lines,
 			"",
-			"**"+c.FieldLabel+"** — following "+c.Scheme,
+			"**"+c.FieldLabel+"**, following "+c.Scheme,
 			"Old: `"+old+"`",
 			"New: `"+c.NewPattern+"`",
 		)
