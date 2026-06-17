@@ -634,15 +634,15 @@ export default {
     // namingInstanceData), field (canonical key for the auto-sync binding)}.
     namingCurrentRows(appType) {
       if (appType === 'radarr') return [
-        { label: 'File', arr: 'standardMovieFormat', field: 'movieFile' },
-        { label: 'Folder', arr: 'movieFolderFormat', field: 'movieFolder' },
+        { label: 'Standard Movie Format', arr: 'standardMovieFormat', field: 'movieFile' },
+        { label: 'Movie Folder Format', arr: 'movieFolderFormat', field: 'movieFolder' },
       ];
       return [
-        { label: 'Episode (Standard)', arr: 'standardEpisodeFormat', field: 'standardEpisode' },
-        { label: 'Episode (Anime)', arr: 'animeEpisodeFormat', field: 'animeEpisode' },
-        { label: 'Episode (Daily)', arr: 'dailyEpisodeFormat', field: 'dailyEpisode' },
-        { label: 'Series Folder', arr: 'seriesFolderFormat', field: 'seriesFolder' },
-        { label: 'Season Folder', arr: 'seasonFolderFormat', field: 'seasonFolder' },
+        { label: 'Standard Episode Format', arr: 'standardEpisodeFormat', field: 'standardEpisode' },
+        { label: 'Anime Episode Format', arr: 'animeEpisodeFormat', field: 'animeEpisode' },
+        { label: 'Daily Episode Format', arr: 'dailyEpisodeFormat', field: 'dailyEpisode' },
+        { label: 'Series Folder Format', arr: 'seriesFolderFormat', field: 'seriesFolder' },
+        { label: 'Season Folder Format', arr: 'seasonFolderFormat', field: 'seasonFolder' },
       ];
     },
 
@@ -834,7 +834,7 @@ export default {
             this.showToast('Naming is in sync', 'success');
           } else {
             const parts = [];
-            if (nDrift) parts.push(`${nDrift} field${nDrift === 1 ? '' : 's'} drifted`);
+            if (nDrift) parts.push(`${nDrift} naming format${nDrift === 1 ? '' : 's'} drifted`);
             if (nUpd) parts.push(`${nUpd} update${nUpd === 1 ? '' : 's'} available`);
             this.showToast('Naming check: ' + parts.join(', '), nDrift ? 'error' : 'info');
           }
@@ -864,7 +864,7 @@ export default {
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok) {
-          if (data.applied > 0) this.showToast(`Synced ${data.applied} naming field${data.applied === 1 ? '' : 's'}`, 'success');
+          if (data.applied > 0) this.showToast(`Synced ${data.applied} naming format${data.applied === 1 ? '' : 's'}`, 'success');
           else this.showToast('Nothing to sync', 'info');
           await this.loadInstances();
           await this.loadInstanceNaming(appType);

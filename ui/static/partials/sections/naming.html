@@ -143,7 +143,7 @@
                           <button type="button" class="v3-inst-action"
                             :disabled="namingSyncing || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                             @click="syncNaming(activeAppType)"
-                            x-tt="'Re-apply every auto-sync field that has an update or drift, to its scheme. Manual-only fields are not touched.'"
+                            x-tt="'Re-apply every auto-synced naming format that has an update or drift, to its scheme. Manual-only formats are not touched.'"
                             x-text="namingSyncing ? 'Syncing…' : 'Update all'"></button>
                         </template>
                       </span>
@@ -167,7 +167,7 @@
                                   <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
                                     <span :style="{ color: st.auto ? 'var(--app-color)' : 'var(--text-secondary)', fontWeight: st.auto ? 600 : 500 }"
                                       x-text="(st.auto ? '⟳ ' : '') + st.label"
-                                      x-tt="st.auto ? 'This field auto-syncs to this scheme' : 'Synced to this scheme manually via clonarr'"></span>
+                                      x-tt="st.auto ? 'Auto-syncs to this scheme' : 'Synced to this scheme manually via clonarr'"></span>
                                     <template x-if="st.drifted">
                                       <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'Changed directly in Radarr/Sonarr, no longer matches. Use Sync to re-apply.'">drifted</span>
                                     </template>
@@ -193,7 +193,7 @@
                                 <button type="button" class="v3-inst-action"
                                   :disabled="namingSyncing || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                                   @click="syncNaming(activeAppType, [row.field])"
-                                  x-tt="st.drifted ? 'Re-apply this scheme to the field (it was changed in Radarr/Sonarr)' : 'Apply the newer guide pattern for this field'">Sync now</button>
+                                  x-tt="st.drifted ? 'Re-apply this scheme to this format (it was changed in Radarr/Sonarr)' : 'Apply the newer guide pattern for this format'">Sync now</button>
                               </template>
                             </template>
                           </div>
@@ -235,7 +235,7 @@
                                       <button type="button" class="btn btn-sm" style="margin-top:4px;padding:1px 7px"
                                         :disabled="instanceStatus[mediaInstanceId[activeAppType]] !== 'connected' || (namingInstanceData[activeAppType]?.[row.arr] || '') === ev.from"
                                         @click="confirmRestoreNamingField(activeAppType, row.field, row.label, ev.from)"
-                                        x-tt="'Set this field back to the value it had before this change'">Restore to before</button>
+                                        x-tt="'Set this format back to the value it had before this change'">Restore to before</button>
                                     </template>
                                   </div>
                                 </template>
@@ -370,7 +370,7 @@
                                   :style="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'font-size:11px;color:var(--app-color);font-weight:600' : 'font-size:11px;color:var(--text-secondary)'"
                                   :disabled="namingAutoSyncBusy || instanceStatus[mediaInstanceId[activeAppType]] !== 'connected'"
                                   @click="toggleNamingAutoSyncScheme(activeAppType, section.key, scheme.key)"
-                                  x-tt="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'This field follows this scheme automatically. Click to turn off.' : 'Apply this scheme now and keep this field following it as TRaSH updates'"
+                                  x-tt="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'This format follows this scheme automatically. Click to turn off.' : 'Apply this scheme now and keep this format following it as TRaSH updates'"
                                   x-text="isNamingAutoSyncing(activeAppType, section.key, scheme.key) ? 'Auto-syncing ✓' : 'Auto-sync'"></button>
                               </template>
                             </span>

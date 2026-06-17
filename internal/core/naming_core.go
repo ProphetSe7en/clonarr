@@ -61,25 +61,26 @@ func ResolveNamingField(ad *AppData, instType, field, scheme string) (string, bo
 }
 
 // NamingFieldLabel is the human label for a canonical naming field key, used in
-// the auto-sync + drift notifications.
+// the auto-sync + drift notifications. Matches Radarr/Sonarr's exact setting names
+// (and the naming page's scheme-card headers) so the terminology is consistent.
 func NamingFieldLabel(field string) string {
 	switch field {
 	case "movieFile":
-		return "Movie file"
+		return "Standard Movie Format"
 	case "movieFolder":
-		return "Movie folder"
+		return "Movie Folder Format"
 	case "standardEpisode":
-		return "Episode (Standard)"
+		return "Standard Episode Format"
 	case "dailyEpisode":
-		return "Episode (Daily)"
+		return "Daily Episode Format"
 	case "animeEpisode":
-		return "Episode (Anime)"
+		return "Anime Episode Format"
 	case "seriesFolder":
-		return "Series folder"
+		return "Series Folder Format"
 	case "seasonFolder":
-		return "Season folder"
+		return "Season Folder Format"
 	case "specialsFolder":
-		return "Specials folder"
+		return "Specials Folder Format"
 	}
 	return field
 }
