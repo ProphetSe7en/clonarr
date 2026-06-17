@@ -161,6 +161,11 @@
             Arr drift resolved
             <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when a previously-detected drift goes away (you fixed it, or Clonarr re-synced and overwrote the changes).')" @mouseleave="hideCFTooltip()">ⓘ</span>
           </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
+            <input type="checkbox" x-model="agentModal.events.onNamingAutoSync" style="accent-color:var(--accent-blue)">
+            Naming auto-sync applied
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when naming auto-sync re-applies a field because the TRaSH guide changed that scheme. Shows the old and new pattern.')" @mouseleave="hideCFTooltip()">ⓘ</span>
+          </label>
         </div>
       </div>
 

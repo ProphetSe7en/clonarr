@@ -8,6 +8,7 @@ function defaultAgentEvents() {
     onUpstreamAhead: false,
     onDriftDetected: false,
     onDriftReconciled: false,
+    onNamingAutoSync: false,
   };
 }
 
@@ -83,7 +84,9 @@ export default {
         this.agentModal.name = agent.name || '';
         this.agentModal.type = agent.type;
         this.agentModal.enabled = agent.enabled;
-        this.agentModal.events = { ...agent.events };
+        // Merge over defaults so event flags added in later versions (e.g.
+        // onNamingAutoSync) appear with their default for agents saved earlier.
+        this.agentModal.events = { ...defaultAgentEvents(), ...agent.events };
         this.agentModal.config = { ...agent.config };
       } else {
         this.agentModal.testPassed = false;

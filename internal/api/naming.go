@@ -142,23 +142,22 @@ func appendNamingSnapshot(cfg *core.Config, instID string, patterns map[string]s
 // applyNamingFields is the single apply path: fetch current naming, optionally
 // snapshot it (for rollback), set the given fields, write back. Used by manual
 // apply and the scheduled loop. fields maps canonical field key → pattern.
-func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string, replacedBy string, snapshot bool) (arr.ArrNamingConfig, error) {
+// Returns the pre-apply patterns (canonical field → pattern) so callers can show
+// what changed (e.g. the auto-sync old → new notification); empty on a failed read.
+func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string, replacedBy string, snapshot bool) (arr.ArrNamingConfig, map[string]string, error) {
 	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
 	current, err := client.GetNaming()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// Capture the pre-apply state now (before we mutate current), but only
-	// PERSIST it after the write succeeds — a failed UpdateNaming must not leave
-	// an orphan rollback snapshot (matters once the loop drives this at volume).
-	var prev map[string]string
-	if snapshot {
-		prev = extractNamingPatterns(inst.Type, current)
-	}
+	// Capture the pre-apply state now (before we mutate current). The rollback
+	// snapshot is only PERSISTED after the write succeeds — a failed UpdateNaming
+	// must not leave an orphan snapshot (matters once the loop drives this at volume).
+	prev := extractNamingPatterns(inst.Type, current)
 	applyFieldsToArrNaming(inst.Type, current, fields)
 	result, err := client.UpdateNaming(current)
 	if err != nil {
-		return nil, err
+		return nil, prev, err
 	}
 	if snapshot {
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -166,7 +165,7 @@ func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string,
 			appendNamingSnapshot(cfg, inst.ID, prev, replacedBy, now, namingHistoryKeep)
 		})
 	}
-	return result, nil
+	return result, prev, nil
 }
 
 // --- #5 phase 2: per-field auto-sync bindings, rollback history, scheduled loop ---
@@ -282,7 +281,7 @@ func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request
 			fp[field] = namingFingerprint(pattern)
 		}
 		if len(fields) > 0 {
-			_, applyErr := s.applyNamingFields(inst, fields, "auto-sync", true)
+			_, _, applyErr := s.applyNamingFields(inst, fields, "auto-sync", true)
 			now := time.Now().UTC().Format(time.RFC3339)
 			s.Core.Config.Update(func(c *core.Config) {
 				m := c.NamingAutoSync[id]
@@ -369,7 +368,7 @@ func (s *Server) handleRestoreNaming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.applyNamingFields(inst, snap.Naming, "rollback", true); err != nil {
+	if _, _, err := s.applyNamingFields(inst, snap.Naming, "rollback", true); err != nil {
 		log.Printf("Naming restore [%s]: failed: %v", inst.Name, err)
 		s.Core.DebugLog.Logf(core.LogError, "Naming restore [%s]: failed: %v", inst.Name, err)
 		writeError(w, 502, "Failed to restore naming on the instance")
@@ -423,7 +422,7 @@ func (s *Server) AutoSyncNaming() {
 			continue
 		}
 
-		_, err := s.applyNamingFields(inst, fieldsToApply, "auto-sync", true)
+		_, prev, err := s.applyNamingFields(inst, fieldsToApply, "auto-sync", true)
 		if err != nil {
 			log.Printf("Auto-sync naming [%s]: apply failed: %v", inst.Name, err)
 			s.Core.DebugLog.Logf(core.LogError, "Naming [%s]: apply failed: %v", inst.Name, err)
@@ -460,5 +459,41 @@ func (s *Server) AutoSyncNaming() {
 		})
 		log.Printf("Auto-sync naming [%s]: applied %d field(s)", inst.Name, len(fieldsToApply))
 		s.Core.DebugLog.Logf(core.LogAutoSync, "Naming [%s]: applied %d field(s)", inst.Name, len(fieldsToApply))
+
+		// Optional notification (off by default): old → new pattern per field.
+		var changes []core.NamingChange
+		for field, newPattern := range fieldsToApply {
+			changes = append(changes, core.NamingChange{
+				FieldLabel: namingFieldLabel(field),
+				Scheme:     bindings[field].Scheme,
+				OldPattern: prev[field],
+				NewPattern: newPattern,
+			})
+		}
+		s.Core.NotifyNamingAutoSync(inst.Name, changes)
 	}
+}
+
+// namingFieldLabel is the human label for a canonical naming field key, used in
+// the auto-sync notification.
+func namingFieldLabel(field string) string {
+	switch field {
+	case "movieFile":
+		return "Movie file"
+	case "movieFolder":
+		return "Movie folder"
+	case "standardEpisode":
+		return "Episode (Standard)"
+	case "dailyEpisode":
+		return "Episode (Daily)"
+	case "animeEpisode":
+		return "Episode (Anime)"
+	case "seriesFolder":
+		return "Series folder"
+	case "seasonFolder":
+		return "Season folder"
+	case "specialsFolder":
+		return "Specials folder"
+	}
+	return field
 }

@@ -31,6 +31,7 @@ type Events struct {
 	OnUpstreamAhead   bool `json:"onUpstreamAhead"`   // Profile Sync detected upstream TRaSH commits without pulling (Mode=notify / Mode=delayed)
 	OnDriftDetected   bool `json:"onDriftDetected"`   // Arr-side drift detected (someone edited the profile directly in Radarr/Sonarr)
 	OnDriftReconciled bool `json:"onDriftReconciled"` // previously-detected drift went away (user fixed it, or clonarr re-synced)
+	OnNamingAutoSync  bool `json:"onNamingAutoSync"`  // naming auto-sync re-applied a field after a TRaSH guide change (old → new pattern)
 }
 
 // Config holds credentials and options for all supported providers.
