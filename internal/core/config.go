@@ -497,6 +497,13 @@ type Instance struct {
 	// without a scheduled or manual check having run. #5 phase-2.
 	NamingDriftFingerprints map[string]string `json:"namingDriftFingerprints,omitempty"`
 
+	// NamingUpdateFingerprints: per applied naming field key, the fingerprint of
+	// the TRaSH guide's CURRENT pattern for that field's intended scheme, set when
+	// the last check found it differs from what clonarr applied. Present => a guide
+	// update is available for that field. Set alongside NamingDriftFingerprints by
+	// the drift/update pass; same "only after a check" gating. #5.
+	NamingUpdateFingerprints map[string]string `json:"namingUpdateFingerprints,omitempty"`
+
 	// PushedCFs records every CF that clonarr has pushed to this Arr
 	// instance via the "Add to Arr" path (the "+" button on the Custom
 	// Formats Browse tab and the Sandbox Add Custom Formats picker),
@@ -839,6 +846,12 @@ func (cs *ConfigStore) Get() Config {
 			cfg.Instances[i].NamingDriftFingerprints = make(map[string]string, len(inst.NamingDriftFingerprints))
 			for k, v := range inst.NamingDriftFingerprints {
 				cfg.Instances[i].NamingDriftFingerprints[k] = v
+			}
+		}
+		if len(inst.NamingUpdateFingerprints) > 0 {
+			cfg.Instances[i].NamingUpdateFingerprints = make(map[string]string, len(inst.NamingUpdateFingerprints))
+			for k, v := range inst.NamingUpdateFingerprints {
+				cfg.Instances[i].NamingUpdateFingerprints[k] = v
 			}
 		}
 	}
@@ -1323,6 +1336,12 @@ func (cs *ConfigStore) GetInstance(id string) (Instance, bool) {
 				out.NamingDriftFingerprints = make(map[string]string, len(inst.NamingDriftFingerprints))
 				for k, v := range inst.NamingDriftFingerprints {
 					out.NamingDriftFingerprints[k] = v
+				}
+			}
+			if len(inst.NamingUpdateFingerprints) > 0 {
+				out.NamingUpdateFingerprints = make(map[string]string, len(inst.NamingUpdateFingerprints))
+				for k, v := range inst.NamingUpdateFingerprints {
+					out.NamingUpdateFingerprints[k] = v
 				}
 			}
 			return out, true

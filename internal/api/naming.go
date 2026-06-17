@@ -30,35 +30,10 @@ func namingFieldsForType(instType string) []string {
 	return []string{"standardEpisode", "dailyEpisode", "animeEpisode", "seriesFolder", "seasonFolder"}
 }
 
-// resolveNamingField returns the TRaSH pattern for one naming field under a given
-// scheme/preset. ok=false when TRaSH has no pattern for that (field, scheme) — the
-// caller then skips it (never applies an empty/guessed pattern). Mirrors the
-// field→TrashNaming mapping in handleApplyNaming.
+// resolveNamingField is an alias to the single source in core (the drift/update
+// pass needs it too, and core cannot import api).
 func resolveNamingField(ad *core.AppData, instType, field, scheme string) (string, bool) {
-	if ad == nil || ad.Naming == nil {
-		return "", false
-	}
-	switch field {
-	case "movieFile":
-		v, ok := ad.Naming.File[scheme]
-		return v, ok
-	case "movieFolder":
-		v, ok := ad.Naming.Folder[scheme]
-		return v, ok
-	case "seriesFolder":
-		v, ok := ad.Naming.Series[scheme]
-		return v, ok
-	case "seasonFolder":
-		v, ok := ad.Naming.Season[scheme]
-		return v, ok
-	case "standardEpisode", "dailyEpisode", "animeEpisode":
-		sub := map[string]string{"standardEpisode": "standard", "dailyEpisode": "daily", "animeEpisode": "anime"}[field]
-		if ep := ad.Naming.Episodes[sub]; ep != nil {
-			v, ok := ep[scheme]
-			return v, ok
-		}
-	}
-	return "", false
+	return core.ResolveNamingField(ad, instType, field, scheme)
 }
 
 // namingFingerprint hashes an applied pattern (single source in core).

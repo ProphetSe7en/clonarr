@@ -30,6 +30,36 @@ func NamingFingerprint(pattern string) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
+// ResolveNamingField returns the TRaSH pattern for one naming field under a given
+// scheme. ok=false when TRaSH has no pattern for that (field, scheme). Lives in
+// core so both the api apply paths and the core drift/update pass share it.
+func ResolveNamingField(ad *AppData, instType, field, scheme string) (string, bool) {
+	if ad == nil || ad.Naming == nil {
+		return "", false
+	}
+	switch field {
+	case "movieFile":
+		v, ok := ad.Naming.File[scheme]
+		return v, ok
+	case "movieFolder":
+		v, ok := ad.Naming.Folder[scheme]
+		return v, ok
+	case "seriesFolder":
+		v, ok := ad.Naming.Series[scheme]
+		return v, ok
+	case "seasonFolder":
+		v, ok := ad.Naming.Season[scheme]
+		return v, ok
+	case "standardEpisode", "dailyEpisode", "animeEpisode":
+		sub := map[string]string{"standardEpisode": "standard", "dailyEpisode": "daily", "animeEpisode": "anime"}[field]
+		if ep := ad.Naming.Episodes[sub]; ep != nil {
+			v, ok := ep[scheme]
+			return v, ok
+		}
+	}
+	return "", false
+}
+
 // NamingFieldLabel is the human label for a canonical naming field key, used in
 // the auto-sync + drift notifications.
 func NamingFieldLabel(field string) string {

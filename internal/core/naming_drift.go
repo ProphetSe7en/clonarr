@@ -12,25 +12,31 @@ type namingDriftEvent struct {
 
 // namingDriftPassResult carries what to persist + what to notify after the pass.
 type namingDriftPassResult struct {
-	fingerprints map[string]map[string]string // instID -> field -> current-pattern fp (drifted fields only)
-	checkedOK    map[string]bool              // instances fetched + compared this pass
-	detected     []namingDriftEvent
+	driftFP   map[string]map[string]string // instID -> field -> current Arr pattern fp (drifted)
+	updateFP  map[string]map[string]string // instID -> field -> guide pattern fp (update available)
+	checkedOK map[string]bool              // instances fetched + compared this pass
+	detected  []namingDriftEvent           // newly-drifted, for notification
 }
 
-// runNamingDriftPass compares each auto-synced naming field's CURRENT Arr pattern
-// against the fingerprint clonarr last applied (binding.LastFingerprint). A
-// mismatch means naming was changed in Arr after clonarr set it = drift. It only
-// FLAGS — it never rewrites Arr (re-applying is the user's Sync action). Per
-// instance, mirroring the CF-spec drift pass. Runs inside DriftRunner.RunOnce, so
-// it fires on both the scheduled check and the manual sidebar Check.
+// runNamingDriftPass checks, for every field clonarr has synced (Config.NamingApplied
+// — manual OR auto), two things against what clonarr last applied:
+//   - DRIFT: the instance's CURRENT Arr pattern differs from the applied one
+//     (someone changed naming in Arr).
+//   - UPDATE: the field's intended scheme has a NEWER pattern in the TRaSH guide
+//     than what was applied (a guide update is available).
+//
+// It only FLAGS — never rewrites Arr (re-applying is the user's Sync / auto-sync).
+// Per instance, mirroring the CF-spec drift pass. Runs inside DriftRunner.RunOnce,
+// so it fires on both the scheduled check and the manual sidebar Check.
 func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 	cfg := d.app.Config.Get()
 	res := namingDriftPassResult{
-		fingerprints: map[string]map[string]string{},
-		checkedOK:    map[string]bool{},
+		driftFP:   map[string]map[string]string{},
+		updateFP:  map[string]map[string]string{},
+		checkedOK: map[string]bool{},
 	}
-	for instID, bindings := range cfg.NamingAutoSync {
-		if len(bindings) == 0 {
+	for instID, applied := range cfg.NamingApplied {
+		if len(applied) == 0 {
 			continue
 		}
 		inst, ok := d.app.Config.GetInstance(instID)
@@ -40,37 +46,50 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 		client := arr.NewArrClient(inst.URL, inst.APIKey, d.app.HTTPClient)
 		current, err := client.GetNaming()
 		if err != nil {
-			// Unreachable: leave existing drift state alone (no false reconcile), skip.
+			// Unreachable: leave existing drift/update state alone (no false
+			// reconcile), skip.
 			continue
 		}
 		res.checkedOK[instID] = true
+		ad := d.app.Trash.GetAppData(inst.Type)
 
-		driftFP := map[string]string{}
-		for field, b := range bindings {
-			if b.LastFingerprint == "" {
-				continue // never applied — nothing to compare against
+		drift := map[string]string{}
+		updates := map[string]string{}
+		for field, rec := range applied {
+			if rec.Fingerprint == "" {
+				continue
 			}
 			arrKey, ok := NamingArrKey[field]
 			if !ok {
 				continue
 			}
-			cur, _ := current[arrKey].(string)
-			if cur == "" {
-				continue // field unset on the instance — treat as not drifted
+			// DRIFT — current Arr pattern differs from what clonarr applied.
+			if cur, _ := current[arrKey].(string); cur != "" {
+				if fp := NamingFingerprint(cur); fp != rec.Fingerprint {
+					drift[field] = fp
+				}
 			}
-			curFP := NamingFingerprint(cur)
-			if curFP != b.LastFingerprint {
-				driftFP[field] = curFP
+			// UPDATE — the intended scheme's current guide pattern differs from
+			// what clonarr applied (a guide update is available for this field).
+			if rec.Scheme != "" {
+				if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.Scheme); ok && gp != "" {
+					if fp := NamingFingerprint(gp); fp != rec.Fingerprint {
+						updates[field] = fp
+					}
+				}
 			}
 		}
-		if len(driftFP) > 0 {
-			res.fingerprints[instID] = driftFP
+		if len(drift) > 0 {
+			res.driftFP[instID] = drift
+		}
+		if len(updates) > 0 {
+			res.updateFP[instID] = updates
 		}
 
 		// Newly-drifted vs the previously-stored fingerprints → notify (dedup so a
 		// standing drift isn't re-notified on every check).
 		var newly []string
-		for field, fp := range driftFP {
+		for field, fp := range drift {
 			if inst.NamingDriftFingerprints[field] != fp {
 				newly = append(newly, field)
 			}

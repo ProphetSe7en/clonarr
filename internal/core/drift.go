@@ -456,13 +456,15 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		for i := range c.Instances {
 			id := c.Instances[i].ID
 			if namingPass.checkedOK[id] {
-				// Replace with the freshly-computed drift map (nil clears = reconciled).
-				c.Instances[i].NamingDriftFingerprints = namingPass.fingerprints[id]
-			} else if len(c.NamingAutoSync[id]) == 0 {
-				// No bindings → no drift state to keep (clear stale).
+				// Replace with the freshly-computed maps (nil clears = reconciled).
+				c.Instances[i].NamingDriftFingerprints = namingPass.driftFP[id]
+				c.Instances[i].NamingUpdateFingerprints = namingPass.updateFP[id]
+			} else if len(c.NamingApplied[id]) == 0 {
+				// Nothing applied → no drift/update state to keep (clear stale).
 				c.Instances[i].NamingDriftFingerprints = nil
+				c.Instances[i].NamingUpdateFingerprints = nil
 			}
-			// else: has bindings but was unreachable this pass → leave existing.
+			// else: has applied fields but was unreachable this pass → leave existing.
 		}
 	}); updErr != nil {
 		return results, fmt.Errorf("persist naming drift result: %w", updErr)
