@@ -168,7 +168,7 @@ func (app *App) NotifyNamingDriftDetected(events []namingDriftEvent) {
 // the user the change will be auto-applied after the delay. The actual apply later
 // fires NotifyNamingAutoSync. Gated on OnNamingAutoSync (the naming lifecycle event);
 // embed uses the Arr app colour.
-func (app *App) NotifyNamingPending(instanceName, appType, fieldLabel, reason string, delayMinutes int) {
+func (app *App) NotifyNamingPending(instanceName, appType, fieldLabel, reason string, delayMinutes int, oldPattern, newPattern string) {
 	cfg := app.Config.Get()
 
 	hasOptIn := false
@@ -186,8 +186,15 @@ func (app *App) NotifyNamingPending(instanceName, appType, fieldLabel, reason st
 	if reason == "drift" {
 		what = "A direct edit in Radarr/Sonarr"
 	}
+	old := oldPattern
+	if old == "" {
+		old = "(not set)"
+	}
 	msg := what + " changed **" + fieldLabel + "** on **" + instanceName +
-		"**. Auto-sync will apply it in " + humanizeMinutes(delayMinutes) + "."
+		"**. Auto-sync will apply it in " + humanizeMinutes(delayMinutes) + ".\n" +
+		namingField("Now", old) +
+		namingField("Will be", newPattern) +
+		"Diff\n```\n" + namingDiffMarked(oldPattern, newPattern) + "\n```"
 
 	payload := NotificationPayload{
 		Title:    "Naming change pending · " + fieldLabel,

@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// namingPendInfo carries why a field is pending plus the current Arr value and the
+// target pattern, so the "will apply in X" notification can show old / new / diff.
+type namingPendInfo struct {
+	reason string // "update" | "drift"
+	oldPat string // current value in Arr
+	newPat string // scheme's target pattern
+}
+
 // RunNamingDelayed is the naming side of "Wait before applying" (delayed mode).
 // On each delayed-apply poll tick it checks every auto-sync-ON naming field:
 //   - A field that needs syncing (guide update OR Arr drift) is first marked
@@ -49,11 +57,11 @@ func (s *Server) RunNamingDelayed() {
 		}
 		live := extractNamingPatterns(inst.Type, liveCfg)
 
-		setPending := map[string]string{} // field -> reason (newly pending)
-		clearPending := []string{}        // fields back in sync
-		dueFields := map[string]string{}  // field -> pattern (delay elapsed, apply now)
-		dueSchemes := map[string]string{} // field -> scheme
-		dueReason := map[string]string{}  // field -> "update" | "drift"
+		setPending := map[string]namingPendInfo{} // field -> pending detail (newly pending)
+		clearPending := []string{}                // fields back in sync
+		dueFields := map[string]string{}          // field -> pattern (delay elapsed, apply now)
+		dueSchemes := map[string]string{}         // field -> scheme
+		dueReason := map[string]string{}          // field -> "update" | "drift"
 
 		for field, b := range bindings {
 			pattern, ok := resolveNamingField(ad, inst.Type, field, b.Scheme)
@@ -74,7 +82,7 @@ func (s *Server) RunNamingDelayed() {
 				reason = "drift"
 			}
 			if b.PendingSince == "" {
-				setPending[field] = reason // first detection — start the timer
+				setPending[field] = namingPendInfo{reason: reason, oldPat: live[field], newPat: pattern} // start the timer
 				continue
 			}
 			// Already pending — apply once the delay has elapsed.
@@ -93,10 +101,10 @@ func (s *Server) RunNamingDelayed() {
 				if m == nil {
 					return
 				}
-				for field, reason := range setPending {
+				for field, info := range setPending {
 					if nb, ok := m[field]; ok {
 						nb.PendingSince = nowStr
-						nb.PendingReason = reason
+						nb.PendingReason = info.reason
 						m[field] = nb
 					}
 				}
@@ -111,8 +119,8 @@ func (s *Server) RunNamingDelayed() {
 		}
 
 		// One-off "will apply in <delay>" notification per newly-pending field.
-		for field, reason := range setPending {
-			s.Core.NotifyNamingPending(inst.Name, inst.Type, core.NamingFieldLabel(field), reason, cfg.ProfileSync.ApplyDelayMinutes)
+		for field, info := range setPending {
+			s.Core.NotifyNamingPending(inst.Name, inst.Type, core.NamingFieldLabel(field), info.reason, cfg.ProfileSync.ApplyDelayMinutes, info.oldPat, info.newPat)
 		}
 
 		// Apply fields whose delay has elapsed, then notify + clear pending.
