@@ -326,6 +326,11 @@ type NamingFieldBinding struct {
 	LastFingerprint string `json:"lastFingerprint,omitempty"` // hash of this field's last-applied pattern
 	LastAppliedAt   string `json:"lastAppliedAt,omitempty"`
 	LastError       string `json:"lastError,omitempty"` // per-field; never touches an AutoSyncRule
+	// "Wait before applying" (delayed mode): when an update/drift is first detected
+	// for this field, PendingSince is stamped and the apply waits ApplyDelayMinutes
+	// from then. Cleared on apply or when the field is back in sync.
+	PendingSince  string `json:"pendingSince,omitempty"`
+	PendingReason string `json:"pendingReason,omitempty"` // "update" | "drift"
 }
 
 // NamingAppliedRecord: what clonarr last applied to one naming field, recorded on

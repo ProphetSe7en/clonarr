@@ -102,19 +102,19 @@ func main() {
 	sandboxStore := core.NewSandboxStore(configDir)
 
 	app := &core.App{
-		Config:       cfgStore,
-		Trash:        trashStore,
-		Profiles:     profilesStore,
-		CustomCFs:    customCFsStore,
-		CFGroups:     cfGroupsStore,
-		Sandbox:      sandboxStore,
-		DebugLog:     debugLogStore,
-		ActivityLog:  activityLogStore,
-		Version:      Version,
-		DevFeatures:  devFeatures,
-		HTTPClient:   &http.Client{Timeout: 30 * time.Second},
-		NotifyClient: &http.Client{Timeout: 10 * time.Second},
-		SafeClient:   netsec.NewSafeHTTPClient(10*time.Second, nil),
+		Config:        cfgStore,
+		Trash:         trashStore,
+		Profiles:      profilesStore,
+		CustomCFs:     customCFsStore,
+		CFGroups:      cfGroupsStore,
+		Sandbox:       sandboxStore,
+		DebugLog:      debugLogStore,
+		ActivityLog:   activityLogStore,
+		Version:       Version,
+		DevFeatures:   devFeatures,
+		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
+		NotifyClient:  &http.Client{Timeout: 10 * time.Second},
+		SafeClient:    netsec.NewSafeHTTPClient(10*time.Second, nil),
 		PullUpdateCh:  make(chan string, 1),
 		ApplyUpdateCh: make(chan struct{}, 1),
 	}
@@ -437,7 +437,8 @@ func main() {
 
 		runOnce := func() {
 			next := app.RunDelayedApply()
-			app.SetNextApplyAt(next) // zero clears the countdown when nothing pending
+			server.RunNamingDelayed() // naming side of "wait before applying"
+			app.SetNextApplyAt(next)  // zero clears the countdown when nothing pending
 		}
 		runOnce() // evaluate any already-due rules at startup (respecting their persisted deadlines)
 

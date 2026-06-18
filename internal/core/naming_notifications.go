@@ -162,3 +162,44 @@ func (app *App) NotifyNamingDriftDetected(events []namingDriftEvent) {
 		}
 	}
 }
+
+// NotifyNamingPending fires in "Wait before applying" mode when a naming change
+// (guide update or Arr-side drift) is first detected for a bound field: it tells
+// the user the change will be auto-applied after the delay. The actual apply later
+// fires NotifyNamingAutoSync. Gated on OnNamingAutoSync (the naming lifecycle event);
+// embed uses the Arr app colour.
+func (app *App) NotifyNamingPending(instanceName, appType, fieldLabel, reason string, delayMinutes int) {
+	cfg := app.Config.Get()
+
+	hasOptIn := false
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if agent.Events.OnNamingAutoSync {
+			hasOptIn = true
+			break
+		}
+	}
+	if !hasOptIn {
+		return
+	}
+
+	what := "A TRaSH guide update"
+	if reason == "drift" {
+		what = "A direct edit in Radarr/Sonarr"
+	}
+	msg := what + " changed **" + fieldLabel + "** on **" + instanceName +
+		"**. Auto-sync will apply it in " + humanizeMinutes(delayMinutes) + "."
+
+	payload := NotificationPayload{
+		Title:    "Naming change pending · " + fieldLabel,
+		Message:  msg,
+		Color:    appColor(appType),
+		Severity: NotificationSeverityInfo,
+		Route:    NotificationRouteDefault,
+	}
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnNamingAutoSync {
+			continue
+		}
+		app.DispatchNotificationAgent(agent, payload)
+	}
+}

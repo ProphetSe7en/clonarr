@@ -698,15 +698,26 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		result.ScoresUpdated > 0 || result.ScoresZeroed > 0 ||
 		result.QualityUpdated || result.ProfileCreated ||
 		len(result.SettingsDetails) > 0
-	if hasObservableChange && (parent == nil || parent.Source != SourceDriftApply) {
-		app.NotifyAutoSync(rule, inst, plan.ProfileName, result, nil)
-	} else if hasObservableChange {
-		// Drift-apply (auto mode): suppress the generic "Auto-Sync Applied"
-		// notification here — RunOnceAutoApply fires a single drift-aware message
-		// (what was reverted + why) instead, so the user gets one ping, not two.
-		app.DebugLog.Logf(LogAutoSync, "Auto-sync: rule %s — drift-apply; generic sync notification suppressed (drift-corrected fires instead)", rule.ID)
-	} else {
+	switch {
+	case !hasObservableChange:
 		app.DebugLog.Logf(LogAutoSync, "Auto-sync: rule %s — sync ran but no observable change (TRaSH restructure with equivalent effective set); notification suppressed", rule.ID)
+	case parent != nil && parent.Source == SourceDriftApply:
+		// Auto-mode drift correction: RunOnceAutoApply fires the "Drift corrected"
+		// notification (with the detected-drift detail). Suppress the generic one here.
+		app.DebugLog.Logf(LogAutoSync, "Auto-sync: rule %s — drift-apply; drift-corrected notification fires from the drift runner", rule.ID)
+	case parent != nil && parent.Source == SourceDelayedApply && hasDriftPendingChange(rule.PendingChanges):
+		// Delayed-mode drift correction: the "Wait before applying" timer fired and
+		// pushed the saved state back over a direct Arr edit. Same "Drift corrected"
+		// wording as auto mode, with what was put back.
+		app.NotifyDriftCorrected(DriftChangeSummary{
+			RuleID:         rule.ID,
+			InstanceName:   inst.Name,
+			ArrProfileName: plan.ProfileName,
+			AppType:        inst.Type,
+			Summary:        resultChangeLines(result),
+		})
+	default:
+		app.NotifyAutoSync(rule, inst, plan.ProfileName, result, nil)
 	}
 
 	// Push event to frontend toast queue (only when there are actual changes)
@@ -1828,6 +1839,31 @@ func (app *App) UpdateAutoSyncRuleError(ruleID, errMsg string) {
 			}
 		}
 	})
+}
+
+// hasDriftPendingChange reports whether any of a rule's pending changes came from
+// Arr-side drift (vs a TRaSH upstream update).
+func hasDriftPendingChange(pcs []PendingChange) bool {
+	for _, pc := range pcs {
+		if pc.Source == "drift" {
+			return true
+		}
+	}
+	return false
+}
+
+// resultChangeLines flattens a sync result's per-category change strings into one
+// list, for the "Drift corrected" notification body (what was put back).
+func resultChangeLines(r *SyncResult) []string {
+	if r == nil {
+		return nil
+	}
+	var out []string
+	out = append(out, r.CFDetails...)
+	out = append(out, r.ScoreDetails...)
+	out = append(out, r.QualityDetails...)
+	out = append(out, r.SettingsDetails...)
+	return out
 }
 
 // NotifyAutoSync sends notifications for an auto-sync result.

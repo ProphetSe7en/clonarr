@@ -555,7 +555,11 @@ func (d *DriftRunner) runNamingDrift() error {
 		return fmt.Errorf("persist naming drift result: %w", err)
 	}
 	if len(namingPass.detected) > 0 {
-		d.app.NotifyNamingDriftDetected(namingPass.detected)
+		// In delayed mode RunNamingDelayed owns the naming notification flow
+		// ("will sync in X" then "applied"), so don't also fire "re-sync manually".
+		if cfg := d.app.Config.Get(); cfg.ProfileSync == nil || cfg.ProfileSync.Mode != ProfileSyncModeDelayed {
+			d.app.NotifyNamingDriftDetected(namingPass.detected)
+		}
 	}
 	return nil
 }

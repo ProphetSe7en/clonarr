@@ -74,8 +74,24 @@ func (app *App) NotifyDriftDetected(summary DriftChangeSummary) {
 			lines = append(lines, fmt.Sprintf("...and %d more", extra))
 		}
 	}
+	// Closing line reflects what happens next: in "Wait before applying" mode an
+	// auto-sync-ON rule will be re-applied automatically after the delay, so say
+	// when — not "re-sync manually" (notify mode / auto-sync-OFF rules still do).
+	closing := "Open Clonarr, go to Sync Rules to review the changes, then re-sync."
+	if cfg.ProfileSync != nil && cfg.ProfileSync.Mode == ProfileSyncModeDelayed && cfg.ProfileSync.ApplyDelayMinutes > 0 {
+		ruleAutoSyncs := false
+		for _, r := range cfg.AutoSync.Rules {
+			if r.ID == summary.RuleID {
+				ruleAutoSyncs = r.Enabled && r.OrphanedAt == "" && r.ProfileSource != "imported"
+				break
+			}
+		}
+		if ruleAutoSyncs {
+			closing = "Auto-sync will put your saved state back in " + humanizeMinutes(cfg.ProfileSync.ApplyDelayMinutes) + "."
+		}
+	}
 	lines = append(lines, "")
-	lines = append(lines, "Open Clonarr, go to Sync Rules to review the changes, then re-sync.")
+	lines = append(lines, closing)
 
 	payload := NotificationPayload{
 		Title:    title,
