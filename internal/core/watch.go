@@ -125,7 +125,17 @@ func (uw *ProfileSyncRunner) Run(ctx context.Context) error {
 		// Errors collect into DriftWatch.LastResult.Errors so they're
 		// visible to the user via Settings without bubbling up here and
 		// masking a successful TRaSH-side check.
-		_, _ = uw.app.DriftRunner.RunOnce(ctx)
+		//
+		// Apply-automatically mode also re-syncs auto-sync-ON rules that drifted
+		// (RunOnceAutoApply), honouring the "when changes are found" setting for
+		// Arr-side drift the same way it does for TRaSH updates. Notify / Delayed
+		// detect only here (Delayed's apply runs via RunDelayedApply on its own
+		// cadence); both leave Arr untouched on this tick.
+		if cfg.ProfileSync.Mode == ProfileSyncModeAuto {
+			_, _ = uw.app.DriftRunner.RunOnceAutoApply(ctx)
+		} else {
+			_, _ = uw.app.DriftRunner.RunOnce(ctx)
+		}
 	}
 
 	return trashErr

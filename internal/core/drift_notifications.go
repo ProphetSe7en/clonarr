@@ -80,7 +80,7 @@ func (app *App) NotifyDriftDetected(summary DriftChangeSummary) {
 	payload := NotificationPayload{
 		Title:    title,
 		Message:  strings.Join(lines, "\n"),
-		Color:    0xff7b00, // accent-orange (matches the out-of-sync badge planned for the UI)
+		Color:    appColor(summary.AppType), // per-instance app colour
 		Severity: NotificationSeverityWarning,
 		Route:    NotificationRouteDefault,
 	}
@@ -121,7 +121,64 @@ func (app *App) NotifyDriftReconciled(summary DriftChangeSummary) {
 		Title: fmt.Sprintf("Clonarr: drift resolved on %s for %s", appLabel, summary.ArrProfileName),
 		Message: fmt.Sprintf("The earlier drift in **%s** on %s is gone. The profile now matches what Clonarr would sync.",
 			summary.ArrProfileName, summary.InstanceName),
-		Color:    0x3fb950, // accent-green
+		Color:    appColor(summary.AppType), // per-instance app colour
+		Severity: NotificationSeverityInfo,
+		Route:    NotificationRouteDefault,
+	}
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if !agent.Events.OnDriftReconciled {
+			continue
+		}
+		app.DispatchNotificationAgent(agent, payload)
+	}
+}
+
+// NotifyDriftCorrected fires when Apply-automatically mode synced an auto-sync-ON
+// rule back over a direct Arr edit. Uses the OnDriftReconciled toggle (it is a
+// drift-resolution event) but says clearly that clonarr did the correction, so the
+// user never sees a misleading "re-sync manually" for drift that was already fixed.
+// Embed uses the Arr app's brand colour.
+func (app *App) NotifyDriftCorrected(summary DriftChangeSummary) {
+	cfg := app.Config.Get()
+
+	hasOptIn := false
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if agent.Events.OnDriftReconciled {
+			hasOptIn = true
+			break
+		}
+	}
+	if !hasOptIn {
+		return
+	}
+
+	appLabel := summary.AppType
+	if appLabel == "radarr" {
+		appLabel = "Radarr"
+	} else if appLabel == "sonarr" {
+		appLabel = "Sonarr"
+	}
+
+	msg := fmt.Sprintf("**%s** on %s was changed directly in Arr. Auto-sync put it back to your saved state.",
+		summary.ArrProfileName, summary.InstanceName)
+	if len(summary.Details) > 0 {
+		lines := make([]string, 0, len(summary.Details))
+		for _, d := range summary.Details {
+			if len(lines) >= 20 {
+				lines = append(lines, "- ...")
+				break
+			}
+			lines = append(lines, "- "+formatDriftDetail(d))
+		}
+		msg += "\n\n**Reverted:**\n" + strings.Join(lines, "\n")
+	} else if len(summary.Summary) > 0 {
+		msg += "\n\n" + strings.Join(summary.Summary, "\n")
+	}
+
+	payload := NotificationPayload{
+		Title:    fmt.Sprintf("Drift corrected on %s · %s", appLabel, summary.ArrProfileName),
+		Message:  msg,
+		Color:    appColor(summary.AppType),
 		Severity: NotificationSeverityInfo,
 		Route:    NotificationRouteDefault,
 	}

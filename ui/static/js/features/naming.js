@@ -907,5 +907,25 @@ export default {
       if (via === 'rollback') return 'Restore';
       return via || 'Change';
     },
+
+    // Splits an old/new pattern pair into the shared prefix + suffix and the
+    // differing middle of each, so the history "Diff" line can dim what's
+    // unchanged and highlight only what changed (removed = red, added = green).
+    // Character-level common prefix/suffix — fine for naming patterns, where a
+    // change is usually a localized token edit.
+    namingDiffParts(from, to) {
+      from = from || ''; to = to || '';
+      const min = Math.min(from.length, to.length);
+      let p = 0;
+      while (p < min && from[p] === to[p]) p++;
+      let s = 0;
+      while (s < (min - p) && from[from.length - 1 - s] === to[to.length - 1 - s]) s++;
+      return {
+        prefix: from.slice(0, p),
+        oldMid: from.slice(p, from.length - s),
+        newMid: to.slice(p, to.length - s),
+        suffix: s ? from.slice(from.length - s) : '',
+      };
+    },
   },
 };

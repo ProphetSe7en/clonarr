@@ -698,8 +698,13 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		result.ScoresUpdated > 0 || result.ScoresZeroed > 0 ||
 		result.QualityUpdated || result.ProfileCreated ||
 		len(result.SettingsDetails) > 0
-	if hasObservableChange {
+	if hasObservableChange && (parent == nil || parent.Source != SourceDriftApply) {
 		app.NotifyAutoSync(rule, inst, plan.ProfileName, result, nil)
+	} else if hasObservableChange {
+		// Drift-apply (auto mode): suppress the generic "Auto-Sync Applied"
+		// notification here — RunOnceAutoApply fires a single drift-aware message
+		// (what was reverted + why) instead, so the user gets one ping, not two.
+		app.DebugLog.Logf(LogAutoSync, "Auto-sync: rule %s — drift-apply; generic sync notification suppressed (drift-corrected fires instead)", rule.ID)
 	} else {
 		app.DebugLog.Logf(LogAutoSync, "Auto-sync: rule %s — sync ran but no observable change (TRaSH restructure with equivalent effective set); notification suppressed", rule.ID)
 	}
@@ -1847,7 +1852,7 @@ func (app *App) NotifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 		description = fmt.Sprintf("**Instance:** %s\n**Profile:** %s\n**Error:** %s",
 			inst.Name, profileName, syncErr.Error())
 	} else {
-		color = 0x3fb950 // green
+		color = appColor(inst.Type) // per-instance app colour (Sonarr blue / Radarr gold)
 		title = "Auto-Sync Applied"
 		arrName := ""
 		if result != nil && result.ArrProfileName != "" && result.ArrProfileName != profileName {

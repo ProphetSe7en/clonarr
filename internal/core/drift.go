@@ -60,12 +60,56 @@ func NewDriftRunner(app *App) *DriftRunner {
 // aggregate Errors slice but do not abort the walk — one broken
 // instance shouldn't hide drift on the rest.
 func (d *DriftRunner) RunOnce(ctx context.Context) ([]DriftResult, error) {
-	return d.runOnceInternal(ctx)
+	results, _, err := d.runOnceInternal(ctx, false)
+	return results, err
 }
 
-func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error) {
+// RunOnceAutoApply runs drift detection and, in Apply-automatically mode, re-applies
+// every auto-sync-ON rule found drifted — pushing clonarr's saved state back over the
+// direct Arr edit — then notifies that the drift was corrected (the "detected, re-sync
+// manually" notification is suppressed for those rules). Auto-sync-OFF rules are still
+// only flagged. The apply runs after the detection lock is released. Used by the
+// scheduled watcher in auto mode; manual Check uses RunOnce (detect-only), so a Check
+// never silently rewrites Arr.
+func (d *DriftRunner) RunOnceAutoApply(ctx context.Context) ([]DriftResult, error) {
+	results, toApply, err := d.runOnceInternal(ctx, true)
+	if err != nil || len(toApply) == 0 {
+		return results, err
+	}
+	cfg := d.app.Config.Get()
+	byID := make(map[string]AutoSyncRule, len(cfg.AutoSync.Rules))
+	for _, r := range cfg.AutoSync.Rules {
+		byID[r.ID] = r
+	}
+	var due []AutoSyncRule
+	for _, n := range toApply {
+		if r, ok := byID[n.RuleID]; ok {
+			due = append(due, r)
+		}
+	}
+	if len(due) > 0 {
+		currentCommit := ""
+		if d.app.Trash != nil {
+			currentCommit = d.app.Trash.CurrentCommit()
+		}
+		tick := d.app.DebugLog.BeginOp(OpAutoSync, SourceDriftApply, fmt.Sprintf("drift-rules=%d", len(due)))
+		changed, noChange, errCount, summary := d.app.runRulesPerInstance(due, currentCommit, tick)
+		if len(summary) > 0 {
+			tick.Logf("corrected: %s", strings.Join(summary, " | "))
+		}
+		tick.End(fmt.Sprintf("ok | %d corrected, %d no-op, %d errors", changed, noChange, errCount))
+	}
+	// Notify that each drifted rule was synced back ("corrected", not "re-sync").
+	for _, n := range toApply {
+		d.app.NotifyDriftCorrected(n.summary())
+	}
+	return results, err
+}
+
+func (d *DriftRunner) runOnceInternal(ctx context.Context, autoApply bool) ([]DriftResult, []*pendingDriftNotification, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	var toApply []*pendingDriftNotification
 
 	cfg := d.app.Config.Get()
 	currentTrashCommit := ""
@@ -248,6 +292,22 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 		}
 		results = append(results, result)
 
+		// Auto-apply mode: remember EVERY drifted auto-sync-ON rule — whether the
+		// drift is new this tick or has been flagged for a while — so the caller can
+		// re-sync them all back. Keyed off current drift state, NOT the detection
+		// notification event (which only fires on new/changed drift); a long-standing
+		// drift must still be corrected.
+		if autoApply && len(details) > 0 && w.rule.Enabled && w.rule.OrphanedAt == "" && w.rule.ProfileSource != "imported" {
+			toApply = append(toApply, &pendingDriftNotification{
+				RuleID:         w.rule.ID,
+				InstanceName:   w.instance.Name,
+				ArrProfileName: current.Name,
+				AppType:        w.instance.Type,
+				Summary:        result.DriftSummary,
+				Details:        details,
+			})
+		}
+
 		// Per-rule persistence: update WatchState fingerprint, refresh
 		// drift-sourced PendingChanges, and queue notification events
 		// (fired AFTER the Config.Update closes so the lock isn't held
@@ -404,7 +464,7 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 			c.Instances[i].CFDriftFingerprints = merged
 		}
 	}); updErr != nil {
-		return results, fmt.Errorf("persist drift result: %w", updErr)
+		return results, nil, fmt.Errorf("persist drift result: %w", updErr)
 	}
 
 	// Fire notifications outside the Config.Update closures — provider
@@ -412,10 +472,25 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 	// don't hold any locks across them. Order matches the per-rule walk
 	// so log lines stay correlated. Manual and scheduled entry points
 	// both reach here; per-agent event flags decide what actually sends.
+	// In auto-apply mode, drift on an auto-sync-ON rule is about to be synced back
+	// by the caller (RunOnceAutoApply), so suppress its "detected, re-sync manually"
+	// notification — the apply step fires "corrected" instead. Auto-sync-OFF rules
+	// are still only flagged, even in auto-apply mode.
+	autoSyncOn := map[string]bool{}
+	if autoApply {
+		for _, r := range cfg.AutoSync.Rules {
+			autoSyncOn[r.ID] = r.Enabled && r.OrphanedAt == "" && r.ProfileSource != "imported"
+		}
+	}
 	for _, n := range pendingNotifs {
 		switch n.Event {
 		case driftEventDetected:
-			d.app.NotifyDriftDetected(n.summary())
+			// Auto-apply suppresses "detected, re-sync manually" for auto-sync-ON
+			// rules — they're collected from drift state above and corrected by the
+			// caller (which fires "corrected"). Auto-sync-OFF rules still flag here.
+			if !(autoApply && autoSyncOn[n.RuleID]) {
+				d.app.NotifyDriftDetected(n.summary())
+			}
 		case driftEventReconciled:
 			d.app.NotifyDriftReconciled(n.summary())
 		}
@@ -451,10 +526,10 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context) ([]DriftResult, error
 	// Naming drift+update pass (#5): per-instance, flag-only. Runs on both the
 	// universal check (this RunOnce) and the naming-only card Check.
 	if err := d.runNamingDrift(); err != nil {
-		return results, err
+		return results, nil, err
 	}
 
-	return results, nil
+	return results, toApply, nil
 }
 
 // runNamingDrift runs the naming drift+update pass, persists the per-instance

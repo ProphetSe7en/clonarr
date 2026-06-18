@@ -461,16 +461,19 @@ func (s *Server) handleRestoreNamingField(w http.ResponseWriter, r *http.Request
 }
 
 // AutoSyncNaming runs after a TRaSH pull (scheduled + manual; NOT at startup). For each instance with
-// opted-in naming fields, it re-applies any field whose TRaSH pattern has changed
-// since the last apply (fingerprint differs) — so a field keeps following its
-// scheme as the guide evolves. Fields whose pattern is unchanged are skipped (the
-// common case, so most ticks are no-ops). It reacts only to guide changes; Arr-side
-// drift is deferred. Default-off: instances absent from NamingAutoSync do nothing.
+// opted-in naming fields, it re-applies any bound field that no longer matches its
+// scheme — either because the guide changed (update) or because the field was edited
+// directly in Arr (drift). Guide updates always apply on this TRaSH-source path;
+// drift correction is gated on the "Changes made directly in Radarr/Sonarr" source,
+// mirroring profile-sync. Fields already matching their scheme are skipped (the
+// common case, so most ticks are no-ops). Default-off: instances absent from
+// NamingAutoSync do nothing.
 func (s *Server) AutoSyncNaming() {
 	cfg := s.Core.Config.Get()
 	if len(cfg.NamingAutoSync) == 0 {
 		return
 	}
+	arrDriftOn := cfg.ProfileSync != nil && cfg.ProfileSync.Sources.ArrDrift
 
 	for instID, bindings := range cfg.NamingAutoSync {
 		if len(bindings) == 0 {
@@ -485,19 +488,40 @@ func (s *Server) AutoSyncNaming() {
 			continue
 		}
 
+		// Read the live Arr naming once so a bound field can be re-applied for
+		// EITHER reason: the guide changed (update) OR it was edited directly in
+		// Arr so it no longer matches the scheme (drift). Drift correction is
+		// gated on arrDriftOn; guide updates always apply on this path.
+		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+		liveCfg, err := client.GetNaming()
+		if err != nil {
+			log.Printf("Auto-sync naming [%s]: read failed: %v", inst.Name, err)
+			s.Core.DebugLog.Logf(core.LogError, "Naming [%s]: read failed: %v", inst.Name, err)
+			continue
+		}
+		live := extractNamingPatterns(inst.Type, liveCfg)
+
 		fieldsToApply := map[string]string{}
 		newFingerprint := map[string]string{}
+		reasons := map[string]string{} // field -> "update" | "drift" (for the notification wording)
 		for field, b := range bindings {
 			pattern, ok := resolveNamingField(ad, inst.Type, field, b.Scheme)
 			if !ok || pattern == "" {
 				continue // guide has no pattern for this (field, scheme) — never guess
 			}
 			fp := namingFingerprint(pattern)
-			if fp == b.LastFingerprint {
-				continue // unchanged since last apply
+			guideUpdated := fp != b.LastFingerprint         // guide pattern changed since last apply
+			drifted := arrDriftOn && live[field] != pattern // Arr no longer matches the scheme
+			if !guideUpdated && !drifted {
+				continue // already matches the scheme — nothing to do
 			}
 			fieldsToApply[field] = pattern
 			newFingerprint[field] = fp
+			if guideUpdated {
+				reasons[field] = "update"
+			} else {
+				reasons[field] = "drift"
+			}
 		}
 		if len(fieldsToApply) == 0 {
 			continue
@@ -553,8 +577,9 @@ func (s *Server) AutoSyncNaming() {
 				Scheme:     bindings[field].Scheme,
 				OldPattern: prev[field],
 				NewPattern: newPattern,
+				Reason:     reasons[field],
 			})
 		}
-		s.Core.NotifyNamingAutoSync(inst.Name, changes)
+		s.Core.NotifyNamingAutoSync(inst.Name, inst.Type, changes)
 	}
 }

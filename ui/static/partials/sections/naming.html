@@ -224,15 +224,26 @@
                                 x-text="(isNamingFieldHistoryOpen(activeAppType, row.field) ? '▾ Hide history (' : '▸ History (') + namingFieldChanges(activeAppType, row.field).length + ')'"></button>
                               <div x-show="isNamingFieldHistoryOpen(activeAppType, row.field)" x-cloak style="margin-top:5px;display:flex;flex-direction:column;gap:7px">
                                 <template x-for="(ev, evIdx) in namingFieldChanges(activeAppType, row.field)" :key="evIdx">
-                                  <div style="border-left:2px solid var(--border-subtle);padding-left:8px">
-                                    <div style="font-size:10px;color:var(--text-secondary);margin-bottom:2px">
+                                  <div style="border-left:2px solid var(--border-subtle);padding:3px 0 8px 10px" x-data="{ d: namingDiffParts(ev.from, ev.to) }">
+                                    <div style="font-size:10px;color:var(--text-secondary);margin-bottom:5px">
                                       <span x-text="namingSnapshotTime(ev.at)"></span> · <span x-text="namingChangeVia(ev.via)"></span>
                                     </div>
-                                    <div style="font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="ev.from || '(not set)'"></div>
-                                    <div style="font-size:10px;color:var(--text-secondary);line-height:1">&#8595;</div>
-                                    <div style="font-family:monospace;font-size:11px;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="ev.to"></div>
+                                    <!-- Old / New / Diff. Diff dims the shared prefix+suffix and
+                                         highlights only what changed (removed red + struck, added green). -->
+                                    <div style="display:flex;gap:7px;align-items:baseline;margin-bottom:3px">
+                                      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);min-width:28px;flex:0 0 auto">Old</span>
+                                      <span style="font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow-x:auto" x-text="ev.from || '(not set)'"></span>
+                                    </div>
+                                    <div style="display:flex;gap:7px;align-items:baseline;margin-bottom:3px">
+                                      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);min-width:28px;flex:0 0 auto">New</span>
+                                      <span style="font-family:monospace;font-size:11px;color:var(--text-body);white-space:nowrap;overflow-x:auto" x-text="ev.to"></span>
+                                    </div>
+                                    <div style="display:flex;gap:7px;align-items:baseline">
+                                      <span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-secondary);min-width:28px;flex:0 0 auto">Diff</span>
+                                      <span style="font-family:monospace;font-size:11px;white-space:nowrap;overflow-x:auto"><span x-show="d.oldMid" style="color:var(--accent-red);text-decoration:line-through" x-text="'-' + d.oldMid"></span><span x-show="d.oldMid && d.newMid">&nbsp;</span><span x-show="d.newMid" style="color:var(--accent-green)" x-text="'+' + d.newMid"></span></span>
+                                    </div>
                                     <template x-if="ev.from">
-                                      <button type="button" class="btn btn-sm" style="margin-top:4px;padding:1px 7px"
+                                      <button type="button" class="btn btn-sm" style="margin-top:10px;padding:3px 11px"
                                         :disabled="instanceStatus[mediaInstanceId[activeAppType]] !== 'connected' || (namingInstanceData[activeAppType]?.[row.arr] || '') === ev.from"
                                         @click="confirmRestoreNamingField(activeAppType, row.field, row.label, ev.from)"
                                         x-tt="'Set this format back to the value it had before this change'">Restore to before</button>
