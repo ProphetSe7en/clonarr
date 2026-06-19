@@ -53,7 +53,8 @@
                     <button class="v3-inst-action"
                             @click.stop="updateAllForInstance(inst)"
                             :disabled="updatingInstance === inst.id || pulling"
-                            x-tt="'Pull latest TRaSH-Guides data, then sync all enabled rules on this instance. Other instances are not touched.'">Update all</button>
+                            x-tt="localMode() ? 'Re-read your local files, then sync all enabled rules on this instance.' : 'Pull latest TRaSH-Guides data, then sync all enabled rules on this instance. Other instances are not touched.'"
+                            x-text="localMode() ? 'Sync all' : 'Update all'"></button>
                   </span>
                 </div>
                 <div class="v3-rule-grid v3-col-header">
@@ -201,7 +202,7 @@
                         <button class="v3-action-icon"
                                 @click.stop="updateThisProfile(inst, sh)"
                                 :disabled="updatingRuleId === ((autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId) || {}).id || '') || pulling"
-                                x-tt="'Update ' + (sh.arrProfileName || 'profile') + ' (#' + sh.arrProfileId + ') with latest TRaSH-Guides data'">&#8635;</button>
+                                x-tt="(localMode() ? 'Sync ' : 'Update ') + (sh.arrProfileName || 'profile') + ' (#' + sh.arrProfileId + ')' + (localMode() ? ' from your local files' : ' with latest TRaSH-Guides data')">&#8635;</button>
                       </template>
                       <template x-if="!sh.orphanedAt">
                         <button class="v3-action-icon" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>

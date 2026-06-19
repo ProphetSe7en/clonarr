@@ -430,7 +430,7 @@
                                   :disabled="checkingUpdates || pulling || cfApplyAllProgress.running || updatingInstance === card.id"
                                   @click="(() => { const inst = instances.find(i => i.id === card.id); if (inst) updateAllForInstance(inst); })()"
                                   x-tt="'Pull latest TRaSH-Guides data, then sync all rules on ' + card.name + ' that have pending updates or drift.'"
-                                  x-text="updatingInstance === card.id ? 'Updating...' : 'Update all'"></button>
+                                  x-text="updatingInstance === card.id ? 'Updating...' : (localMode() ? 'Sync all' : 'Update all')"></button>
                         </template>
                         <template x-if="cfSRInstanceCardUpdateCount(card) === 0 && cfSRInstanceCardDriftCount(card) > 0">
                           <button class="v3-inst-action"
