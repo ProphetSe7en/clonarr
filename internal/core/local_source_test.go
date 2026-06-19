@@ -75,3 +75,21 @@ func TestLocalSourceDisabledUsesCloneDir(t *testing.T) {
 		t.Errorf("sourceDir() = %q, want clone dir while disabled with a path set", ts.sourceDir())
 	}
 }
+
+// TestLocalSourceSkipsGit locks in phase-3: the git entry points no-op in Local
+// mode (so a pull can never git-reset over the user's local edits, and a bogus
+// repo URL is never reached).
+func TestLocalSourceSkipsGit(t *testing.T) {
+	ts := NewTrashStore(t.TempDir())
+	ts.SetLocalSource(true, t.TempDir())
+
+	// CloneOrPull must no-op without running git, even with a URL that would
+	// otherwise be cloned/reset.
+	if err := ts.CloneOrPull("https://example.invalid/repo.git", "master"); err != nil {
+		t.Errorf("CloneOrPull in Local mode should no-op, got error: %v", err)
+	}
+	// Reset must no-op too — the guide clone is left untouched in Local mode.
+	if err := ts.Reset(); err != nil {
+		t.Errorf("Reset in Local mode should no-op, got error: %v", err)
+	}
+}

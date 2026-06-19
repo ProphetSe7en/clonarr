@@ -90,8 +90,13 @@ func (uw *ProfileSyncRunner) Run(ctx context.Context) error {
 	// enabled. Mode controls how findings are acted on. When the source
 	// is off but ArrDrift is on, this whole block is skipped and we
 	// fall through to the drift block below.
+	//
+	// Local Source mode has no upstream to detect against, so the whole
+	// TRaSH-side block is skipped: the user re-reads the local folder on demand
+	// (Pull/Check). Arr-drift detection + naming drift below still run (they
+	// compare Arr against the local source, with commit="").
 	var trashErr error
-	if cfg.ProfileSync.Sources.TrashUpstream {
+	if cfg.ProfileSync.Sources.TrashUpstream && !uw.app.Trash.LocalSourceEnabled() {
 		switch cfg.ProfileSync.Mode {
 		case ProfileSyncModeAuto:
 			// Auto mode applies auto-sync-ON rules AND badges auto-sync-OFF
