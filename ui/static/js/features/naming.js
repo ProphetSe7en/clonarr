@@ -260,7 +260,7 @@ export default {
           if (epSchemes.length > 0) {
             sections.push({
               key: 'episodes-' + epType,
-              label: 'Episode Format — ' + epLabel,
+              label: epLabel + ' Episode Format',
               exampleLabel: 'Episode',
               description: '',
               varies: epVaries,
@@ -446,7 +446,7 @@ export default {
         title: 'Compare naming scheme',
         message,
         html: true,
-        wide: true,  // long monospace patterns need room — bumps modal to 760px
+        wide: true,  // long monospace patterns need room, bumps modal to 760px
         confirmLabel: 'Apply',
         cancelLabel: 'Close',
         // hideCancel defaults to false — both buttons visible. User can
@@ -659,7 +659,7 @@ export default {
           const data = await r.json();
           this.namingAutoSync = { ...this.namingAutoSync, [appType]: data || {} };
         }
-      } catch (e) { /* ignore — toggle just shows off */ }
+      } catch (e) { /* ignore, toggle just shows off */ }
       this.loadNamingApplied(appType);
       this.loadNamingChanges(appType);
     },
@@ -702,7 +702,7 @@ export default {
           // auto-sync brings the field to the scheme now, then follows updates).
           if (data.error) this.showToast(`Auto-sync saved, but applying now failed: ${data.error}`, 'error');
           else if (data.applied > 0) {
-            this.showToast('Auto-sync on — scheme applied now and will follow TRaSH updates', 'success');
+            this.showToast('Auto-sync on. Scheme applied now and will follow TRaSH updates.', 'success');
             this.loadInstanceNaming(appType); // refresh the "currently on instance" card
           }
         } else {

@@ -184,7 +184,7 @@
                                 </template>
                               </span>
                             </template>
-                            <!-- Per-field Sync now — re-applies this field's scheme.
+                            <!-- Per-field Sync now, re-applies this field's scheme.
                                  Shown only when it has something to apply (drift/update).
                                  Inline (no margin-left:auto) so it clearly belongs to
                                  this field, not the card header. -->
@@ -213,7 +213,7 @@
                                   :style="{ border: st.drifted ? '1px dashed var(--accent-orange)' : '1px dashed var(--accent-blue)' }"
                                   x-text="st.expected"></div>
                                 <!-- Diff: only what changes from Now to the target
-                                     (red = removed, green = added) — same as history. -->
+                                     (red = removed, green = added), same as history. -->
                                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin:3px 0 1px;color:var(--text-secondary)">Diff</div>
                                 <div style="font-family:monospace;font-size:12px;white-space:nowrap;overflow-x:auto" x-data="{ d: namingDiffParts(namingInstanceData[activeAppType]?.[row.arr] || '', st.expected) }"><span x-show="d.oldMid" style="color:var(--accent-red);text-decoration:line-through" x-text="'-' + d.oldMid"></span><span x-show="d.oldMid && d.newMid">&nbsp;</span><span x-show="d.newMid" style="color:var(--accent-green)" x-text="'+' + d.newMid"></span><span x-show="!d.oldMid && !d.newMid" style="color:var(--text-secondary)">(no change)</span></div>
                               </div>
@@ -296,7 +296,7 @@
                   <div x-show="namingSectionExpanded[activeAppType + ':' + section.key]" x-cloak style="padding:0 14px 12px;border-top:1px solid var(--bg-muted)">
                     <div x-show="section.description" style="font-size:13px;color:var(--text-muted);margin:10px 0;line-height:1.5" x-text="section.description"></div>
 
-                    <!-- Auto-sync summary (#5) — always visible at the top of the
+                    <!-- Auto-sync summary (#5), always visible at the top of the
                          card so the active binding shows even when it points at a
                          scheme on another media-server tab. The on/off control is
                          the per-scheme "Auto-sync" button on each row below. -->
@@ -358,7 +358,7 @@
 
                         <!-- Compact scheme card. Actions live in a footer row below
                              the pattern/example (not on the label line) so long
-                             patterns can't visually swallow them — the buttons keep
+                             patterns can't visually swallow them, the buttons keep
                              a fixed, separated position on every card. -->
                         <div style="margin-bottom:6px;padding:6px 8px;background:var(--bg-page);border-radius:4px;border:1px solid var(--bg-muted)">
                           <!-- Label + actions on one line. The pattern sits in its own
