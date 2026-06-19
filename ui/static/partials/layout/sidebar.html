@@ -225,10 +225,20 @@
          @keydown.escape.window="if (showChangelog) { showChangelog = false; $nextTick(() => $refs.trashChangelogButton?.focus()) }">
       <div class="sidebar-trash-status">
         <span class="dot sidebar-trash-dot"
-              :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"
-              x-tt="sidebarCollapsed ? (trashStatus.cloned ? 'TRaSH pulled ' + formatSyncTime(trashStatus.lastPull) : 'TRaSH not synced') : null"></span>
+              :class="{ stale: !localMode() && !trashStatus.cloned, none: !localMode() && !trashStatus.commitHash }"
+              x-tt="sidebarCollapsed ? (localMode() ? 'Local source' : (trashStatus.cloned ? 'TRaSH pulled ' + formatSyncTime(trashStatus.lastPull) : 'TRaSH not synced')) : null"></span>
 
-        <template x-if="trashStatus.cloned">
+        <!-- Local Source mode: no commit, no upstream, no changelog dropdown. -->
+        <template x-if="localMode()">
+          <div class="sidebar-trash-notsynced" x-show="!sidebarCollapsed">
+            <span class="sidebar-trash-line1" style="color:var(--accent-blue)"
+                  x-text="(trashStatus.radarrCFs + trashStatus.sonarrCFs) > 0 ? 'Local source' : 'Local source not set up'"></span>
+            <span class="sidebar-trash-line2"
+                  x-text="(trashStatus.radarrCFs + trashStatus.sonarrCFs) > 0 ? ((trashStatus.radarrCFs + trashStatus.sonarrCFs) + ' CFs from your local files') : 'Seed it in Settings'"></span>
+          </div>
+        </template>
+
+        <template x-if="!localMode() && trashStatus.cloned">
           <button type="button" class="sidebar-trash-button"
                   x-show="!sidebarCollapsed"
                   @click="showChangelog = !showChangelog"
@@ -293,7 +303,7 @@
             </template>
           </button>
         </template>
-        <template x-if="!trashStatus.cloned">
+        <template x-if="!localMode() && !trashStatus.cloned">
           <div class="sidebar-trash-notsynced" x-show="!sidebarCollapsed">
             <span class="sidebar-trash-line1">TRaSH not pulled yet</span>
             <span class="sidebar-trash-line2" x-show="trashStatus.nextPull"
@@ -319,9 +329,9 @@
           <span x-show="!checkingUpdates && sidebarCollapsed" aria-hidden="true">?</span>
         </button>
         <button class="sidebar-trash-pull btn btn-sm" @click="pullTrash()" :disabled="pulling || checkingUpdates"
-                x-tt="sidebarCollapsed ? 'Pull TRaSH-Guides (no sync)' : 'Refresh local TRaSH-Guides data. Does not push to Arr. Use Update all or Update profile to sync.'">
+                x-tt="localMode() ? (sidebarCollapsed ? 'Reload your local files' : 'Re-read your local source folder so edits are picked up. Does not push to Arr.') : (sidebarCollapsed ? 'Pull TRaSH-Guides (no sync)' : 'Refresh local TRaSH-Guides data. Does not push to Arr. Use Update all or Update profile to sync.')">
           <span x-show="pulling" class="spinner"></span>
-          <span x-show="!pulling && !sidebarCollapsed">Pull</span>
+          <span x-show="!pulling && !sidebarCollapsed" x-text="localMode() ? 'Reload' : 'Pull'"></span>
           <span x-show="!pulling && sidebarCollapsed" aria-hidden="true">↓</span>
         </button>
       </div>

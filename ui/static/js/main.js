@@ -1155,6 +1155,12 @@ export function clonarr() {
       }
     },
 
+    // localMode drives the guide-specific UI: when on, there is no upstream/commit,
+    // so pull/updates/changelog/GitHub-link affordances are hidden or relabeled.
+    localMode() {
+      return !!(this.config && this.config.localSource && this.config.localSource.enabled);
+    },
+
     // Local Source: toggle on/off (the backend re-points the source and reloads),
     // seed the local folder from the current guide, or clean it.
     async saveLocalSource() {

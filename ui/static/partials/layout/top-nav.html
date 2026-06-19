@@ -27,8 +27,12 @@
            opens the changelog dropdown. -->
       <div class="topnav-trash" style="position:relative"
            @keydown.escape.window="if (showChangelog) { showChangelog = false; $nextTick(() => $refs.trashChangelogButton?.focus()) }">
-        <span class="topnav-trash-dot" :class="{ stale: !trashStatus.cloned, none: !trashStatus.commitHash }"></span>
-        <template x-if="trashStatus.cloned">
+        <span class="topnav-trash-dot" :class="{ stale: !localMode() && !trashStatus.cloned, none: !localMode() && !trashStatus.commitHash }"></span>
+        <template x-if="localMode()">
+          <span class="topnav-trash-empty" style="color:var(--accent-blue)"
+                x-text="(trashStatus.radarrCFs + trashStatus.sonarrCFs) > 0 ? 'Local source' : 'Local source not set up'"></span>
+        </template>
+        <template x-if="!localMode() && trashStatus.cloned">
           <button type="button" class="topnav-trash-btn"
                   @click="showChangelog = !showChangelog"
                   x-ref="trashChangelogButton"
@@ -41,16 +45,17 @@
             <span class="topnav-trash-chev" :style="showChangelog ? 'transform:rotate(180deg)' : ''">&#9662;</span>
           </button>
         </template>
-        <template x-if="!trashStatus.cloned">
+        <template x-if="!localMode() && !trashStatus.cloned">
           <span class="topnav-trash-empty">
             TRaSH not pulled yet
             <span x-show="trashStatus.nextPull" class="topnav-trash-next"
                   x-text="'· ' + nextPullLabel()"></span>
           </span>
         </template>
-        <button class="btn btn-sm topnav-trash-pull" @click="pullTrash()" :disabled="pulling">
+        <button class="btn btn-sm topnav-trash-pull" @click="pullTrash()" :disabled="pulling"
+                x-tt="localMode() ? 'Re-read your local source folder so edits are picked up' : null">
           <span x-show="pulling" class="spinner"></span>
-          <span x-show="!pulling">Pull</span>
+          <span x-show="!pulling" x-text="localMode() ? 'Reload' : 'Pull'"></span>
         </button>
 
         <!-- Changelog dropdown -->
