@@ -19,6 +19,7 @@ import (
 type Config struct {
 	Instances            []Instance                                `json:"instances"`
 	TrashRepo            TrashRepo                                 `json:"trashRepo"`
+	LocalSource          LocalSource                               `json:"localSource,omitempty"`          // read guide data from a local folder instead of pulling the git repo (Local Source mode)
 	PullInterval         string                                    `json:"pullInterval"`                   // Go duration (e.g. "24h", "1h"), "0" to disable, or "specific" for PullSchedule
 	PullSchedule         *PullSchedule                             `json:"pullSchedule,omitempty"`         // nil unless a wall-clock pull schedule has been saved
 	SyncSchedule         *SyncSchedule                             `json:"syncSchedule,omitempty"`         // DEPRECATED — retained only to migrate v2 configs; converted to Auto-sync drift detection on load, then cleared
@@ -544,6 +545,17 @@ type PushedCFRecord struct {
 type TrashRepo struct {
 	URL    string `json:"url"`
 	Branch string `json:"branch"`
+}
+
+// LocalSource configures Local Source mode: reading guide data (CF/profile/score
+// JSON) from a local folder instead of pulling the TRaSH-Guides git repo. When
+// Enabled, clonarr reads from Path (which mirrors the guide's docs/json +
+// includes layout) and skips all git operations — pull, reset, and upstream
+// update detection. Path defaults to <config>/local-source. Edits to the local
+// files stick because nothing pulls or resets over them.
+type LocalSource struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path"`
 }
 
 // DefaultConfig returns a new Config with sensible defaults.
