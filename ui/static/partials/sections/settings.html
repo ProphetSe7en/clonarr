@@ -204,33 +204,41 @@
           <div class="setting-row">
             <div class="setting-label">Repository URL</div>
             <div class="setting-value">
-              <input class="input" style="width:400px" x-model="config.trashRepo.url" @change="saveConfig()" autocomplete="one-time-code">
+              <input class="input" style="width:400px" x-model="config.trashRepo.url" @change="saveConfig()" :disabled="localMode()" autocomplete="one-time-code">
+              <div x-show="localMode()" style="font-size:12px;color:var(--text-muted);margin-top:6px">Not used while local files are on.</div>
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Branch</div>
             <div class="setting-value">
-              <input class="input" style="width:150px" x-model="config.trashRepo.branch" @change="saveConfig()">
+              <input class="input" style="width:150px" x-model="config.trashRepo.branch" @change="saveConfig()" :disabled="localMode()">
             </div>
           </div>
           <div class="setting-row">
             <div class="setting-label">Status</div>
             <div class="setting-value" style="font-size:13px">
-              <template x-if="trashStatus.cloned">
+              <template x-if="localMode()">
+                <span style="color:var(--accent-blue)">
+                  Local source
+                  &middot; Radarr: <span x-text="trashStatus.radarrCFs"></span> CFs, <span x-text="trashStatus.radarrProfiles"></span> profiles
+                  &middot; Sonarr: <span x-text="trashStatus.sonarrCFs"></span> CFs, <span x-text="trashStatus.sonarrProfiles"></span> profiles
+                </span>
+              </template>
+              <template x-if="!localMode() && trashStatus.cloned">
                 <span>
                   Commit <code x-text="trashStatus.commitHash" style="background:var(--bg-muted);padding:2px 6px;border-radius:4px;font-size:12px"></code>
                   &middot; Radarr: <span x-text="trashStatus.radarrCFs"></span> CFs, <span x-text="trashStatus.radarrProfiles"></span> profiles
                   &middot; Sonarr: <span x-text="trashStatus.sonarrCFs"></span> CFs, <span x-text="trashStatus.sonarrProfiles"></span> profiles
                 </span>
               </template>
-              <template x-if="!trashStatus.cloned">
+              <template x-if="!localMode() && !trashStatus.cloned">
                 <span style="color:var(--text-muted)">
                   Not cloned yet. Click Pull in the nav bar<span x-show="trashStatus.nextPull" x-text="', or wait for ' + nextPullLabel()"></span>.
                 </span>
               </template>
             </div>
           </div>
-          <div class="setting-row">
+          <div class="setting-row" x-show="!localMode()">
             <div class="setting-label">Reset TRaSH Data</div>
             <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
               <button class="btn btn-sm btn-danger"
@@ -364,7 +372,7 @@
           <div class="setting-row">
             <div class="setting-label">What to check for</div>
             <div class="setting-value" style="flex-direction:column;align-items:flex-start;gap:8px">
-              <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px">
+              <label x-show="!localMode()" style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px">
                 <input type="checkbox" x-model="config.profileSync.sources.trashUpstream" @change="saveProfileSync()" style="margin-top:2px">
                 <span>
                   <span style="font-weight:500">TRaSH-Guides updates</span>
