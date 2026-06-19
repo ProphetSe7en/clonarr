@@ -1167,8 +1167,8 @@ export function clonarr() {
       try {
         const r = await fetch('/api/trash/local-source/seed', { method: 'POST' });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) { this.showToast(data.error || 'Seed failed', 'error', 8000); return; }
-        this.showToast('Local source seeded from the current guide. Edit the files, then it is used on the next check.', 'success', 6000);
+        if (!r.ok) { this.showToast(data.error || 'Copy failed', 'error', 8000); return; }
+        this.showToast('Copied the current guide to the local source.', 'success');
         setTimeout(() => this.loadTrashStatus(), 800);
       } catch (e) {
         this.showToast('Seed failed: ' + e.message, 'error', 8000);
