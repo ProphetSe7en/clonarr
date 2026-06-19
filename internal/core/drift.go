@@ -572,6 +572,14 @@ func (d *DriftRunner) runNamingDrift(checkDrift, checkUpdate bool) error {
 			d.app.NotifyNamingUpdateAvailable(namingPass.detectedUpdates)
 		}
 	}
+	// Fields that are both drifted AND update-available get one combined message
+	// (avoids the duplicate Now->guide diff). Gated like the drift half: fired in
+	// Notify and Auto, suppressed in Delayed where RunNamingDelayed owns the flow.
+	if len(namingPass.detectedBoth) > 0 {
+		if cfg := d.app.Config.Get(); cfg.ProfileSync == nil || cfg.ProfileSync.Mode != ProfileSyncModeDelayed {
+			d.app.NotifyNamingBoth(namingPass.detectedBoth)
+		}
+	}
 	return nil
 }
 

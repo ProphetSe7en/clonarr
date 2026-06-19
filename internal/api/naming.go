@@ -391,11 +391,26 @@ func (s *Server) handleSaveNamingAutoSync(w http.ResponseWriter, r *http.Request
 	var applyErrMsg string
 	if len(toApply) > 0 && s.Core.Trash != nil {
 		ad := s.Core.Trash.GetAppData(inst.Type)
+		// Resolve the scheme's CURRENT pattern from the upstream side-ref (sees
+		// guide updates without a working-tree pull), falling back to the loaded
+		// guide when upstream is unreachable. Same as handleNamingSync, so enabling
+		// auto-sync against a stale clone applies the current pattern, not the old.
+		un := s.upstreamNaming(inst.Type)
 		fields := map[string]string{}
 		fp := map[string]string{}
 		for _, field := range toApply {
-			pattern, ok := resolveNamingField(ad, inst.Type, field, incoming[field].Scheme)
-			if !ok || pattern == "" {
+			pattern := ""
+			if un != nil {
+				if p, ok := core.ResolveNamingFieldFrom(un, inst.Type, field, incoming[field].Scheme); ok {
+					pattern = p
+				}
+			}
+			if pattern == "" {
+				if p, ok := resolveNamingField(ad, inst.Type, field, incoming[field].Scheme); ok {
+					pattern = p
+				}
+			}
+			if pattern == "" {
 				continue // guide has no pattern for this (field, scheme) — never guess
 			}
 			fields[field] = pattern

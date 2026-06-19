@@ -27,8 +27,9 @@ type namingDriftPassResult struct {
 	driftFP         map[string]map[string]string // instID -> field -> current Arr pattern fp (drifted)
 	updateFP        map[string]map[string]string // instID -> field -> guide pattern fp (update available)
 	checkedOK       map[string]bool              // instances fetched + compared this pass
-	detected        []namingDriftEvent           // newly-drifted, for notification
-	detectedUpdates []namingDriftEvent           // newly update-available, for notification
+	detected        []namingDriftEvent           // newly-drifted only, for notification
+	detectedUpdates []namingDriftEvent           // newly update-available only, for notification
+	detectedBoth    []namingDriftEvent           // newly both drifted AND update-available (one combined notification)
 }
 
 // runNamingDriftPass checks, for every field clonarr has synced (Config.NamingApplied
@@ -174,39 +175,47 @@ func runNamingDriftPass(d *DriftRunner, checkDrift, checkUpdate bool) namingDrif
 			res.updateFP[instID] = updates
 		}
 
-		// Newly-drifted vs the previously-stored fingerprints → notify (dedup so a
-		// standing drift isn't re-notified on every check).
-		var newly []namingDriftField
-		for field, fp := range drift {
-			if inst.NamingDriftFingerprints[field] != fp {
-				newly = append(newly, namingDriftField{Field: field, Current: curPattern[field], Expected: expectedPattern[field]})
+		// Categorize each newly-changed field, deduped per half against the stored
+		// fingerprints so a standing state isn't re-notified. A field that is BOTH
+		// drifted AND update-available goes to one combined notification rather than
+		// a drift + an update message that would show the identical Now → guide diff
+		// twice (the drift "Should be" and the update "New" both resolve to the same
+		// current guide pattern).
+		mkField := func(field string) namingDriftField {
+			return namingDriftField{Field: field, Current: curPattern[field], Expected: expectedPattern[field]}
+		}
+		var newlyDrift, newlyUpd, newlyBoth []namingDriftField
+		for field, dfp := range drift {
+			driftNew := inst.NamingDriftFingerprints[field] != dfp
+			if ufp, isUpdate := updates[field]; isUpdate {
+				if driftNew || inst.NamingUpdateFingerprints[field] != ufp {
+					newlyBoth = append(newlyBoth, mkField(field))
+				}
+				continue
+			}
+			if driftNew {
+				newlyDrift = append(newlyDrift, mkField(field))
 			}
 		}
-		if len(newly) > 0 {
-			res.detected = append(res.detected, namingDriftEvent{
-				InstanceID:   instID,
-				InstanceName: inst.Name,
-				AppType:      inst.Type,
-				Fields:       newly,
-			})
-		}
-
-		// Newly update-available vs the previously-stored update fingerprints →
-		// notify (same dedup so a standing update isn't re-notified every check).
-		// Current = the applied/Arr pattern (old), Expected = the new guide pattern.
-		var newlyUpd []namingDriftField
-		for field, fp := range updates {
-			if inst.NamingUpdateFingerprints[field] != fp {
-				newlyUpd = append(newlyUpd, namingDriftField{Field: field, Current: curPattern[field], Expected: expectedPattern[field]})
+		for field, ufp := range updates {
+			if _, isDrift := drift[field]; isDrift {
+				continue // handled above as "both"
 			}
+			if inst.NamingUpdateFingerprints[field] != ufp {
+				newlyUpd = append(newlyUpd, mkField(field))
+			}
+		}
+		ev := func(fields []namingDriftField) namingDriftEvent {
+			return namingDriftEvent{InstanceID: instID, InstanceName: inst.Name, AppType: inst.Type, Fields: fields}
+		}
+		if len(newlyDrift) > 0 {
+			res.detected = append(res.detected, ev(newlyDrift))
 		}
 		if len(newlyUpd) > 0 {
-			res.detectedUpdates = append(res.detectedUpdates, namingDriftEvent{
-				InstanceID:   instID,
-				InstanceName: inst.Name,
-				AppType:      inst.Type,
-				Fields:       newlyUpd,
-			})
+			res.detectedUpdates = append(res.detectedUpdates, ev(newlyUpd))
+		}
+		if len(newlyBoth) > 0 {
+			res.detectedBoth = append(res.detectedBoth, ev(newlyBoth))
 		}
 	}
 	return res

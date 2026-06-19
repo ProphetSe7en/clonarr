@@ -163,6 +163,62 @@ func (app *App) NotifyNamingDriftDetected(events []namingDriftEvent) {
 	}
 }
 
+// NotifyNamingBoth fires ONE combined notification for a field that is both
+// drifted (changed directly in Arr) AND has a TRaSH guide update available.
+// Sending the separate drift + update notifications would show the identical
+// Now → guide diff twice, so this states both facts once. Dispatches to agents
+// subscribed to either the Arr-drift event (OnDriftDetected) or the naming
+// lifecycle event (OnNamingAutoSync), so whichever the user opted into delivers
+// it (each agent gets it at most once). Embed uses the Arr app colour.
+func (app *App) NotifyNamingBoth(events []namingDriftEvent) {
+	if len(events) == 0 {
+		return
+	}
+	cfg := app.Config.Get()
+
+	hasOptIn := false
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if agent.Events.OnDriftDetected || agent.Events.OnNamingAutoSync {
+			hasOptIn = true
+			break
+		}
+	}
+	if !hasOptIn {
+		return
+	}
+
+	for _, ev := range events {
+		for _, f := range ev.Fields {
+			old := f.Current
+			if old == "" {
+				old = "(not set)"
+			}
+			msg := "**" + NamingFieldLabel(f.Field) + "** was changed directly in **" + ev.InstanceName +
+				"** AND a TRaSH guide update is available.\n" +
+				namingField("Now", old)
+			if f.Expected != "" {
+				msg += namingField("Target", f.Expected) +
+					"Diff\n```\n" + namingDiffMarked(f.Current, f.Expected) + "\n```\n"
+			}
+			msg += "\nSync in clonarr applies the current guide pattern (fixes both)."
+
+			payload := NotificationPayload{
+				Title:    "Naming changed and update available · " + NamingFieldLabel(f.Field),
+				Message:  msg,
+				Color:    appColor(ev.AppType),
+				Severity: NotificationSeverityWarning,
+				Route:    NotificationRouteDefault,
+			}
+			for _, agent := range cfg.AutoSync.NotificationAgents {
+				if !agent.Events.OnDriftDetected && !agent.Events.OnNamingAutoSync {
+					continue
+				}
+				app.DispatchNotificationAgent(agent, payload)
+			}
+		}
+	}
+}
+
 // NotifyNamingPending fires in "Wait before applying" mode when a naming change
 // (guide update or Arr-side drift) is first detected for a bound field: it tells
 // the user the change will be auto-applied after the delay. The actual apply later
