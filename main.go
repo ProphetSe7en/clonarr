@@ -63,6 +63,18 @@ func main() {
 	}
 
 	trashStore := core.NewTrashStore(dataDir)
+	// Local Source mode: read guide data from a local folder instead of the git
+	// clone. Default path is <data>/local-source (sibling to trash-guides).
+	// Disabled by default, so sourceDir() returns the clone dir and guide mode is
+	// unchanged. The Settings handler re-applies this when the toggle changes.
+	{
+		ls := cfgStore.Get().LocalSource
+		lsPath := ls.Path
+		if lsPath == "" {
+			lsPath = filepath.Join(dataDir, "local-source")
+		}
+		trashStore.SetLocalSource(ls.Enabled, lsPath)
+	}
 	profilesStore := core.NewProfileStore(filepath.Join(configDir, "profiles"))
 	// Migrate profile filenames at startup so the appType suffix added in
 	// PR #28's sanitizeFilename change is applied to existing files. Without

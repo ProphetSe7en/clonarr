@@ -242,6 +242,40 @@ type TrashStore struct {
 	cfPathIndex       map[string]map[string]string   // appType -> CF display name -> repo-relative JSON path; lazy-built, nil-out on pull
 	repoURLMu         sync.Mutex                     // protects repoURL
 	repoURL           string                         // cached origin URL for PR/commit link construction; "" until first resolve / cleared on pull
+	localMu           sync.RWMutex                   // protects localEnabled/localPath
+	localEnabled      bool                           // Local Source mode: read from localPath, skip all git
+	localPath         string                         // local source dir (mirrors guide docs/json + includes); "" falls back to dataDir
+}
+
+// SetLocalSource configures Local Source mode. When enabled, sourceDir() returns
+// path so filesystem reads come from the local folder; callers of git operations
+// check LocalSourceEnabled() and skip. The App sets this from config on startup
+// and whenever the setting changes. A no-op (disabled) leaves guide mode intact.
+func (ts *TrashStore) SetLocalSource(enabled bool, path string) {
+	ts.localMu.Lock()
+	ts.localEnabled = enabled
+	ts.localPath = path
+	ts.localMu.Unlock()
+}
+
+// LocalSourceEnabled reports whether Local Source mode is on. Git-operation
+// callers (pull, reset, upstream detection) use this to skip in Local mode.
+func (ts *TrashStore) LocalSourceEnabled() bool {
+	ts.localMu.RLock()
+	defer ts.localMu.RUnlock()
+	return ts.localEnabled
+}
+
+// sourceDir is the directory clonarr reads guide JSON from: the local source
+// path in Local mode, else the git clone dir. Filesystem-read sites use this;
+// git operations always use dataDir directly (and are skipped in Local mode).
+func (ts *TrashStore) sourceDir() string {
+	ts.localMu.RLock()
+	defer ts.localMu.RUnlock()
+	if ts.localEnabled && ts.localPath != "" {
+		return ts.localPath
+	}
+	return ts.dataDir
 }
 
 // SetOnNewChangelog sets the callback for when updates.txt has a new date section.
@@ -1210,7 +1244,7 @@ func (ts *TrashStore) loadAndSwap() error {
 		data.CommitDate = strings.TrimSpace(string(commitDate))
 	}
 	// Parse changelog from updates.txt
-	data.Changelog = parseChangelog(filepath.Join(ts.dataDir, "docs", "updates.txt"), 5)
+	data.Changelog = parseChangelog(filepath.Join(ts.sourceDir(), "docs", "updates.txt"), 5)
 	// LastPull is the timestamp of the last actual git pull, NOT this load.
 	// Persisted alongside the data dir so a load-from-disk (test workflow,
 	// scheduled pull mode that skips startup pull) preserves the prior
@@ -1297,13 +1331,14 @@ func (ts *TrashStore) parseAll() (*TrashData, error) {
 
 // parseAppData parses all JSON for a single app (radarr or sonarr).
 func (ts *TrashStore) parseAppData(app string) (AppData, error) {
-	base := filepath.Join(ts.dataDir, "docs", "json", app)
+	src := ts.sourceDir()
+	base := filepath.Join(src, "docs", "json", app)
 	ad := AppData{
 		CustomFormats: make(map[string]*TrashCF),
 	}
 
 	// Load CF descriptions from includes/cf-descriptions/*.md
-	descMap := loadCFDescriptions(ts.dataDir)
+	descMap := loadCFDescriptions(src)
 
 	// Parse CFs
 	cfDir := filepath.Join(base, "cf")
@@ -3244,8 +3279,9 @@ func (ts *TrashStore) buildCFPathIndex() map[string]map[string]string {
 		"radarr": {},
 		"sonarr": {},
 	}
+	src := ts.sourceDir()
 	for _, app := range []string{"radarr", "sonarr"} {
-		dir := filepath.Join(ts.dataDir, "docs/json", app, "cf")
+		dir := filepath.Join(src, "docs/json", app, "cf")
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			continue
