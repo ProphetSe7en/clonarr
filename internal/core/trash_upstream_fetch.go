@@ -16,6 +16,10 @@ import (
 // refs/heads/*, never refs/upstream-watch/*.
 const upstreamWatchRefPrefix = "refs/upstream-watch/"
 
+// UpstreamWatchRef returns the side-ref name for a branch, for callers outside this
+// package (e.g. the api naming apply paths) that read upstream naming via the ref.
+func UpstreamWatchRef(branch string) string { return upstreamWatchRefPrefix + branch }
+
 // FetchUpstreamRefspec runs `git fetch` from the configured remote into a
 // dedicated side-ref so the detection-only path can walk the commit range
 // without mutating any branch tracked by other code paths (CloneOrPull,

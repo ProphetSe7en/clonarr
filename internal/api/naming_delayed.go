@@ -37,6 +37,7 @@ func (s *Server) RunNamingDelayed() {
 	arrDriftOn := cfg.ProfileSync.Sources.ArrDrift
 	delay := time.Duration(cfg.ProfileSync.ApplyDelayMinutes) * time.Minute
 	now := time.Now().UTC()
+	upstreamCache := map[string]*core.TrashNaming{} // appType -> side-ref naming (lazy, no pull)
 
 	for instID, bindings := range cfg.NamingAutoSync {
 		if len(bindings) == 0 {
@@ -47,8 +48,13 @@ func (s *Server) RunNamingDelayed() {
 			continue
 		}
 		ad := s.Core.Trash.GetAppData(inst.Type)
-		if ad == nil {
-			continue
+		un, cached := upstreamCache[inst.Type]
+		if !cached {
+			un = s.upstreamNaming(inst.Type) // current scheme patterns (side-ref, no pull)
+			upstreamCache[inst.Type] = un
+		}
+		if ad == nil && un == nil {
+			continue // no pattern source (guide not loaded + upstream unreachable)
 		}
 		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
 		liveCfg, err := client.GetNaming()
@@ -64,9 +70,19 @@ func (s *Server) RunNamingDelayed() {
 		dueReason := map[string]string{}          // field -> "update" | "drift"
 
 		for field, b := range bindings {
-			pattern, ok := resolveNamingField(ad, inst.Type, field, b.Scheme)
-			if !ok || pattern == "" {
-				continue // guide has no pattern for this (field, scheme) — never guess
+			pattern := ""
+			if un != nil {
+				if p, ok := core.ResolveNamingFieldFrom(un, inst.Type, field, b.Scheme); ok {
+					pattern = p
+				}
+			}
+			if pattern == "" && ad != nil {
+				if p, ok := resolveNamingField(ad, inst.Type, field, b.Scheme); ok {
+					pattern = p
+				}
+			}
+			if pattern == "" {
+				continue // no pattern for this (field, scheme) — never guess
 			}
 			fp := namingFingerprint(pattern)
 			guideUpdated := fp != b.LastFingerprint

@@ -845,6 +845,17 @@ export function clonarr() {
         // for the toast logic below.
         void lastRunChanged;
         await this.loadAutoSyncRules();
+        // Also refresh instance objects so naming drift/update markers
+        // (Instance.namingDrift/UpdateFingerprints, set by background checks)
+        // update live on the naming page — same as sync rules' badges, which
+        // ride on the loadAutoSyncRules reload above.
+        await this.loadInstances();
+        // Refresh loaded naming guide patterns too, so the naming card's
+        // "update available" pattern + Diff track the current upstream (markers
+        // refresh via loadInstances above). Cheap — reads the side-ref, no git fetch.
+        for (const app of Object.keys(this.namingData || {})) {
+          await this.loadNaming(app);
+        }
         // If lastPull changed (scheduled pull completed), reload sync data
         if (this.trashStatus?.lastPull && this.trashStatus.lastPull !== prevPull) {
           // Show pull diff toast for scheduled pulls (only if diff is fresh — newCommit matches current)

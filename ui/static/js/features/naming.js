@@ -824,6 +824,7 @@ export default {
         const r = await fetch('/api/naming/drift-check', { method: 'POST' });
         if (r.ok) {
           await this.loadInstances();
+          await this.loadNaming(appType); // refresh guide patterns so the card's "update available" + Diff are current
           await this.loadInstanceNaming(appType);
           await this.loadNamingApplied(appType);
           // Summarise for the selected instance (the page the user is on).

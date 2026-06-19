@@ -3,6 +3,7 @@ package api
 import (
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -2555,6 +2556,20 @@ func (s *Server) handleTrashNaming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prefer the upstream side-ref naming (current TRaSH patterns, kept fresh by
+	// detection/sync without a working-tree pull) so the page shows the correct
+	// "update available" pattern + diff in Notify/Delayed mode where the clone
+	// hasn't been pulled. No fetch here (avoids page-load latency); the side-ref
+	// is refreshed by naming checks/syncs. Falls back to the loaded guide.
+	cfg := s.Core.Config.Get()
+	branch := cfg.TrashRepo.Branch
+	if branch == "" {
+		branch = "master"
+	}
+	if up := s.Core.Trash.ReadNamingFromRef(context.Background(), core.UpstreamWatchRef(branch), appType); up != nil {
+		writeJSON(w, up)
+		return
+	}
 	ad := s.Core.Trash.GetAppData(appType)
 	if ad == nil || ad.Naming == nil {
 		writeJSON(w, map[string]any{})

@@ -3,11 +3,36 @@ package api
 import (
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 )
+
+// upstreamNaming fetches an app type's CURRENT TRaSH naming from the upstream
+// side-ref (git fetch + git show, NO working-tree pull). Apply paths use it so
+// "Update all" / "Sync now" / delayed-apply write the current scheme pattern even
+// in Notify/Delayed mode where the clone hasn't been pulled — otherwise they'd
+// re-apply the stale loaded pattern (a no-op) and the update badge would never
+// clear. Returns nil when the upstream is unreachable (callers fall back to the
+// loaded guide).
+func (s *Server) upstreamNaming(appType string) *core.TrashNaming {
+	cfg := s.Core.Config.Get()
+	if cfg.TrashRepo.URL == "" {
+		return nil
+	}
+	branch := cfg.TrashRepo.Branch
+	if branch == "" {
+		branch = "master"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := s.Core.Trash.FetchUpstreamRefspec(ctx, cfg.TrashRepo.URL, branch); err != nil {
+		return nil
+	}
+	return s.Core.Trash.ReadNamingFromRef(ctx, core.UpstreamWatchRef(branch), appType)
+}
 
 // Naming auto-sync (#5) shared core: resolving a TRaSH scheme to a single naming
 // field, applying fields to an instance (per-field; others preserved), recording
@@ -190,6 +215,10 @@ func (s *Server) handleNamingSync(w http.ResponseWriter, r *http.Request) {
 	bindings := cfg.NamingAutoSync[id]
 	applied := cfg.NamingApplied[id]
 	ad := s.Core.Trash.GetAppData(inst.Type)
+	// Resolve from the upstream side-ref (current scheme pattern, no pull) so an
+	// available guide UPDATE is actually applied — not the stale loaded pattern.
+	// Falls back to the loaded guide per field if the upstream is unreachable.
+	un := s.upstreamNaming(inst.Type)
 
 	targets := req.Fields
 	if len(targets) == 0 {
@@ -211,8 +240,18 @@ func (s *Server) handleNamingSync(w http.ResponseWriter, r *http.Request) {
 		if scheme == "" {
 			continue
 		}
-		pattern, ok := resolveNamingField(ad, inst.Type, field, scheme)
-		if !ok || pattern == "" {
+		pattern := ""
+		if un != nil {
+			if p, ok := core.ResolveNamingFieldFrom(un, inst.Type, field, scheme); ok {
+				pattern = p
+			}
+		}
+		if pattern == "" {
+			if p, ok := resolveNamingField(ad, inst.Type, field, scheme); ok {
+				pattern = p
+			}
+		}
+		if pattern == "" {
 			continue
 		}
 		fields[field] = pattern

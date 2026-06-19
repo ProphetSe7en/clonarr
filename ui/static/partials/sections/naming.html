@@ -208,10 +208,14 @@
                               <div style="margin-top:3px">
                                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px"
                                   :style="{ color: st.drifted ? 'var(--accent-orange)' : 'var(--accent-blue)' }"
-                                  x-text="(st.drifted ? 'Expected (' : 'Update available (') + st.label + ')'"></div>
+                                  x-text="(st.drifted ? 'Should be: ' : 'Update available: ') + row.label + ' (' + st.label + ' scheme)'"></div>
                                 <div style="font-family:monospace;font-size:12px;color:var(--text-body);white-space:nowrap;overflow-x:auto;background:var(--bg-app);border-radius:3px;padding:5px 8px"
                                   :style="{ border: st.drifted ? '1px dashed var(--accent-orange)' : '1px dashed var(--accent-blue)' }"
                                   x-text="st.expected"></div>
+                                <!-- Diff: only what changes from Now to the target
+                                     (red = removed, green = added) — same as history. -->
+                                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin:3px 0 1px;color:var(--text-secondary)">Diff</div>
+                                <div style="font-family:monospace;font-size:12px;white-space:nowrap;overflow-x:auto" x-data="{ d: namingDiffParts(namingInstanceData[activeAppType]?.[row.arr] || '', st.expected) }"><span x-show="d.oldMid" style="color:var(--accent-red);text-decoration:line-through" x-text="'-' + d.oldMid"></span><span x-show="d.oldMid && d.newMid">&nbsp;</span><span x-show="d.newMid" style="color:var(--accent-green)" x-text="'+' + d.newMid"></span><span x-show="!d.oldMid && !d.newMid" style="color:var(--text-secondary)">(no change)</span></div>
                               </div>
                             </template>
                           </template>
