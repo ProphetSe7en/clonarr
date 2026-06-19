@@ -199,9 +199,18 @@ export default {
       await this.loadInstances();
     },
 
-    async testAllInstances() {
+    // Write a status only when it actually changes, so a stable instance does
+    // not churn the instanceStatus object on every poll. The object reference is
+    // what Alpine watches; rewriting it with the same value still re-evaluates
+    // every binding (e.g. the Profile Editor action buttons), so guard it.
+    _setInstanceStatus(id, status) {
+      if (this.instanceStatus[id] === status) return;
+      this.instanceStatus = { ...this.instanceStatus, [id]: status };
+    },
+
+    async testAllInstances({ silent = false } = {}) {
       for (const inst of this.instances) {
-        this.testInstance(inst);
+        this.testInstance(inst, { silent });
       }
       // Also test Prowlarr if configured.
       if (this.config.prowlarr?.enabled && this.config.prowlarr?.url && this.config.prowlarr?.apiKey) {
@@ -209,18 +218,23 @@ export default {
       }
     },
 
-    async testInstance(inst) {
-      this.instanceStatus = { ...this.instanceStatus, [inst.id]: 'testing' };
+    // silent: the background re-test (every 60s) skips the transient 'testing'
+    // state and only writes the final status when it changed. Without this, each
+    // poll flipped every connected instance 'connected' -> 'testing' -> 'connected',
+    // which flickered the Profile Editor buttons bound to instanceStatus. A user-
+    // initiated test (silent=false) still shows 'testing' for immediate feedback.
+    async testInstance(inst, { silent = false } = {}) {
+      if (!silent) this._setInstanceStatus(inst.id, 'testing');
       try {
         const r = await fetch(`/api/instances/${inst.id}/test`, { method: 'POST' });
-        if (!r.ok) { this.instanceStatus = { ...this.instanceStatus, [inst.id]: 'failed' }; return; }
+        if (!r.ok) { this._setInstanceStatus(inst.id, 'failed'); return; }
         const data = await r.json();
-        this.instanceStatus = { ...this.instanceStatus, [inst.id]: data.connected ? 'connected' : 'failed' };
-        if (data.connected && data.version) {
+        this._setInstanceStatus(inst.id, data.connected ? 'connected' : 'failed');
+        if (data.connected && data.version && this.instanceVersion[inst.id] !== data.version) {
           this.instanceVersion = { ...this.instanceVersion, [inst.id]: data.version };
         }
       } catch (e) {
-        this.instanceStatus = { ...this.instanceStatus, [inst.id]: 'failed' };
+        this._setInstanceStatus(inst.id, 'failed');
       }
     },
 

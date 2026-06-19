@@ -845,16 +845,16 @@ export function clonarr() {
         // for the toast logic below.
         void lastRunChanged;
         await this.loadAutoSyncRules();
-        // Also refresh instance objects so naming drift/update markers
-        // (Instance.namingDrift/UpdateFingerprints, set by background checks)
-        // update live on the naming page — same as sync rules' badges, which
-        // ride on the loadAutoSyncRules reload above.
-        await this.loadInstances();
-        // Refresh loaded naming guide patterns too, so the naming card's
-        // "update available" pattern + Diff track the current upstream (markers
-        // refresh via loadInstances above). Cheap — reads the side-ref, no git fetch.
-        for (const app of Object.keys(this.namingData || {})) {
-          await this.loadNaming(app);
+        // Refresh instances + loaded naming guide patterns so naming drift/update
+        // markers and the naming card track backend state live, same cadence as the
+        // sync-rules pills above. Skip while the Profile Editor overlay is open: it
+        // reassigns whole arrays the editor does not show, and a background reload
+        // mid-edit only risks a reactive reflow. The next tick after closing catches up.
+        if (!this.profileDetail) {
+          await this.loadInstances();
+          for (const app of Object.keys(this.namingData || {})) {
+            await this.loadNaming(app);
+          }
         }
         // If lastPull changed (scheduled pull completed), reload sync data
         if (this.trashStatus?.lastPull && this.trashStatus.lastPull !== prevPull) {
@@ -877,8 +877,10 @@ export function clonarr() {
           setTimeout(() => this.checkAutoSyncEvents(), 5000);
         }
       }, 30000);
-      // Re-test instances every 60 seconds
-      setInterval(() => this.testAllInstances(), 60000);
+      // Re-test instances every 60 seconds. Silent: no transient 'testing' state
+      // on the background poll, so stable instances do not flicker bindings (e.g.
+      // the Profile Editor action buttons). A manual test still shows 'testing'.
+      setInterval(() => this.testAllInstances({ silent: true }), 60000);
       // Initial-state coverage: the watchers above only fire when
       // currentSection / advancedTab actually CHANGE. If the user
       // landed on the scoring tab from URL/localStorage at boot, the
