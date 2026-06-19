@@ -561,6 +561,15 @@ func (d *DriftRunner) runNamingDrift() error {
 			d.app.NotifyNamingDriftDetected(namingPass.detected)
 		}
 	}
+	// Update-available notifications: in Notify mode, tell the user which naming
+	// formats have a guide update (the UI marker is set regardless of mode). Auto
+	// applies + notifies via AutoSyncNaming (so RunOnce finds nothing new here);
+	// Delayed's will-apply/applied notifications are owned by RunNamingDelayed.
+	if len(namingPass.detectedUpdates) > 0 {
+		if cfg := d.app.Config.Get(); cfg.ProfileSync != nil && cfg.ProfileSync.Mode == ProfileSyncModeNotify {
+			d.app.NotifyNamingUpdateAvailable(namingPass.detectedUpdates)
+		}
+	}
 	return nil
 }
 

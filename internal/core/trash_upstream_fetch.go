@@ -208,12 +208,12 @@ func (ts *TrashStore) ReadCFGroupMembersFromRef(ctx context.Context, ref, path s
 // reflects what the rule will see when sync runs). For removed CFs the
 // entry comes from the OLD side since they're gone from NEW.
 type GroupDiff struct {
-	Added         []GroupCFMember // present in new, absent in old
-	Removed       []GroupCFMember // present in old, absent in new (entry from old)
-	DefaultOn     []GroupCFMember // flag flipped to default:true (was false or missing)
-	DefaultOff    []GroupCFMember // flag flipped to default:false (was true)
-	RequiredOn    []GroupCFMember // flag flipped to required:true
-	RequiredOff   []GroupCFMember // flag flipped to required:false
+	Added       []GroupCFMember // present in new, absent in old
+	Removed     []GroupCFMember // present in old, absent in new (entry from old)
+	DefaultOn   []GroupCFMember // flag flipped to default:true (was false or missing)
+	DefaultOff  []GroupCFMember // flag flipped to default:false (was true)
+	RequiredOn  []GroupCFMember // flag flipped to required:true
+	RequiredOff []GroupCFMember // flag flipped to required:false
 }
 
 // DiffCFGroupMembers compares two member-list snapshots and categorises the
@@ -267,19 +267,19 @@ func (d GroupDiff) IsEmpty() bool {
 // just hashed — since the spec list is heterogeneous and we only need
 // to know "specs changed" vs "specs unchanged" for now.
 type CFSnapshot struct {
-	Name              string            `json:"name"`
-	TrashScores       map[string]int    `json:"trash_scores"`
-	Specifications    json.RawMessage   `json:"specifications"`
-	IncludeInRename   bool              `json:"includeCustomFormatWhenRenaming"`
+	Name            string          `json:"name"`
+	TrashScores     map[string]int  `json:"trash_scores"`
+	Specifications  json.RawMessage `json:"specifications"`
+	IncludeInRename bool            `json:"includeCustomFormatWhenRenaming"`
 }
 
 // CFDiff is the per-aspect change set between two CF snapshots.
 type CFDiff struct {
-	NameChanged       bool
-	OldName           string
-	NewName           string
-	ScoreChanges      map[string]ScoreChange // score-context key → old/new
-	SpecsChanged      bool
+	NameChanged  bool
+	OldName      string
+	NewName      string
+	ScoreChanges map[string]ScoreChange // score-context key → old/new
+	SpecsChanged bool
 	// SpecDiff is the structured spec diff between old and new
 	// Specifications, populated when SpecsChanged is true and both
 	// sides parsed cleanly. Used by the TRaSH Last Updated /
@@ -320,6 +320,47 @@ func (ts *TrashStore) ReadCFFromRef(ctx context.Context, ref, path string) (*CFS
 		return nil, nil
 	}
 	return &snap, nil
+}
+
+// ReadNamingFromRef reads an app type's naming-scheme JSON from a git ref (the
+// upstream side-ref) via `git show`, with NO working-tree pull — so the naming
+// UPDATE check can see guide changes in Notify/Delayed mode the way profile-sync
+// already detects CF/profile changes. Returns nil (not an error) when the file is
+// absent/unreadable at the ref. The filename isn't assumed (matches the loader,
+// which scans the naming dir): find the first .json under the dir at the ref.
+func (ts *TrashStore) ReadNamingFromRef(ctx context.Context, ref, appType string) *TrashNaming {
+	ts.repoMu.RLock()
+	dataDir := ts.dataDir
+	ts.repoMu.RUnlock()
+	if dataDir == "" {
+		return nil
+	}
+	dir := "docs/json/" + appType + "/naming"
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	lsOut, err := exec.CommandContext(ctx, "git", "-C", dataDir, "ls-tree", "--name-only", ref+":"+dir).Output()
+	if err != nil {
+		return nil
+	}
+	file := ""
+	for _, line := range strings.Split(strings.TrimSpace(string(lsOut)), "\n") {
+		if strings.HasSuffix(line, ".json") {
+			file = line
+			break
+		}
+	}
+	if file == "" {
+		return nil
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", dataDir, "show", ref+":"+dir+"/"+file).Output()
+	if err != nil {
+		return nil
+	}
+	var n TrashNaming
+	if json.Unmarshal(out, &n) != nil {
+		return nil
+	}
+	return &n
 }
 
 // DiffCFSnapshots reports per-aspect changes. Nil sides treated as empty

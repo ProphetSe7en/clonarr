@@ -1,6 +1,10 @@
 package core
 
-import "clonarr/internal/arr"
+import (
+	"clonarr/internal/arr"
+	"context"
+	"time"
+)
 
 // namingDriftField: one newly-drifted field, with the patterns so the notification
 // can show what changed (Now vs what Sync would re-apply).
@@ -20,10 +24,11 @@ type namingDriftEvent struct {
 
 // namingDriftPassResult carries what to persist + what to notify after the pass.
 type namingDriftPassResult struct {
-	driftFP   map[string]map[string]string // instID -> field -> current Arr pattern fp (drifted)
-	updateFP  map[string]map[string]string // instID -> field -> guide pattern fp (update available)
-	checkedOK map[string]bool              // instances fetched + compared this pass
-	detected  []namingDriftEvent           // newly-drifted, for notification
+	driftFP         map[string]map[string]string // instID -> field -> current Arr pattern fp (drifted)
+	updateFP        map[string]map[string]string // instID -> field -> guide pattern fp (update available)
+	checkedOK       map[string]bool              // instances fetched + compared this pass
+	detected        []namingDriftEvent           // newly-drifted, for notification
+	detectedUpdates []namingDriftEvent           // newly update-available, for notification
 }
 
 // runNamingDriftPass checks, for every field clonarr has synced (Config.NamingApplied
@@ -56,6 +61,25 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 		instIDs[instID] = true
 	}
 
+	// UPDATE check resolves the intended scheme's pattern from the UPSTREAM
+	// side-ref (no working-tree pull), so Notify/Delayed see guide updates at
+	// check time the way profile-sync does. Fetch the side-ref once; read naming
+	// per app type lazily below. On fetch/read failure we fall back to the loaded
+	// guide per field, so a transient failure never produces false updates.
+	branch := cfg.TrashRepo.Branch
+	if branch == "" {
+		branch = "master"
+	}
+	upstreamRef := ""
+	if cfg.TrashRepo.URL != "" {
+		fctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := d.app.Trash.FetchUpstreamRefspec(fctx, cfg.TrashRepo.URL, branch); err == nil {
+			upstreamRef = upstreamWatchRefPrefix + branch
+		}
+		cancel()
+	}
+	upstreamNaming := map[string]*TrashNaming{} // appType -> side-ref naming (lazy, cached)
+
 	for instID := range instIDs {
 		// Merge per-field {scheme, fingerprint}: applied record wins; else binding.
 		type fieldState struct{ scheme, fingerprint string }
@@ -86,6 +110,13 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 		}
 		res.checkedOK[instID] = true
 		ad := d.app.Trash.GetAppData(inst.Type)
+		un, cached := upstreamNaming[inst.Type]
+		if !cached {
+			if upstreamRef != "" {
+				un = d.app.Trash.ReadNamingFromRef(context.Background(), upstreamRef, inst.Type)
+			}
+			upstreamNaming[inst.Type] = un // cache (may be nil → loaded-guide fallback)
+		}
 
 		drift := map[string]string{}
 		updates := map[string]string{}
@@ -100,7 +131,13 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 			// update check + the drift notification's "what Sync would apply").
 			expected := ""
 			if rec.scheme != "" {
-				if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.scheme); ok {
+				// Prefer the upstream side-ref pattern (sees guide updates without a
+				// pull); fall back to the loaded guide if the side-ref is unavailable.
+				if un != nil {
+					if gp, ok := ResolveNamingFieldFrom(un, inst.Type, field, rec.scheme); ok {
+						expected = gp
+					}
+				} else if gp, ok := ResolveNamingField(ad, inst.Type, field, rec.scheme); ok {
 					expected = gp
 				}
 			}
@@ -141,6 +178,24 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 				InstanceName: inst.Name,
 				AppType:      inst.Type,
 				Fields:       newly,
+			})
+		}
+
+		// Newly update-available vs the previously-stored update fingerprints →
+		// notify (same dedup so a standing update isn't re-notified every check).
+		// Current = the applied/Arr pattern (old), Expected = the new guide pattern.
+		var newlyUpd []namingDriftField
+		for field, fp := range updates {
+			if inst.NamingUpdateFingerprints[field] != fp {
+				newlyUpd = append(newlyUpd, namingDriftField{Field: field, Current: curPattern[field], Expected: expectedPattern[field]})
+			}
+		}
+		if len(newlyUpd) > 0 {
+			res.detectedUpdates = append(res.detectedUpdates, namingDriftEvent{
+				InstanceID:   instID,
+				InstanceName: inst.Name,
+				AppType:      inst.Type,
+				Fields:       newlyUpd,
 			})
 		}
 	}

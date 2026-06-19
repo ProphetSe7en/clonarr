@@ -34,25 +34,36 @@ func NamingFingerprint(pattern string) string {
 // scheme. ok=false when TRaSH has no pattern for that (field, scheme). Lives in
 // core so both the api apply paths and the core drift/update pass share it.
 func ResolveNamingField(ad *AppData, instType, field, scheme string) (string, bool) {
-	if ad == nil || ad.Naming == nil {
+	if ad == nil {
+		return "", false
+	}
+	return ResolveNamingFieldFrom(ad.Naming, instType, field, scheme)
+}
+
+// ResolveNamingFieldFrom is ResolveNamingField against an explicit TrashNaming —
+// used to resolve patterns from the UPSTREAM side-ref naming (read with
+// ReadNamingFromRef, no working-tree pull) for the update check, not just the
+// in-memory loaded guide.
+func ResolveNamingFieldFrom(n *TrashNaming, instType, field, scheme string) (string, bool) {
+	if n == nil {
 		return "", false
 	}
 	switch field {
 	case "movieFile":
-		v, ok := ad.Naming.File[scheme]
+		v, ok := n.File[scheme]
 		return v, ok
 	case "movieFolder":
-		v, ok := ad.Naming.Folder[scheme]
+		v, ok := n.Folder[scheme]
 		return v, ok
 	case "seriesFolder":
-		v, ok := ad.Naming.Series[scheme]
+		v, ok := n.Series[scheme]
 		return v, ok
 	case "seasonFolder":
-		v, ok := ad.Naming.Season[scheme]
+		v, ok := n.Season[scheme]
 		return v, ok
 	case "standardEpisode", "dailyEpisode", "animeEpisode":
 		sub := map[string]string{"standardEpisode": "standard", "dailyEpisode": "daily", "animeEpisode": "anime"}[field]
-		if ep := ad.Naming.Episodes[sub]; ep != nil {
+		if ep := n.Episodes[sub]; ep != nil {
 			v, ok := ep[scheme]
 			return v, ok
 		}

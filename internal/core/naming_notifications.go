@@ -210,3 +210,55 @@ func (app *App) NotifyNamingPending(instanceName, appType, fieldLabel, reason st
 		app.DispatchNotificationAgent(agent, payload)
 	}
 }
+
+// NotifyNamingUpdateAvailable fires in Notify mode when a TRaSH guide update is
+// available for a bound/synced naming format (detected from the upstream side-ref,
+// no pull). One per format; shows Now (applied) / New (guide) / Diff. Gated on
+// OnNamingAutoSync (the naming lifecycle event); embed uses the Arr app colour.
+func (app *App) NotifyNamingUpdateAvailable(events []namingDriftEvent) {
+	if len(events) == 0 {
+		return
+	}
+	cfg := app.Config.Get()
+
+	hasOptIn := false
+	for _, agent := range cfg.AutoSync.NotificationAgents {
+		if agent.Events.OnNamingAutoSync {
+			hasOptIn = true
+			break
+		}
+	}
+	if !hasOptIn {
+		return
+	}
+
+	for _, ev := range events {
+		for _, f := range ev.Fields {
+			old := f.Current
+			if old == "" {
+				old = "(not set)"
+			}
+			msg := "A TRaSH guide update is available for **" + NamingFieldLabel(f.Field) + "** on **" + ev.InstanceName + "**.\n" +
+				namingField("Now", old)
+			if f.Expected != "" {
+				msg += namingField("New", f.Expected) +
+					"Diff\n```\n" + namingDiffMarked(f.Current, f.Expected) + "\n```\n"
+			}
+			msg += "\nApply it from Movie/Episode Naming (Update all / Sync now), or it applies on the next scheduled sync."
+
+			payload := NotificationPayload{
+				Title:    "Naming update available · " + NamingFieldLabel(f.Field),
+				Message:  msg,
+				Color:    appColor(ev.AppType),
+				Severity: NotificationSeverityInfo,
+				Route:    NotificationRouteDefault,
+			}
+			for _, agent := range cfg.AutoSync.NotificationAgents {
+				if !agent.Events.OnNamingAutoSync {
+					continue
+				}
+				app.DispatchNotificationAgent(agent, payload)
+			}
+		}
+	}
+}
