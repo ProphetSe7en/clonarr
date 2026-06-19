@@ -138,6 +138,22 @@ func (uw *ProfileSyncRunner) Run(ctx context.Context) error {
 		}
 	}
 
+	// Naming drift+update detection runs independently of the profile/CF drift
+	// gate above: UPDATE detection is gated by the TRaSH-updates source and DRIFT
+	// by the Arr-drift source, the same split profile-sync uses. (#5: naming
+	// updates used to be detected only inside the ArrDrift block, so Notify mode
+	// on the schedule showed no marker or notification unless Arr-drift was also
+	// enabled. The naming card Check always checked both and was unaffected.)
+	if uw.app.DriftRunner != nil {
+		nCheckDrift := cfg.ProfileSync.Sources.ArrDrift
+		nCheckUpdate := cfg.ProfileSync.Sources.TrashUpstream
+		if nCheckDrift || nCheckUpdate {
+			if err := uw.app.DriftRunner.RunNamingDrift(nCheckDrift, nCheckUpdate); err != nil {
+				log.Printf("profile-sync: naming detection failed: %v", err)
+			}
+		}
+	}
+
 	return trashErr
 }
 

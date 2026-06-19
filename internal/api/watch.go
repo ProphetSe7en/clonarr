@@ -144,6 +144,9 @@ func (s *Server) handleDriftCheck(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "drift check failed: "+err.Error())
 		return
 	}
+	// Refresh naming drift+update too: the naming pass is no longer bundled into
+	// RunOnce, and this manual Check bypasses the source gate, so check both halves.
+	_ = s.Core.DriftRunner.RunNamingDrift(true, true)
 
 	// Read per-instance CF drift fingerprints persisted by the pass we
 	// just ran. The frontend renders a per-CF status pill (one entry

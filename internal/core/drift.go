@@ -523,27 +523,29 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context, autoApply bool) ([]Dr
 		d.app.NotifyCFDriftReconciled(cfReconciled)
 	}
 
-	// Naming drift+update pass (#5): per-instance, flag-only. Runs on both the
-	// universal check (this RunOnce) and the naming-only card Check.
-	if err := d.runNamingDrift(); err != nil {
-		return results, nil, err
-	}
-
 	return results, toApply, nil
 }
 
 // runNamingDrift runs the naming drift+update pass, persists the per-instance
-// flags, and fires drift notifications. Shared by RunOnce (universal check) and
-// RunNamingDriftOnce (the naming-only card Check) so both behave identically.
-func (d *DriftRunner) runNamingDrift() error {
-	namingPass := runNamingDriftPass(d)
+// flags, and fires notifications. checkDrift / checkUpdate gate the two halves
+// independently: the scheduled watcher gates DRIFT on the Arr-drift source and
+// UPDATE on the TRaSH-updates source (so Notify mode surfaces guide updates even
+// when Arr-drift detection is off), while the naming-card Check runs both.
+func (d *DriftRunner) runNamingDrift(checkDrift, checkUpdate bool) error {
+	namingPass := runNamingDriftPass(d, checkDrift, checkUpdate)
 	if err := d.app.Config.Update(func(c *Config) {
 		for i := range c.Instances {
 			id := c.Instances[i].ID
 			if namingPass.checkedOK[id] {
-				// Replace with the freshly-computed maps (nil clears = reconciled).
-				c.Instances[i].NamingDriftFingerprints = namingPass.driftFP[id]
-				c.Instances[i].NamingUpdateFingerprints = namingPass.updateFP[id]
+				// Replace only the maps for the checks that actually ran (nil
+				// clears = reconciled). A half whose source is off is left as-is
+				// so we never wipe state we didn't authoritatively re-check.
+				if checkDrift {
+					c.Instances[i].NamingDriftFingerprints = namingPass.driftFP[id]
+				}
+				if checkUpdate {
+					c.Instances[i].NamingUpdateFingerprints = namingPass.updateFP[id]
+				}
 			} else if len(c.NamingApplied[id]) == 0 && len(c.NamingAutoSync[id]) == 0 {
 				// Nothing synced (no applied record, no binding) → clear stale state.
 				c.Instances[i].NamingDriftFingerprints = nil
@@ -574,12 +576,21 @@ func (d *DriftRunner) runNamingDrift() error {
 }
 
 // RunNamingDriftOnce runs ONLY the naming drift+update pass (not CF/profile drift),
-// for the naming-section "Check" — so it checks naming and nothing else. Serialized
+// for the naming-section "Check" and the universal manual Check — both check naming
+// fully (drift AND update), regardless of the scheduled-source toggles. Serialized
 // with the same mutex as RunOnce.
 func (d *DriftRunner) RunNamingDriftOnce() error {
+	return d.RunNamingDrift(true, true)
+}
+
+// RunNamingDrift runs the naming drift+update pass with the two halves gated
+// independently. The scheduled watcher passes the live source toggles
+// (drift=ArrDrift, update=TrashUpstream); manual checks pass (true, true).
+// Serialized with the same mutex as RunOnce.
+func (d *DriftRunner) RunNamingDrift(checkDrift, checkUpdate bool) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.runNamingDrift()
+	return d.runNamingDrift(checkDrift, checkUpdate)
 }
 
 // driftNotificationEvent identifies which lifecycle event to fire for a

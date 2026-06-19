@@ -39,9 +39,14 @@ type namingDriftPassResult struct {
 //     than what was applied (a guide update is available).
 //
 // It only FLAGS — never rewrites Arr (re-applying is the user's Sync / auto-sync).
-// Per instance, mirroring the CF-spec drift pass. Runs inside DriftRunner.RunOnce,
-// so it fires on both the scheduled check and the manual sidebar Check.
-func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
+// Per instance, mirroring the CF-spec drift pass.
+//
+// checkDrift / checkUpdate gate the two halves independently, mirroring how
+// profile-sync gates its TRaSH-update half (TrashUpstream source) separately
+// from its Arr-drift half (ArrDrift source). The live Arr value is captured
+// regardless of the flags, since the update notification needs it for the
+// "Now" line.
+func runNamingDriftPass(d *DriftRunner, checkDrift, checkUpdate bool) namingDriftPassResult {
 	cfg := d.app.Config.Get()
 	res := namingDriftPassResult{
 		driftFP:   map[string]map[string]string{},
@@ -71,7 +76,7 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 		branch = "master"
 	}
 	upstreamRef := ""
-	if cfg.TrashRepo.URL != "" {
+	if checkUpdate && cfg.TrashRepo.URL != "" {
 		fctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		if err := d.app.Trash.FetchUpstreamRefspec(fctx, cfg.TrashRepo.URL, branch); err == nil {
 			upstreamRef = upstreamWatchRefPrefix + branch
@@ -142,16 +147,21 @@ func runNamingDriftPass(d *DriftRunner) namingDriftPassResult {
 				}
 			}
 			expectedPattern[field] = expected
-			// DRIFT — current Arr pattern differs from what clonarr applied.
-			if cur, _ := current[arrKey].(string); cur != "" {
+			// Capture the live Arr value regardless of which checks run — the
+			// update notification's "Now" line needs it even in update-only mode.
+			cur, _ := current[arrKey].(string)
+			if cur != "" {
 				curPattern[field] = cur
+			}
+			// DRIFT — current Arr pattern differs from what clonarr applied.
+			if checkDrift && cur != "" {
 				if fp := NamingFingerprint(cur); fp != rec.fingerprint {
 					drift[field] = fp
 				}
 			}
 			// UPDATE — the intended scheme's current guide pattern differs from
 			// what clonarr applied (a guide update is available for this field).
-			if expected != "" {
+			if checkUpdate && expected != "" {
 				if fp := NamingFingerprint(expected); fp != rec.fingerprint {
 					updates[field] = fp
 				}
