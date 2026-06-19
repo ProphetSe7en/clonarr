@@ -138,7 +138,7 @@ export default function baseState() {
     cfgbSavingMsg: '',                       // transient save/delete feedback
     cfgbSavingOk: false,                     // whether cfgbSavingMsg is success (green) or error (red)
     cfgbDeleting: false,                     // guard against double-fire on Delete → Confirm (modal's onConfirm could run twice under fast clicks)
-    config: { trashRepo: { url: '', branch: '' }, pullInterval: '24h', pullSchedule: { mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, profileSync: { mode: 'auto', interval: '24h', applyDelayMinutes: 1440, sources: { trashUpstream: true, arrDrift: false } }, prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
+    config: { trashRepo: { url: '', branch: '' }, localSource: { enabled: false, path: '' }, pullInterval: '24h', pullSchedule: { mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, profileSync: { mode: 'auto', interval: '24h', applyDelayMinutes: 1440, sources: { trashUpstream: true, arrDrift: false } }, prowlarr: { url: '', apiKey: '', enabled: false, radarrCategories: [], sonarrCategories: [] }, authentication: 'forms', authenticationRequired: 'disabled_for_local_addresses', trustedNetworks: '', trustedProxies: '', sessionTtlDays: 30 },
     trashStatus: {},
     _nowTick: Date.now(),
     _trashStatusFetchedAt: 0, // ms; set by loadTrashStatus(). Declared here so Alpine tracks it; the next-pull countdown reads it together with _nowTick to compute server-relative remaining time.
@@ -162,6 +162,7 @@ export default function baseState() {
     updatingInstance: '', // instance id currently running Update all
     updatingRuleId: '',   // rule id currently running Update profile
     trashResetting: false,
+    localSourceBusy: false,
     profileTabs: {},  // per app-type profile tab: { radarr: 'trash-profiles', sonarr: 'sync-rules', ... }
     // Per app-type Custom Formats sub-tab: { radarr: 'browse' | 'sync-rules', sonarr: ... }.
     // browse = the existing TRaSH + custom CF catalog (default).
