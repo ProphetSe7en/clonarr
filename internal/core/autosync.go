@@ -82,7 +82,7 @@ func (app *App) AutoSyncAfterPull(trigger string) {
 	app.Config.Update(func(c *Config) {
 		for i := range c.AutoSync.Rules {
 			r := &c.AutoSync.Rules[i]
-			if r.LastSyncCommit == currentCommit && len(r.PendingChanges) > 0 {
+			if commitMatches(r.LastSyncCommit, currentCommit) && len(r.PendingChanges) > 0 {
 				r.PendingChanges = dropTrashPendingChanges(r.PendingChanges)
 			}
 		}
@@ -117,7 +117,7 @@ func filterEligibleRulesForPull(rules []AutoSyncRule, currentCommit string) []Au
 		if rule.ProfileSource == "imported" {
 			continue
 		}
-		if rule.LastSyncCommit == currentCommit {
+		if commitMatches(rule.LastSyncCommit, currentCommit) {
 			continue
 		}
 		out = append(out, rule)
@@ -1969,7 +1969,7 @@ func (app *App) NotifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 	cfg := app.Config.Get()
 
-	description := fmt.Sprintf("**Commit:** `%s` → `%s`", prevCommit, newCommit)
+	description := fmt.Sprintf("**Commit:** `%s` → `%s`", shortHash(prevCommit), shortHash(newCommit))
 	status := app.Trash.Status()
 	if status.LastDiff != nil && status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary

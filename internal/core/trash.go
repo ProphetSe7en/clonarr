@@ -1186,8 +1186,12 @@ func (ts *TrashStore) LoadFromDisk() error {
 // returned the error to the caller and never updated pullError — so a
 // corrupted on-disk repo after a failed parse looked "clean" in the UI.)
 func (ts *TrashStore) loadAndSwap() error {
-	// Get commit hash
-	hash, err := exec.Command("git", "-C", ts.dataDir, "rev-parse", "--short", "HEAD").Output()
+	// Get commit hash. Pin to 7 chars: bare "--short" uses git's auto length,
+	// which grows as the repo gains objects (7 -> 9 -> 10...), so the same
+	// commit gets stored at different lengths across pulls. That tripped the
+	// raw-string "did it change?" checks into a phantom "TRaSH-Guides Updated".
+	// 7 chars matches the UI; git only extends past 7 on genuine ambiguity.
+	hash, err := exec.Command("git", "-C", ts.dataDir, "rev-parse", "--short=7", "HEAD").Output()
 	if err != nil {
 		ts.SetPullError(err.Error())
 		return fmt.Errorf("get commit hash: %w", err)
@@ -1224,7 +1228,7 @@ func (ts *TrashStore) loadAndSwap() error {
 	prevChangelogDate := ts.lastChangelogDate
 	ts.mu.RUnlock()
 
-	if prevCommit != "" && data.CommitHash != prevCommit {
+	if prevCommit != "" && !commitMatches(prevCommit, data.CommitHash) {
 		if diff := ts.diffChangedFilesLocked(prevCommit, data.CommitHash); diff != "" {
 			data.LastDiff = &PullDiff{
 				PrevCommit: prevCommit,

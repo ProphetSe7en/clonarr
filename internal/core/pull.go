@@ -57,7 +57,9 @@ func (app *App) RunPullAndSync(source string) error {
 	}
 
 	newCommit := app.Trash.CurrentCommit()
-	commitChanged := prevCommit != "" && newCommit != prevCommit
+	// commitMatches (not raw !=) so a stored short hash that differs only in
+	// abbreviation length from the new one is not mistaken for a real change.
+	commitChanged := prevCommit != "" && !commitMatches(prevCommit, newCommit)
 
 	// Persist post-pull ProfileSync state. Best-effort — persist failures
 	// don't abort the rest of the flow.
@@ -167,7 +169,7 @@ func (app *App) RunPullOnly(source string) error {
 	}
 
 	newCommit := app.Trash.CurrentCommit()
-	commitChanged := prevCommit != "" && newCommit != prevCommit
+	commitChanged := prevCommit != "" && !commitMatches(prevCommit, newCommit)
 
 	if updErr := app.Config.Update(func(c *Config) {
 		if c.ProfileSync == nil {

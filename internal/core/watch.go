@@ -238,13 +238,13 @@ func (uw *ProfileSyncRunner) runDetectionOnly(ctx context.Context, fireAggregate
 		return fmt.Errorf("profile-sync: persist result: %w", updErr)
 	}
 
-	// Length-normalised compare. New code stores the full 40-char hash on
-	// both sides, but existing installs may have a 7-char shortened local
-	// hash persisted in last-pull-diff.json from an earlier --short bug;
-	// truncating the longer side to the shorter's length lets the very
-	// first detection tick after upgrade compare equal instead of firing
-	// a false "upstream ahead" notification. The next loadAndSwap rewrites
-	// CommitHash to the full form and this fallback stops mattering.
+	// Length-normalised compare. localCommit is the stored 7-char short hash
+	// (CurrentCommit), upstreamHead is the full 40-char ls-remote hash, and
+	// existing installs may still have an older 9/10-char short hash persisted
+	// from the earlier auto-length --short behavior. Truncating the longer side
+	// to the shorter's length lets all these mixed forms compare equal for the
+	// same commit instead of firing a false "upstream ahead" notification. This
+	// is the same prefix-tolerant comparison as commitMatches.
 	cmpLocal, cmpUpstream := localCommit, upstreamHead
 	if len(cmpLocal) < len(cmpUpstream) {
 		cmpUpstream = cmpUpstream[:len(cmpLocal)]
@@ -296,7 +296,7 @@ func (uw *ProfileSyncRunner) runDetectionOnly(ctx context.Context, fireAggregate
 		// mapping failed, in which case the aggregate path falls back to a
 		// commit-hash-only message.
 		if fireAggregateNotify {
-			if priorUpstream != upstreamHead {
+			if !commitMatches(priorUpstream, upstreamHead) {
 				uw.app.NotifyUpstreamUpdate(localCommit, upstreamHead, summary)
 			}
 		} else if summary != nil && len(summary.ManualUpdateRules) > 0 {
@@ -1127,3 +1127,7 @@ func commitMatches(a, b string) bool {
 	}
 	return a[:n] == b[:n]
 }
+
+// CommitMatches is the exported form of commitMatches for callers outside the
+// core package (e.g. the api layer's sync-source labelling).
+func CommitMatches(a, b string) bool { return commitMatches(a, b) }

@@ -375,7 +375,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		// TRaSH-update label so the chip matches what actually drove
 		// the sync. Genuine drift-only sync (TRaSH unchanged) still
 		// labels as drift_apply correctly.
-		if priorCommit != "" && currentTrashCommit != "" && priorCommit != currentTrashCommit {
+		if priorCommit != "" && currentTrashCommit != "" && !core.CommitMatches(priorCommit, currentTrashCommit) {
 			// TRaSH advanced. Keep the original source (Manual /
 			// Builder etc.) so the chip reads as the user's actual
 			// click, not a drift apply.

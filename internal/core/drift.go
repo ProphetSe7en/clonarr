@@ -164,7 +164,7 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context, autoApply bool) ([]Dr
 		// state so the row drops back to "Updates" pill cleanly. Once
 		// the user syncs, the next pass runs normally against fresh
 		// ground truth.
-		if currentTrashCommit != "" && r.LastSyncCommit != "" && r.LastSyncCommit != currentTrashCommit {
+		if currentTrashCommit != "" && r.LastSyncCommit != "" && !commitMatches(r.LastSyncCommit, currentTrashCommit) {
 			indeterminateRules = append(indeterminateRules, r.ID)
 			continue
 		}
