@@ -1203,7 +1203,14 @@ func (ts *TrashStore) LoadFromDisk() error {
 	ts.repoMu.Lock()
 	defer ts.repoMu.Unlock()
 
-	if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err != nil {
+	if ts.LocalSourceEnabled() {
+		// Local source is not a git repo; verify it has data to parse instead of
+		// checking for .git. loadAndSwap reads from sourceDir() with no git.
+		src := ts.sourceDir()
+		if _, err := os.Stat(filepath.Join(src, "docs", "json")); err != nil {
+			return fmt.Errorf("local source has no docs/json at %s (seed it first)", src)
+		}
+	} else if _, err := os.Stat(filepath.Join(ts.dataDir, ".git")); err != nil {
 		return fmt.Errorf("TRaSH repo not cloned at %s", ts.dataDir)
 	}
 
@@ -1220,15 +1227,24 @@ func (ts *TrashStore) LoadFromDisk() error {
 // returned the error to the caller and never updated pullError — so a
 // corrupted on-disk repo after a failed parse looked "clean" in the UI.)
 func (ts *TrashStore) loadAndSwap() error {
-	// Get commit hash. Pin to 7 chars: bare "--short" uses git's auto length,
-	// which grows as the repo gains objects (7 -> 9 -> 10...), so the same
-	// commit gets stored at different lengths across pulls. That tripped the
+	// In Local Source mode there is no git: the commit hash + date stay empty and
+	// the diff step below is skipped. parseAll / parseChangelog already read from
+	// sourceDir(), so the data itself comes from the local folder.
+	local := ts.LocalSourceEnabled()
+
+	// Get commit hash (guide mode only). Pin to 7 chars: bare "--short" uses git's
+	// auto length, which grows as the repo gains objects (7 -> 9 -> 10...), so the
+	// same commit gets stored at different lengths across pulls. That tripped the
 	// raw-string "did it change?" checks into a phantom "TRaSH-Guides Updated".
 	// 7 chars matches the UI; git only extends past 7 on genuine ambiguity.
-	hash, err := exec.Command("git", "-C", ts.dataDir, "rev-parse", "--short=7", "HEAD").Output()
-	if err != nil {
-		ts.SetPullError(err.Error())
-		return fmt.Errorf("get commit hash: %w", err)
+	var commitHash string
+	if !local {
+		hash, err := exec.Command("git", "-C", ts.dataDir, "rev-parse", "--short=7", "HEAD").Output()
+		if err != nil {
+			ts.SetPullError(err.Error())
+			return fmt.Errorf("get commit hash: %w", err)
+		}
+		commitHash = strings.TrimSpace(string(hash))
 	}
 
 	// Parse all data — builds a new *TrashData (C1: old snapshot remains valid)
@@ -1237,11 +1253,13 @@ func (ts *TrashStore) loadAndSwap() error {
 		ts.SetPullError(err.Error())
 		return fmt.Errorf("parse TRaSH data: %w", err)
 	}
-	data.CommitHash = strings.TrimSpace(string(hash))
-	// Get commit date
-	commitDate, err := exec.Command("git", "-C", ts.dataDir, "log", "-1", "--format=%ci").Output()
-	if err == nil {
-		data.CommitDate = strings.TrimSpace(string(commitDate))
+	data.CommitHash = commitHash // "" in Local mode
+	// Get commit date (guide mode only)
+	if !local {
+		commitDate, err := exec.Command("git", "-C", ts.dataDir, "log", "-1", "--format=%ci").Output()
+		if err == nil {
+			data.CommitDate = strings.TrimSpace(string(commitDate))
+		}
 	}
 	// Parse changelog from updates.txt
 	data.Changelog = parseChangelog(filepath.Join(ts.sourceDir(), "docs", "updates.txt"), 5)
@@ -1262,7 +1280,10 @@ func (ts *TrashStore) loadAndSwap() error {
 	prevChangelogDate := ts.lastChangelogDate
 	ts.mu.RUnlock()
 
-	if prevCommit != "" && !commitMatches(prevCommit, data.CommitHash) {
+	if local {
+		// Local mode has no commits to diff; preserve any previous diff for the GUI.
+		data.LastDiff = ts.data.LastDiff
+	} else if prevCommit != "" && !commitMatches(prevCommit, data.CommitHash) {
 		if diff := ts.diffChangedFilesLocked(prevCommit, data.CommitHash); diff != "" {
 			data.LastDiff = &PullDiff{
 				PrevCommit: prevCommit,

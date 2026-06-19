@@ -191,6 +191,18 @@ func main() {
 	// otherwise — and we still load the existing on-disk data into memory.
 	utils.SafeGo("startup-trash-pull", func() {
 		cfg := cfgStore.Get()
+
+		// Local Source mode: load guide data from the local folder, no git. Skip
+		// the clone/pull AND the git-dependent startup maintenance (commit-replay
+		// migrations). The data comes from sourceDir(); commit hash stays empty.
+		if trashStore.LocalSourceEnabled() {
+			log.Printf("Local Source mode — loading guide data from the local folder (no git pull)")
+			if err := trashStore.LoadFromDisk(); err != nil {
+				log.Printf("Local source load failed: %v", err)
+			}
+			return
+		}
+
 		repoCloned := false
 		if _, err := os.Stat(filepath.Join(trashStore.DataDir(), ".git")); err == nil { // #nosec G703 -- DataDir is server-side config, not request input; constant ".git" suffix; read-only Stat
 			repoCloned = true
