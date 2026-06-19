@@ -19,12 +19,17 @@
         <input class="input" x-model="agentModal.name" placeholder="e.g. Discord #alerts" autocomplete="off">
       </div>
 
-      <!-- Type (add only) — options come from manifest.notificationAgents -->
+      <!-- Type (add only) — options come from manifest.notificationAgents.
+           :selected re-asserts the model on each option as it renders: the modal
+           lives in the DOM from page load, so x-model binds before the manifest
+           (and thus the x-for options) is loaded, and on first render the select
+           would otherwise fall back to the alphabetically-first option (apprise)
+           while the model is still the default (discord). -->
       <div class="form-group" x-show="!agentModal.editId">
         <label>Type</label>
         <select class="input" x-model="agentModal.type">
           <template x-for="a in (manifest.notificationAgents || [])" :key="a.type">
-            <option :value="a.type" x-text="a.label"></option>
+            <option :value="a.type" :selected="a.type === agentModal.type" x-text="a.label"></option>
           </template>
         </select>
       </div>
