@@ -1269,6 +1269,12 @@ func (app *App) MigrateGlobalPauseToInstances() {
 // into a new default-on cf-group) would have the new group auto-set
 // to false, silently zeroing the user's previous CF blocks.
 func (app *App) MigratePriorAvailableGroups() {
+	// One-time commit-replay migration; reads group state at each rule's
+	// LastSyncCommit via git. Skip in Local Source mode (no git; a guide commit
+	// left on a rule from before the switch must not trigger a git read).
+	if app.Trash.LocalSourceEnabled() {
+		return
+	}
 	cfg := app.Config.Get()
 	if len(cfg.AutoSync.Rules) == 0 {
 		return
@@ -1370,6 +1376,13 @@ func (app *App) MigratePriorAvailableGroups() {
 // the union of opt-ins + inherited-defaults — sub-optimal but correct in the
 // effective-set sense).
 func (app *App) MigrateExcludedCFs() {
+	// One-time commit-replay migration (reads format-items at LastSyncCommit via
+	// git). Skip in Local Source mode for the same reason as
+	// MigratePriorAvailableGroups: no git, and a stale guide commit on a rule
+	// must not trigger a git read.
+	if app.Trash.LocalSourceEnabled() {
+		return
+	}
 	cfg := app.Config.Get()
 	if len(cfg.AutoSync.Rules) == 0 {
 		return

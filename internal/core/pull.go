@@ -21,6 +21,9 @@ import (
 // Returns an error only on pull failure. Persist / notify / sync failures
 // inside this method are logged but do not abort the flow.
 func (app *App) RunPullAndSync(source string) error {
+	if app.Trash.LocalSourceEnabled() {
+		return app.runLocalReload(source, true)
+	}
 	cfg := app.Config.Get()
 	remote := cfg.TrashRepo.URL
 	branch := cfg.TrashRepo.Branch
@@ -136,6 +139,9 @@ func (app *App) RunPullAndSync(source string) error {
 // AfterPullCallback (e.g. AutoSyncQualitySizes) still fires — that's
 // instance-level quality-size handling, not the per-rule sync work.
 func (app *App) RunPullOnly(source string) error {
+	if app.Trash.LocalSourceEnabled() {
+		return app.runLocalReload(source, false)
+	}
 	cfg := app.Config.Get()
 	remote := cfg.TrashRepo.URL
 	branch := cfg.TrashRepo.Branch
@@ -211,5 +217,49 @@ func (app *App) RunPullOnly(source string) error {
 	} else {
 		endResult = "ok | no change"
 	}
+	return nil
+}
+
+// runLocalReload is the Local Source replacement for a git pull: it re-reads the
+// local source folder (no git, no remote) so the user's edits to the local files
+// are picked up, then runs the same post-pull callbacks. sync=true also runs the
+// per-rule auto-sync (the pull-and-sync path); sync=false is data-only. There is
+// no commit, no upstream, no "changed?" diff — the local files are the source of
+// truth, so a reload always re-parses them.
+func (app *App) runLocalReload(source string, sync bool) error {
+	mode := "local-reload"
+	if sync {
+		mode = "local-reload+sync"
+	}
+	op := app.DebugLog.BeginOp(OpTrash, source, "mode="+mode)
+	endResult := "error: unknown"
+	defer func() { op.End(endResult) }()
+
+	if err := app.Trash.LoadFromDisk(); err != nil {
+		log.Printf("local-source reload failed: %v", err)
+		app.DebugLog.Logf(LogError, "Local source reload failed: %v", err)
+		app.Trash.SetPullError(err.Error())
+		endResult = "error: local reload failed"
+		return err
+	}
+	if updErr := app.Config.Update(func(c *Config) {
+		if c.ProfileSync == nil {
+			return
+		}
+		c.ProfileSync.LastRun = time.Now().UTC().Format(time.RFC3339)
+	}); updErr != nil {
+		log.Printf("local-source reload: persist last-run failed: %v", updErr)
+	}
+
+	if app.AfterPullCallback != nil {
+		app.AfterPullCallback()
+	}
+	if sync {
+		if app.AfterSyncCallback != nil {
+			app.AfterSyncCallback()
+		}
+		app.AutoSyncAfterPull(source)
+	}
+	endResult = "ok | " + mode
 	return nil
 }

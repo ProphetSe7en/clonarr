@@ -330,6 +330,12 @@ func (ts *TrashStore) DataDir() string {
 // the in-memory snapshot with an empty dataset. User configuration and locally
 // saved profiles/CFs live outside this store and are intentionally untouched.
 func (ts *TrashStore) Reset() error {
+	// In Local Source mode "Reset" (clear the git clone) does not apply; the local
+	// source is cleared by the dedicated Clean action instead. No-op so the guide
+	// clone is left untouched while Local mode is on.
+	if ts.LocalSourceEnabled() {
+		return nil
+	}
 	if !ts.pullMu.TryLock() {
 		return ErrTrashBusy
 	}
@@ -1071,6 +1077,12 @@ func cleanStaleGitLocks(gitDir string) {
 
 // Serialized via pullMu (C4: prevents concurrent git operations).
 func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
+	// Local Source mode never pulls — the local folder is the source of truth and
+	// git-reset would wipe the user's edits. No-op (the pull wrappers re-read the
+	// local folder via runLocalReload instead). Defensive: callers branch first.
+	if ts.LocalSourceEnabled() {
+		return nil
+	}
 	// C3: Validate inputs to prevent git flag injection
 	if strings.HasPrefix(branch, "-") {
 		return fmt.Errorf("invalid branch name: %q", branch)
