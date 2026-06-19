@@ -4,6 +4,7 @@ import (
 	"clonarr/internal/auth"
 	"clonarr/internal/core"
 	"clonarr/internal/netsec"
+	"clonarr/internal/utils"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -122,6 +123,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		TrashRepo              *core.TrashRepo      `json:"trashRepo,omitempty"`
+		LocalSource            *core.LocalSource    `json:"localSource,omitempty"`
 		PullInterval           *string              `json:"pullInterval,omitempty"`
 		PullSchedule           *core.PullSchedule   `json:"pullSchedule,omitempty"`
 		DevMode                *bool                `json:"devMode,omitempty"`
@@ -247,6 +249,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	pullChanged := false
 	scheduleChanged := false
 	authChanged := false
+	localSourceChanged := false
 	err := s.Core.Config.Update(func(cfg *core.Config) {
 		if req.TrashRepo != nil {
 			if req.TrashRepo.URL != "" {
@@ -255,6 +258,13 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			if req.TrashRepo.Branch != "" {
 				cfg.TrashRepo.Branch = req.TrashRepo.Branch
 			}
+		}
+		if req.LocalSource != nil {
+			cfg.LocalSource = *req.LocalSource
+			if cfg.LocalSource.Path == "" {
+				cfg.LocalSource.Path = s.Core.Trash.DefaultLocalPath()
+			}
+			localSourceChanged = true
 		}
 		if req.PullInterval != nil {
 			cfg.PullInterval = *req.PullInterval
@@ -339,6 +349,18 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		case s.Core.PullUpdateCh <- "":
 		default:
 		}
+	}
+	// Apply a Local Source toggle/path change live: re-point the store and reload
+	// from the now-active source (local folder or guide clone) so the switch takes
+	// effect without a restart.
+	if localSourceChanged {
+		ls := s.Core.Config.Get().LocalSource
+		s.Core.Trash.SetLocalSource(ls.Enabled, ls.Path)
+		utils.SafeGo("local-source-switch-reload", func() {
+			// RunPullOnly branches on mode: local -> re-read the folder, guide ->
+			// pull. Best-effort; a missing local source surfaces via pull-error.
+			_ = s.Core.RunPullOnly(core.SourceManualPull)
+		})
 	}
 	// Live-reload auth config so the change takes effect immediately
 	if authChanged && s.AuthStore != nil {
