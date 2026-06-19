@@ -242,6 +242,34 @@
               <span style="font-size:12px;color:var(--text-muted)">Deletes only the local cache. Pull redownloads TRaSH data; Update all forces an Arr refresh.</span>
             </div>
           </div>
+
+          <!-- ===== Local source ===== -->
+          <div class="settings-section-title" style="margin-top:28px">Local source</div>
+          <div class="settings-section-desc">Use your own local copy of the guide data, with your own scores, instead of pulling from the repository. While this is on, clonarr reads from the local folder and does not pull or check for updates, so your edits are never overwritten.</div>
+          <div class="setting-row">
+            <div class="setting-label">Use local files</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <input type="checkbox" x-model="config.localSource.enabled" @change="saveLocalSource()" style="accent-color:var(--accent-blue)">
+              <span style="font-size:12px;color:var(--text-muted)" x-text="config.localSource.enabled ? 'On. Reading from the local folder, no repository pulls or update checks.' : 'Off. Pulling guide updates from the repository.'"></span>
+            </div>
+          </div>
+          <div class="setting-row" x-show="config.localSource.enabled">
+            <div class="setting-label">Folder</div>
+            <div class="setting-value" style="font-size:13px">
+              <code x-text="config.localSource.path || '(default)'" style="background:var(--bg-muted);padding:2px 6px;border-radius:4px;font-size:12px"></code>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">Set up</div>
+            <div class="setting-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-sm" @click="seedLocalSource()" :disabled="localSourceBusy || !trashStatus.cloned">
+                <span x-show="localSourceBusy" class="spinner"></span>
+                <span>Copy current guide to local source</span>
+              </button>
+              <button class="btn btn-sm btn-danger" @click="cleanLocalSource()" :disabled="localSourceBusy">Clean local folder</button>
+              <span style="font-size:12px;color:var(--text-muted)">Copy gives you a complete, editable set to start from. Then overwrite the files you want with your own scores.</span>
+            </div>
+          </div>
         </div>
 
         <!-- ===== Auto-sync ===== -->

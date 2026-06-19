@@ -1124,6 +1124,7 @@ export function clonarr() {
         const body = {};
         const pullScheduleChanged = fields && (fields.includes('pullInterval') || fields.includes('pullSchedule'));
         if (!fields || fields.includes('trashRepo')) body.trashRepo = this.config.trashRepo;
+        if (fields && fields.includes('localSource')) body.localSource = this.config.localSource;
         if (fields && fields.includes('pullInterval')) {
           body.pullInterval = this.config.pullInterval;
           if (this.config.pullInterval === 'specific') body.pullSchedule = this.config.pullSchedule;
@@ -1151,6 +1152,45 @@ export function clonarr() {
       } catch (e) {
         console.error('saveConfig:', e);
         this.showToast('Could not save settings (network error)', 'error', 6000);
+      }
+    },
+
+    // Local Source: toggle on/off (the backend re-points the source and reloads),
+    // seed the local folder from the current guide, or clean it.
+    async saveLocalSource() {
+      await this.saveConfig(['localSource']);
+      // Reload status so the UI reflects the switched source (commit, counts).
+      setTimeout(() => this.loadTrashStatus(), 800);
+    },
+    async seedLocalSource() {
+      this.localSourceBusy = true;
+      try {
+        const r = await fetch('/api/trash/local-source/seed', { method: 'POST' });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showToast(data.error || 'Seed failed', 'error', 8000); return; }
+        this.showToast('Local source seeded from the current guide. Edit the files, then it is used on the next check.', 'success', 6000);
+        setTimeout(() => this.loadTrashStatus(), 800);
+      } catch (e) {
+        this.showToast('Seed failed: ' + e.message, 'error', 8000);
+      } finally {
+        this.localSourceBusy = false;
+      }
+    },
+    async cleanLocalSource() {
+      const ok = await new Promise(resolve => {
+        this.confirmModal = { show: true, title: 'Clean local folder', message: 'This empties the local source folder (its docs and includes). You can copy the current guide back into it afterwards. Continue?', confirmLabel: 'Clean', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
+      });
+      if (!ok) return;
+      this.localSourceBusy = true;
+      try {
+        const r = await fetch('/api/trash/local-source/clean', { method: 'POST' });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { this.showToast(data.error || 'Clean failed', 'error', 8000); return; }
+        this.showToast('Local folder cleaned.', 'success');
+      } catch (e) {
+        this.showToast('Clean failed: ' + e.message, 'error', 8000);
+      } finally {
+        this.localSourceBusy = false;
       }
     },
 
