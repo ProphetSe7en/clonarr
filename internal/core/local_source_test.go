@@ -93,3 +93,50 @@ func TestLocalSourceSkipsGit(t *testing.T) {
 		t.Errorf("Reset in Local mode should no-op, got error: %v", err)
 	}
 }
+
+// TestLocalSourceSeedAndClean locks in phase-4: Seed copies the guide clone's
+// docs/json + includes into the local folder (a complete, parseable set), and
+// Clean empties it.
+func TestLocalSourceSeedAndClean(t *testing.T) {
+	cloneRoot := t.TempDir() // NewTrashStore puts the clone at cloneRoot/trash-guides
+	cloneCF := filepath.Join(cloneRoot, "trash-guides", "docs", "json", "radarr", "cf")
+	if err := os.MkdirAll(cloneCF, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cloneCF, "x.json"), []byte(`{"trash_id":"x","name":"X"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	incl := filepath.Join(cloneRoot, "trash-guides", "includes", "cf-descriptions")
+	if err := os.MkdirAll(incl, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(incl, "x.md"), []byte("desc"), 0o644)
+
+	ts := NewTrashStore(cloneRoot)
+	localDir := filepath.Join(t.TempDir(), "local-source")
+	ts.SetLocalSource(true, localDir)
+
+	if err := ts.SeedLocalSource(); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(localDir, "docs", "json", "radarr", "cf", "x.json")); err != nil {
+		t.Errorf("seeded CF missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(localDir, "includes", "cf-descriptions", "x.md")); err != nil {
+		t.Errorf("seeded include missing: %v", err)
+	}
+	// The seeded local source parses.
+	if err := ts.LoadFromDisk(); err != nil {
+		t.Fatalf("load after seed: %v", err)
+	}
+	if _, ok := ts.Snapshot().Radarr.CustomFormats["x"]; !ok {
+		t.Errorf("CF x not parsed from seeded local source")
+	}
+
+	if err := ts.CleanLocalSource(); err != nil {
+		t.Fatalf("clean: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(localDir, "docs")); !os.IsNotExist(err) {
+		t.Errorf("docs should be removed after clean, stat err = %v", err)
+	}
+}
