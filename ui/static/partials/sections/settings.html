@@ -253,10 +253,11 @@
               <span style="font-size:12px;color:var(--text-muted)" x-text="config.localSource.enabled ? 'On. Reading from the local folder, no repository pulls or update checks.' : 'Off. Pulling guide updates from the repository.'"></span>
             </div>
           </div>
-          <div class="setting-row" x-show="config.localSource.enabled">
+          <div class="setting-row">
             <div class="setting-label">Folder</div>
             <div class="setting-value" style="font-size:13px">
-              <code x-text="config.localSource.path || '(default)'" style="background:var(--bg-muted);padding:2px 6px;border-radius:4px;font-size:12px"></code>
+              <code x-text="config.localSource.path" style="background:var(--bg-muted);padding:2px 6px;border-radius:4px;font-size:12px"></code>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:6px">This is where clonarr reads your local files from. Put your edited copies here.</div>
             </div>
           </div>
           <div class="setting-row">
@@ -267,7 +268,7 @@
                 <span>Copy current guide to local source</span>
               </button>
               <button class="btn btn-sm btn-danger" @click="cleanLocalSource()" :disabled="localSourceBusy">Clean local folder</button>
-              <span style="font-size:12px;color:var(--text-muted)">Copy gives you a complete, editable set to start from. Then overwrite the files you want with your own scores.</span>
+              <span style="font-size:12px;color:var(--text-muted)">Copy gives you a complete, editable set to start from. Then overwrite the files you want with your own scores. Your edits are used on the next Check or Pull.</span>
             </div>
           </div>
         </div>

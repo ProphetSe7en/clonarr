@@ -35,6 +35,12 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	timeInfo := serverTimeInfoAt(time.Now(), os.Getenv("TZ") != "")
 
+	// Resolve the Local Source folder for display so the UI always shows the real
+	// path (where the user puts their files), not an empty placeholder.
+	if cfg.LocalSource.Path == "" && s.Core.Trash != nil {
+		cfg.LocalSource.Path = s.Core.Trash.DefaultLocalPath()
+	}
+
 	// Wrap config with version + devFeatures for frontend.
 	// devFeatures is env-only (CLONARR_DEV_FEATURES), not persisted to clonarr.json,
 	// so it's exposed alongside the config rather than as part of it.
