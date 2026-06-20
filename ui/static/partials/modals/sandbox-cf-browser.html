@@ -46,13 +46,13 @@
                       <label class="toggle toggle-sm">
                         <input type="checkbox"
                                :checked="sandboxCFBrowser.selected[cf.trashId]"
-                               @change="sandboxCFBrowser.selected[cf.trashId] = $event.target.checked; if($event.target.checked) { sandboxCFBrowser.scores[cf.trashId] = sandboxCFBrowser.scores[cf.trashId] ?? 0; }">
+                               @change="sandboxCFBrowser.selected[cf.trashId] = $event.target.checked; if($event.target.checked) { sandboxCFBrowser.scores[cf.trashId] = sandboxCFBrowser.scores[cf.trashId] ?? _sandboxDefaultScore(sandboxCFBrowser.appType, cf.trashScores); }">
                         <span class="slider"></span>
                       </label>
                       <span style="flex:1;color:var(--text-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0" x-text="cf.name"></span>
                       <input x-show="sandboxCFBrowser.selected[cf.trashId]" type="number" class="pb-input"
                              style="width:75px;flex-shrink:0;font-size:12px;text-align:right;font-family:monospace"
-                             :value="sandboxCFBrowser.scores[cf.trashId] ?? 0"
+                             :value="sandboxCFBrowser.scores[cf.trashId] ?? _sandboxDefaultScore(sandboxCFBrowser.appType, cf.trashScores)"
                              @input="sandboxCFBrowser.scores[cf.trashId] = parseInt($event.target.value) || 0">
                     </div>
                   </template>

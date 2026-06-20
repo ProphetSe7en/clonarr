@@ -1713,9 +1713,11 @@ export default {
       // Resolve display names so the sandbox UI can label the added
       // rows. Both TRaSH catalog (by trashId) and Custom CFs (by id).
       const allCFs = {};
+      const cfScores = {}; // trashId → trash score map, for default-score inherit on add
       for (const cat of br.categories) {
         for (const g of cat.groups) {
-          for (const cf of g.cfs) { allCFs[cf.trashId] = cf.name; }
+          // all-cfs serialises the score map as trashScores (camelCase).
+          for (const cf of g.cfs) { allCFs[cf.trashId] = cf.name; cfScores[cf.trashId] = cf.trashScores; }
         }
       }
       for (const cf of br.customCFs || []) { allCFs[cf.id] = cf.name; }
@@ -1727,7 +1729,9 @@ export default {
           const existing = (sb.editOriginal?.scores || []).find(s => s.trashId === key);
           if (!existing) {
             sb.editToggles[key] = 'added';
-            sb.editScores[key] = br.scores[key] ?? 0;
+            // Preserve a prior in-session override; otherwise inherit the CF's
+            // TRaSH default score for this profile's score set (was hardcoded 0).
+            sb.editScores[key] = br.scores[key] ?? this._sandboxDefaultScore(br.appType, cfScores[key]);
             sb._addedCFNames[key] = allCFs[key] || key;
           }
         }
@@ -1948,12 +1952,25 @@ export default {
       return this._sandboxCFCache[appType].filter(cf => cf.name.toLowerCase().includes(q) && !existing.has(cf.trashId) && added[cf.trashId] !== 'added').slice(0, 15);
     },
 
+    // Resolve a newly-added CF's default score for the sandbox profile's
+    // score set, mirroring how the Profile Editor scores an added Additional
+    // CF (resolveCFDefaultScore). Falls back to the default set, then 0.
+    // trashScores may be undefined (custom CFs have no TRaSH score) → 0.
+    _sandboxDefaultScore(appType, trashScores) {
+      if (!trashScores) return 0;
+      const sb = this.sandbox[appType];
+      const prof = (this.trashProfiles[appType] || []).find(p => ('trash:' + p.trashId) === sb.profileKey);
+      const scoreSet = prof?.trashScoreSet || 'default';
+      return trashScores[scoreSet] ?? trashScores.default ?? 0;
+    },
+
     addSandboxEditCF(appType, cf) {
       const sb = this.sandbox[appType];
       if (!sb._addedCFNames) sb._addedCFNames = {};
       sb._addedCFNames[cf.trashId] = cf.name;
       sb.editToggles[cf.trashId] = 'added';
-      sb.editScores[cf.trashId] = 0;
+      // /cfs serialises the score map as trash_scores (snake_case).
+      sb.editScores[cf.trashId] = this._sandboxDefaultScore(appType, cf.trash_scores);
       this.debounceSandboxEdit(appType);
     },
 
