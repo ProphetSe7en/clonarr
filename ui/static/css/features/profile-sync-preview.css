@@ -274,9 +274,13 @@ button.sp-summary-active:focus-visible {
   color: var(--text-muted);
   cursor: pointer;
 }
+/* Active option: app-color text + subtle app-color tint (mirrors the editor's
+   --app-color badge treatment), so Radarr stays gold and Sonarr blue without a
+   low-contrast white-on-colour fill. */
 .sp-view-toggle button.active {
-  background: var(--accent-blue);
-  color: var(--text-on-accent);
+  color: var(--app-color);
+  background: color-mix(in srgb, var(--app-color) 14%, transparent);
+  font-weight: 600;
 }
 
 /* ===== Tabs ===== */
