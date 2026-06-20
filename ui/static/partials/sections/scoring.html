@@ -383,15 +383,13 @@
               <!-- Score-sort mode: grab order (quality first, what Arr grabs)
                    vs pure total CF score (quality ignored, for browsing). -->
               <div x-show="sandbox[activeAppType].sortCol === 'score'" x-cloak
-                   style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);margin-bottom:10px">
+                   style="display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;color:var(--text-muted);margin-bottom:10px">
                 <span>Sort score by:</span>
-                <div style="display:inline-flex;border:1px solid var(--border-subtle);border-radius:6px;overflow:hidden">
-                  <button type="button" style="border:0;padding:3px 10px;cursor:pointer;font-size:12px"
-                          :style="sandbox[activeAppType].scoreSortMode !== 'score' ? 'background:var(--accent-blue);color:var(--text-inverse)' : 'background:transparent;color:var(--text-body)'"
+                <div class="sp-view-toggle" style="margin-left:0">
+                  <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode !== 'score' }"
                           @click="setSandboxScoreSort(activeAppType, 'grab')"
                           x-tt="'Quality first, then score within quality — what Arr would actually grab'">Grab order</button>
-                  <button type="button" style="border:0;border-left:1px solid var(--border-subtle);padding:3px 10px;cursor:pointer;font-size:12px"
-                          :style="sandbox[activeAppType].scoreSortMode === 'score' ? 'background:var(--accent-blue);color:var(--text-inverse)' : 'background:transparent;color:var(--text-body)'"
+                  <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode === 'score' }"
                           @click="setSandboxScoreSort(activeAppType, 'score')"
                           x-tt="'Total CF score only, quality ignored — for browsing the CF picture'">Score</button>
                 </div>
