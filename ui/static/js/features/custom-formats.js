@@ -138,6 +138,9 @@ export default {
           if (!s || s.negate) continue;
           if (s.name) haystacks.push(String(s.name).toLowerCase());
         }
+        // Make the rename indicator searchable: a CF flagged to append its
+        // name to renamed files matches the term "rename".
+        if (cf.includeInRename) haystacks.push('rename');
         return terms.some(term => haystacks.some(hay => hay.includes(term)));
       };
       return groups
@@ -910,7 +913,7 @@ export default {
     // in a small muted footer instead of inheriting body font-size.
     // Falls back to "No description" when both fields are empty so the
     // cell is never blank.
-    cfInlineDescriptionHTML(cf, appType) {
+    cfInlineDescriptionHTML(cf, appType, opts = {}) {
       // Description resolve chain — row data first, then raw cfBrowseData
       // (data.cfs / data.customCFs) as fallback. getCFBrowseGroups carries
       // description forward but only for the path it was loaded under;
@@ -937,15 +940,25 @@ export default {
       } else {
         html += `<span class="cf-desc-empty">No description</span>`;
       }
+      // Meta footer row — TRaSH guide / JSON links plus the rename
+      // indicator, all in the same muted line. The rename chip surfaces
+      // includeCustomFormatWhenRenaming so the profile editor shows, right
+      // where the links live, which CFs append their name to renamed files.
+      // It renders for custom CFs too (they can carry the flag). The Custom
+      // Formats tab passes opts.hideRename because it already shows this as a
+      // badge in the CF name cluster — avoids a duplicate.
+      const metaBits = [];
       if (!cf?.isCustom) {
         const guideUrl = this.trashCFGuideUrl ? this.trashCFGuideUrl(cf, appType) : '';
         const jsonUrl = this.trashCFJsonUrl ? this.trashCFJsonUrl(cf, appType) : '';
-        const links = [];
-        if (guideUrl) links.push(`<a href="${esc(guideUrl)}" target="_blank" rel="noopener noreferrer">TRaSH guide</a>`);
-        if (jsonUrl) links.push(`<a href="${esc(jsonUrl)}" target="_blank" rel="noopener noreferrer">JSON</a>`);
-        if (links.length) {
-          html += `<span class="cf-desc-links">${links.join(' · ')}</span>`;
-        }
+        if (guideUrl) metaBits.push(`<a href="${esc(guideUrl)}" target="_blank" rel="noopener noreferrer">TRaSH guide</a>`);
+        if (jsonUrl) metaBits.push(`<a href="${esc(jsonUrl)}" target="_blank" rel="noopener noreferrer">JSON</a>`);
+      }
+      if (!opts.hideRename && cf?.includeInRename) {
+        metaBits.push(`<span class="cf-desc-rename" title="Custom Format name is appended to renamed files when this CF matches.">rename</span>`);
+      }
+      if (metaBits.length) {
+        html += `<span class="cf-desc-links">${metaBits.join(' · ')}</span>`;
       }
       return html;
     },

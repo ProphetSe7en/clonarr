@@ -820,6 +820,17 @@ button.sp-summary-active:focus-visible {
   margin-right: 12px;
 }
 .sp-cf-desc .cf-desc-links a:hover { color: var(--app-color); text-decoration: underline; }
+/* Rename indicator — sits in the same footer row as the TRaSH/JSON links.
+   Blue, uppercase to match the link styling, but no underline/hover since
+   it's a behaviour flag (includeCustomFormatWhenRenaming), not a link. */
+.sp-cf-desc .cf-desc-links .cf-desc-rename,
+.sp-ov-cf-desc .cf-desc-links .cf-desc-rename {
+  color: var(--accent-blue);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: help;
+}
 .sp-cf-desc:empty { display: none; }
 /* User toggle: when the editor's root carries sp-hide-cf-desc, every
    inline description collapses back to the compact name + score

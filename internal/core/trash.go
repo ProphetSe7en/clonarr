@@ -2123,11 +2123,12 @@ func SnapshotAppData(snap *TrashData, app string) *AppData {
 
 // ResolvedCF is a single CF with resolved score.
 type ResolvedCF struct {
-	TrashID     string `json:"trashId"`
-	Name        string `json:"name"`
-	Score       int    `json:"score"`
-	HasScore    bool   `json:"hasScore"`
-	Description string `json:"description,omitempty"`
+	TrashID         string `json:"trashId"`
+	Name            string `json:"name"`
+	Score           int    `json:"score"`
+	HasScore        bool   `json:"hasScore"`
+	Description     string `json:"description,omitempty"`
+	IncludeInRename bool   `json:"includeInRename,omitempty"` // Arr's includeCustomFormatWhenRenaming — surfaced as the "rename" indicator in the profile editor
 }
 
 // ResolvedCFCategory groups resolved CFs by category.
@@ -2138,13 +2139,14 @@ type ResolvedCFCategory struct {
 
 // ProfileCFGroupEntry is a CF within a group, with resolved score and default flag.
 type ProfileCFGroupEntry struct {
-	TrashID     string `json:"trashId"`
-	Name        string `json:"name"`
-	Score       int    `json:"score"`
-	HasScore    bool   `json:"hasScore"`
-	Required    bool   `json:"required"`
-	Default     bool   `json:"default"`
-	Description string `json:"description,omitempty"`
+	TrashID         string `json:"trashId"`
+	Name            string `json:"name"`
+	Score           int    `json:"score"`
+	HasScore        bool   `json:"hasScore"`
+	Required        bool   `json:"required"`
+	Default         bool   `json:"default"`
+	Description     string `json:"description,omitempty"`
+	IncludeInRename bool   `json:"includeInRename,omitempty"` // Arr's includeCustomFormatWhenRenaming — surfaced as the "rename" indicator in the profile editor
 }
 
 // ProfileCFGroup is a CF group linked to a profile via quality_profiles.include.
@@ -2572,6 +2574,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 					entry.HasScore = true
 				}
 				entry.Description = cf.Description
+				entry.IncludeInRename = cf.IncludeInRename
 			}
 
 			cg.CFs = append(cg.CFs, entry)
@@ -2720,6 +2723,7 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 					entry.HasScore = true
 				}
 				entry.Description = cf.Description
+				entry.IncludeInRename = cf.IncludeInRename
 			}
 
 			cg.CFs = append(cg.CFs, entry)
@@ -2763,6 +2767,7 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 			// info as Group CFs (which populate Description on line
 			// 2059). Without this, Required CFs had blank tooltips.
 			rc.Description = cf.Description
+			rc.IncludeInRename = cf.IncludeInRename
 			if s, ok := cf.TrashScores[scoreCtx]; ok {
 				rc.Score = s
 				rc.HasScore = true

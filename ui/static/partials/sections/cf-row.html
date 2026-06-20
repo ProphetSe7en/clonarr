@@ -44,7 +44,7 @@
            the CF name to peek conditions in the expand row below. -->
       <template x-if="cfBrowseViewMode === 'description'">
         <div class="cf-cell-desc"
-             x-html="cfInlineDescriptionHTML(cf, activeAppType)"></div>
+             x-html="cfInlineDescriptionHTML(cf, activeAppType, { hideRename: true })"></div>
       </template>
       <!-- Conditions view: pills rendered inline directly into the
            parent .cf-cell-pills flex container so its flex-wrap +

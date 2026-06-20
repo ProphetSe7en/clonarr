@@ -397,6 +397,9 @@ export default {
         if (!s || s.negate) continue;
         if (s.name) haystacks.push(String(s.name).toLowerCase());
       }
+      // Make the rename indicator searchable: a CF that appends its name to
+      // renamed files matches the term "rename".
+      if (cf.includeInRename) haystacks.push('rename');
       return terms.some(term => haystacks.some(hay => hay.includes(term)));
     },
     // Sidebar bulk-toggle helpers. Expand sets every parent section
