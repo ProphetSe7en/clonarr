@@ -382,16 +382,21 @@
 
               <!-- Score-sort mode: grab order (quality first, what Arr grabs)
                    vs pure total CF score (quality ignored, for browsing). -->
-              <div x-show="sandbox[activeAppType].sortCol === 'score'" x-cloak
-                   style="display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;color:var(--text-muted);margin-bottom:10px">
-                <span>Sort score by:</span>
-                <div class="sp-view-toggle" style="margin-left:0">
-                  <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode !== 'score' }"
-                          @click="setSandboxScoreSort(activeAppType, 'grab')"
-                          x-tt="'Quality first, then score within quality — what Arr would actually grab'">Grab order</button>
-                  <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode === 'score' }"
-                          @click="setSandboxScoreSort(activeAppType, 'score')"
-                          x-tt="'Total CF score only, quality ignored — for browsing the CF picture'">Score</button>
+              <!-- x-show lives on the outer block so it never clobbers the
+                   inner flex's display — Alpine x-show caches the inline
+                   display value, which left this stuck block/left-aligned
+                   (same trap as the disable-auth modal). -->
+              <div x-show="sandbox[activeAppType].sortCol === 'score'" x-cloak style="margin-bottom:10px">
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;color:var(--text-muted)">
+                  <span>Sort score by:</span>
+                  <div class="sp-view-toggle" style="margin-left:0">
+                    <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode !== 'score' }"
+                            @click="setSandboxScoreSort(activeAppType, 'grab')"
+                            x-tt="'Quality first, then score within quality — what Arr would actually grab'">Grab order</button>
+                    <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode === 'score' }"
+                            @click="setSandboxScoreSort(activeAppType, 'score')"
+                            x-tt="'Total CF score only, quality ignored — for browsing the CF picture'">Score</button>
+                  </div>
                 </div>
               </div>
 
