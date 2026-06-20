@@ -23,6 +23,10 @@
                 </template>
                 <span x-text="_shortName"></span>
                 <span class="sp-group-badges">
+                  <!-- Combined view only: marks this group as additional (not in the
+                       profile by default), so it is self-identifying in All categories
+                       where sections stack. Redundant in the Additional CF tab. -->
+                  <span class="sp-badge sp-badge-additional" x-show="pdCombined()">Additional</span>
                   <span class="sp-badge" x-show="g.exclusive">pick one</span>
                 </span>
               </div>

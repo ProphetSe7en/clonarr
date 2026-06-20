@@ -687,6 +687,13 @@ button.sp-summary-active:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
+/* Additional-group marker (combined view): red outline so an additional group is
+   self-identifying wherever it renders, without a heavy fill. */
+.sp-badge-additional {
+  background: transparent;
+  color: var(--accent-red);
+  border: 1px solid var(--accent-red);
+}
 /* ===== Action rows (group toggle + All-optional) =====
    Both rows share the same left-aligned layout so the user's eye
    scans a single column of switches that continues into the CF list
