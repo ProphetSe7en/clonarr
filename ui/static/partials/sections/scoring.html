@@ -80,7 +80,7 @@
             <div style="padding:10px 14px;column-count:4;column-gap:24px;column-rule:1px solid var(--bg-muted)">
               <!-- Profile CFs -->
               <template x-for="s in sandbox[activeAppType].editOriginal?.scores || []" :key="s.trashId || s.name">
-                <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
+                <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
                   <label class="toggle toggle-sm" style="flex-shrink:0">
                     <input type="checkbox"
                            :checked="sandbox[activeAppType].editToggles[s.trashId || s.name] !== false"
@@ -88,7 +88,7 @@
                     <span class="slider"></span>
                   </label>
                   <span style="font-size:13px;color:var(--text-body);white-space:normal;overflow-wrap:anywhere;line-height:1.3" x-text="s.name"></span>
-                  <input type="number" class="pb-input" style="width:48px;font-size:12px;text-align:right;font-family:monospace"
+                  <input type="number" class="pb-input" style="width:70px;font-size:12px;text-align:right;font-family:monospace"
                          :value="sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score"
                          :style="(sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score) !== s.score ? 'border-color:var(--accent-orange);color:var(--accent-orange)' : ''"
                          @input="sandbox[activeAppType].editScores[s.trashId || s.name] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
@@ -96,11 +96,11 @@
               </template>
               <!-- Added CFs (not in original profile) -->
               <template x-for="key in Object.keys(sandbox[activeAppType].editToggles).filter(k => sandbox[activeAppType].editToggles[k] === 'added').sort((a,b) => (sandbox[activeAppType]._addedCFNames?.[a]||a).toLowerCase().localeCompare((sandbox[activeAppType]._addedCFNames?.[b]||b).toLowerCase()))" :key="'add:'+key">
-                <div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
+                <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
                   <button @click="delete sandbox[activeAppType].editToggles[key]; delete sandbox[activeAppType].editScores[key]; debounceSandboxEdit(activeAppType)"
-                          style="background:none;border:none;color:var(--accent-red);font-size:12px;cursor:pointer;padding:0 2px;flex-shrink:0;width:30px;text-align:center" x-tt="'Remove'">✕</button>
+                          style="background:none;border:none;color:var(--accent-red);font-size:12px;cursor:pointer;padding:0;width:100%;text-align:center" x-tt="'Remove'">✕</button>
                   <span style="font-size:13px;color:var(--accent-orange);white-space:normal;overflow-wrap:anywhere;line-height:1.3" x-text="sandbox[activeAppType]._addedCFNames?.[key] || key"></span>
-                  <input type="number" class="pb-input" style="width:48px;font-size:12px;text-align:right;font-family:monospace;border-color:var(--accent-orange)"
+                  <input type="number" class="pb-input" style="width:70px;font-size:12px;text-align:right;font-family:monospace;border-color:var(--accent-orange)"
                          :value="sandbox[activeAppType].editScores[key] ?? 0"
                          @input="sandbox[activeAppType].editScores[key] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
                 </div>
