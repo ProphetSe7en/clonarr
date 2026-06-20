@@ -442,6 +442,36 @@ export default {
       return Array.from(sections, ([section, items]) => ({ section, items }));
     },
 
+    // Additional-CF view mode. 'combined' folds the additional groups into the
+    // Profile default categories (distinct colour); 'split' keeps the separate
+    // Additional CF tab. Persisted per browser, default combined.
+    pdCombined() {
+      return this.pdAdditionalView !== 'split';
+    },
+    setPdAdditionalView(mode) {
+      this.pdAdditionalView = mode === 'split' ? 'split' : 'combined';
+      try { localStorage.setItem('clonarr_pdAdditionalView', this.pdAdditionalView); } catch (_) {}
+      // Combined mode has no Additional tab, so bounce to the default tab so the
+      // user is not left on a now-hidden tab.
+      if (this.pdAdditionalView === 'combined' && this.spActiveTab === 'additional') {
+        this.spActiveTab = 'default';
+      }
+    },
+
+    // The section list for the Profile default sidebar/body. In combined mode it
+    // appends the additional groups (tagged _additional) so they render inside the
+    // same categories as the profile groups, with a distinct treatment.
+    spDefaultSections() {
+      const profileGroups = this.profileDetail?.detail?.trashGroups || [];
+      if (!this.pdOverridesEnabled || !this.pdCombined()) {
+        return this.spGroupBySection(profileGroups);
+      }
+      const additional = (this.spAdditionalCFGroups() || [])
+        .filter(g => this.spAdditionalGroupCFs(g).length > 0)
+        .map(g => ({ ...g, _additional: true }));
+      return this.spGroupBySection(profileGroups.concat(additional));
+    },
+
     // Sidebar section expand/collapse for the Profile editor sub-nav.
     // Three sources, in priority order:
     //   1. Explicit override from chevron click (persisted localStorage)

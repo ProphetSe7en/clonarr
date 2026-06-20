@@ -478,6 +478,13 @@
               @click="$event.currentTarget.blur(); pdOverridesEnabled ? pdConfirmDisable() : spConfirmEnableCustomize()"
               x-tt="pdOverridesEnabled ? 'Clear all customizations and revert this profile to TRaSH defaults' : 'Override profile defaults for language, scores, quality, and custom formats'"
               x-text="pdOverridesEnabled ? 'Reset to profile defaults' : 'Customize this profile'"></button>
+      <!-- Additional-CF view toggle (Customize-gated): Combined folds additional
+           formats into the profile categories; Split keeps the separate tab. -->
+      <div class="sp-view-toggle" x-show="pdOverridesEnabled" role="group" aria-label="Additional formats view"
+           x-tt="'Combined shows additional formats inside the profile categories (a different colour). Split keeps them in a separate tab.'">
+        <button type="button" :class="{ active: pdCombined() }" @click="setPdAdditionalView('combined')">Combined</button>
+        <button type="button" :class="{ active: !pdCombined() }" @click="setPdAdditionalView('split')">Split</button>
+      </div>
     </div>
 
     <!-- ===== Tabs =====

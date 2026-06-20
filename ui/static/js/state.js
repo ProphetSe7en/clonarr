@@ -229,6 +229,10 @@ export default function baseState() {
     // structural compare.
     _profileBaseline: null,
     spActiveTab: 'default',     // 'default' | 'overview' | 'additional' (Customize-gated)
+    // Additional-CF view mode (Customize-gated): 'combined' folds additional groups
+    // into the Profile default categories; 'split' keeps them in their own tab.
+    // Persisted per browser, global across profiles. Default combined.
+    pdAdditionalView: (typeof localStorage !== 'undefined' && localStorage.getItem('clonarr_pdAdditionalView') === 'split') ? 'split' : 'combined',
     spActiveGroup: '__required', // '__required' | <trashGroup.name>
     spActiveParent: null,        // null | <sectionName> — when set, main pane
                                  // renders ALL groups whose _section matches

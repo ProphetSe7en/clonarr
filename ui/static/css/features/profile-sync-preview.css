@@ -256,6 +256,29 @@ button.sp-summary-active:focus-visible {
   margin-left: auto;
 }
 
+/* Additional-CF view toggle (Combined | Split), Customize-gated. */
+.sp-view-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-left: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sp-view-toggle button {
+  background: transparent;
+  border: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sp-view-toggle button.active {
+  background: var(--accent-blue);
+  color: var(--text-on-accent);
+}
+
 /* ===== Tabs ===== */
 .sp-tabs {
   display: flex;
