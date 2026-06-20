@@ -905,6 +905,16 @@ export default {
       return false;
     },
 
+    // Any format (auto-sync OR manual) with drift/update detail to reveal. Gates
+    // the "Show details" toggle, which is broader than namingAnyPending (that one
+    // counts only auto-sync fields, since "Update all" re-applies only those).
+    namingAnyDetail(appType) {
+      const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
+      if (!inst) return false;
+      return Object.keys(inst.namingDriftFingerprints || {}).length > 0 ||
+             Object.keys(inst.namingUpdateFingerprints || {}).length > 0;
+    },
+
     // Locale-aware timestamp (server stores UTC/ISO; format client-side).
     namingSnapshotTime(ts) {
       if (!ts) return '';

@@ -146,9 +146,10 @@
                             x-tt="'Re-apply every auto-synced naming format that has an update or drift, to its scheme. Manual-only formats are not touched.'"
                             x-text="namingSyncing ? 'Syncing…' : 'Update all'"></button>
                         </template>
-                        <!-- Show/Hide the per-format update + drift detail. Only when
-                             there is something to detail; collapses the cards otherwise. -->
-                        <template x-if="namingAnyPending(activeAppType)">
+                        <!-- Show/Hide the per-format update + drift detail. Shown when
+                             ANY format (auto-sync or manual) has detail, broader than
+                             the auto-sync-only "Update all" gate. -->
+                        <template x-if="namingAnyDetail(activeAppType)">
                           <button type="button" class="v3-inst-action"
                             @click="toggleNamingDetails()"
                             x-tt="namingShowDetails ? 'Hide the update and drift details' : 'Show the update and drift details (what each format should be, and the diff)'"
@@ -180,7 +181,7 @@
                                       <span style="color:var(--accent-orange);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'Changed directly in Radarr/Sonarr, no longer matches. Use Sync to re-apply.'">drifted</span>
                                     </template>
                                     <template x-if="st.updatable">
-                                      <span style="color:var(--accent-blue);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'The guide published a newer pattern for this scheme. Use Sync to apply it.'">update</span>
+                                      <span style="color:var(--accent-blue);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;font-size:11px" x-tt="'The guide published a newer pattern for this scheme. Use Sync to apply it.'">update available</span>
                                     </template>
                                   </span>
                                 </template>
