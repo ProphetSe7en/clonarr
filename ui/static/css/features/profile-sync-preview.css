@@ -299,7 +299,7 @@ button.sp-summary-active:focus-visible {
   font-size: 12px;
   font-weight: 400;
   font-style: italic;
-  color: var(--text-muted);
+  color: var(--accent-red);
 }
 .sp-additional-note::before { content: "· "; font-style: normal; }
 
