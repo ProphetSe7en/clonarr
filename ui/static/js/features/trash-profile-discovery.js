@@ -471,6 +471,17 @@ export default {
         .map(g => ({ ...g, _additional: true }));
       return this.spGroupBySection(profileGroups.concat(additional));
     },
+    // The default-body groups as ONE flat list in section order (profile +
+    // additional interleaved in combined view), so the body renders them in the
+    // same order as the sidebar. Used by the "All categories" body so additional
+    // groups appear inside their section, not in a separate second pass.
+    spDefaultGroupsFlat() {
+      const out = [];
+      for (const s of this.spDefaultSections()) {
+        for (const g of s.items) out.push(g);
+      }
+      return out;
+    },
 
     // Sidebar section expand/collapse for the Profile editor sub-nav.
     // Three sources, in priority order:

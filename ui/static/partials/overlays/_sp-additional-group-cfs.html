@@ -1,8 +1,10 @@
 {{/* Shared additional-CF groups body. Rendered by the Additional CF tab
    AND inlined into the Profile default tab in combined view. Top-level
    define (own file) so it is not nested inside another template. */}}
-{{define "sp-additional-group-cfs"}}
-        <template x-for="g in spAdditionalCFGroups()" :key="g.name">
+{{define "sp-additional-one-group"}}
+        <!-- Renders ONE additional group's block; the caller iterates groups
+             (Additional tab over spAdditionalCFGroups(), or the combined Profile
+             body over spDefaultGroupsFlat()). g comes from the caller x-for. -->
         <!-- Mount when active OR (search is on AND at least one of the
              group's unique CFs matches). Same cross-group search model
              as Profile default's editor. -->
@@ -121,6 +123,5 @@
               </template>
             </div>
           </div>
-        </template>
         </template>
 {{end}}

@@ -495,7 +495,8 @@
                          the tab body x-effect kicks in.
          Profile overview - read-only summary of what's currently on -->
     <div class="sp-tabs">
-      <button class="sp-tab" :class="{ active: spActiveTab === 'default' }" @click="spActiveTab = 'default'">Profile default</button>
+      <button class="sp-tab" :class="{ active: spActiveTab === 'default' }" @click="spActiveTab = 'default'"
+              x-text="(pdCombined() && pdOverridesEnabled) ? 'Profile' : 'Profile default'"></button>
       <button class="sp-tab" :class="{ active: spActiveTab === 'additional' }" x-show="pdOverridesEnabled && !pdCombined()" @click="spActiveTab = 'additional'">
         Additional CF
         <template x-if="Object.keys(extraCFs || {}).length > 0">
@@ -744,13 +745,18 @@
              for ~3s. With x-if Alpine only mounts the matching group;
              switching groups re-mounts on demand (small per-switch
              cost, big initial-load win). -->
-        <template x-for="g in (profileDetail?.detail?.trashGroups || [])" :key="g.name">
+        <!-- Iterate the combined flat group list (profile + additional in
+             section order in combined view) so the body renders groups in the
+             same order as the sidebar. Additional groups render the shared
+             per-group partial; profile groups render the block below. -->
+        <template x-for="g in spDefaultGroupsFlat()" :key="g.name">
+        <template x-if="g._additional">{{template "sp-additional-one-group" .}}</template>
         <!-- Per-group block: when search is active, mounts ANY group
              whose CFs match (ignoring spActiveGroup so the currently
              selected group doesn't render with zero rows when its
              matches live elsewhere). When search is empty, mount only
              the active group - preserves lazy-mount perf. -->
-        <template x-if="!!spSearchFilter ? (g.cfs || []).some(cf => spMatchCF(cf, spSearchFilter)) : (spActiveGroup === g.name || spActiveParent === spSectionOfGroup(g) || spActiveParent === '__all')">
+        <template x-if="!g._additional && (!!spSearchFilter ? (g.cfs || []).some(cf => spMatchCF(cf, spSearchFilter)) : (spActiveGroup === g.name || spActiveParent === spSectionOfGroup(g) || spActiveParent === '__all'))">
           <div class="sp-group-block" x-data="{
                  get _groupOn() { if (g.defaultEnabled) { for (const cf of (g.cfs||[])) { if (cf.required || cf.default) { if (selectedOptionalCFs[cf.trashId] !== false) return true; } else if (selectedOptionalCFs[cf.trashId] === true) return true; } return false; } return selectedOptionalCFs['__grp_'+g.name] !== undefined ? selectedOptionalCFs['__grp_'+g.name] : g.defaultEnabled; },
                  get _section() { const m = (g.name||'').match(/^\[([^\]]+)\]\s*(.*)$/); return m ? m[1].trim() : ''; },
@@ -1035,10 +1041,6 @@
           </div>
         </template>
         </template>
-        <!-- Combined view: the additional groups render inline here, inside the
-             same categories as the profile groups (Customize-gated). The shared
-             partial reuses the exact Additional-tab rendering + handlers. -->
-        <template x-if="pdCombined()">{{template "sp-additional-group-cfs" .}}</template>
       </main>
     </div>
 
@@ -1988,7 +1990,7 @@
         <!-- Lazy-mount: same x-if pattern as the Profile default
              group panes above. Without this Alpine mounts every
              Additional CF group's content into DOM up front. -->
-        {{template "sp-additional-group-cfs" .}}
+        <template x-for="g in spAdditionalCFGroups()" :key="g.name">{{template "sp-additional-one-group" .}}</template>
       </main>
     </div>
 
