@@ -333,6 +333,22 @@
                               x-tt="'Delete the active score set (releases stay in your results)'">Delete</button>
                     </span>
                   </template>
+                  <!-- Sort-score-by toggle shares this row, pushed to the right
+                       (margin-left:auto). x-show on the outer block, flex on the
+                       inner div so x-show can't clobber the flex display. -->
+                  <div x-show="sandbox[activeAppType].sortCol === 'score'" x-cloak style="margin-left:auto">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
+                      <span>Sort score by:</span>
+                      <div class="sp-view-toggle" style="margin-left:0">
+                        <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode !== 'score' }"
+                                @click="setSandboxScoreSort(activeAppType, 'grab')"
+                                x-tt="'Quality first, then score within quality — what Arr would actually grab'">Grab order</button>
+                        <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode === 'score' }"
+                                @click="setSandboxScoreSort(activeAppType, 'score')"
+                                x-tt="'Total CF score only, quality ignored — for browsing the CF picture'">Score</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <!-- Row 2: Selection-driven actions, only when ≥1 selected.
                      "+ New set" lives here too so all checkbox-driven actions
@@ -378,26 +394,6 @@
               <div x-show="sandbox[activeAppType].sortCol && sandbox[activeAppType].sortCol !== 'score' && sandbox[activeAppType].sortCol !== 'manual'"
                    style="padding:6px 10px;background:var(--accent-orange-bg);color:var(--accent-orange);border:1px solid var(--accent-orange-bg);border-left:3px solid var(--accent-orange);border-radius:4px;font-size:13px;margin-bottom:10px;line-height:1.5">
                 Sonarr/Radarr's real pick order is <strong>quality first, then score within each quality</strong> (Quality Trumps All). The current sort is for browsing — click <a href="#" @click.prevent="toggleSandboxSort(activeAppType, 'score')" style="color:var(--accent-blue);text-decoration:underline">Score</a> to see what Arr would actually grab.
-              </div>
-
-              <!-- Score-sort mode: grab order (quality first, what Arr grabs)
-                   vs pure total CF score (quality ignored, for browsing). -->
-              <!-- x-show lives on the outer block so it never clobbers the
-                   inner flex's display — Alpine x-show caches the inline
-                   display value, which left this stuck block/left-aligned
-                   (same trap as the disable-auth modal). -->
-              <div x-show="sandbox[activeAppType].sortCol === 'score'" x-cloak style="margin-bottom:10px">
-                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;color:var(--text-muted)">
-                  <span>Sort score by:</span>
-                  <div class="sp-view-toggle" style="margin-left:0">
-                    <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode !== 'score' }"
-                            @click="setSandboxScoreSort(activeAppType, 'grab')"
-                            x-tt="'Quality first, then score within quality — what Arr would actually grab'">Grab order</button>
-                    <button type="button" :class="{ active: sandbox[activeAppType].scoreSortMode === 'score' }"
-                            @click="setSandboxScoreSort(activeAppType, 'score')"
-                            x-tt="'Total CF score only, quality ignored — for browsing the CF picture'">Score</button>
-                  </div>
-                </div>
               </div>
 
               <!-- Compact table view -->
