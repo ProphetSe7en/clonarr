@@ -69,6 +69,12 @@ export default {
     namingAutoSyncBusy: false,
     namingDriftChecking: false,
     namingSyncing: false,
+    // Collapse the per-format update/drift detail (Update available / Should be +
+    // Diff) on the naming cards, so a card with updates is not cluttered. The card
+    // still shows the current instance value + the update badge. Default collapsed;
+    // persisted per browser. The "Show details" toggle only appears when there is
+    // something to detail (namingAnyPending).
+    namingShowDetails: (typeof localStorage !== 'undefined' && localStorage.getItem('clonarr_namingShowDetails') === '1'),
     // Per-appType map of field -> [change events]; inline per-field history.
     namingChanges: {},
     namingFieldHistoryOpen: {},
@@ -882,6 +888,12 @@ export default {
 
     // True if any auto-sync field on the selected instance currently has a drift
     // or update flag — i.e. "Update all" would do something. Drives that button.
+    // Global toggle for the per-format update/drift detail on the naming cards.
+    toggleNamingDetails() {
+      this.namingShowDetails = !this.namingShowDetails;
+      try { localStorage.setItem('clonarr_namingShowDetails', this.namingShowDetails ? '1' : '0'); } catch (_) {}
+    },
+
     namingAnyPending(appType) {
       const inst = this.instances.find(i => i.id === this.mediaInstanceId[appType]);
       if (!inst) return false;
