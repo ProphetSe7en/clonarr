@@ -390,7 +390,7 @@ export default {
       let data;
       try { data = JSON.parse(m.importText); } catch (e) { m.error = 'Could not read that — it is not valid JSON.'; return; }
       if (!data || !Array.isArray(data.cfs) || data.clonarrScoreConfig == null) { m.error = 'That does not look like a clonarr score config.'; return; }
-      const scores = [], editToggles = {}, editScores = {}, addedNames = {};
+      const scores = [], editToggles = {}, editScores = {}, addedNames = {}, addedDefaults = {};
       for (const cf of data.cfs) {
         if (!cf || !cf.name) continue;
         const key = cf.trashId || cf.name;
@@ -398,6 +398,9 @@ export default {
           editToggles[key] = 'added';
           editScores[key] = cf.score ?? 0;
           addedNames[key] = cf.name;
+          // An imported config carries no separate default; treat the
+          // imported score as the baseline so the reset icon stays hidden.
+          addedDefaults[key] = cf.score ?? 0;
         } else {
           scores.push({ trashId: cf.trashId || '', name: cf.name, score: cf.score ?? 0 });
           if (cf.enabled === false) editToggles[key] = false;
@@ -408,6 +411,7 @@ export default {
       sb.editToggles = editToggles;
       sb.editMinScore = data.minScore ?? 0;
       sb._addedCFNames = { ...(sb._addedCFNames || {}), ...addedNames };
+      sb._addedCFDefaults = { ...(sb._addedCFDefaults || {}), ...addedDefaults };
       sb.editOpen = true;
       this.applySandboxEdit(appType);
       m.show = false;
@@ -1701,6 +1705,7 @@ export default {
       const sb = this.sandbox[br.appType];
       if (!sb) return;
       if (!sb._addedCFNames) sb._addedCFNames = {};
+      if (!sb._addedCFDefaults) sb._addedCFDefaults = {};
       // Remove previously-added CFs that the user has now deselected
       // in this modal session.
       for (const key of Object.keys(sb.editToggles)) {
@@ -1708,6 +1713,7 @@ export default {
           delete sb.editToggles[key];
           delete sb.editScores[key];
           delete sb._addedCFNames[key];
+          delete sb._addedCFDefaults[key];
         }
       }
       // Resolve display names so the sandbox UI can label the added
@@ -1729,9 +1735,12 @@ export default {
           const existing = (sb.editOriginal?.scores || []).find(s => s.trashId === key);
           if (!existing) {
             sb.editToggles[key] = 'added';
+            // Remember the pure TRaSH default so the per-field reset icon can
+            // restore it (the user may override the score in the picker).
+            sb._addedCFDefaults[key] = this._sandboxDefaultScore(br.appType, cfScores[key]);
             // Preserve a prior in-session override; otherwise inherit the CF's
             // TRaSH default score for this profile's score set (was hardcoded 0).
-            sb.editScores[key] = br.scores[key] ?? this._sandboxDefaultScore(br.appType, cfScores[key]);
+            sb.editScores[key] = br.scores[key] ?? sb._addedCFDefaults[key];
             sb._addedCFNames[key] = allCFs[key] || key;
           }
         }
@@ -1967,10 +1976,12 @@ export default {
     addSandboxEditCF(appType, cf) {
       const sb = this.sandbox[appType];
       if (!sb._addedCFNames) sb._addedCFNames = {};
+      if (!sb._addedCFDefaults) sb._addedCFDefaults = {};
       sb._addedCFNames[cf.trashId] = cf.name;
       sb.editToggles[cf.trashId] = 'added';
       // /cfs serialises the score map as trash_scores (snake_case).
-      sb.editScores[cf.trashId] = this._sandboxDefaultScore(appType, cf.trash_scores);
+      sb._addedCFDefaults[cf.trashId] = this._sandboxDefaultScore(appType, cf.trash_scores);
+      sb.editScores[cf.trashId] = sb._addedCFDefaults[cf.trashId];
       this.debounceSandboxEdit(appType);
     },
 

@@ -88,21 +88,37 @@
                     <span class="slider"></span>
                   </label>
                   <span style="font-size:13px;color:var(--text-body);white-space:normal;overflow-wrap:anywhere;line-height:1.3" x-text="s.name"></span>
-                  <input type="number" class="pb-input" style="width:70px;font-size:12px;text-align:right;font-family:monospace"
-                         :value="sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score"
-                         :style="(sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score) !== s.score ? 'border-color:var(--accent-orange);color:var(--accent-orange)' : ''"
-                         @input="sandbox[activeAppType].editScores[s.trashId || s.name] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
+                  <div style="display:grid;grid-template-columns:20px auto;align-items:center;gap:4px">
+                    <template x-if="(sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score) !== s.score">
+                      <button class="sp-basics-reset" style="grid-column:1;font-size:13px"
+                              @click="delete sandbox[activeAppType].editScores[s.trashId || s.name]; debounceSandboxEdit(activeAppType)"
+                              :aria-label="'Reset ' + s.name + ' to ' + ((s.score > 0 ? '+' : '') + s.score)"
+                              x-tt="'Reset to ' + ((s.score > 0 ? '+' : '') + s.score)">&#8634;</button>
+                    </template>
+                    <input type="number" class="pb-input" style="grid-column:2;width:70px;font-size:12px;text-align:right;font-family:monospace"
+                           :value="sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score"
+                           :style="(sandbox[activeAppType].editScores[s.trashId || s.name] ?? s.score) !== s.score ? { borderColor: 'var(--accent-orange)', color: 'var(--accent-orange)' } : {}"
+                           @input="sandbox[activeAppType].editScores[s.trashId || s.name] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
+                  </div>
                 </div>
               </template>
               <!-- Added CFs (not in original profile) -->
               <template x-for="key in Object.keys(sandbox[activeAppType].editToggles).filter(k => sandbox[activeAppType].editToggles[k] === 'added').sort((a,b) => (sandbox[activeAppType]._addedCFNames?.[a]||a).toLowerCase().localeCompare((sandbox[activeAppType]._addedCFNames?.[b]||b).toLowerCase()))" :key="'add:'+key">
                 <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:6px;padding:3px 0;break-inside:avoid">
-                  <button @click="delete sandbox[activeAppType].editToggles[key]; delete sandbox[activeAppType].editScores[key]; debounceSandboxEdit(activeAppType)"
+                  <button @click="delete sandbox[activeAppType].editToggles[key]; delete sandbox[activeAppType].editScores[key]; delete sandbox[activeAppType]._addedCFDefaults[key]; debounceSandboxEdit(activeAppType)"
                           style="background:none;border:none;color:var(--accent-red);font-size:12px;cursor:pointer;padding:0;width:100%;text-align:center" x-tt="'Remove'">✕</button>
                   <span style="font-size:13px;color:var(--accent-orange);white-space:normal;overflow-wrap:anywhere;line-height:1.3" x-text="sandbox[activeAppType]._addedCFNames?.[key] || key"></span>
-                  <input type="number" class="pb-input" style="width:70px;font-size:12px;text-align:right;font-family:monospace;border-color:var(--accent-orange)"
-                         :value="sandbox[activeAppType].editScores[key] ?? 0"
-                         @input="sandbox[activeAppType].editScores[key] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
+                  <div style="display:grid;grid-template-columns:20px auto;align-items:center;gap:4px">
+                    <template x-if="(sandbox[activeAppType].editScores[key] ?? 0) !== (sandbox[activeAppType]._addedCFDefaults?.[key] ?? 0)">
+                      <button class="sp-basics-reset" style="grid-column:1;font-size:13px"
+                              @click="sandbox[activeAppType].editScores[key] = sandbox[activeAppType]._addedCFDefaults?.[key] ?? 0; debounceSandboxEdit(activeAppType)"
+                              :aria-label="'Reset to ' + (((sandbox[activeAppType]._addedCFDefaults?.[key] ?? 0) > 0 ? '+' : '') + (sandbox[activeAppType]._addedCFDefaults?.[key] ?? 0))"
+                              x-tt="'Reset to ' + (((sandbox[activeAppType]._addedCFDefaults?.[key] ?? 0) > 0 ? '+' : '') + (sandbox[activeAppType]._addedCFDefaults?.[key] ?? 0))">&#8634;</button>
+                    </template>
+                    <input type="number" class="pb-input" style="grid-column:2;width:70px;font-size:12px;text-align:right;font-family:monospace;border-color:var(--accent-orange)"
+                           :value="sandbox[activeAppType].editScores[key] ?? 0"
+                           @input="sandbox[activeAppType].editScores[key] = parseInt($event.target.value) || 0; debounceSandboxEdit(activeAppType)">
+                  </div>
                 </div>
               </template>
             </div>
