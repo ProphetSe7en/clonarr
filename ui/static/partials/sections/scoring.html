@@ -333,9 +333,33 @@
                               x-tt="'Delete the active score set (releases stay in your results)'">Delete</button>
                     </span>
                   </template>
-                  <!-- Sort-score-by toggle shares this row, pushed to the right
-                       (margin-left:auto). x-show on the outer block, flex on the
-                       inner div so x-show can't clobber the flex display. -->
+                  <!-- Selection-driven actions, inline on this row. x-if so the
+                       whole group mounts/unmounts cleanly; appears when ≥1 row
+                       is checkbox-selected. -->
+                  <template x-if="sandboxSelectedCount(activeAppType) > 0">
+                    <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
+                      <span style="font-size:12px;color:var(--accent-blue)" x-text="sandboxSelectedCount(activeAppType) + ' selected →'"></span>
+                      <button class="btn btn-sm btn-primary" style="height:28px;font-size:12px;padding:2px 8px;white-space:nowrap"
+                              @click="sandboxCreateScoreSetFromSelected(activeAppType)"
+                              x-tt="'Save the selected releases as a new score set'">+ New set</button>
+                      <select class="input" style="height:28px;font-size:12px;padding:2px 6px;max-width:200px"
+                              x-show="(sandbox[activeAppType].scoreSets?.length || 0) > 0"
+                              @change="if ($event.target.value) { sandboxAddSelectedToScoreSet(activeAppType, $event.target.value); $event.target.value = ''; }"
+                              x-tt="'Add the selected releases to an existing score set'">
+                        <option value="">Add to existing…</option>
+                        <template x-for="s in sandbox[activeAppType].scoreSets || []" :key="'add:'+s.id">
+                          <option :value="s.id" x-text="s.name"></option>
+                        </template>
+                      </select>
+                      <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-orange);border-color:var(--accent-orange-bg)"
+                              x-show="sandbox[activeAppType].activeScoreSet"
+                              @click="sandboxRemoveSelectedFromScoreSet(activeAppType)"
+                              x-tt="'Remove the selected releases from this score set only — they stay in your results'">− Remove from set</button>
+                    </span>
+                  </template>
+                  <!-- Sort-score-by toggle, pushed to the far right. x-show on
+                       the outer block, flex on the inner div so x-show can't
+                       clobber the flex display. -->
                   <div x-show="sandbox[activeAppType].sortCol === 'score'" x-cloak style="margin-left:auto">
                     <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)">
                       <span>Sort score by:</span>
@@ -349,31 +373,6 @@
                       </div>
                     </div>
                   </div>
-                </div>
-                <!-- Row 2: Selection-driven actions, only when ≥1 selected.
-                     "+ New set" lives here too so all checkbox-driven actions
-                     are in the same place — no jump between rows to find
-                     what selecting rows enables. -->
-                <div x-show="sandboxSelectedCount(activeAppType) > 0"
-                     style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--bg-muted)">
-                  <span style="font-size:12px;color:var(--accent-blue)"
-                        x-text="sandboxSelectedCount(activeAppType) + ' selected →'"></span>
-                  <button class="btn btn-sm btn-primary" style="height:28px;font-size:12px;padding:2px 8px;white-space:nowrap"
-                          @click="sandboxCreateScoreSetFromSelected(activeAppType)"
-                          x-tt="'Save the selected releases as a new score set'">+ New set</button>
-                  <select class="input" style="height:28px;font-size:12px;padding:2px 6px;max-width:200px"
-                          x-show="(sandbox[activeAppType].scoreSets?.length || 0) > 0"
-                          @change="if ($event.target.value) { sandboxAddSelectedToScoreSet(activeAppType, $event.target.value); $event.target.value = ''; }"
-                          x-tt="'Add the selected releases to an existing score set'">
-                    <option value="">Add to existing…</option>
-                    <template x-for="s in sandbox[activeAppType].scoreSets || []" :key="'add:'+s.id">
-                      <option :value="s.id" x-text="s.name"></option>
-                    </template>
-                  </select>
-                  <button class="btn btn-sm" style="height:28px;font-size:12px;padding:2px 8px;color:var(--accent-orange);border-color:var(--accent-orange-bg)"
-                          x-show="sandbox[activeAppType].activeScoreSet"
-                          @click="sandboxRemoveSelectedFromScoreSet(activeAppType)"
-                          x-tt="'Remove the selected releases from this score set only — they stay in your results'">− Remove from set</button>
                 </div>
               </div>
 
