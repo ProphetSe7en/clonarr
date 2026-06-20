@@ -171,7 +171,7 @@
         <template x-if="profileDetail?._arrProfileName">
           <span class="sp-action-name"
                 x-tt="'Profile name in ' + (profileDetail?.instance?.name || 'Arr') + ' - what this rule manages.'"
-                x-text="profileDetail._arrProfileName"></span>
+                x-text="profileDetail?._arrProfileName"></span>
         </template>
         <template x-if="!profileDetail?._arrProfileName">
           <span class="sp-action-name" x-text="profileDetail?.profile?.name"></span>
@@ -187,8 +187,8 @@
           <template x-if="profileDetail?.instance?.name && !profileDetail?._browseMode">
             <span>
               <span x-text="profileDetail?.instance?.name"></span>
-              <template x-if="profileDetail._editLockedArrProfileId">
-                <span> &middot; ID #<span x-text="profileDetail._editLockedArrProfileId"></span></span>
+              <template x-if="profileDetail?._editLockedArrProfileId">
+                <span> &middot; ID #<span x-text="profileDetail?._editLockedArrProfileId"></span></span>
               </template>
               &middot;
             </span>
@@ -227,7 +227,7 @@
             <button class="btn btn-sm" style="border-color:var(--accent-blue);color:var(--accent-blue)" :disabled="instanceStatus[profileDetail?.instance?.id] !== 'connected'" @click="openSyncModalAsNew(profileDetail.instance, profileDetail.profile)" x-tt="instanceStatus[profileDetail?.instance?.id] !== 'connected' ? 'Instance offline — creating a profile needs a running instance.' : 'Create a new Arr profile with these settings'">Create New</button>
           </span>
         </template>
-        <span x-show="profileDetail?.instance && instanceStatus[profileDetail.instance.id] !== 'connected'" style="font-size:12px;color:var(--accent-orange);align-self:center" x-cloak>&#9888; <span x-text="profileDetail.instance.name"></span> offline — only Apply is available; changes save to clonarr and sync when it's back.</span>
+        <span x-show="profileDetail?.instance && instanceStatus[profileDetail?.instance?.id] !== 'connected'" style="font-size:12px;color:var(--accent-orange);align-self:center" x-cloak>&#9888; <span x-text="profileDetail?.instance?.name"></span> offline, only Apply is available; changes save to clonarr and sync when it's back.</span>
       </div>
     </div>
 
