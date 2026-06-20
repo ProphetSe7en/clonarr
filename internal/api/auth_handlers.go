@@ -640,11 +640,14 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 		log.Printf("auth: WARNING — authentication is DISABLED via authentication=none. Do not expose this container to untrusted networks.")
 	}
 
-	// Periodic loud warning while in none mode. Wrapped in utils.SafeGo so
-	// a panic in store.Config() (shouldn't happen, but defense in depth)
+	// Periodic warning while in none mode — a safety net for a forgotten
+	// auth-disabled state. The startup log + UI banner cover active
+	// awareness, so this only needs to be infrequent: every 6h (4/day)
+	// surfaces in any log review without flooding. Wrapped in utils.SafeGo
+	// so a panic in store.Config() (shouldn't happen, but defense in depth)
 	// can't take down the container.
 	utils.SafeGo("auth-none-warning", func() {
-		t := time.NewTicker(60 * time.Second)
+		t := time.NewTicker(6 * time.Hour)
 		defer t.Stop()
 		for {
 			select {

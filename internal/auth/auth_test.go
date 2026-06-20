@@ -554,8 +554,8 @@ func TestMiddleware_NoneMode(t *testing.T) {
 
 func TestValidateConfig_NoneAccepted(t *testing.T) {
 	// The env-var gate was removed — Radarr-parity UX puts the guardrails
-	// in the UI (type-to-confirm modal + persistent red banner + 60s log
-	// warning). ValidateConfig should accept ModeNone unconditionally.
+	// in the UI (password-confirm modal + dismissable red banner + periodic
+	// log warning). ValidateConfig should accept ModeNone unconditionally.
 	cfg := DefaultConfig()
 	cfg.Mode = ModeNone
 	os.Unsetenv("I_UNDERSTAND_AUTH_IS_DISABLED")
