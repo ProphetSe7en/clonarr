@@ -1155,7 +1155,16 @@ func (ts *TrashStore) CloneOrPull(repoURL, branch string) error {
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("git fetch: %w", err)
 		}
-		cmd = exec.Command("git", "-C", ts.dataDir, "reset", "--hard", "origin/"+branch)
+		// Reset to FETCH_HEAD, not origin/<branch>. The initial clone uses
+		// --depth=1 --branch <X> (implicitly --single-branch), so the remote
+		// refspec only tracks the originally-cloned branch. When the user
+		// later points clonarr at a different branch (e.g. a TRaSH PR/feature
+		// branch, often with a "/" in the name), `fetch origin <branch>`
+		// updates FETCH_HEAD but NOT refs/remotes/origin/<branch>, so
+		// `reset --hard origin/<branch>` fails with exit 128 (Issue #51).
+		// FETCH_HEAD is always written by the preceding fetch and points at
+		// the same commit. (No-slash branch names are unaffected either way.)
+		cmd = exec.Command("git", "-C", ts.dataDir, "reset", "--hard", "FETCH_HEAD")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
