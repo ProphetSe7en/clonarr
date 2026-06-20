@@ -22,11 +22,11 @@
                   <span class="sp-content-section" x-text="_section + ' › '"></span>
                 </template>
                 <span x-text="_shortName"></span>
+                <!-- Combined view: a small, muted note that this group is not in the
+                     profile by default (self-identifying in All categories), instead
+                     of a loud badge. Omitted in the Additional CF tab (redundant). -->
+                <span class="sp-additional-note" x-show="pdCombined()">not in this profile by default</span>
                 <span class="sp-group-badges">
-                  <!-- Combined view only: marks this group as additional (not in the
-                       profile by default), so it is self-identifying in All categories
-                       where sections stack. Redundant in the Additional CF tab. -->
-                  <span class="sp-badge sp-badge-additional" x-show="pdCombined()">Additional</span>
                   <span class="sp-badge" x-show="g.exclusive">pick one</span>
                 </span>
               </div>

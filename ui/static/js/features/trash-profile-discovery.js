@@ -478,15 +478,7 @@ export default {
     spDefaultGroupsFlat() {
       const out = [];
       for (const s of this.spDefaultSections()) {
-        // Mark the first additional group that follows at least one profile group
-        // in this section, so the body can draw a "now showing additional" divider
-        // before it (only when defaults precede them).
-        let sawProfile = false, markedDivider = false;
-        for (const g of s.items) {
-          if (!g._additional) { sawProfile = true; out.push(g); continue; }
-          if (sawProfile && !markedDivider) { out.push({ ...g, _dividerBefore: true }); markedDivider = true; }
-          else out.push(g);
-        }
+        for (const g of s.items) out.push(g);
       }
       return out;
     },

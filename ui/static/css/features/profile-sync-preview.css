@@ -293,27 +293,15 @@ button.sp-summary-active:focus-visible {
    root child while the group blocks still flow directly in the content column. */
 .sp-group-slot { display: contents; }
 
-/* Divider in the body between the profile defaults and the additional formats.
-   Subtle: a muted label + a thin app-colour line, no per-group colouring. */
-.sp-additional-divider {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 34px 0 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--accent-red);
-  text-align: center;
+/* Combined view: a small, muted note after an additional group's name marking it
+   as not in the profile by default (self-identifying, no loud badge or divider). */
+.sp-additional-note {
+  font-size: 12px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-muted);
 }
-.sp-additional-divider::before,
-.sp-additional-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border-subtle);
-}
+.sp-additional-note::before { content: "· "; font-style: normal; }
 
 /* ===== Tabs ===== */
 .sp-tabs {
@@ -686,13 +674,6 @@ button.sp-summary-active:focus-visible {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-}
-/* Additional-group marker (combined view): red outline so an additional group is
-   self-identifying wherever it renders, without a heavy fill. */
-.sp-badge-additional {
-  background: transparent;
-  color: var(--accent-red);
-  border: 1px solid var(--accent-red);
 }
 /* ===== Action rows (group toggle + All-optional) =====
    Both rows share the same left-aligned layout so the user's eye

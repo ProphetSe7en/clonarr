@@ -753,14 +753,6 @@
         <!-- Single root child for x-for (display:contents so it adds no box):
              one group renders either the additional partial or the profile block. -->
         <div class="sp-group-slot">
-        <!-- Divider before the first additional group when viewing ONE section
-             (Optional, Unwanted, ...): one clean transition from the profile
-             defaults to the extras. Not in All categories, where sections stack and
-             a per-section divider reads as global; there the per-group "Additional"
-             tag identifies them instead. -->
-        <template x-if="g._dividerBefore && !spSearchFilter && spActiveParent !== '__all' && spActiveParent === spSectionOfGroup(g)">
-          <div class="sp-additional-divider"><span>Additional formats, not in this profile by default</span></div>
-        </template>
         <template x-if="g._additional">{{template "sp-additional-one-group" .}}</template>
         <!-- Per-group block: when search is active, mounts ANY group
              whose CFs match (ignoring spActiveGroup so the currently
