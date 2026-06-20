@@ -753,6 +753,12 @@
         <!-- Single root child for x-for (display:contents so it adds no box):
              one group renders either the additional partial or the profile block. -->
         <div class="sp-group-slot">
+        <!-- Divider before the first additional group in a section (parent / All
+             categories views), so the user sees where the profile defaults end and
+             the optional extras begin. -->
+        <template x-if="g._dividerBefore && !spSearchFilter && (spActiveParent === '__all' || spActiveParent === spSectionOfGroup(g))">
+          <div class="sp-additional-divider"><span>Additional formats, not in this profile by default</span></div>
+        </template>
         <template x-if="g._additional">{{template "sp-additional-one-group" .}}</template>
         <!-- Per-group block: when search is active, mounts ANY group
              whose CFs match (ignoring spActiveGroup so the currently

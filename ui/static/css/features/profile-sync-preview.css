@@ -293,6 +293,27 @@ button.sp-summary-active:focus-visible {
    root child while the group blocks still flow directly in the content column. */
 .sp-group-slot { display: contents; }
 
+/* Divider in the body between the profile defaults and the additional formats.
+   Subtle: a muted label + a thin app-colour line, no per-group colouring. */
+.sp-additional-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 34px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+}
+.sp-additional-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--app-color);
+  opacity: 0.4;
+}
+
 /* ===== Tabs ===== */
 .sp-tabs {
   display: flex;
