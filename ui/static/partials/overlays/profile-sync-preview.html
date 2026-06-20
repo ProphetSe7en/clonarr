@@ -750,6 +750,9 @@
              same order as the sidebar. Additional groups render the shared
              per-group partial; profile groups render the block below. -->
         <template x-for="g in spDefaultGroupsFlat()" :key="g.name">
+        <!-- Single root child for x-for (display:contents so it adds no box):
+             one group renders either the additional partial or the profile block. -->
+        <div class="sp-group-slot">
         <template x-if="g._additional">{{template "sp-additional-one-group" .}}</template>
         <!-- Per-group block: when search is active, mounts ANY group
              whose CFs match (ignoring spActiveGroup so the currently
@@ -1040,6 +1043,7 @@
             </div>
           </div>
         </template>
+        </div>
         </template>
       </main>
     </div>

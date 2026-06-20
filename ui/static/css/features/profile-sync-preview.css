@@ -289,6 +289,10 @@ button.sp-summary-active:focus-visible {
 .sp-sub-nav-item.is-additional .sp-sub-nav-label { color: var(--app-color); }
 .sp-sub-nav-item.is-additional .sp-sub-nav-label::before { content: "+ "; opacity: 0.6; }
 
+/* Layout-invisible wrapper: lets the combined Profile body give x-for a single
+   root child while the group blocks still flow directly in the content column. */
+.sp-group-slot { display: contents; }
+
 /* ===== Tabs ===== */
 .sp-tabs {
   display: flex;
