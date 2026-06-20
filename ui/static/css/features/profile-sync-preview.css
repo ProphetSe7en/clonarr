@@ -283,6 +283,12 @@ button.sp-summary-active:focus-visible {
   font-weight: 600;
 }
 
+/* Additional groups shown inline in the Profile default categories (combined
+   view): app-colour label + a "+" marker so they read as addable extras, not
+   profile defaults. */
+.sp-sub-nav-item.is-additional .sp-sub-nav-label { color: var(--app-color); }
+.sp-sub-nav-item.is-additional .sp-sub-nav-label::before { content: "+ "; opacity: 0.6; }
+
 /* ===== Tabs ===== */
 .sp-tabs {
   display: flex;

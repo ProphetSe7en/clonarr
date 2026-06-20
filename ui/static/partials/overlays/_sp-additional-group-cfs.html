@@ -1,0 +1,126 @@
+{{/* Shared additional-CF groups body. Rendered by the Additional CF tab
+   AND inlined into the Profile default tab in combined view. Top-level
+   define (own file) so it is not nested inside another template. */}}
+{{define "sp-additional-group-cfs"}}
+        <template x-for="g in spAdditionalCFGroups()" :key="g.name">
+        <!-- Mount when active OR (search is on AND at least one of the
+             group's unique CFs matches). Same cross-group search model
+             as Profile default's editor. -->
+        <!-- Same cross-group-search model as Profile default: when
+             search is active, mount only matching groups (ignoring
+             spActiveGroup); when empty, mount the active group. -->
+        <template x-if="(!!spSearchFilter ? spAdditionalGroupCFs(g).some(cf => spMatchCF(cf, spSearchFilter)) : (spActiveGroup === g.name || spActiveParent === spSectionOfGroup(g) || spActiveParent === '__all')) && spAdditionalGroupCFs(g).length > 0">
+          <div class="sp-group-block" x-data="{
+                 get _section() { const m = (g.name||'').match(/^\[([^\]]+)\]\s*(.*)$/); return m ? m[1].trim() : ''; },
+                 get _shortName() { const m = (g.name||'').match(/^\[([^\]]+)\]\s*(.*)$/); return m ? (m[2].trim() || g.name) : g.name; }
+               }">
+            <h2 class="sp-content-title">
+              <div class="sp-content-title-name">
+                <template x-if="_section">
+                  <span class="sp-content-section" x-text="_section + ' › '"></span>
+                </template>
+                <span x-text="_shortName"></span>
+                <span class="sp-group-badges">
+                  <span class="sp-badge" x-show="g.exclusive">pick one</span>
+                </span>
+              </div>
+            </h2>
+            <div class="sp-group-desc" x-show="g.trashDescription" x-html="sanitizeHTML(g.trashDescription || '')"></div>
+            <p class="sp-content-sub" x-show="!g.trashDescription">Optional CFs you can add to this profile. Toggle individual entries below.</p>
+
+            <!-- Mass-toggle for the whole group - mirrors the Profile
+                 default tab's "All optional CFs" action row. Renders
+                 only when the group has 2+ CFs so it doesn't add noise
+                 for single-CF groups (those have their own row toggle).
+                 Hidden when search is active so a user looking for a
+                 specific CF doesn't accidentally toggle the whole
+                 group with a misaimed click. -->
+            <template x-if="spAdditionalGroupCFs(g).length >= 2 && !spSearchFilter">
+              <div class="sp-action-rows">
+                <label class="sp-action-row toggle-row">
+                  <span class="toggle toggle-sm"
+                        x-tt="'Toggle every CF in this group on or off at once.'"
+                        @click.stop>
+                    <input type="checkbox"
+                           :checked="spAdditionalGroupCFs(g).every(cf => !!selectedOptionalCFs[cf.trashId])"
+                           @change="(() => {
+                             const enabling = $event.target.checked;
+                             for (const cf of spAdditionalGroupCFs(g)) {
+                               const on = !!selectedOptionalCFs[cf.trashId];
+                               if (enabling !== on) toggleOptionalCF(cf.trashId);
+                             }
+                           })()">
+                    <span class="slider"></span>
+                  </span>
+                  <span class="sp-action-label" x-text="'All in ' + _shortName"></span>
+                  <span class="sp-action-count"
+                        x-text="(() => {
+                          const cfs = spAdditionalGroupCFs(g);
+                          const on = cfs.filter(cf => !!selectedOptionalCFs[cf.trashId]).length;
+                          return on + ' of ' + cfs.length + ' enabled';
+                        })()"></span>
+                </label>
+              </div>
+            </template>
+
+            <div class="sp-cf-list">
+              <!-- Use spAdditionalGroupCFs(g) so CFs that are already
+                   active via another group don't appear here (Unwanted
+                   French shows only the CFs not already in Default
+                   Unwanted's active set). -->
+              <!-- CFs in extraCFGroups carry `trashScores` (the full
+                   profile-context map) rather than a resolved cf.score.
+                   resolveCFDefaultScore() picks the right value via
+                   profile's scoreCtx, with a formatItems / trashGroups
+                   fast-path for CFs that also appear in this profile. -->
+              <template x-for="cf in spAdditionalGroupCFs(g)" :key="cf.trashId">
+                <div class="sp-cf-row"
+                     x-show="!spSearchFilter || spMatchCF(cf, spSearchFilter)"
+                     x-data="{
+                       get _def() { const r = resolveCFDefaultScore(cf.trashId); return (typeof r === 'number') ? r : 0; },
+                       /* Read extras FIRST then cfScoreOverrides - matches
+                          spOverviewDiffs score-priority order. Additional
+                          CF scores typically live in extras for out-of-
+                          profile CFs; cfScoreOverrides is the fallback
+                          for in-profile or freshly-edited CFs that landed
+                          there. _mod compares effective vs default. */
+                       get _eff() { const e = extraCFs[cf.trashId]; if (e !== undefined) return e; const o = cfScoreOverrides[cf.trashId]; return o !== undefined ? o : this._def; },
+                       get _mod() { return this._eff !== this._def; }
+                     }">
+                  <label class="toggle toggle-sm" @click.stop>
+                    <input type="checkbox" :checked="selectedOptionalCFs[cf.trashId]" @change="selectedOptionalCFs = { ...selectedOptionalCFs, [cf.trashId]: $event.target.checked }">
+                    <span class="slider"></span>
+                  </label>
+                  <div class="sp-cf-name">
+                    <span :class="{ 'sp-cf-name-has-tooltip': cf.description || (!cf.isCustom && (trashCFGuideUrl(cf, activeAppType) || trashCFJsonUrl(cf, activeAppType))) }"
+                          x-text="cf.name"
+                          @mouseenter="if (cf.description || (!cf.isCustom && (trashCFGuideUrl(cf, activeAppType) || trashCFJsonUrl(cf, activeAppType)))) showCFTooltip($event, buildCFInfoHTML(cf, activeAppType))"
+                          @mouseleave="hideCFTooltip()"></span>
+                  </div>
+                  <div class="sp-cf-desc" x-html="cfInlineDescriptionHTML(cf, activeAppType)"></div>
+                  <template x-if="!pdOverridesEnabled">
+                    <div class="sp-cf-score" :class="(_eff > 0 ? 'positive' : _eff < 0 ? 'negative' : 'zero')" x-text="_eff != null ? ((_eff > 0 ? '+' : '') + _eff) : ''"></div>
+                  </template>
+                  <template x-if="pdOverridesEnabled">
+                    <div class="sp-cf-score-edit">
+                      <template x-if="_mod">
+                        <button class="sp-basics-reset sp-cf-score-reset" @click="pdResetCFScore(cf.trashId)" x-tt="'Reset to ' + ((_def > 0 ? '+' : '') + _def)">&#8634;</button>
+                      </template>
+                      <!-- Additional CF: opted-in iff sel[cf.trashId] === true.
+                           Otherwise the CF isn't being synced, so editing
+                           its score would just leak into the payload via
+                           the safety net. Disabled until opt-in is on. -->
+                      <input type="number" class="sp-cf-score-input"
+                             :value="_eff"
+                             :disabled="!selectedOptionalCFs[cf.trashId]"
+                             :title="!selectedOptionalCFs[cf.trashId] ? 'Enable this CF first to edit its score' : ''"
+                             @change="spApplyCFScore(cf.trashId, $el.value, _def)">
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        </template>
+{{end}}
