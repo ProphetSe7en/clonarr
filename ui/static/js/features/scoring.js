@@ -168,7 +168,13 @@ export default {
       results.sort((a, b) => {
         switch (col) {
           case 'score': {
-            // Pass/fail outer, then quality, then score within quality.
+            // Pure-score mode: total CF score only, quality + pass/fail
+            // ignored — for browsing the CF picture, not Arr's pick order.
+            if (sb.scoreSortMode === 'score') {
+              return dir * ((a.scoring?.total ?? -99999) - (b.scoring?.total ?? -99999));
+            }
+            // Grab order (default): pass/fail outer, then quality, then score
+            // within quality — what Arr would actually grab (Quality Trumps All).
             const dp = passOf(b) - passOf(a);
             if (dp !== 0) return dp;
             const dq = rankOf(a) - rankOf(b);
@@ -253,6 +259,16 @@ export default {
         sb.sortCol = col;
         sb.sortDir = col === 'title' || col === 'group' ? 'asc' : 'desc';
       }
+    },
+
+    // Switch how the Score column sorts: 'grab' = quality first then score
+    // (what Arr would actually grab), 'score' = pure total CF score. Selecting
+    // a mode also makes Score the active sort so the change is visible at once.
+    setSandboxScoreSort(appType, mode) {
+      const sb = this.sandbox[appType];
+      sb.scoreSortMode = mode;
+      sb.sortCol = 'score';
+      sb.sortDir = 'desc';
     },
 
     // Format a single sandbox result as a readable plain-text block for sharing.
