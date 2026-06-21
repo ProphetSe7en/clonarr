@@ -397,10 +397,21 @@
                 Sonarr/Radarr's real pick order is <strong>quality first, then score within each quality</strong> (Quality Trumps All). The current sort is for browsing — click <a href="#" @click.prevent="toggleSandboxSort(activeAppType, 'score')" style="color:var(--accent-blue);text-decoration:underline">Score</a> to see what Arr would actually grab.
               </div>
 
-              <!-- Compact table view -->
-              <table style="width:100%;border-collapse:collapse;border:1px solid var(--border-subtle);border-radius:6px">
+              <!-- Compact table view. Virtualized: the scroll lives in this
+                   container (not the page), and only the rows in view are drawn
+                   (see sandboxWindow). table-layout:fixed + a colgroup give every
+                   row a predictable width so the fixed row height holds. -->
+              <div style="max-height:65vh;overflow:auto;border:1px solid var(--border-subtle);border-radius:6px"
+                   x-init="$nextTick(() => { sandbox[activeAppType]._vH = $el.clientHeight })"
+                   @scroll="sandboxOnScroll(activeAppType, $event)">
+              <table style="width:100%;table-layout:fixed;border-collapse:collapse">
+                <colgroup>
+                  <col style="width:24px"><col style="width:28px"><col style="width:24px">
+                  <col><col style="width:34%">
+                  <col style="width:78px"><col style="width:58px"><col style="width:52px"><col style="width:24px">
+                </colgroup>
                 <thead>
-                  <tr style="background:var(--bg-card);font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;user-select:none">
+                  <tr style="position:sticky;top:0;z-index:2;background:var(--bg-card);font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;user-select:none">
                     <th style="width:22px;padding:5px 2px 5px 6px"></th>
                     <th style="width:24px;padding:5px 2px;text-align:center">
                       <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer" x-tt="'Select/deselect all'"
@@ -436,14 +447,17 @@
                     <th style="width:24px;padding:5px 2px"></th>
                   </tr>
                 </thead>
-                <template x-for="(res, idx) in visibleSandboxResults(activeAppType)" :key="res._sid">
+                <!-- Top spacer: reserves the height of the rows scrolled above the window. -->
+                <tbody><tr :style="`height:${sandboxWindow(activeAppType).padTop}px`"><td colspan="9" style="padding:0;border:0"></td></tr></tbody>
+                <template x-for="res in sandboxWindow(activeAppType).items" :key="res._sid">
                   <tbody>
-                    <tr :draggable="!sandbox[activeAppType].filterToSelected"
+                    <tr style="height:34px"
+                        :draggable="!sandbox[activeAppType].filterToSelected"
                         @dragstart="if (!sandbox[activeAppType].filterToSelected) { event.dataTransfer.setData('text/plain', ''); sandboxDragStart(activeAppType, res); }"
                         @dragover.prevent="if (!sandbox[activeAppType].filterToSelected) sandboxDragOver(activeAppType, res)"
                         @drop.prevent="if (!sandbox[activeAppType].filterToSelected) sandboxDrop(activeAppType, res)"
                         @dragend="sandbox[activeAppType].dragSrc = null; sandbox[activeAppType].dragOver = null"
-                        :style="sandbox[activeAppType].dragSrc === res ? 'opacity:0.35' : (sandbox[activeAppType].dragOver === res && sandbox[activeAppType].dragSrc && sandbox[activeAppType].dragSrc !== res ? 'box-shadow:inset 0 2px 0 var(--accent-blue)' : '')"
+                        :style="{ opacity: sandbox[activeAppType].dragSrc === res ? '0.35' : '1', boxShadow: (sandbox[activeAppType].dragOver === res && sandbox[activeAppType].dragSrc && sandbox[activeAppType].dragSrc !== res) ? 'inset 0 2px 0 var(--accent-blue)' : '' }"
                         @mouseenter="if (sandbox[activeAppType].dragSrc !== res) $el.style.background='var(--bg-elevated-hover)'" @mouseleave="$el.style.background=''">
                       <td style="padding:5px 2px 5px 6px;border-bottom:1px solid var(--bg-muted);text-align:center;color:var(--text-muted-secondary);user-select:none;font-size:12px"
                           :style="sandbox[activeAppType].filterToSelected ? 'opacity:0.2;cursor:default' : 'cursor:grab'"
@@ -451,15 +465,15 @@
                       <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center" @click.stop>
                         <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer"
                                :checked="res._selected === true"
-                               @change="res._selected = $event.target.checked">
+                               @change="res._selected = $event.target.checked; _sbTouch(activeAppType)">
                       </td>
                       <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center" @click.stop>
                         <button @click.stop="openSandboxCopy(activeAppType, res)" x-tt="'Show release details for copying'"
                           style="background:none;border:none;color:var(--text-secondary);font-size:12px;cursor:pointer;padding:0 4px;line-height:1"
                           @mouseenter="$el.style.color='var(--accent-blue)'" @mouseleave="$el.style.color='var(--text-secondary)'">⧉</button>
                       </td>
-                      <td style="padding:5px 6px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;color:var(--text-body);word-break:break-all;line-height:1.4" x-text="res.title"></td>
-                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all"
+                      <td style="padding:5px 6px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;color:var(--text-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4" x-text="res.title" :title="res.title"></td>
+                      <td style="padding:5px 4px;border-bottom:1px solid var(--bg-muted);font-family:monospace;font-size:11px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
                           :class="(res.scoring?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'sb-matched-compact' : ''"
                           @click.stop="(res.scoring?.breakdown?.filter(x => x.matched) || []).length > 8 && openSandboxCopy(activeAppType, res)"
                           x-tt="(res.scoring?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'Click to see the full match list' : ''">
@@ -491,13 +505,15 @@
                           @mouseenter="$el.style.color='var(--accent-red)'" @mouseleave="$el.style.color='var(--text-secondary)'">&times;</button>
                       </td>
                     </tr>
-                    <!-- Compare profile row -->
-                    <tr x-show="sandbox[activeAppType].compareKey && res.scoringB" style="background:var(--bg-page)">
+                    <!-- Compare profile row. Always shown while comparing (even
+                         without a compare score) so every result keeps the same
+                         fixed height for the virtualized window. -->
+                    <tr x-show="sandbox[activeAppType].compareKey" style="height:30px;background:var(--bg-page)">
                       <td style="padding:3px 2px 3px 6px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 2px;border-bottom:1px solid var(--border-subtle)"></td>
                       <td style="padding:3px 6px 3px 18px;border-bottom:1px solid var(--border-subtle);white-space:nowrap;font-size:11px;color:var(--accent-blue)" x-text="'↳ ' + (sandboxCompareProfileName(activeAppType) || 'Compare')"></td>
-                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-family:monospace;font-size:11px;line-height:1.5;white-space:normal;word-break:keep-all"
+                      <td style="padding:3px 4px;border-bottom:1px solid var(--border-subtle);font-family:monospace;font-size:11px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
                           :class="(res.scoringB?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'sb-matched-compact' : ''"
                           @click.stop="(res.scoringB?.breakdown?.filter(x => x.matched) || []).length > 8 && openSandboxCopy(activeAppType, res)"
                           x-tt="(res.scoringB?.breakdown?.filter(x => x.matched) || []).length > 8 ? 'Click to see the full match list' : ''">
@@ -525,7 +541,10 @@
                     </tr>
                   </tbody>
                 </template>
+                <!-- Bottom spacer: reserves the height of the rows below the window. -->
+                <tbody><tr :style="`height:${sandboxWindow(activeAppType).padBottom}px`"><td colspan="9" style="padding:0;border:0"></td></tr></tbody>
               </table>
+              </div>
             </div>
           </template>
 

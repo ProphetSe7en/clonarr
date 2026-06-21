@@ -755,10 +755,12 @@ export function clonarr() {
       this.loadAutoSyncSettings();
       this.loadNotificationAgents();
       this.loadAutoSyncRules();
-      this.loadSandboxResults('radarr');
-      this.loadSandboxResults('sonarr');
-      this.sandboxLoadScoreSets('radarr');
-      this.sandboxLoadScoreSets('sonarr');
+      // Scoring Sandbox results are NOT loaded here. Loading every app type's
+      // full result set at boot meant just opening Clonarr (on any page) pulled
+      // the entire sandbox into reactive memory — fine for a few hundred rows,
+      // but it ballooned RAM for large sandboxes. They now load lazily the first
+      // time the Scoring page is opened (see loadSandbox), guarded to run once
+      // per app type.
       // Load sync history for all instances (also triggers stale cleanup)
       for (const inst of this.instances) {
         await this.loadInstanceProfiles(inst);

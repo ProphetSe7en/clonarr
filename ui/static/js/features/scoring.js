@@ -13,6 +13,11 @@ export default {
 
     async loadSandbox(appType) {
       const sb = this.sandbox[appType];
+      // Lazy-load the saved results + score sets the first time the Scoring page
+      // is opened (guarded to run once per app type). Boot no longer pulls every
+      // app type's full result set into memory, so opening Clonarr on any other
+      // page stays cheap even for a large sandbox.
+      this.loadSandboxResults(appType);
       // Default to first instance of this type
       if (!sb.instanceId) {
         const insts = this.instancesOfType(appType);
@@ -211,9 +216,22 @@ export default {
     // place. Score-set filter narrows by saved title list (Set lookup
     // is O(1) so this stays cheap even with many results); the
     // selected filter then narrows further if active.
+    // Bump this whenever results, scores or selection change, so the memoized
+    // visibleSandboxResults below knows to recompute.
+    _sbTouch(appType) {
+      const sb = this.sandbox[appType];
+      if (sb) sb._dataVer = (sb._dataVer || 0) + 1;
+    },
     visibleSandboxResults(appType) {
       const sb = this.sandbox[appType];
       this._sbEnsureIds(sb.results || []);
+      // Memoize the sort+filter so the virtualized window (which reads this a few
+      // times per render, and on every scroll frame) doesn't re-sort 25k rows
+      // each time. Scroll position is NOT in the key — only the data and the
+      // sort/filter choices are.
+      const key = `${(sb.results || []).length}|${sb.sortCol}|${sb.sortDir}|${sb.scoreSortMode}|${sb.activeScoreSet}|${sb.filterToSelected}|${sb.hideFailed}|${sb._dataVer || 0}`;
+      const cache = (this._sbVisCache ||= {})[appType];
+      if (cache && cache.key === key) return cache.list;
       let results = this.sortedSandboxResults(appType);
       if (sb.activeScoreSet) {
         const set = (sb.scoreSets || []).find(s => s.id === sb.activeScoreSet);
@@ -235,7 +253,55 @@ export default {
           return this.sandboxResultStatus(r, r.scoring, appType).pass === true;
         });
       }
+      this._sbVisCache[appType] = { key, list: results };
       return results;
+    },
+
+    // --- Virtualized results ("windowing") ---
+    // The results list renders only the rows visible in the scroll viewport,
+    // plus a buffer, instead of every row. The full set still lives in memory
+    // and drives every count/sort/filter; only the DOM is bounded, so 50 rows or
+    // 50,000 rows cost the same to draw. This is the shared windowing engine —
+    // the Scoring Generator reuses the same math. Requires a fixed row height
+    // (see the fixed-height result rows in the template).
+    SANDBOX_ROW_H: 34,         // px, one result row (single profile)
+    SANDBOX_ROW_H_COMPARE: 64, // px, result + compare row when comparing
+    SANDBOX_BUFFER: 25,        // rows rendered above/below the viewport
+    sandboxRowH(appType) {
+      return this.sandbox[appType]?.compareKey ? this.SANDBOX_ROW_H_COMPARE : this.SANDBOX_ROW_H;
+    },
+    // Track scroll position + viewport height (rAF-throttled so a fast scroll
+    // doesn't recompute the window on every pixel).
+    sandboxOnScroll(appType, e) {
+      const sb = this.sandbox[appType];
+      const el = e.target;
+      if (sb._vRaf) return;
+      sb._vRaf = requestAnimationFrame(() => {
+        sb._vTop = el.scrollTop;
+        sb._vH = el.clientHeight;
+        sb._vRaf = null;
+      });
+    },
+    // The visible slice plus the spacer heights that keep the scrollbar sized to
+    // the full list. Computed once per render via the [sandboxWindow(...)] trick
+    // in the template.
+    sandboxWindow(appType) {
+      const sb = this.sandbox[appType];
+      const all = this.visibleSandboxResults(appType);
+      const rowH = this.sandboxRowH(appType);
+      const total = all.length;
+      const vh = sb._vH || 600;
+      const top = sb._vTop || 0;
+      let start = Math.floor(top / rowH) - this.SANDBOX_BUFFER;
+      if (start < 0) start = 0;
+      let end = start + Math.ceil(vh / rowH) + this.SANDBOX_BUFFER * 2;
+      if (end > total) end = total;
+      return {
+        items: all.slice(start, end),
+        padTop: start * rowH,
+        padBottom: Math.max(0, (total - end) * rowH),
+        total,
+      };
     },
 
     sandboxSelectedCount(appType) {
@@ -247,6 +313,7 @@ export default {
       const all = (sb.results || []);
       const allSelected = all.length > 0 && all.every(r => r._selected === true);
       all.forEach(r => { r._selected = !allSelected; });
+      this._sbTouch(appType);
       // trigger reactivity — mutating props in place isn't always picked up
       sb.results = [...all];
     },
@@ -870,6 +937,7 @@ export default {
     // the server file stay in sync; existing callers keep their old name
     // and don't need to know about server persistence.
     saveSandboxResults(appType) {
+      this._sbTouch(appType);
       this._sandboxPersistAll(appType);
     },
 
@@ -1616,6 +1684,7 @@ export default {
       delete this._profileScoreCache[cacheKey];
       const profileData = await this.fetchProfileScores(sb.profileKey, appType);
       sb.results = sb.results.map(res => this.applyScoring(res, profileData));
+      this._sbTouch(appType);
       // Re-score compare profile too
       if (sb.compareKey) this.rescoreCompare(appType);
     },
@@ -1624,6 +1693,7 @@ export default {
       const sb = this.sandbox[appType];
       if (!sb.results?.length || !sb.compareKey) {
         sb.results = sb.results.map(res => { const r = {...res}; delete r.scoringB; return r; });
+        this._sbTouch(appType);
         return;
       }
       const cacheKey = appType + ':' + sb.compareKey;
@@ -1633,6 +1703,7 @@ export default {
         const scored = this.applyScoring(res, profileData);
         return { ...res, scoringB: scored.scoring };
       });
+      this._sbTouch(appType);
     },
 
     async toggleSandboxEdit(appType) {
