@@ -1772,17 +1772,21 @@ export default {
       // height. Drop the measured height so the window falls back to the right
       // constant immediately and re-measures on the next scroll.
       sb._rowH = null;
-      if (!sb.results?.length || !sb.compareKey) {
-        sb.results = sb.results.map(res => { const r = {...res}; delete r.scoringB; return r; });
-        return;
-      }
+      // Clearing compare: the compare rows are hidden by x-show="compareKey"
+      // already, so there's nothing to recompute. The old code remapped every
+      // result to delete scoringB, which froze the UI for seconds on a big list
+      // (the stale scoringB is harmless and gets overwritten next time compare
+      // is set). Just return.
+      if (!sb.compareKey || !sb.results?.length) return;
       const cacheKey = appType + ':' + sb.compareKey;
       delete this._profileScoreCache[cacheKey];
       const profileData = await this.fetchProfileScores(sb.compareKey, appType);
-      sb.results = sb.results.map(res => {
-        const scored = this.applyScoring(res, profileData);
-        return { ...res, scoringB: scored.scoring };
-      });
+      // Mutate scoringB in place rather than building a new 25k array of spread
+      // copies (which doubled memory). The compare score doesn't affect the
+      // primary sort, so this also avoids invalidating the sort cache.
+      for (const res of sb.results) {
+        res.scoringB = this.applyScoring(res, profileData).scoring;
+      }
     },
 
     async toggleSandboxEdit(appType) {
