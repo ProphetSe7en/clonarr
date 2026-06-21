@@ -680,7 +680,7 @@ export default {
 
     async sandboxParse(appType) {
       const sb = this.sandbox[appType];
-      const title = sb.pasteInput?.trim();
+      const title = this._sandboxCleanLine(sb.pasteInput);
       if (!title || !sb.instanceId) return;
       sb.parsing = true;
       try {
@@ -697,6 +697,17 @@ export default {
         sb.pasteInput = '';
       } catch (e) { this.showToast('Parse error: ' + e.message, 'error', 8000); }
       finally { sb.parsing = false; }
+    },
+
+    // Clean a pasted line: drop a trailing comma and surrounding quotes. People
+    // paste a fragment of an exported JSON list (e.g. `"Movie.2025...-Tier1",`)
+    // and the quotes/comma are noise — harmless to the score, but they clutter
+    // the title. Strips them so the release reads clean.
+    _sandboxCleanLine(s) {
+      let t = (s || '').trim();
+      t = t.replace(/,\s*$/, '');           // trailing comma from a JSON-array line
+      t = t.replace(/^["'`]+|["'`]+$/g, ''); // surrounding quotes/backticks
+      return t.trim();
     },
 
     async sandboxParseBulk(appType) {
@@ -726,14 +737,14 @@ export default {
           }
           if (!lines) {
             this.showToast('JSON paste did not contain a titles array. Falling back to line-by-line parsing.', 'warning', 5000);
-            lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+            lines = raw.split('\n').map(l => this._sandboxCleanLine(l)).filter(Boolean);
           }
         } catch (_) {
           this.showToast('JSON paste failed to parse. Treating each line as a title.', 'warning', 5000);
-          lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+          lines = raw.split('\n').map(l => this._sandboxCleanLine(l)).filter(Boolean);
         }
       } else {
-        lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+        lines = raw.split('\n').map(l => this._sandboxCleanLine(l)).filter(Boolean);
       }
 
       if (lines.length === 0 && importedSets.length === 0) return;
