@@ -2186,6 +2186,31 @@ export default {
       return scored;
     },
 
+    // Synthetic test releases (from our export) use a placeholder release group
+    // "Tier1"/"Tier2"/"Tier3" instead of a real group, so the release-group tier
+    // can stay stable even as TRaSH's group lists change. Arr can't match a
+    // placeholder to a real release-group Custom Format, so here we find the
+    // tier CF the release SHOULD match for its source (WEB / Bluray / Remux) and
+    // return its profile score entry. "NoTier" (and any real group) returns null
+    // on purpose. Shared with the Scoring Generator, which scores the same way.
+    _tierCFEntry(result, profileData) {
+      const group = (result?.parsed?.releaseGroup || '').trim();
+      const tm = group.match(/^tier\s*0*([1-9])$/i);
+      if (!tm) return null; // NoTier, a real group, or no group
+      const n = tm[1];
+      const q = (result?.parsed?.quality || '').toLowerCase();
+      let src;
+      if (q.includes('remux')) src = 'remux';
+      else if (q.includes('bluray') || q.includes('blu-ray')) src = 'bluray';
+      else if (q.includes('web')) src = 'web';
+      else return null;
+      // Anchor the source at the START of the CF name so a plain WEB release
+      // matches "WEB Tier 01", not "Anime Web Tier 01" (which begins with
+      // "Anime"). Anime tiers would need anime detection — a separate concern.
+      const re = new RegExp('^' + src + '\\b.*\\btier\\s*0*' + n + '\\b', 'i');
+      return (profileData.scores || []).find(s => s.name && re.test(s.name)) || null;
+    },
+
     applyScoring(result, profileData) {
       if (!result.matchedCFs || !profileData?.scores?.length) return result;
 
@@ -2217,6 +2242,16 @@ export default {
         breakdown.push({ name: cf.name, trashId: cf.trashId, score, matched: true });
         if (cf.trashId) matchedKeys.add(cf.trashId);
         matchedKeys.add(cf.name);
+      }
+
+      // A "TierN" placeholder group can't match a real release-group CF in Arr,
+      // so add the tier CF for this release's source here, as if it were matched.
+      const tierEntry = this._tierCFEntry(result, profileData);
+      if (tierEntry && !matchedKeys.has(tierEntry.trashId) && !matchedKeys.has(tierEntry.name)) {
+        total += tierEntry.score;
+        breakdown.push({ name: tierEntry.name, trashId: tierEntry.trashId, score: tierEntry.score, matched: true });
+        if (tierEntry.trashId) matchedKeys.add(tierEntry.trashId);
+        matchedKeys.add(tierEntry.name);
       }
 
       // Unmatched CFs from profile
