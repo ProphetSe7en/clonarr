@@ -18,6 +18,8 @@ export default {
       // app type's full result set into memory, so opening Clonarr on any other
       // page stays cheap even for a large sandbox.
       this.loadSandboxResults(appType);
+      // Restore the "Simplify names" preference (per app type, per browser).
+      try { sb.simplifyNames = localStorage.getItem('clonarr-sandbox-simplify-' + appType) === '1'; } catch (_) {}
       // Default to first instance of this type
       if (!sb.instanceId) {
         const insts = this.instancesOfType(appType);
@@ -691,6 +693,7 @@ export default {
         });
         if (!r.ok) { const e = await r.json().catch(() => ({})); this.showToast(e.error || 'Parse failed', 'error', 8000); return; }
         const result = await r.json();
+        if (sb.simplifyNames) result.title = this._sandboxSimplifyTitle(result, appType);
         const scored = await this.calculateScoring(result, appType);
         sb.results = [scored, ...sb.results];
         this.saveSandboxResults(appType);
@@ -708,6 +711,50 @@ export default {
       t = t.replace(/,\s*$/, '');           // trailing comma from a JSON-array line
       t = t.replace(/^["'`]+|["'`]+$/g, ''); // surrounding quotes/backticks
       return t.trim();
+    },
+
+    // "Simplify names": replace the movie title and year with a fixed
+    // "Movie.2026", keeping the technical part (resolution, source, audio,
+    // codec, group) untouched. Neither title nor year affects the score — only
+    // the Custom Formats do — so this makes the list compact and anonymous. The
+    // cut point uses Arr's PARSED year, not the first four digits, so a title
+    // like "1917" isn't mistaken for the year. Releases that become identical
+    // afterwards merge, which is fine: identical tags always score the same.
+    _sandboxSimplifyTitle(result, appType) {
+      const orig = result?.title || '';
+      if (!orig) return orig;
+      // The technical block starts at the resolution or source token; everything
+      // before it is the title (and year), which we replace.
+      const techM = orig.match(/\b(\d{3,4}p|web-?dl|web-?rip|blu-?ray|bdrip|remux|hdtv|dvdrip)\b/i);
+      const techIdx = techM ? techM.index : orig.length;
+
+      if (appType === 'sonarr') {
+        // TV: keep the season/episode marker and everything after it; replace
+        // only the series title with "Series". Episode numbers don't affect the
+        // score but keep each test release recognisable.
+        const epM = orig.match(/\bS\d{1,3}(E\d{1,3})?\b|\b\d{1,2}x\d{1,3}\b/i);
+        if (epM) return 'Series.' + orig.slice(epM.index).replace(/^[\s._-]+/, '');
+        const suf = orig.slice(techIdx).replace(/^[\s._-]+/, '');
+        return suf ? 'Series.' + suf : orig;
+      }
+
+      // Movies: replace title + year with "Movie.2026", keeping everything after
+      // the release year. Prefer Arr's parsed year; otherwise the LAST 4-digit
+      // year before the technical block, so a title like "1917" (which comes
+      // first) isn't mistaken for the release year (which comes right before the
+      // quality). If there's no year at all, cut at the technical block.
+      let cut = -1;
+      const py = result?.parsed?.year ? String(result.parsed.year) : null;
+      if (py) { const i = orig.indexOf(py); if (i >= 0 && i < techIdx) cut = i + py.length; }
+      if (cut < 0) {
+        const re = /\b(19|20)\d{2}\b/g; let m, last = null;
+        while ((m = re.exec(orig)) && m.index < techIdx) last = m;
+        if (last) cut = last.index + last[0].length;
+      }
+      if (cut < 0) cut = techIdx;
+      let suffix = orig.slice(cut);
+      if (suffix && !/^[\s._-]/.test(suffix)) suffix = '.' + suffix;
+      return 'Movie.2026' + suffix;
     },
 
     async sandboxParseBulk(appType) {
@@ -785,6 +832,7 @@ export default {
             rawResults.push(...part);
           }
           if (rawResults.length === 0 && failed) return;
+          if (sb.simplifyNames) rawResults.forEach(r => { r.title = this._sandboxSimplifyTitle(r, appType); });
           scored = await Promise.all(rawResults.map(result => this.calculateScoring(result, appType)));
         }
         const before = sb.results.length;

@@ -163,6 +163,12 @@
                   @click="sandboxParseBulk(activeAppType)" :disabled="sandbox[activeAppType].parsing">Parse All</button>
                 <span x-show="sandbox[activeAppType].parseProgress" x-cloak
                   style="margin-left:8px;font-size:12px;color:var(--text-muted)" x-text="sandbox[activeAppType].parseProgress"></span>
+                <label style="margin-left:12px;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none"
+                       x-tt="activeAppType === 'sonarr' ? 'Replace the series title with Series when adding releases (the season/episode and technical tags are kept). Scoring is unaffected, and releases that become identical are merged.' : 'Replace the movie title and year with Movie.2026 when adding releases. Scoring is unaffected (only the Custom Formats matter), and releases that become identical are merged.'">
+                  <input type="checkbox" style="accent-color:var(--accent-blue);vertical-align:middle;margin-right:4px"
+                         :checked="sandbox[activeAppType].simplifyNames"
+                         @change="sandbox[activeAppType].simplifyNames = $event.target.checked; try { localStorage.setItem('clonarr-sandbox-simplify-' + activeAppType, $event.target.checked ? '1' : '0'); } catch(e){}">Simplify names (<span x-text="activeAppType === 'sonarr' ? 'Series' : 'Movie.2026'"></span>)
+                </label>
               </div>
             </div>
 
