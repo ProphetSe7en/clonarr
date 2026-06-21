@@ -156,7 +156,23 @@ export default {
     // own behaviour where qualities inside a group are interchangeable.
     sortedSandboxResults(appType) {
       const sb = this.sandbox[appType];
-      const results = [...(sb.results || [])];
+      const src = sb.results || [];
+      // Memoize the sort on the results-array REFERENCE plus the sort choice.
+      // Every mutation that changes the data (parse, rescore, inline edit, drag,
+      // delete, select-all) reassigns sb.results to a NEW array, so the reference
+      // changes and the cache invalidates on its own — no manual version bump to
+      // forget. Filters (set / selected / hide-failed) run fresh in
+      // visibleSandboxResults on top of this, so selection and set-membership
+      // changes are always reflected even though the sort is cached.
+      const c = (this._sbSortCache ||= {})[appType];
+      if (c && c.src === src && c.col === sb.sortCol && c.dir === sb.sortDir && c.mode === sb.scoreSortMode) return c.list;
+      const list = this._computeSortedResults(appType, src);
+      this._sbSortCache[appType] = { src, col: sb.sortCol, dir: sb.sortDir, mode: sb.scoreSortMode, list };
+      return list;
+    },
+    _computeSortedResults(appType, src) {
+      const sb = this.sandbox[appType];
+      const results = [...src];
       const col = sb.sortCol;
       if (!col || col === 'manual') return results;
       const dir = sb.sortDir === 'asc' ? 1 : -1;
@@ -218,22 +234,12 @@ export default {
     // place. Score-set filter narrows by saved title list (Set lookup
     // is O(1) so this stays cheap even with many results); the
     // selected filter then narrows further if active.
-    // Bump this whenever results, scores or selection change, so the memoized
-    // visibleSandboxResults below knows to recompute.
-    _sbTouch(appType) {
-      const sb = this.sandbox[appType];
-      if (sb) sb._dataVer = (sb._dataVer || 0) + 1;
-    },
     visibleSandboxResults(appType) {
       const sb = this.sandbox[appType];
       this._sbEnsureIds(sb.results || []);
-      // Memoize the sort+filter so the virtualized window (which reads this a few
-      // times per render, and on every scroll frame) doesn't re-sort 25k rows
-      // each time. Scroll position is NOT in the key — only the data and the
-      // sort/filter choices are.
-      const key = `${(sb.results || []).length}|${sb.sortCol}|${sb.sortDir}|${sb.scoreSortMode}|${sb.activeScoreSet}|${sb.filterToSelected}|${sb.hideFailed}|${sb._dataVer || 0}`;
-      const cache = (this._sbVisCache ||= {})[appType];
-      if (cache && cache.key === key) return cache.list;
+      // The expensive sort is memoized (see sortedSandboxResults); the filters
+      // below run fresh on every call so selection, score-set membership and
+      // hide-failed changes are always reflected, even mid-scroll.
       let results = this.sortedSandboxResults(appType);
       if (sb.activeScoreSet) {
         const set = (sb.scoreSets || []).find(s => s.id === sb.activeScoreSet);
@@ -255,7 +261,6 @@ export default {
           return this.sandboxResultStatus(r, r.scoring, appType).pass === true;
         });
       }
-      this._sbVisCache[appType] = { key, list: results };
       return results;
     },
 
@@ -270,10 +275,23 @@ export default {
     SANDBOX_ROW_H_COMPARE: 64, // px, result + compare row when comparing
     SANDBOX_BUFFER: 25,        // rows rendered above/below the viewport
     sandboxRowH(appType) {
-      return this.sandbox[appType]?.compareKey ? this.SANDBOX_ROW_H_COMPARE : this.SANDBOX_ROW_H;
+      const sb = this.sandbox[appType];
+      // Use the MEASURED height of a real rendered row when available, so the
+      // window math can't drift from the actual pixels (cell borders under
+      // border-collapse, line height). Falls back to the design constant until
+      // the first measurement.
+      return (sb && sb._rowH) || (sb?.compareKey ? this.SANDBOX_ROW_H_COMPARE : this.SANDBOX_ROW_H);
+    },
+    // Measure one rendered result block (main row + optional compare row) from
+    // the scroll container so sandboxRowH stays exact regardless of CSS.
+    _sandboxMeasureRow(appType, el) {
+      const row = el && el.querySelector('tbody.sb-item');
+      const h = row && row.offsetHeight;
+      if (h && this.sandbox[appType]) this.sandbox[appType]._rowH = h;
     },
     // Track scroll position + viewport height (rAF-throttled so a fast scroll
-    // doesn't recompute the window on every pixel).
+    // doesn't recompute the window on every pixel). Also re-measures the row
+    // height, which is cheap and keeps the window aligned.
     sandboxOnScroll(appType, e) {
       const sb = this.sandbox[appType];
       const el = e.target;
@@ -281,6 +299,7 @@ export default {
       sb._vRaf = requestAnimationFrame(() => {
         sb._vTop = el.scrollTop;
         sb._vH = el.clientHeight;
+        this._sandboxMeasureRow(appType, el);
         sb._vRaf = null;
       });
     },
@@ -315,7 +334,6 @@ export default {
       const all = (sb.results || []);
       const allSelected = all.length > 0 && all.every(r => r._selected === true);
       all.forEach(r => { r._selected = !allSelected; });
-      this._sbTouch(appType);
       // trigger reactivity — mutating props in place isn't always picked up
       sb.results = [...all];
     },
@@ -773,10 +791,10 @@ export default {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
             // Bare JSON array of titles.
-            lines = parsed.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim());
+            lines = parsed.filter(t => typeof t === 'string').map(t => this._sandboxCleanLine(t)).filter(Boolean);
           } else if (parsed && typeof parsed === 'object') {
             if (Array.isArray(parsed.titles)) {
-              lines = parsed.titles.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim());
+              lines = parsed.titles.filter(t => typeof t === 'string').map(t => this._sandboxCleanLine(t)).filter(Boolean);
             }
             if (Array.isArray(parsed.scoreSets)) {
               importedSets = parsed.scoreSets;
@@ -996,7 +1014,6 @@ export default {
     // the server file stay in sync; existing callers keep their old name
     // and don't need to know about server persistence.
     saveSandboxResults(appType) {
-      this._sbTouch(appType);
       this._sandboxPersistAll(appType);
     },
 
@@ -1336,9 +1353,11 @@ export default {
     sandboxRemoveResultRow(appType, res) {
       const sb = this.sandbox[appType];
       if (!sb || !res) return;
-      const idx = (sb.results || []).indexOf(res);
-      if (idx === -1) return;
-      sb.results.splice(idx, 1);
+      const before = (sb.results || []).length;
+      // Reassign to a NEW array (not in-place splice) so the reference-keyed
+      // sort memo invalidates and the deleted row stops rendering.
+      sb.results = (sb.results || []).filter(r => r !== res);
+      if (sb.results.length === before) return; // wasn't present
       // Prune the deleted title from every score set that referenced it.
       // No-op for sets that didn't contain the title.
       const title = res.title;
@@ -1743,16 +1762,18 @@ export default {
       delete this._profileScoreCache[cacheKey];
       const profileData = await this.fetchProfileScores(sb.profileKey, appType);
       sb.results = sb.results.map(res => this.applyScoring(res, profileData));
-      this._sbTouch(appType);
       // Re-score compare profile too
       if (sb.compareKey) this.rescoreCompare(appType);
     },
 
     async rescoreCompare(appType) {
       const sb = this.sandbox[appType];
+      // Compare mode adds/removes a second row per result, changing the row
+      // height. Drop the measured height so the window falls back to the right
+      // constant immediately and re-measures on the next scroll.
+      sb._rowH = null;
       if (!sb.results?.length || !sb.compareKey) {
         sb.results = sb.results.map(res => { const r = {...res}; delete r.scoringB; return r; });
-        this._sbTouch(appType);
         return;
       }
       const cacheKey = appType + ':' + sb.compareKey;
@@ -1762,7 +1783,6 @@ export default {
         const scored = this.applyScoring(res, profileData);
         return { ...res, scoringB: scored.scoring };
       });
-      this._sbTouch(appType);
     },
 
     async toggleSandboxEdit(appType) {
@@ -2174,7 +2194,7 @@ export default {
     async calculateScoring(result, appType) {
       const sb = this.sandbox[appType];
       const profileKey = sb.profileKey;
-      if (!profileKey || !result.matchedCFs) return result;
+      if (!profileKey) return result; // matchedCFs may be empty; a TierN release still scores its tier CF
       const profileData = await this.fetchProfileScores(profileKey, appType);
       let scored = this.applyScoring(result, profileData);
       // Also score against compare profile if active
@@ -2198,21 +2218,31 @@ export default {
       const tm = group.match(/^tier\s*0*([1-9])$/i);
       if (!tm) return null; // NoTier, a real group, or no group
       const n = tm[1];
+      // Map the parsed source to the prefix the tier CF name uses (WEBDL and
+      // WEBRip both fall under "WEB"; Remux is checked before Bluray). Whatever
+      // tier CFs the profile actually has is what we match against, so Radarr
+      // and Sonarr profiles that name or omit tiers differently both work.
       const q = (result?.parsed?.quality || '').toLowerCase();
       let src;
       if (q.includes('remux')) src = 'remux';
-      else if (q.includes('bluray') || q.includes('blu-ray')) src = 'bluray';
+      else if (q.includes('bluray') || q.includes('blu-ray') || q.includes('brdisk') || q.includes('bdrip')) src = 'bluray';
       else if (q.includes('web')) src = 'web';
+      else if (q.includes('hdtv')) src = 'hdtv';
+      else if (q.includes('dvd')) src = 'dvd';
+      else if (q.includes('sdtv')) src = 'sdtv';
       else return null;
       // Anchor the source at the START of the CF name so a plain WEB release
       // matches "WEB Tier 01", not "Anime Web Tier 01" (which begins with
-      // "Anime"). Anime tiers would need anime detection — a separate concern.
+      // "Anime"). If the profile has no tier CF for this source (e.g. an app
+      // without HDTV tiers), find returns null and no tier is added — correct.
+      // Anime tiers would need anime detection, a separate concern.
       const re = new RegExp('^' + src + '\\b.*\\btier\\s*0*' + n + '\\b', 'i');
       return (profileData.scores || []).find(s => s.name && re.test(s.name)) || null;
     },
 
     applyScoring(result, profileData) {
-      if (!result.matchedCFs || !profileData?.scores?.length) return result;
+      if (!profileData?.scores?.length) return result;
+      const matched = result.matchedCFs || []; // may be empty; tier block below still runs
 
       // Build lookup maps: by trashId and by name
       const byTrashId = {};
@@ -2234,7 +2264,7 @@ export default {
       // and confuse "what would this profile actually score". Filter
       // them out entirely — if a CF isn't in the profile, the profile
       // wouldn't score it.
-      for (const cf of result.matchedCFs) {
+      for (const cf of matched) {
         const entry = (cf.trashId && byTrashId[cf.trashId]) || byName[cf.name];
         if (!entry) continue;
         const score = entry.score;

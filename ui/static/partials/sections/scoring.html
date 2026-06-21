@@ -408,16 +408,16 @@
                    (see sandboxWindow). table-layout:fixed + a colgroup give every
                    row a predictable width so the fixed row height holds. -->
               <div style="max-height:65vh;overflow:auto;border:1px solid var(--border-subtle);border-radius:6px"
-                   x-init="$nextTick(() => { sandbox[activeAppType]._vH = $el.clientHeight })"
+                   x-init="$nextTick(() => { sandbox[activeAppType]._vH = $el.clientHeight; _sandboxMeasureRow(activeAppType, $el) })"
                    @scroll="sandboxOnScroll(activeAppType, $event)">
-              <table style="width:100%;table-layout:fixed;border-collapse:collapse">
+              <table style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0">
                 <colgroup>
                   <col style="width:24px"><col style="width:28px"><col style="width:24px">
                   <col><col style="width:34%">
                   <col style="width:78px"><col style="width:58px"><col style="width:52px"><col style="width:24px">
                 </colgroup>
                 <thead>
-                  <tr style="position:sticky;top:0;z-index:2;background:var(--bg-card);font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;user-select:none">
+                  <tr style="position:sticky;top:0;z-index:2;background:var(--bg-card);box-shadow:inset 0 -1px 0 var(--bg-muted);font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;user-select:none">
                     <th style="width:22px;padding:5px 2px 5px 6px"></th>
                     <th style="width:24px;padding:5px 2px;text-align:center">
                       <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer" x-tt="'Select/deselect all'"
@@ -456,7 +456,7 @@
                 <!-- Top spacer: reserves the height of the rows scrolled above the window. -->
                 <tbody><tr :style="`height:${sandboxWindow(activeAppType).padTop}px`"><td colspan="9" style="padding:0;border:0"></td></tr></tbody>
                 <template x-for="res in sandboxWindow(activeAppType).items" :key="res._sid">
-                  <tbody>
+                  <tbody class="sb-item">
                     <tr style="height:34px"
                         :draggable="!sandbox[activeAppType].filterToSelected"
                         @dragstart="if (!sandbox[activeAppType].filterToSelected) { event.dataTransfer.setData('text/plain', ''); sandboxDragStart(activeAppType, res); }"
@@ -471,7 +471,7 @@
                       <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center" @click.stop>
                         <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer"
                                :checked="res._selected === true"
-                               @change="res._selected = $event.target.checked; _sbTouch(activeAppType)">
+                               @change="res._selected = $event.target.checked">
                       </td>
                       <td style="padding:5px 2px;border-bottom:1px solid var(--bg-muted);text-align:center" @click.stop>
                         <button @click.stop="openSandboxCopy(activeAppType, res)" x-tt="'Show release details for copying'"
