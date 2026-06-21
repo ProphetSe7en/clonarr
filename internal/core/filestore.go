@@ -253,11 +253,13 @@ func (fs *FileStore[T, PT]) writeItem(item *T) error {
 // sanitizeFilename converts a name to a safe filesystem filename.
 // Strips path separators, .., and most special characters. Falls back to ID if name is empty.
 //
-// `!` is preserved because it's a common prefix on TRaSH-style custom format
-// names (e.g. `!P2P Internal`, `!FLUX`) and is safe on every filesystem we
-// support. Stripping it would also collide names like `!FLUX` and `FLUX` to
-// the same target file. The trim/collapse logic operates on '-' only so a
-// leading '!' is kept after the rest is normalized.
+// `!` and `+` are preserved because they distinguish otherwise-identical names
+// and are safe on every filesystem we support. `!` is a common TRaSH prefix
+// (`!P2P Internal`, `!FLUX`); stripping it would collide `!FLUX` with `FLUX`.
+// `+` is common in audio Custom Format names (`DD+`, `Atmos+`); stripping it
+// would collide `DD+` with `DD` onto the same target file and silently let one
+// overwrite the other (issue #64). The trim/collapse logic operates on '-' only
+// so a kept '!' or '+' survives normalization.
 func sanitizeFilename(name, appType, id string) string {
 	if name == "" {
 		name = id
@@ -266,7 +268,7 @@ func sanitizeFilename(name, appType, id string) string {
 	safe := strings.ToLower(name)
 	var b strings.Builder
 	for _, r := range safe {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '!' {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '!' || r == '+' {
 			b.WriteRune(r)
 		} else if r == ' ' || r == '.' {
 			b.WriteRune('-')
@@ -355,7 +357,7 @@ func (fs *FileStore[T, PT]) MigrateFilenames() int {
 			continue
 		}
 		newPath := filepath.Join(fs.dir, expectedFilename)
-		if err := os.WriteFile(newPath, data, 0644); err == nil { // #nosec G703 -- filename from sanitizeFilename, a strict [a-z0-9-_!] allowlist that strips path separators and dots, so it cannot escape fs.dir
+		if err := os.WriteFile(newPath, data, 0644); err == nil { // #nosec G703 -- filename from sanitizeFilename, a strict [a-z0-9-_!+] allowlist that strips path separators and dots, so it cannot escape fs.dir
 			os.Remove(path)
 			delete(claimed, name)
 			claimed[expectedFilename] = true

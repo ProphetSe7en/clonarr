@@ -304,6 +304,52 @@ func TestFileStore_PreservesBangPrefix(t *testing.T) {
 	}
 }
 
+// Regression test for issue #64: cloning "DD+ (German Dub Fix)" alongside
+// "DD (German Dub Fix)" used to drop the '+' from the filename, so both names
+// sanitized to the same target file and the second silently overwrote the
+// first. '+' is now preserved, keeping the two on distinct files.
+func TestFileStore_PreservesPlusSign(t *testing.T) {
+	fs := newTestStore(t)
+
+	items := []testItem{
+		{ID: "1", Name: "DD+ (German Dub Fix)", AppType: "radarr", Value: "plus"},
+		{ID: "2", Name: "DD (German Dub Fix)", AppType: "radarr", Value: "plain"},
+	}
+	added, _, err := fs.Add(items)
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if added != 2 {
+		t.Fatalf("expected both items to add, got %d", added)
+	}
+
+	entries, err := os.ReadDir(fs.dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	got := map[string]bool{}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			got[e.Name()] = true
+		}
+	}
+	if !got["dd+-german-dub-fix-radarr.json"] {
+		t.Errorf("expected dd+-german-dub-fix-radarr.json to exist (plus preserved); got %v", got)
+	}
+	if !got["dd-german-dub-fix-radarr.json"] {
+		t.Errorf("expected dd-german-dub-fix-radarr.json to exist (no collision with plus variant); got %v", got)
+	}
+
+	plus, ok := fs.Get("1")
+	if !ok || plus.Value != "plus" {
+		t.Error("plus variant data corrupted or missing")
+	}
+	plain, ok := fs.Get("2")
+	if !ok || plain.Value != "plain" {
+		t.Error("plain variant data corrupted or missing")
+	}
+}
+
 // Verifies that MigrateFilenames preserves both items when two ID-named
 // files would migrate to the same target filename. Without collision
 // protection, the second writer silently overwrites the first.
