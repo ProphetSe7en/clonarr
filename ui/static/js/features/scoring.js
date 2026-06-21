@@ -672,23 +672,42 @@ export default {
       if (lines.length === 0 && importedSets.length === 0) return;
 
       sb.parsing = true;
-      // Each parse is one sequential call against the Arr Parse API. At ~100ms
-      // per call, a 200-title batch takes ~20s — surface that to the user
-      // instead of leaving them staring at a quiet spinner.
+      sb.parseProgress = '';
+      // Each parse is one sequential call against the Arr Parse API (~100ms
+      // each). Send the titles in chunks rather than one giant request: a chunk
+      // stays well under the per-request caps, finishes fast enough to clear any
+      // reverse-proxy timeout, lets us show progress, and keeps whatever parsed
+      // so far if a later chunk fails.
+      const CHUNK = 500;
       if (lines.length > 30) {
         this.showToast(`Parsing ${lines.length} titles, this may take a moment...`, 'info', 6000);
       }
       try {
         let scored = [];
         if (lines.length > 0) {
-          const r = await fetch('/api/scoring/parse/batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ instanceId: sb.instanceId, titles: lines })
-          });
-          if (!r.ok) { const e = await r.json().catch(() => ({})); this.showToast(e.error || 'Batch parse failed', 'error', 8000); return; }
-          const results = await r.json();
-          scored = await Promise.all(results.map(result => this.calculateScoring(result, appType)));
+          const rawResults = [];
+          let failed = false;
+          for (let off = 0; off < lines.length; off += CHUNK) {
+            const chunk = lines.slice(off, off + CHUNK);
+            if (lines.length > CHUNK) {
+              sb.parseProgress = `Parsing ${Math.min(off + chunk.length, lines.length)} / ${lines.length}…`;
+            }
+            const r = await fetch('/api/scoring/parse/batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ instanceId: sb.instanceId, titles: chunk })
+            });
+            if (!r.ok) {
+              const e = await r.json().catch(() => ({}));
+              this.showToast(e.error || 'Batch parse failed', 'error', 8000);
+              failed = true;
+              break; // keep the chunks that already succeeded
+            }
+            const part = await r.json();
+            rawResults.push(...part);
+          }
+          if (rawResults.length === 0 && failed) return;
+          scored = await Promise.all(rawResults.map(result => this.calculateScoring(result, appType)));
         }
         const before = sb.results.length;
         if (scored.length > 0) {
@@ -715,7 +734,7 @@ export default {
           this.showToast(parts.join(', ') + '.', 'success', 4500);
         }
       } catch (e) { this.showToast('Batch parse error: ' + e.message, 'error', 8000); }
-      finally { sb.parsing = false; }
+      finally { sb.parsing = false; sb.parseProgress = ''; }
     },
 
     sandboxIndexerLabel(appType) {

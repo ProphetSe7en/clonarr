@@ -40,12 +40,14 @@ func (s *Server) handleSandboxGet(w http.ResponseWriter, r *http.Request) {
 // how the frontend already manages this object: it holds the full sandbox
 // model in memory, mutates locally, debounces, and uploads.
 //
-// Body is capped at 8MB. At ~2KB per parsed result and ~100 bytes per
-// score-set entry, the cap covers a 1000-title power-user comfortably
-// without letting a runaway payload exhaust memory.
+// Body is capped at 32MB. At ~2KB per parsed result and ~100 bytes per
+// score-set entry, the cap holds well over 10,000 parsed releases — enough for
+// the largest paste the chunked parser will accumulate — without letting a
+// runaway payload exhaust memory. The cap is a maximum, not a reservation:
+// small sandboxes still upload only a few KB.
 func (s *Server) handleSandboxPut(w http.ResponseWriter, r *http.Request) {
 	appType := r.PathValue("appType")
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 32<<20)
 	var state core.SandboxState
 	if err := json.NewDecoder(r.Body).Decode(&state); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid sandbox state: "+err.Error())
