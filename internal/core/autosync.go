@@ -1995,7 +1995,12 @@ func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 		return
 	}
 
-	description := fmt.Sprintf("**Commit:** `%s` → `%s`", shortHash(prevCommit), shortHash(newCommit))
+	// Append a clickable GitHub compare link so power users can open the exact
+	// diff for this pull. commitURLBase points at the configured repo (a fork
+	// included), falling back to the upstream TRaSH-Guides URL.
+	prev, next := shortHash(prevCommit), shortHash(newCommit)
+	description := fmt.Sprintf("**Commit:** `%s` → `%s` ([compare](%s/compare/%s...%s))",
+		prev, next, app.Trash.commitURLBase(), prev, next)
 	if status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary
 	}
