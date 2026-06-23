@@ -1982,9 +1982,21 @@ func (app *App) NotifyAutoSync(rule AutoSyncRule, inst Instance, profileName str
 func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 	cfg := app.Config.Get()
 
-	description := fmt.Sprintf("**Commit:** `%s` → `%s`", shortHash(prevCommit), shortHash(newCommit))
 	status := app.Trash.Status()
-	if status.LastDiff != nil && status.LastDiff.Summary != "" {
+	// Only notify when this pull actually changed data Clonarr manages (custom
+	// formats, quality, naming). LastDiff is set during the pull ONLY when
+	// docs/json changed; a docs / CI / contributor-only commit leaves it nil or
+	// preserved from an earlier pull, so its NewCommit won't match this one.
+	// Suppressing those keeps the notification meaningful instead of firing on
+	// every commit, including ones that touch nothing Clonarr surfaces.
+	if status.LastDiff == nil || !commitMatches(status.LastDiff.NewCommit, newCommit) {
+		app.DebugLog.Logf(LogTrash, "Repo update %s → %s changed no custom-format / quality / naming data, skipping notification",
+			shortHash(prevCommit), shortHash(newCommit))
+		return
+	}
+
+	description := fmt.Sprintf("**Commit:** `%s` → `%s`", shortHash(prevCommit), shortHash(newCommit))
+	if status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary
 	}
 
