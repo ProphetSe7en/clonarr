@@ -497,3 +497,35 @@ func TestCleanDescription_StripImagesAndAdmonitions(t *testing.T) {
 		})
 	}
 }
+
+func TestParseConventionalCommit(t *testing.T) {
+	cases := []struct{ subject, scope, desc, pr string }{
+		{"feat(radarr): Add RlsGrp `RBB` to `LQ` (#2779)", "radarr", "Add RlsGrp `RBB` to `LQ`", "2779"},
+		{"fix(guide-sync): wrong audio channel count for SQP (#2773)", "guide-sync", "wrong audio channel count for SQP", "2773"},
+		{"feat(starr-anime): Some Anime Tier adjustments (#2790)", "starr-anime", "Some Anime Tier adjustments", "2790"},
+		{"chore(contributors): Update CONTRIBUTORS.md", "contributors", "Update CONTRIBUTORS.md", ""},
+	}
+	for _, c := range cases {
+		got := parseConventionalCommit(c.subject)
+		if got.Scope != c.scope || got.Desc != c.desc || got.PR != c.pr {
+			t.Errorf("parseConventionalCommit(%q) = {%q,%q,%q}, want {%q,%q,%q}",
+				c.subject, got.Scope, got.Desc, got.PR, c.scope, c.desc, c.pr)
+		}
+	}
+}
+
+func TestTrashScopeCategory(t *testing.T) {
+	for scope, want := range map[string]string{
+		"guide-sync": "contract", "radarr": "content", "starr": "content",
+		"sonarr": "content", "starr-anime": "content", "starr-french": "content",
+	} {
+		if got := trashScopeCategory(scope); got != want {
+			t.Errorf("trashScopeCategory(%q) = %q, want %q", scope, got, want)
+		}
+	}
+	for _, scope := range []string{"downloaders", "contributors", "deps", "ci", "guide", "hardlinks", ""} {
+		if got := trashScopeCategory(scope); got != "" {
+			t.Errorf("trashScopeCategory(%q) = %q, want noise (empty)", scope, got)
+		}
+	}
+}

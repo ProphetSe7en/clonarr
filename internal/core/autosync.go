@@ -1995,13 +1995,41 @@ func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 		return
 	}
 
-	// Append a clickable GitHub compare link so power users can open the exact
-	// diff for this pull. commitURLBase points at the configured repo (a fork
-	// included), falling back to the upstream TRaSH-Guides URL.
+	// Clickable GitHub compare link so power users can open the exact diff.
+	// commitURLBase points at the configured repo (a fork included), falling
+	// back to the upstream TRaSH-Guides URL.
 	prev, next := shortHash(prevCommit), shortHash(newCommit)
+	base := app.Trash.commitURLBase()
 	description := fmt.Sprintf("**Commit:** `%s` → `%s` ([compare](%s/compare/%s...%s))",
-		prev, next, app.Trash.commitURLBase(), prev, next)
-	if status.LastDiff.Summary != "" {
+		prev, next, base, prev, next)
+
+	// Group this pull's commits by what they mean to a sync tool, using the TRaSH
+	// conventional-commit scope: content (starr / radarr / sonarr and variants =
+	// CF, scoring, naming) vs the guide-sync sync contract (cf-group / profile
+	// structure). Docs, CI, deps and contributor commits are dropped. Each line
+	// links to its PR. Falls back to the file-based summary if no commit subjects
+	// parse.
+	var content, contract []string
+	for _, c := range app.Trash.CommitsBetween(prevCommit, newCommit) {
+		cat := trashScopeCategory(c.Scope)
+		if cat == "" {
+			continue
+		}
+		line := "- " + c.Desc
+		if c.PR != "" {
+			line += fmt.Sprintf(" (%s [#%s](%s/pull/%s))", c.Scope, c.PR, base, c.PR)
+		} else {
+			line += " (" + c.Scope + ")"
+		}
+		if cat == "contract" {
+			contract = append(contract, line)
+		} else {
+			content = append(content, line)
+		}
+	}
+	if body := scopeSummaryBody(content, contract); body != "" {
+		description += "\n" + body
+	} else if status.LastDiff.Summary != "" {
 		description += "\n" + status.LastDiff.Summary
 	}
 
@@ -2020,6 +2048,45 @@ func (app *App) NotifyRepoUpdate(prevCommit, newCommit string) {
 		app.dispatchNotification(agent, payload)
 	}
 	log.Printf("Repo update: notifications dispatched (%s → %s)", prevCommit, newCommit)
+}
+
+// trashScopeCategory classifies a TRaSH commit scope by what it means to a sync
+// tool: "content" (starr / radarr / sonarr and variants = CF, scoring, naming
+// the user runs), "contract" (guide-sync = the sync contract: cf-group and
+// profile structure), or "" (docs, CI, deps, contributors = not relevant).
+func trashScopeCategory(scope string) string {
+	switch {
+	case scope == "guide-sync":
+		return "contract"
+	case strings.Contains(scope, "starr"), strings.Contains(scope, "radarr"), strings.Contains(scope, "sonarr"):
+		return "content"
+	}
+	return ""
+}
+
+// scopeSummaryBody renders the categorised commit lines, capping each section so
+// a large pull cannot produce a wall-of-text notification. Returns "" when there
+// is nothing relevant to show (caller then falls back to the file summary).
+func scopeSummaryBody(content, contract []string) string {
+	const maxLines = 12
+	var b strings.Builder
+	section := func(heading string, lines []string) {
+		if len(lines) == 0 {
+			return
+		}
+		b.WriteString("\n**" + heading + ":**\n")
+		shown := lines
+		if len(shown) > maxLines {
+			shown = shown[:maxLines]
+		}
+		b.WriteString(strings.Join(shown, "\n"))
+		if len(lines) > maxLines {
+			b.WriteString(fmt.Sprintf("\n...and %d more", len(lines)-maxLines))
+		}
+	}
+	section("Custom Formats / scoring", content)
+	section("Sync contract", contract)
+	return strings.TrimPrefix(b.String(), "\n")
 }
 
 // NotifyChangelog sends notifications when updates.txt has a new weekly date

@@ -3180,6 +3180,59 @@ func (ts *TrashStore) commitURLBase() string {
 	return ts.repoURL
 }
 
+// TrashCommit is one commit from a pull range, parsed from its conventional-
+// commit subject ("type(scope): description (#PR)").
+type TrashCommit struct {
+	Scope string // conventional-commit scope: "radarr", "guide-sync", "downloaders", ...
+	Desc  string // subject with the type(scope): prefix and (#PR) suffix stripped
+	PR    string // PR number without '#', "" when the subject carries none
+}
+
+var (
+	reConventional = regexp.MustCompile(`^[a-z]+\(([a-z0-9._-]+)\):\s*(.+)$`)
+	rePRSuffix     = regexp.MustCompile(`\s*\(#(\d+)\)\s*$`)
+)
+
+func parseConventionalCommit(subject string) TrashCommit {
+	c := TrashCommit{Desc: strings.TrimSpace(subject)}
+	if m := reConventional.FindStringSubmatch(c.Desc); m != nil {
+		c.Scope = m[1]
+		c.Desc = m[2]
+	}
+	if m := rePRSuffix.FindStringSubmatch(c.Desc); m != nil {
+		c.PR = m[1]
+		c.Desc = strings.TrimSpace(rePRSuffix.ReplaceAllString(c.Desc, ""))
+	}
+	return c
+}
+
+// CommitsBetween returns the commits in (prev, new], newest first, parsed from
+// their conventional-commit subjects. Merge commits are dropped (no scope, just
+// noise). Works on a blobless clone (only commit metadata is read, not file
+// blobs), so it stays cheap. Returns nil on any git error.
+func (ts *TrashStore) CommitsBetween(prev, newCommit string) []TrashCommit {
+	if prev == "" || newCommit == "" || prev == newCommit {
+		return nil
+	}
+	ts.repoMu.RLock()
+	defer ts.repoMu.RUnlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "-C", ts.dataDir, "log", "--no-merges",
+		"--format=%s", prev+".."+newCommit).Output()
+	if err != nil {
+		return nil
+	}
+	var commits []TrashCommit
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		commits = append(commits, parseConventionalCommit(line))
+	}
+	return commits
+}
+
 func (ts *TrashStore) fetchRepoOriginURL() string {
 	ts.repoMu.RLock()
 	defer ts.repoMu.RUnlock()
