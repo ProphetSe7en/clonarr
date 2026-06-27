@@ -997,7 +997,9 @@ export default {
         return;
       }
       let titles = [];
-      this.showToast('Generating titles from the profile…', 'info', 4000);
+      // No "generating…" toast here: titles are built first but the user still
+      // has to confirm the Proceed/Cancel modal below before anything is scored,
+      // so a toast at this point claims work that has not started yet.
       try {
         const r = await fetch('/api/scoring/generate-titles', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },

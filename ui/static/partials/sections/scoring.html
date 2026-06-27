@@ -261,9 +261,16 @@
             </div>
           </div>
 
-          <!-- RLS Title Generator -->
+          <!-- RLS Title Generator, collapsible so it stays out of the way for
+               users who only score pasted releases. Collapsed by default. -->
           <div class="card" style="padding:16px;margin-bottom:16px;overflow:visible">
-            <div style="font-size:14px;font-weight:600;margin-bottom:8px">RLS Title Generator</div>
+            <div style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none"
+                 @click="sandbox[activeAppType].genCardOpen = !sandbox[activeAppType].genCardOpen">
+              <span class="qs-chevron" :class="{ open: sandbox[activeAppType].genCardOpen }">&#9654;</span>
+              <div style="font-size:14px;font-weight:600">RLS Title Generator</div>
+              <span style="font-size:12px;color:var(--text-muted)">build and score candidate release titles from a profile</span>
+            </div>
+            <div x-show="sandbox[activeAppType].genCardOpen" x-cloak style="margin-top:10px">
             <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Generate candidate release titles from the selected profile's Custom Formats and score them, no pasting needed. The axes below come from what is scored in the Score Editor. Use the pickers to choose what to generate titles for, for example skip generating more Unwanted releases when you already have some in the list. This only limits generation; it does not change scoring, every title is still scored against the full Score Editor. Custom Formats scored 0 are skipped, since they cannot change the result.</div>
             <div>
                 <button class="btn btn-sm" style="margin-left:8px;border-color:var(--accent-green);color:var(--accent-green)"
@@ -302,7 +309,7 @@
                               <span class="slider"></span>
                             </label>
                             <span class="qs-name" :style="genQualityGroupOn(activeAppType, it) ? 'color:var(--text-primary)' : 'color:var(--text-muted)'" x-text="it.name"></span>
-                            <span class="qs-badge" x-text="it.members.length"></span>
+                            <span class="qs-badge" x-text="it.members?.length"></span>
                           </div>
                           <div x-show="sandbox[activeAppType].genQualityExpand[it.name]" style="padding-left:24px">
                             <template x-for="m in it.members" :key="m">
@@ -367,7 +374,7 @@
                   <!-- Qualities: the structural base (picked in the Qualities button above), not part of the Score Editor -->
                   <div style="display:flex;gap:10px;padding:2px 0;font-size:12px;align-items:baseline">
                     <span style="flex:0 0 140px;color:var(--text-muted);font-weight:600">Qualities</span>
-                    <span style="flex:1;min-width:0">
+                    <span style="flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline">
                       <template x-for="q in genSelectedQualities(activeAppType)" :key="q">
                         <span style="margin-right:12px;color:var(--text-body)" x-text="q"></span>
                       </template>
@@ -377,7 +384,7 @@
                   <template x-for="ax in genAxesWithCFs(activeAppType)" :key="ax.dim">
                     <div style="display:flex;gap:10px;padding:2px 0;font-size:12px;align-items:baseline">
                       <span style="flex:0 0 140px;color:var(--text-muted);font-weight:600" x-text="ax.label"></span>
-                      <span style="flex:1;min-width:0">
+                      <span style="flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline">
                         <template x-for="cf in genAxisUsed(activeAppType, ax.dim)" :key="cf.trashId">
                           <span style="margin-right:12px;white-space:nowrap"><span style="color:var(--text-body)" x-text="cf.name"></span><span style="font-family:monospace;color:var(--text-muted)" x-text="' ' + (cf.score > 0 ? '+' : '') + cf.score"></span></span>
                         </template>
@@ -387,6 +394,7 @@
                     </div>
                   </template>
                 </div>
+            </div>
             </div>
           </div>
 
