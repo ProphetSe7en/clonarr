@@ -6,6 +6,7 @@ import (
 	"clonarr/internal/core"
 	"clonarr/internal/core/titlegen"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,8 +16,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// errArrUnreachable marks a parse failure caused by the Arr instance being
+// unreachable (connection refused, DNS failure, or timeout) rather than the
+// release simply not parsing. The batch handler uses it to fail fast instead
+// of returning a page of empty results when the instance is down.
+var errArrUnreachable = errors.New("arr unreachable")
 
 // --- Scoring Sandbox ---
 
@@ -215,15 +223,52 @@ func (s *Server) handleScoringParseBatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	results := make([]ScoringParseResult, 0, len(req.Titles))
-	for _, title := range req.Titles {
-		result, err := s.parseSingleRelease(inst, title)
-		if err != nil {
-			// Include error as empty result with the title
-			results = append(results, ScoringParseResult{Title: title})
+	// Parse with a small worker pool instead of one-at-a-time. Each /parse is
+	// in-process regex matching on the Arr side (no DB writes), and benchmarking
+	// against a populated instance showed the parse path serializes internally
+	// past ~4 concurrent requests: concurrency 4 gives ~2.4x over sequential
+	// with zero errors, while 8 or 16 add load without going faster. Results are
+	// written by index so the response order still matches the request order
+	// (the frontend pairs each result back to its title positionally).
+	const parseConcurrency = 4
+	results := make([]ScoringParseResult, len(req.Titles))
+	sem := make(chan struct{}, parseConcurrency)
+	var wg sync.WaitGroup
+	var unreachable atomic.Bool
+	for i, title := range req.Titles {
+		// Fail fast: once a worker reports the instance unreachable, stop
+		// starting new parses instead of grinding through the rest at one
+		// 30s client timeout each. At most parseConcurrency requests are
+		// already in flight when this trips.
+		if unreachable.Load() {
+			results[i] = ScoringParseResult{Title: title}
 			continue
 		}
-		results = append(results, *result)
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, title string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			result, err := s.parseSingleRelease(inst, title)
+			if err != nil {
+				if errors.Is(err, errArrUnreachable) {
+					unreachable.Store(true)
+				}
+				// Include error as empty result with the title
+				results[i] = ScoringParseResult{Title: title}
+				return
+			}
+			results[i] = *result
+		}(i, title)
+	}
+	wg.Wait()
+	if unreachable.Load() {
+		label := "Radarr"
+		if inst.Type == "sonarr" {
+			label = "Sonarr"
+		}
+		writeError(w, 502, "Could not reach the "+label+" instance \""+inst.Name+"\". Check that it is running and reachable, then try again.")
+		return
 	}
 	writeJSON(w, results)
 }
@@ -241,7 +286,9 @@ func (s *Server) parseSingleRelease(inst core.Instance, title string) (*ScoringP
 	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
 	data, status, err := client.DoRequest("GET", "/parse?title="+url.QueryEscape(title), nil)
 	if err != nil {
-		return nil, err
+		// Transport-level failure (connection refused, DNS, timeout): the
+		// instance is unreachable, not a release that failed to parse.
+		return nil, fmt.Errorf("%w: %v", errArrUnreachable, err)
 	}
 	if status != 200 {
 		return nil, fmt.Errorf("HTTP %d: %s", status, string(data))

@@ -2,7 +2,7 @@
       <!-- ===== Scoring Sandbox section / Advanced sub-tab ===== -->
       <div class="page" x-show="currentSection === 'scoring' || (currentSection === 'advanced' && advancedTab === 'scoring')" style="max-width:none">
         <div style="font-size:18px;font-weight:600;margin-bottom:4px">Scoring Sandbox</div>
-        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">Test how releases score against your profiles. Paste a release name or search Prowlarr, then see which Custom Formats match and the total score. Releases are read through your selected <span x-text="activeAppType === 'sonarr' ? 'Sonarr' : 'Radarr'"></span> instance, so the result matches what that app would do. Indexer flags (such as Internal or Freeleech) live on the indexer, not in the release name, so they can't be scored here.</div>
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">Test how releases score against your profiles. Paste a release name or search Prowlarr, then see which Custom Formats match and the total score. Each release is sent to your selected <span x-text="activeAppType === 'sonarr' ? 'Sonarr' : 'Radarr'"></span> instance to be parsed and scored, so the result always matches what that app would do. This needs a working connection to that app, and scoring a large batch makes one request per release, so it can take a while. Indexer flags (such as Internal or Freeleech) live on the indexer, not in the release name, so they can't be scored here.</div>
 
         <div style="padding:20px">
           <!-- App type + Instance selector for CF matching -->
@@ -163,6 +163,10 @@
                   @click="sandboxParseBulk(activeAppType)" :disabled="sandbox[activeAppType].parsing">Parse All</button>
                 <span x-show="sandbox[activeAppType].parseProgress" x-cloak
                   style="margin-left:8px;font-size:12px;color:var(--text-muted)" x-text="sandbox[activeAppType].parseProgress"></span>
+                <button x-show="sandbox[activeAppType].parsing" x-cloak class="btn btn-sm"
+                  style="margin-left:8px;border-color:var(--accent-orange);color:var(--accent-orange)"
+                  @click="sandbox[activeAppType].parseAbort?.abort()"
+                  x-tt="'Stop parsing. Titles already scored are kept.'">Cancel</button>
                 <label style="margin-left:12px;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none"
                        x-tt="activeAppType === 'sonarr' ? 'Replace the series title with Series when adding releases (the season/episode and technical tags are kept). Scoring is unaffected, and releases that become identical are merged.' : 'Replace the movie title and year with Movie.2026 when adding releases. Scoring is unaffected (only the Custom Formats matter), and releases that become identical are merged.'">
                   <input type="checkbox" style="accent-color:var(--accent-blue);vertical-align:middle;margin-right:4px"
@@ -276,6 +280,10 @@
                 <button class="btn btn-sm" style="margin-left:8px;border-color:var(--accent-green);color:var(--accent-green)"
                   @click="sandboxGenerateFromProfile(activeAppType)" :disabled="sandbox[activeAppType].parsing"
                   x-tt="'Generate candidate release titles from the selected profile\'s Custom Formats and score them, no pasting needed'">Generate from profile</button>
+                <button x-show="sandbox[activeAppType].parsing" x-cloak class="btn btn-sm"
+                  style="margin-left:8px;border-color:var(--accent-orange);color:var(--accent-orange)"
+                  @click="sandbox[activeAppType].parseAbort?.abort()"
+                  x-tt="'Stop generating and scoring. Titles already scored are kept.'">Cancel</button>
                 <span style="position:relative;display:inline-block;margin-left:8px" @click.outside="sandbox[activeAppType].genQualityOpen = false">
                   <button class="btn btn-sm" type="button"
                     @click="sandbox[activeAppType].genQualityOpen = !sandbox[activeAppType].genQualityOpen; if (sandbox[activeAppType].genQualityOpen) loadGenQualities(activeAppType)"

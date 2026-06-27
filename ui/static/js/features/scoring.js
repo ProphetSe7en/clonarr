@@ -988,6 +988,21 @@ export default {
       const sb = this.sandbox[appType];
       if (!sb.instanceId) { this.showToast('Pick an instance to parse with first.', 'info', 4000); return; }
       if (!sb.profileKey) { this.showToast('Pick a profile to score against first.', 'info', 4000); return; }
+      // Pre-flight: confirm the instance is reachable before generating and
+      // scoring potentially thousands of titles against it. Cheaper to fail
+      // here than to grind through a batch only to get empty results.
+      const appName = appType === 'sonarr' ? 'Sonarr' : 'Radarr';
+      try {
+        const probe = await fetch(`/api/instances/${sb.instanceId}/test`, { method: 'POST' });
+        const probeBody = await probe.json().catch(() => ({}));
+        if (!probe.ok || probeBody.connected === false) {
+          this.showToast(probeBody.error || `${appName} is not reachable. Check that it is running, then try again.`, 'error', 8000);
+          return;
+        }
+      } catch (e) {
+        this.showToast(`${appName} is not reachable: ${e.message}`, 'error', 8000);
+        return;
+      }
       await this.loadGenQualities(appType);
       // Need at least one scored axis CF or one quality, otherwise the generator
       // falls back to a single resolution-less placeholder title (confusing).
@@ -1080,30 +1095,46 @@ export default {
 
       sb.parsing = true;
       sb.parseProgress = '';
-      // Each parse is one sequential call against the Arr Parse API (~100ms
-      // each). Send the titles in chunks rather than one giant request: a chunk
-      // stays well under the per-request caps, finishes fast enough to clear any
-      // reverse-proxy timeout, lets us show progress, and keeps whatever parsed
-      // so far if a later chunk fails.
+      // AbortController lets the user cancel an in-progress run (the Cancel
+      // button calls sb.parseAbort.abort()). The signal is passed to each
+      // chunk fetch, and we also check it between chunks so a cancel takes
+      // effect promptly without waiting for the current chunk to finish.
+      const ac = new AbortController();
+      sb.parseAbort = ac;
+      // Each parse is one call against the Arr Parse API (a few ms each on a
+      // healthy instance, parsed server-side with a small worker pool). Send
+      // the titles in chunks rather than one giant request: a chunk stays
+      // well under the per-request caps, finishes fast enough to clear any
+      // reverse-proxy timeout, lets us show progress, and keeps whatever
+      // parsed so far if a later chunk fails or is cancelled.
       const CHUNK = 500;
       if (lines.length > 30) {
         this.showToast(`Parsing ${lines.length} titles, this may take a moment...`, 'info', 6000);
       }
       try {
         let scored = [];
+        let cancelled = false;
         if (lines.length > 0) {
           const rawResults = [];
           let failed = false;
           for (let off = 0; off < lines.length; off += CHUNK) {
+            if (ac.signal.aborted) { cancelled = true; break; }
             const chunk = lines.slice(off, off + CHUNK);
             if (lines.length > CHUNK) {
               sb.parseProgress = `Parsing ${Math.min(off + chunk.length, lines.length)} / ${lines.length}…`;
             }
-            const r = await fetch('/api/scoring/parse/batch', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ instanceId: sb.instanceId, titles: chunk })
-            });
+            let r;
+            try {
+              r = await fetch('/api/scoring/parse/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instanceId: sb.instanceId, titles: chunk }),
+                signal: ac.signal
+              });
+            } catch (err) {
+              if (err.name === 'AbortError') { cancelled = true; break; }
+              throw err;
+            }
             if (!r.ok) {
               const e = await r.json().catch(() => ({}));
               this.showToast(e.error || 'Batch parse failed', 'error', 8000);
@@ -1113,9 +1144,13 @@ export default {
             const part = await r.json();
             rawResults.push(...part);
           }
-          if (rawResults.length === 0 && failed) return;
+          if (rawResults.length === 0 && (failed || cancelled)) {
+            if (cancelled) this.showToast('Generation cancelled.', 'info', 4000);
+            return;
+          }
           if (sb.simplifyNames) rawResults.forEach(r => { r.title = this._sandboxSimplifyTitle(r, appType); });
           scored = await Promise.all(rawResults.map(result => this.calculateScoring(result, appType)));
+          if (cancelled) this.showToast(`Cancelled. Kept ${scored.length} title${scored.length === 1 ? '' : 's'} scored so far.`, 'info', 5000);
         }
         const before = sb.results.length;
         if (scored.length > 0) {
@@ -1141,8 +1176,11 @@ export default {
         if (parts.length > 0) {
           this.showToast(parts.join(', ') + '.', 'success', 4500);
         }
-      } catch (e) { this.showToast('Batch parse error: ' + e.message, 'error', 8000); }
-      finally { sb.parsing = false; sb.parseProgress = ''; }
+      } catch (e) {
+        if (e.name === 'AbortError') { this.showToast('Generation cancelled.', 'info', 4000); }
+        else { this.showToast('Batch parse error: ' + e.message, 'error', 8000); }
+      }
+      finally { sb.parsing = false; sb.parseProgress = ''; sb.parseAbort = null; }
     },
 
     sandboxIndexerLabel(appType) {
