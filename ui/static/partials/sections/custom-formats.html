@@ -240,7 +240,7 @@
             <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">Loading custom formats...</div>
           </template>
           <template x-if="cfSyncRulesLoaded[activeAppType] && (cfSyncRules[activeAppType] || []).length === 0">
-            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No custom formats are managed by your sync rules yet. Sync a profile from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a> to start managing CFs through clonarr.</div>
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No custom formats are managed by your profiles yet. Add a profile from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">Add Profiles</a> to start managing CFs through clonarr.</div>
           </template>
           <template x-if="cfSyncRulesLoaded[activeAppType] && (cfSyncRules[activeAppType] || []).length > 0">
             <div class="cf-sr-layout">

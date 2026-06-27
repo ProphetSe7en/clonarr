@@ -357,7 +357,7 @@ export default {
 
       if (this.currentSection === 'profiles') {
         const tab = this.getProfileTab(this.activeAppType);
-        const tabLabel = { 'trash-profiles': 'TRaSH Profiles', 'sync-rules': 'Sync Rules', 'history': 'History', 'compare': 'Compare' }[tab] || '';
+        const tabLabel = { 'trash-profiles': 'Add Profiles', 'sync-rules': 'Manage Profiles', 'history': 'History', 'compare': 'Compare' }[tab] || '';
         return tabLabel ? `${section} / ${tabLabel}` : section;
       }
       if (this.currentSection === 'media-management') {

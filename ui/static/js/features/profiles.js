@@ -70,7 +70,7 @@ export default {
       // Skip extras the user has explicitly toggled off (sel[tid]===false).
       // Without this filter, toggling off an Additional CF that was opted
       // in earlier (and so carries a score in extraCFs) silently re-adds
-      // it to selectedCFs via the unconditional append — visible as the
+      // it to selectedCFs via the unconditional append - visible as the
       // CF "reactivating itself" on every reopen. Mirror filter lives in
       // buildSyncBody's scoreOverrides loop so the rule's scoreOverride
       // entry for the same CF also drops out of the persisted payload.
@@ -114,14 +114,14 @@ export default {
     // previously synced.
     //
     // Two sources:
-    //   1. Phase 2c lock-clicks — sel[tid] === false on a CF that's in
+    //   1. Phase 2c lock-clicks - sel[tid] === false on a CF that's in
     //      TRaSH defaults (spToggleRequiredCF writes this).
-    //   2. Group-level opt-out — when the user disables a default-on
+    //   2. Group-level opt-out - when the user disables a default-on
     //      group via pdToggleGroup, the group flag flips to false but
     //      per-CF state stays untouched (preserves Phase 2c
     //      exclusions). Without this branch, backend would see the
     //      group's required+default CFs missing from selectedCFs but
-    //      not in excludedCFs either — it treats that as "still
+    //      not in excludedCFs either - it treats that as "still
     //      default-on" and never zeroes them in the Arr profile.
     //
     // Mirror in restoreFromSyncHistory (~line 803): the rehydrate
@@ -136,7 +136,7 @@ export default {
       for (const fi of formatItems) {
         if (sel[fi.trashId] === false) excluded.add(fi.trashId);
       }
-      // Group-level handling — branch on whether the group is currently
+      // Group-level handling - branch on whether the group is currently
       // active in the user's selection (defaultEnabled if no override).
       const groups = this.profileDetail?.detail?.trashGroups || [];
       for (const group of groups) {
@@ -147,7 +147,7 @@ export default {
           // default CFs so backend zeros them out of the existing Arr
           // profile (otherwise trash_defaults brings them back and the
           // disable signal is lost). Default-off groups that are off
-          // are the default state — defaults don't include them, so
+          // are the default state - defaults don't include them, so
           // nothing to subtract.
           if (!group.defaultEnabled) continue;
           for (const cf of (group.cfs || [])) {
@@ -175,17 +175,17 @@ export default {
     //
     // GUARDED: only returns true when extraCFAllCFs is populated. Empty
     // means /api/trash/{app}/all-cfs returned nothing (TRaSH cache empty
-    // during Reset window — backend short-circuits and drops customs from
+    // during Reset window - backend short-circuits and drops customs from
     // the response). We can't distinguish "deleted" from "not loaded yet"
     // in that state, so we leave the IDs alone and let backend cleanup
     // catch them post-sync. Worst case in the Reset window: orphan ref
-    // round-trips one extra time — same as before this fix.
+    // round-trips one extra time - same as before this fix.
     _isOrphanCustomTrashId(tid) {
       if (!tid || !tid.startsWith('custom:')) return false;
       const all = this.extraCFAllCFs || [];
-      if (all.length === 0) return false; // unknown — don't strip
+      if (all.length === 0) return false; // unknown - don't strip
       for (const cf of all) {
-        if (cf.trashId === tid) return false; // resolved — alive
+        if (cf.trashId === tid) return false; // resolved - alive
       }
       return true; // custom: prefix + customs loaded + no match = dead
     },
@@ -219,7 +219,7 @@ export default {
           if (cf.trashId === tid) return cf.score ?? 0;
         }
       }
-      // Fallback: extras — resolve default score from CF's trashScores map using current score set
+      // Fallback: extras - resolve default score from CF's trashScores map using current score set
       const scoreSet = detail.scoreCtx || detail.profile?.trashScoreSet || 'default';
       for (const cf of (this.extraCFAllCFs || [])) {
         if (cf.trashId === tid) {
@@ -244,8 +244,8 @@ export default {
     async loadExtraCFList(appType) {
       // Default to the open editor's app type so existing callers keep
       // working (most flows have profileDetail already set when they
-      // reach here). Callers that run BEFORE openProfileDetail — like
-      // Compare → Edit & Sync's pre-flight check for Arr-only CFs —
+      // reach here). Callers that run BEFORE openProfileDetail - like
+      // Compare → Edit & Sync's pre-flight check for Arr-only CFs -
       // pass the appType explicitly.
       const t = appType || this.profileDetail?.instance?.type;
       if (!t) return;
@@ -292,7 +292,7 @@ export default {
             for (const cf of g.cfs) ungrouped.push(cf);
           }
         }
-        // Order matters — spGroupBySection preserves input order and
+        // Order matters - spGroupBySection preserves input order and
         // the sub-nav renders sections top-to-bottom in that order.
         // Other above Custom by request.
         if (ungrouped.length > 0) groups.push({ name: 'Other', category: 'Other', cfs: ungrouped });
@@ -300,7 +300,7 @@ export default {
         this.extraCFGroups = groups;
         // Ensure all groups start collapsed. Alpine's reactive proxy treats
         // missing keys as truthy in some cases AND direct keyed mutation
-        // doesn't reliably re-trigger every dependent expression — use the
+        // doesn't reliably re-trigger every dependent expression - use the
         // object-spread pattern so x-show/:class re-evaluate uniformly.
         const updatedSections = { ...this.detailSections };
         for (const g of groups) updatedSections['extra_' + g.name] = false;
@@ -337,10 +337,10 @@ export default {
       );
     },
 
-    // Counter for the Additional CFs picker group header — inline IIFE on
+    // Counter for the Additional CFs picker group header - inline IIFE on
     // x-text didn't reliably re-trigger Alpine reactivity when extraCFs
     // mutated (counter stayed at 0/N after toggling). Method-form forces
-    // a re-evaluation per render. Returns { total, added, overridden } —
+    // a re-evaluation per render. Returns { total, added, overridden } -
     // overridden counts added CFs whose current score differs from the
     // profile's score-set default.
     pdExtraGroupCount(group) {
@@ -355,7 +355,7 @@ export default {
       return { total: cfs.length, added, overridden };
     },
 
-    // Resolve the score that this CF would be added at — current profile's
+    // Resolve the score that this CF would be added at - current profile's
     // score-set falling back to default. Used by picker rows and the
     // pdToggleAdditionalGroup helper. Returns 0 when no score is defined.
     pdExtraCFScore(cf) {
@@ -390,7 +390,7 @@ export default {
             show: true,
             title: 'Enable Advanced Mode',
             html: true,
-            message: 'Advanced Mode enables tools for power users and guide contributors:<br><br>• Profile Builder — create custom profiles with fixed scores <span style="color:var(--accent-red);font-weight:600">(no auto-sync — scores will NOT update when TRaSH Guides change)</span><br>• Scoring Sandbox — test how releases score against profiles<br>• TRaSH JSON export — for contributing to TRaSH Guides<br><br><strong style="color:var(--accent-orange);font-size:14px">Most users don\'t need this.</strong> TRaSH Sync handles profiles, scores, and updates automatically. Only enable Advanced Mode if you have a specific need that TRaSH Sync doesn\'t cover.<br><br>Enable Advanced Mode?',
+            message: 'Advanced Mode enables tools for power users and guide contributors:<br><br>• Profile Builder - create custom profiles with fixed scores <span style="color:var(--accent-red);font-weight:600">(no auto-sync - scores will NOT update when TRaSH Guides change)</span><br>• Scoring Sandbox - test how releases score against profiles<br>• TRaSH JSON export - for contributing to TRaSH Guides<br><br><strong style="color:var(--accent-orange);font-size:14px">Most users don\'t need this.</strong> TRaSH Sync handles profiles, scores, and updates automatically. Only enable Advanced Mode if you have a specific need that TRaSH Sync doesn\'t cover.<br><br>Enable Advanced Mode?',
             onConfirm: () => resolve(true),
             onCancel: () => resolve(false)
           };
@@ -420,7 +420,7 @@ export default {
       document.documentElement.setAttribute('data-theme', resolved);
     },
 
-    // v3 content-alignment toggle — applies immediately, persists to
+    // v3 content-alignment toggle - applies immediately, persists to
     // localStorage. CSS rule in layout.css reads [data-content-align="left"]
     // on the x-data wrapper and removes the centering margin.
     setContentAlign(value) {
@@ -428,7 +428,7 @@ export default {
       localStorage.setItem('clonarr-content-align', this.contentAlign);
     },
 
-    // v3 navigation-style toggle — applies immediately, persists to
+    // v3 navigation-style toggle - applies immediately, persists to
     // localStorage. Switches between sidebar (default) and topnav (classic
     // horizontal bar with v3 color treatment). The x-if templates in
     // index.html swap the layout in/out; CSS rule in layout.css reads
@@ -608,12 +608,12 @@ export default {
             if (this.trashStatus.pullError) {
               this.showToast('Pull failed: ' + this.trashStatus.pullError, 'error');
             } else if (totalLoaded === 0) {
-              // Git fetch succeeded but the parser found nothing — typically a
+              // Git fetch succeeded but the parser found nothing - typically a
               // path/permissions issue with /config/data/trash-guides. Surfacing
               // this as a warning instead of a misleading "success" toast.
               this.showToast('Pull completed but no TRaSH data was loaded (0 CFs, 0 profiles). Check container logs and that /config/data/trash-guides/docs/json/ exists and is readable by the container user.', 'warning', 12000);
             } else if (this.trashStatus.commitHash !== prevCommit && this.trashStatus.lastDiff?.summary) {
-              // Keep the diff's line structure — toast-content is pre-line so
+              // Keep the diff's line structure - toast-content is pre-line so
               // each app + CF renders on its own row. Only strip markdown bold.
               const summary = this.trashStatus.lastDiff.summary.replace(/\*\*/g, '').trim();
               this.showToast('TRaSH updated:\n' + summary, 'info', 10000);
@@ -638,7 +638,7 @@ export default {
               await this.loadSyncHistory(inst.id);
             }
             this.checkCleanupEvents();
-            // Delay auto-sync event check — auto-sync runs async after pull completes
+            // Delay auto-sync event check - auto-sync runs async after pull completes
             setTimeout(() => this.checkAutoSyncEvents(), 5000);
           }
         }, 2000);
@@ -735,11 +735,11 @@ export default {
     // --- Profile Detail ---
 
     // restoreFromRule controls auto-restore from existing sync rules:
-    //   false (default) — fresh TRaSH defaults. Use when user clicks a TRaSH
+    //   false (default) - fresh TRaSH defaults. Use when user clicks a TRaSH
     //     guide profile from Standard/German/French/Anime/SQP cards. Browse
     //     mode: profile detail shows what TRaSH spec defines, not what an
     //     existing rule may have customized.
-    //   true            — auto-restore from matching rule (selectedOptionalCFs
+    //   true            - auto-restore from matching rule (selectedOptionalCFs
     //     reconstructed, scoreOverrides + qualityStructure + overrides loaded,
     //     edit-session lock set to that Arr profile). Use when user explicitly
     //     opens an existing rule (Edit pencil from Sync rules card,
@@ -747,7 +747,7 @@ export default {
     //
     // Earlier versions auto-restored unconditionally when matchingRules.length
     // === 1. That broke the "create another sibling profile from the same
-    // TRaSH guide" workflow — clicking a guide profile would silently load
+    // TRaSH guide" workflow - clicking a guide profile would silently load
     // the existing rule's customizations and lock Save & Sync to the
     // existing Arr profile, instead of starting fresh.
     async openProfileDetail(inst, profile, restoreFromRule = false) {
@@ -778,7 +778,7 @@ export default {
       }
       // Fire /all-cfs in parallel with the profile fetch. It's the
       // heavy catalog the Additional CF picker + Diffs view rely on,
-      // and there's no dependency between the two requests — the
+      // and there's no dependency between the two requests - the
       // previous sequential ordering (profile → applyRuleStateToEditor
       // → loadExtraCFList) just cost a full round-trip's worth of
       // latency. loadExtraCFList is idempotent + cache-gated by Arr
@@ -795,7 +795,7 @@ export default {
           try { const data = await r.json(); if (data?.error) msg = data.error; } catch (_) {}
           this.showToast(msg, 'error', 8000);
           // Reset the half-loaded state so the overlay doesn't show a
-          // stale shell — return to the profile list.
+          // stale shell - return to the profile list.
           this.profileDetail = null;
           console.error('loadProfileDetail: HTTP', r.status);
           return;
@@ -812,7 +812,7 @@ export default {
         // Auto-restore is opt-in via restoreFromRule. Only fires when the
         // caller explicitly asked AND there's exactly one matching rule.
         // Multiple rules for the same TRaSH profile (different Arr
-        // profiles) are not auto-restored — ambiguous which to load. User
+        // profiles) are not auto-restored - ambiguous which to load. User
         // reaches the specific rule via Sync rules card's Edit button.
         if (restoreFromRule) {
           const matchingRules = (this.autoSyncRules || []).filter(rl =>
@@ -824,7 +824,7 @@ export default {
             this.applyRuleStateToEditor(matchingRules[0], detail);
           }
         }
-        // Issue #52 — initial baseline. resyncProfile re-captures this
+        // Issue #52 - initial baseline. resyncProfile re-captures this
         // after its own restore pass; for the create-new path (TPD Use
         // this profile, no resyncProfile follow-up) this is the only
         // capture point.
@@ -857,7 +857,7 @@ export default {
       //
       // Ordering matters: infer group flags FIRST, then apply per-CF
       // entries. This lets the per-CF loop skip writing sel=false for
-      // CFs that are already covered by a group-off flag — without that,
+      // CFs that are already covered by a group-off flag - without that,
       // a rule saved on v2.5.9 (where group-disable bulk-wrote false
       // for every CF in the group) would rehydrate with sel=false
       // entries that LOOK like Phase 2c locks. The user toggling the
@@ -945,11 +945,11 @@ export default {
         this.syncForm.behavior = { ...(this.syncForm.behavior || {}), ...rule.behavior };
       }
       // Restore the user's free-form notes for this rule. Empty by
-      // default — the Notes editor renders an "Add notes" CTA when
+      // default - the Notes editor renders an "Add notes" CTA when
       // pdDescription is blank. Auto-expand the Notes card on
       // reopen when notes exist so the user instantly sees they're
       // still there (collapsed default + small snippet otherwise
-      // reads as "my notes are gone" — first reported bug).
+      // reads as "my notes are gone" - first reported bug).
       this.pdDescription = rule.description || '';
       this.pdNotesExpanded = !!(rule.description || '').trim();
       if (anyOverride || (rule.selectedCFs && rule.selectedCFs.length > 0)) {
@@ -983,7 +983,7 @@ export default {
               // Non-exclusive group: optional CFs respect their per-CF default
               // flag. Required CFs are handled by group state. Previously this
               // unconditionally set all optional CFs to true, ignoring
-              // cf.default — defeating TRaSH's whole reason for marking some
+              // cf.default - defeating TRaSH's whole reason for marking some
               // group members default-on and others default-off.
               for (const cf of (group.cfs || [])) {
                 if (!cf.required) selected[cf.trashId] = !!cf.default;
@@ -1000,7 +1000,7 @@ export default {
                   selected[cf.trashId] = !!cf.default;
                 }
               } else {
-                // Same fix as the trashGroups branch above — respect cf.default
+                // Same fix as the trashGroups branch above - respect cf.default
                 // even when the legacy cfCategories shape is used.
                 for (const cf of (group.cfs || [])) {
                   selected[cf.trashId] = !!cf.default;
@@ -1065,7 +1065,7 @@ export default {
       const el = document.getElementById('cf-tooltip-portal');
       if (!el) return;
       // Pre-process pymdownx-extra "caret" syntax (^^text^^) used in
-      // TRaSH descriptions for underline emphasis — without this the
+      // TRaSH descriptions for underline emphasis - without this the
       // raw "^^NOT^^" leaks through to the tooltip text. The <u> tag
       // is already on sanitizeHTML's allow-list, so the rendered
       // underline survives sanitization.
@@ -1093,7 +1093,7 @@ export default {
       // around the hovered icon's left edge).
       //
       // Walk up parents until we find the first ancestor containing >1
-      // .cf-info — that's the group container.
+      // .cf-info - that's the group container.
       let anchorRight = rect.right;
       // .cf-sr-name in the In use sub-tab fills the whole grid column
       // (overflow:hidden + text-overflow:ellipsis means the span box
@@ -1108,7 +1108,7 @@ export default {
       // Only walk ancestors when the trigger itself IS a .cf-info icon
       // (Sync Preview / classic editor / etc.). The new CF browse hover
       // moved off .cf-info onto .cf-name-text, where the X-anchor logic
-      // does nothing useful — short-circuit to avoid an unnecessary
+      // does nothing useful - short-circuit to avoid an unnecessary
       // tree walk on every hover.
       if (event.target.classList && event.target.classList.contains('cf-info')) {
         let parent = event.target.parentElement;
@@ -1186,7 +1186,7 @@ export default {
           updated[conflictId] = false;
         }
       } else if (this.cfScoreOverrides && this.cfScoreOverrides[trashId] !== undefined) {
-        // Toggling a CF OFF drops its score override too — mirrors the
+        // Toggling a CF OFF drops its score override too - mirrors the
         // group-off path in pdToggleGroup. Without this the override
         // lingers in cfScoreOverrides, gets re-persisted by buildSyncBody,
         // and resurfaces as a phantom "custom score" customization on a CF
@@ -1264,12 +1264,12 @@ export default {
 
     // Resolve the human-readable name of an Arr profile for the given
     // instance + profile ID. Used by toasts / debug-log lines that
-    // would otherwise show the raw ID — meaningless to users who
+    // would otherwise show the raw ID - meaningless to users who
     // identify their profiles by name. Lookup order:
     //   1. instProfiles cache (live data fetched at startup, refreshed
     //      via loadInstanceProfiles whenever the user navigates near
     //      a profile flow)
-    //   2. sync-history entries — every successful sync writes
+    //   2. sync-history entries - every successful sync writes
     //      arrProfileName, so this catches profiles that weren't in
     //      the live cache yet
     //   3. empty string if neither has it (caller should fall back to
@@ -1387,7 +1387,7 @@ export default {
         const flag = sel['__grp_' + g.name];
         return flag === undefined ? g.defaultEnabled : flag;
       };
-      // Individually toggled optional CFs — honoured regardless of
+      // Individually toggled optional CFs - honoured regardless of
       // group state. User explicit sel=true is a hard signal ("include
       // this specific CF"). When the user disables a group via
       // pdToggleGroup, that handler clears per-CF=true entries for
@@ -1396,7 +1396,7 @@ export default {
       for (const [k, v] of Object.entries(sel)) {
         if (v && !k.startsWith('__grp_')) idSet.add(k);
       }
-      // Required CFs from active TRaSH groups — skip Phase 2c locks
+      // Required CFs from active TRaSH groups - skip Phase 2c locks
       // (sel===false) so a lock on a required CF inside an opted-in
       // default-off group is honoured.
       for (const group of groups) {
@@ -1653,18 +1653,18 @@ export default {
 
     // Max possible Min Score for the profile-as-currently-configured.
     // Mirrors backend's BuildSyncPlan computation but runs client-side
-    // off the data already loaded into the editor — no dry-run / HTTP
+    // off the data already loaded into the editor - no dry-run / HTTP
     // round-trip needed. The value is the post-sync sum of every
     // positive Custom Format score that will be in the profile after
     // Save & Sync, which is exactly what Sonarr/Radarr validates Min
     // Score against.
     //
     // Sources walked (matches backend's allCFTrashIDs ∪ overrides):
-    //   1. detail.formatItemNames        — TRaSH profile.formatItems (always synced)
-    //   2. detail.trashGroups[].cfs      — group CFs that are toggled on
-    //   3. selectedOptionalCFs[trashId]  — individually toggled optional CFs
-    //   4. extraCFs                      — user-added extras (their explicit score)
-    //   5. cfScoreOverrides              — per-CF score overrides (when active)
+    //   1. detail.formatItemNames        - TRaSH profile.formatItems (always synced)
+    //   2. detail.trashGroups[].cfs      - group CFs that are toggled on
+    //   3. selectedOptionalCFs[trashId]  - individually toggled optional CFs
+    //   4. extraCFs                      - user-added extras (their explicit score)
+    //   5. cfScoreOverrides              - per-CF score overrides (when active)
     //
     // Returns null when no profile is loaded so the tooltip / red
     // border can hide. Caveat: do_not_adjust removeMode keeps existing
@@ -1693,11 +1693,11 @@ export default {
           }
         }
       }
-      // 4. Extra CFs — user-added with their explicit scores
+      // 4. Extra CFs - user-added with their explicit scores
       for (const [tid, score] of Object.entries(this.extraCFs || {})) {
         cfMap.set(tid, score);
       }
-      // 5. Score overrides — apply to every CF in the override map. CFs
+      // 5. Score overrides - apply to every CF in the override map. CFs
       // already in cfMap get their score replaced; CFs not yet present get
       // pulled in (matching the backend, which uses body.scoreOverrides
       // regardless of selectedCFs). Symmetric with buildSyncBody:1283 where
@@ -1707,7 +1707,7 @@ export default {
           cfMap.set(tid, score);
         }
       }
-      // Sum positives — matches backend's `if sa.NewScore > 0` filter
+      // Sum positives - matches backend's `if sa.NewScore > 0` filter
       let sum = 0;
       for (const score of cfMap.values()) {
         if (typeof score === 'number' && score > 0) sum += score;
@@ -1767,7 +1767,7 @@ export default {
         profileTrashId: this.syncForm.profileTrashId,
         arrProfileId: this.syncMode === 'create' ? 0 : parseInt(this.syncForm.arrProfileId),
         selectedCFs: this.getAllSelectedCFIds(),
-        // Explicit opt-outs — trash_ids the user has toggled OFF among
+        // Explicit opt-outs - trash_ids the user has toggled OFF among
         // CFs that ARE in current TRaSH defaults for this profile. Backend
         // subtracts these from `ComputeTrashDefaults ∪ selectedCFs` so the
         // resulting Arr profile reflects the user's opt-out choices even
@@ -1780,11 +1780,11 @@ export default {
       if (this.syncMode === 'create') {
         body.profileName = this.syncForm.newProfileName;
       }
-      // Build overrides from pdOverrides values. Persistence is data-driven —
+      // Build overrides from pdOverrides values. Persistence is data-driven -
       // values that match the profile default are filtered out below, so the
       // saved sync rule only carries true overrides. The pdOverridesEnabled
       // toggle gates the EDITOR UI (whether the override cards render at all),
-      // not the payload — when the user disables the toggle, pdDisableOverrides
+      // not the payload - when the user disables the toggle, pdDisableOverrides
       // explicitly clears the maps so the next sync sends a clean body.
       const ov = this.pdOverrides;
       const p = this.profileDetail?.detail?.profile || {};
@@ -1813,7 +1813,7 @@ export default {
       }
       // Per-CF score overrides + extra CFs scores. Strip orphan custom:
       // refs (deleted CFs still in state) so backend doesn't have to
-      // clean up after us — keeps payloads + persisted rule data clean.
+      // clean up after us - keeps payloads + persisted rule data clean.
       // See _isOrphanCustomTrashId for the guard that handles the Reset
       // window safely.
       const allScoreOverrides = {};
@@ -1824,7 +1824,7 @@ export default {
         // toggled OFF must not survive in scoreOverrides. The sync engine
         // already resets its Arr score to 0 (it's no longer in the profile
         // set), but persisting the override onto the rule leaves a phantom
-        // customization — the Sync Rules "custom score" pill, the editor
+        // customization - the Sync Rules "custom score" pill, the editor
         // header count, and the diff all keep reporting an override for a
         // CF that isn't in use anymore.
         if (selForExtras[tid] === false) continue;
@@ -1841,7 +1841,7 @@ export default {
       }
       if (Object.keys(allScoreOverrides).length > 0) body.scoreOverrides = allScoreOverrides;
       // Quality overrides: structure (new) trumps flat map (legacy). Skip
-      // sending qualityStructure when it exactly mirrors profile defaults —
+      // sending qualityStructure when it exactly mirrors profile defaults -
       // otherwise just OPENING the Quality Items editor (which auto-inits
       // qualityStructure from defaults so drag-drop works) would persist a
       // phantom override on Save & Sync.
@@ -1852,7 +1852,7 @@ export default {
       }
       // Sync behavior rules
       if (this.syncForm.behavior) body.behavior = this.syncForm.behavior;
-      // Free-form user notes about this rule — persists as
+      // Free-form user notes about this rule - persists as
       // AutoSyncRule.Description. Trim to avoid whitespace-only saves.
       const desc = (this.pdDescription || '').trim();
       if (desc) body.description = desc;
@@ -1883,7 +1883,7 @@ export default {
     },
 
     async startDryRun() {
-      // Check for name collision in Create mode — prevent silent overwrite
+      // Check for name collision in Create mode - prevent silent overwrite
       if (this.syncMode === 'create') {
         const newName = this.syncForm.newProfileName.trim().toLowerCase();
         const existing = this.arrProfiles.find(p => p.name.toLowerCase() === newName);
@@ -1938,7 +1938,7 @@ export default {
       const profile = this.profileDetail.profile || {};
       const arrId = this.profileDetail._editLockedArrProfileId || 0;
       if (!arrId) {
-        this.showToast('No saved rule yet — Save with Apply first, then dry-run.', 'warning', 6000);
+        this.showToast('No saved rule yet - Save with Apply first, then dry-run.', 'warning', 6000);
         return;
       }
       // Seed syncForm so buildSyncBody picks up the right instance +
@@ -2009,7 +2009,7 @@ export default {
     },
 
     async startApply() {
-      // Pre-flight reachability check — bail out with a friendly toast
+      // Pre-flight reachability check - bail out with a friendly toast
       // before the confirm modals + body building if the Arr instance is
       // unreachable. Avoids the user clicking through an "overwrite?"
       // confirm only to get a generic "failed to build sync plan" toast
@@ -2022,11 +2022,11 @@ export default {
           const probeBody = await probe.json().catch(() => ({}));
           if (!probe.ok || probeBody.connected === false) {
             const detail = probeBody.error || `${instName} is not reachable.`;
-            this.showToast(`Save & Sync skipped — ${detail}`, 'error', 8000);
+            this.showToast(`Save & Sync skipped - ${detail}`, 'error', 8000);
             return;
           }
         } catch (e) {
-          this.showToast(`Save & Sync skipped — ${instName} unreachable: ${e.message}`, 'error', 8000);
+          this.showToast(`Save & Sync skipped - ${instName} unreachable: ${e.message}`, 'error', 8000);
           return;
         }
       }
@@ -2035,7 +2035,7 @@ export default {
       // _editFlow=true in _loadSyncInstanceData; that path expects to update
       // the existing rule and shows no popup. Any other path (Save & Sync
       // from Profile Detail, Compare, etc.) reaching Update mode means the
-      // user explicitly clicked the "Update existing profile" radio — warn
+      // user explicitly clicked the "Update existing profile" radio - warn
       // before we replace their saved customizations with current UI state.
       if (this.syncMode === 'update' && !this.syncForm._editFlow) {
         const arrId = parseInt(this.syncForm.arrProfileId) || 0;
@@ -2060,7 +2060,7 @@ export default {
         if (!ok) return;
       }
 
-      // Check for name collision in Create mode — prevent silent overwrite
+      // Check for name collision in Create mode - prevent silent overwrite
       if (this.syncMode === 'create') {
         const newName = this.syncForm.newProfileName.trim().toLowerCase();
         const existing = this.arrProfiles.find(p => p.name.toLowerCase() === newName);
@@ -2090,7 +2090,7 @@ export default {
             // TRaSH → Builder: warning about losing auto-sync
             const ok = await new Promise(resolve => {
               this.confirmModal = { show: true, title: 'Replace TRaSH Sync Rule',
-                message: 'This profile is currently synced with TRaSH Guides and receives automatic updates.\n\nSwitching to a builder profile will stop all TRaSH Guide sync — scores become fixed and will no longer update automatically.\n\nAre you sure?',
+                message: 'This profile is currently synced with TRaSH Guides and receives automatic updates.\n\nSwitching to a builder profile will stop all TRaSH Guide sync - scores become fixed and will no longer update automatically.\n\nAre you sure?',
                 onConfirm: () => resolve(true), onCancel: () => resolve(false) };
             });
             if (!ok) return;
@@ -2110,11 +2110,11 @@ export default {
       // Block Apply when Min Score exceeds the authoritative max from
       // the latest dry-run plan. The plan computes maxPossibleScore by
       // walking exactly the CF set ExecuteSyncPlan will push, so this
-      // matches what Sonarr/Radarr would validate — no edge cases.
+      // matches what Sonarr/Radarr would validate - no edge cases.
       if (this.pdMinScoreInvalid) {
         const min = this.pdOverrides?.minFormatScore?.value ?? 0;
         const max = this.pdMaxPossibleScore;
-        this.showToast(`Min Score ${min} can't be reached — max for this profile after sync is ${max} (sum of every positive Custom Format score). Lower Min Score, raise CF scores, or add CFs with positive scores before saving.`, 'error', 9000);
+        this.showToast(`Min Score ${min} can't be reached - max for this profile after sync is ${max} (sum of every positive Custom Format score). Lower Min Score, raise CF scores, or add CFs with positive scores before saving.`, 'error', 9000);
         return;
       }
       this.syncing = true;
@@ -2163,7 +2163,7 @@ export default {
         this.syncResultDetailsOpen = false;
         this.syncPlan = null;
         this.syncPlanSnapshot = '';
-        // Issue #52 — Save & Sync success: re-snapshot baseline so the
+        // Issue #52 - Save & Sync success: re-snapshot baseline so the
         // editor doesn't show as dirty after a clean save.
         this._captureProfileBaseline();
         // Reload Arr profiles first (new profile may have been created), then sync history + rules
@@ -2185,7 +2185,7 @@ export default {
         const existingRule = arrId > 0
           ? this.autoSyncRules.find(r => r.instanceId === this.syncForm.instanceId && r.arrProfileId === arrId)
           : null;
-        // Native profile sync success — surface a result toast and
+        // Native profile sync success - surface a result toast and
         // close the editor (Apply & Sync UX: one-click commit, return
         // to where you came from). Imported profile flow already has
         // its own toast above; this branch handles the rule-attached
@@ -2202,12 +2202,12 @@ export default {
           ];
           this.showToast({
             title: `"${this.syncForm.profileName}" synced`,
-            message: details.length > 0 ? `${details.length} change${details.length === 1 ? '' : 's'} applied.` : 'No changes — profile already in sync.',
+            message: details.length > 0 ? `${details.length} change${details.length === 1 ? '' : 's'} applied.` : 'No changes - profile already in sync.',
             // Pass the full details list so the toast can render the
             // per-change breakdown inline (matches the imported-sync
             // toast). Without this, auto-closing the editor on Apply
             // & Sync left the user with no visibility of what
-            // actually changed — they'd have to navigate to History
+            // actually changed - they'd have to navigate to History
             // to see the breakdown.
             details,
             type: 'info',
@@ -2223,7 +2223,7 @@ export default {
           const updated = {
             ...existingRule,
             selectedCFs: this.getAllSelectedCFIds(),
-            // Echo whatever the sync body just sent — without this, the spread
+            // Echo whatever the sync body just sent - without this, the spread
             // of `...existingRule` (loaded BEFORE this sync ran) silently
             // overwrites the excludedCFs that /api/sync/apply just persisted
             // to the rule. Any opt-out the user made in the editor would be
@@ -2248,7 +2248,7 @@ export default {
             // buildSyncBody only includes the field when trimmed
             // pdDescription is non-empty, so explicit empty-string
             // fallback persists "user cleared their notes" correctly
-            // — without this the spread of ...existingRule would
+            // - without this the spread of ...existingRule would
             // resurrect the old description.
             description: syncBody.description !== undefined ? syncBody.description : '',
           };
@@ -2262,12 +2262,12 @@ export default {
           } catch (e) { console.error('updateAutoSyncRule:', e); }
         }
         // Close editor after all post-sync work (rule PUT + reloads)
-        // completes — guarantees the back-list reflects the persisted
+        // completes - guarantees the back-list reflects the persisted
         // state by the time the user sees it. Gated on the same
         // condition as the success toast above so error paths leave
         // the editor open for re-attempt. Clear the dirty-tracking
         // baseline first so closeProfileEditor's unsaved-changes guard
-        // doesn't fire — Apply IS the save, by definition there's
+        // doesn't fire - Apply IS the save, by definition there's
         // nothing unsaved to warn about.
         if (closeEditorAfterApply) {
           this._clearProfileBaseline();
@@ -2292,14 +2292,14 @@ export default {
     // "● Unsynced changes" on the rule card until the next Sync All /
     // Sync Now / Auto-Sync run equalizes UpdatedAt with LastSyncTime.
     // Gated on _editLockedArrProfileId (only the edit-existing-rule flow
-    // — Create New has no rule to save against, must Save & Sync first).
+    // - Create New has no rule to save against, must Save & Sync first).
     async saveRuleOnly() {
       if (!this.profileDetail || !this.profileDetail.instance) return;
       const inst = this.profileDetail.instance;
       const profile = this.profileDetail.profile;
       const arrId = this.profileDetail._editLockedArrProfileId || 0;
       if (!arrId) {
-        this.showToast('No existing rule to save — use Save & Sync or Create New first.', 'error', 8000);
+        this.showToast('No existing rule to save - use Save & Sync or Create New first.', 'error', 8000);
         return;
       }
       const existingRule = this.autoSyncRules.find(r => r.instanceId === inst.id && r.arrProfileId === arrId);
@@ -2308,7 +2308,7 @@ export default {
         return;
       }
       // Populate syncForm minimally so buildSyncBody can read its fields,
-      // then restore — saveRuleOnly is independent of the Sync Profile
+      // then restore - saveRuleOnly is independent of the Sync Profile
       // modal, no need to leave syncForm primed for an accidental
       // Save & Sync click.
       const prevSyncForm = this.syncForm;
@@ -2356,7 +2356,7 @@ export default {
         if (!r.ok) {
           let msg = 'Save failed';
           try { const data = await r.json(); if (data?.error) msg = data.error; } catch (_) {}
-          if (r.status === 409) msg = 'Sync running on this instance — try again in a moment.';
+          if (r.status === 409) msg = 'Sync running on this instance - try again in a moment.';
           this.showToast(msg, 'error', 8000);
           return;
         }
@@ -2389,23 +2389,23 @@ export default {
           const probeBody = await probe.json().catch(() => ({}));
           if (!probe.ok || probeBody.connected === false) {
             const detail = probeBody.error || `${inst.name} is not reachable.`;
-            this.showToast(`"${sh.profileName}" sync skipped — ${detail}`, 'error', 8000);
+            this.showToast(`"${sh.profileName}" sync skipped - ${detail}`, 'error', 8000);
             this.setRuleSyncError(inst.id, sh.arrProfileId, detail);
             return { ok: false, name: sh.profileName, error: detail };
           }
         } catch (e) {
-          const msg = `${inst.name} unreachable — ${e.message}`;
-          this.showToast(`"${sh.profileName}" sync skipped — ${msg}`, 'error', 8000);
+          const msg = `${inst.name} unreachable - ${e.message}`;
+          this.showToast(`"${sh.profileName}" sync skipped - ${msg}`, 'error', 8000);
           this.setRuleSyncError(inst.id, sh.arrProfileId, msg);
           return { ok: false, name: sh.profileName, error: msg };
         }
       }
-      // Look up the rule once — used for importedProfileId fallback AND
+      // Look up the rule once - used for importedProfileId fallback AND
       // for the SelectedCFs source-of-truth lookup below.
       // useHistoryOnly bypasses rule lookup entirely: required for rollback
       // so prevEntry is the strict source of truth. Without this, rollback
       // would build the body from the (already-modified-by-the-just-undone-
-      // sync) rule, push the current state to Arr, and produce a no-op —
+      // sync) rule, push the current state to Arr, and produce a no-op -
       // user sees rollback succeed but next reset-to-default has nothing
       // to change because the profile was never actually rolled back.
       const rule = useHistoryOnly
@@ -2425,7 +2425,7 @@ export default {
       // Gate the fallback on rule absence, NOT on whether the array
       // parsed: SelectedCFs/ExcludedCFs are omitempty on the backend, so
       // an empty list comes back as `undefined`, not `[]`. When a rule
-      // exists, an absent field means "no entries" and is authoritative —
+      // exists, an absent field means "no entries" and is authoritative -
       // falling back to the (possibly stale) sync-history snapshot here
       // would reintroduce opt-ins/opt-outs the user just cleared. That's
       // what made a freshly-activated default-on CF revert on the next
@@ -2438,7 +2438,7 @@ export default {
         : Object.keys(sh.selectedCFs || {}).filter(k => sh.selectedCFs[k]);
       // Opt-outs follow the same rule-authoritative pattern. Rollback
       // (useHistoryOnly=true) sets rule=null, so the history snapshot's
-      // excludedCFs becomes the only source — without that branch, every
+      // excludedCFs becomes the only source - without that branch, every
       // rolled-back sync would silently re-include CFs the user had opted
       // out of at the time of the original sync.
       const excludedCFs = rule
@@ -2626,7 +2626,7 @@ export default {
     async syncAllForInstance(inst, builderOnly = false) {
       // Iterate auto-sync RULES, not sync-history entries. Earlier this
       // function pulled the latest sync-history entry per arrProfileId
-      // and re-played its overrides — but a failed sync's bad overrides
+      // and re-played its overrides - but a failed sync's bad overrides
       // (e.g. unsatisfiable Min Score) were ALSO recorded in history,
       // so any subsequent Sync All would re-attempt the same bad data
       // and produce yet another bad-data entry, locking the user in a
@@ -2637,7 +2637,7 @@ export default {
       // execute current intent, not replay broken attempts.
       const rules = this.autoSyncRules.filter(r => {
         if (r.instanceId !== inst.id || !r.enabled) return false;
-        // Skip soft-tombstoned rules — their target Arr profile no longer
+        // Skip soft-tombstoned rules - their target Arr profile no longer
         // resolves, so the sync would 404/500. Restore-flow gating uses
         // the same predicate; Sync All shouldn't try harder than Restore.
         if (r.orphanedAt) return false;
@@ -2647,7 +2647,7 @@ export default {
         this.showToast(`Update all (${inst.name}): no profiles with auto-sync enabled`, 'warning', 4000);
         return;
       }
-      // Pre-flight reachability check — bail out with ONE friendly toast
+      // Pre-flight reachability check - bail out with ONE friendly toast
       // instead of iterating N rules and producing N copies of the same
       // "FAILED: ..." line in a single aggregate toast. Uses the existing
       // /api/instances/{id}/test endpoint which already returns a clear
@@ -2656,12 +2656,12 @@ export default {
         const probe = await fetch(`/api/instances/${inst.id}/test`, { method: 'POST' });
         const probeBody = await probe.json().catch(() => ({}));
         if (!probe.ok || probeBody.connected === false) {
-          const detail = probeBody.error || `${inst.name} is not reachable — check that the instance is running.`;
+          const detail = probeBody.error || `${inst.name} is not reachable - check that the instance is running.`;
           this.showToast(`Update all (${inst.name}): ${detail}`, 'error', 8000);
           return;
         }
       } catch (e) {
-        this.showToast(`Update all (${inst.name}): could not reach ${inst.name} — ${e.message}`, 'error', 8000);
+        this.showToast(`Update all (${inst.name}): could not reach ${inst.name} - ${e.message}`, 'error', 8000);
         return;
       }
       // quickSync expects a sync-history-entry shape. Adapt each rule
@@ -2740,7 +2740,7 @@ export default {
       } catch (e) { console.error('loadSyncHistory:', e); }
     },
 
-    // Quick action modal — driven by status pill click. Lets the user
+    // Quick action modal - driven by status pill click. Lets the user
     // review what changed for THIS rule and act (Apply updates / Re-sync /
     // Sync now) without opening the full editor. Escape hatch button
     // opens the editor at the right tab for users who need more context.
@@ -2754,7 +2754,7 @@ export default {
       this.statusReviewSh = sh;
       this.statusReviewKind = status === 'out-of-sync' ? 'drift' : status;
       this.statusReviewOpen = true;
-      // Pending needs a backend round-trip — the change list comes from
+      // Pending needs a backend round-trip - the change list comes from
       // dry-run, not from pre-computed PendingChanges.
       if (this.statusReviewKind === 'pending') {
         this.fetchPendingSyncPlan(rule, inst);
@@ -2783,7 +2783,7 @@ export default {
       if (this.statusReviewKind === 'updates') {
         return this._pdCategorizePending((rule.pendingChanges || []).filter(c => c.source !== 'drift'));
       }
-      // pending — uses dry-run output instead of frontend diff because the
+      // pending - uses dry-run output instead of frontend diff because the
       // rule's persisted fields don't align with what SyncHistory stores
       // (opt-ins vs resolved set, score overrides routing differences).
       return this.syncPlanByCategory(this.statusReviewPendingPlan);
@@ -2836,7 +2836,7 @@ export default {
           await this.updateThisProfile(inst, sh);
         } else {
           // drift OR pending: push Clonarr's current target state to Arr.
-          // No pull needed — neither case requires upstream data.
+          // No pull needed - neither case requires upstream data.
           await this.quickSync(inst, sh);
           await this.loadAutoSyncRules();
         }
@@ -2862,7 +2862,7 @@ export default {
     },
 
     async resyncProfile(inst, shArg) {
-      // Always use the latest sync history entry for this profile — after rollback
+      // Always use the latest sync history entry for this profile - after rollback
       // or other changes, the passed-in sh may be stale (Alpine template reference).
       const freshHistory = (this.syncHistory[inst.id] || []).filter(h => h.arrProfileId === shArg.arrProfileId);
       const sh = freshHistory[0] || shArg;
@@ -2916,18 +2916,18 @@ export default {
         // sync. Distinguishes "user opted out of an existing group" from
         // "group is brand new since last sync (TRaSH restructure)".
         const priorAvailable = (ruleForRestore && ruleForRestore.priorAvailableGroups) || {};
-        // priorSyncedCFs: per-CF snapshot from last successful sync — the
+        // priorSyncedCFs: per-CF snapshot from last successful sync - the
         // trash_ids that ended up in Arr regardless of how they got there
         // (SelectedCFs, formatItems direct path, or group expansion).
         // Used to distinguish "CF is new in this group since last sync
-        // (TRaSH restructure — follow default)" from "CF existed and user
+        // (TRaSH restructure - follow default)" from "CF existed and user
         // chose to leave it off (preserve opt-out)". Without this, NEW
         // default-on CFs inside KNOWN groups get silently flipped off when
         // the rule reopens.
         const priorSyncedCFs = (ruleForRestore && Array.isArray(ruleForRestore.priorSyncedCFs))
           ? new Set(ruleForRestore.priorSyncedCFs)
           : new Set();
-        // Explicit opt-outs from the rule. Highest-priority signal — a
+        // Explicit opt-outs from the rule. Highest-priority signal - a
         // CF here is always off regardless of TRaSH defaults or prior
         // synced state. Persists across syncs and TRaSH restructures.
         const excludedCFs = (ruleForRestore && Array.isArray(ruleForRestore.excludedCFs))
@@ -2952,7 +2952,7 @@ export default {
           const groupWasSynced = group.cfs.some(cf =>
             effectiveSelectedCFs[cf.trashId] || priorSyncedCFs.has(cf.trashId));
           // If the WHOLE group's defaults are excluded, the user
-          // disabled the group — its excludedCFs entries are bulk
+          // disabled the group - its excludedCFs entries are bulk
           // group-off signals, NOT per-CF Phase 2c locks. Treating
           // them as locks would leave the CFs frozen as opt-outs
           // even after the user re-enables the group, which is the
@@ -2965,13 +2965,13 @@ export default {
           for (const cf of group.cfs) {
             if (cf.required) continue;
             if (groupOffViaExcluded) {
-              // Skip the per-CF=false write — the group flag below
+              // Skip the per-CF=false write - the group flag below
               // expresses the off state. Per-CF stays undefined →
               // render falls back to cf.default on re-enable.
               continue;
             }
             if (excludedCFs.has(cf.trashId)) {
-              // Explicit opt-out persists — always off, no exceptions.
+              // Explicit opt-out persists - always off, no exceptions.
               this.selectedOptionalCFs[cf.trashId] = false;
             } else if (effectiveSelectedCFs[cf.trashId]) {
               // CF is currently in the rule's selection → restore as on.
@@ -2993,7 +2993,7 @@ export default {
               // unwanted-formats-german post-PR-2733). If we did, every
               // editor reopen would re-tick CFs the user just deselected.
               // New TRaSH defaults are surfaced as available but not
-              // pre-checked — user opts in explicitly.
+              // pre-checked - user opts in explicitly.
               this.selectedOptionalCFs[cf.trashId] = false;
             } else if (cf.default) {
               // Brand-new default-on group + CF is default-on within → on.
@@ -3015,7 +3015,7 @@ export default {
         }
         this.selectedOptionalCFs = { ...this.selectedOptionalCFs };
       }
-      // Restore Additional CF opt-ins — CFs in rule.selectedCFs that
+      // Restore Additional CF opt-ins - CFs in rule.selectedCFs that
       // DON'T live in any profile-default trashGroup (e.g. HDR, DV,
       // Flux, DD+/DD+ ATMOS for a profile whose default scope doesn't
       // include those groups). The optional-CF loop above only walks
@@ -3042,14 +3042,14 @@ export default {
         }
         this.selectedOptionalCFs = selWithExtras;
       }
-      // Phase 2c — restore required-CF exclusions from rule.ExcludedCFs.
+      // Phase 2c - restore required-CF exclusions from rule.ExcludedCFs.
       // The optional-CF restore loop above intentionally skips required
       // CFs (their inclusion is driven by group state). But Phase 2c
       // lets users opt out of required CFs via the lock-icon UI, so the
       // rule can carry excludedCFs entries that target required CFs
       // (both formatItemNames and required-in-group). Without this
       // restore step, the editor reopens with the exclusion silently
-      // dropped from sel — the Diffs view + lock-icon visuals show the
+      // dropped from sel - the Diffs view + lock-icon visuals show the
       // CF as included even though the rule on disk still excludes it.
       // applyRuleStateToEditor handles this for the single-matching-
       // rule case via openProfileDetail; this is the resyncProfile path
@@ -3096,12 +3096,12 @@ export default {
       }
 
       // Split ruleData.scoreOverrides into (Extra CF) vs (base-profile override).
-      // Rule: if trashID is NOT in the base profile, it's an Extra — belongs
+      // Rule: if trashID is NOT in the base profile, it's an Extra - belongs
       // in extraCFs, NOT cfScoreOverrides. Otherwise it's a base-profile
       // override, and only kept if score differs from TRaSH default (prevents
       // "false-positive" overrides with `default → default` rows that
       // reappear after every refresh). "Also selected" guard uses
-      // effectiveSelectedCFs (rule-preferring) defined earlier — fall back
+      // effectiveSelectedCFs (rule-preferring) defined earlier - fall back
       // to sh.selectedCFs when no rule (orphaned).
       const effectiveSelOpt = (ruleForRestore && Array.isArray(ruleForRestore.selectedCFs))
         ? Object.fromEntries(ruleForRestore.selectedCFs.map(id => [id, true]))
@@ -3120,7 +3120,7 @@ export default {
           const def = this.resolveCFDefaultScore(tid);
           // Keep only if score differs from TRaSH default. When default can't
           // be resolved (older data, missing profile context), keep the entry
-          // — we can't prove it's redundant.
+          // - we can't prove it's redundant.
           if (def === '?' || v !== def) {
             baseOverrides[tid] = v;
           }
@@ -3129,7 +3129,7 @@ export default {
       this.cfScoreOverrides = baseOverrides;
       if (Object.keys(baseOverrides).length > 0) anyOverride = true;
 
-      // Restore quality overrides — prefer structure override over legacy flat map.
+      // Restore quality overrides - prefer structure override over legacy flat map.
       // qualityOverrideActive is the Quality Items editor modal-open flag and
       // must NOT be set here, otherwise the editor would auto-open on every
       // Profile Detail open for any rule with Quality overrides.
@@ -3178,16 +3178,16 @@ export default {
         const appType = this.profileDetail?.instance?.type;
         if (appType) this.loadExtraCFList();
       }
-      // Phase 2c — excludedCFs (required opt-outs + default-on opt-outs)
+      // Phase 2c - excludedCFs (required opt-outs + default-on opt-outs)
       // counts as customization. Without this, a rule whose only edit is
       // an excluded required CF reopens with Customize off and the
-      // "Customize this profile" CTA — even though the rule clearly IS
+      // "Customize this profile" CTA - even though the rule clearly IS
       // customized (Sync Rules pill correctly shows N excluded). Mirror
       // backend ComputeRuleCustomizations bucket 4 / frontend
       // pdExcludedCFCount: count entries that resolve to default CFs.
       //
       // Defensive: if profileDetail.detail hasn't loaded yet (async race
-      // — shouldn't happen since resyncProfile awaits openProfileDetail,
+      // - shouldn't happen since resyncProfile awaits openProfileDetail,
       // but cheap to guard), conservatively flip anyOverride=true so the
       // rule's saved-customization state isn't lost. The downstream
       // diff/badge counters will reconcile correctly once detail loads.
@@ -3202,7 +3202,7 @@ export default {
           }
         }
       }
-      // Restore behavior — prefer rule's behavior (current intent) over sync
+      // Restore behavior - prefer rule's behavior (current intent) over sync
       // history (last applied).
       if (ruleData.behavior) {
         this.syncForm.behavior = { ...this.syncForm.behavior, ...ruleData.behavior };
@@ -3217,7 +3217,7 @@ export default {
       // Auto-enable the Profile Detail overrides toggle if ANY override was
       // restored, so the UI reflects the saved state of the rule (no "All
       // values follow profile defaults" lie when there are real overrides).
-      // Also flip on when the rule carries selectedCFs OR excludedCFs —
+      // Also flip on when the rule carries selectedCFs OR excludedCFs -
       // Additional CF opt-ins (Flux/DD+/HDR for profiles whose default
       // scope excludes them) live in selectedCFs, and Phase 2c lock-clicks
       // live in excludedCFs. Both count as user customizations even when
@@ -3226,14 +3226,14 @@ export default {
       const hasSelectedCFs = ruleForRestore && Array.isArray(ruleForRestore.selectedCFs) && ruleForRestore.selectedCFs.length > 0;
       const hasExcludedCFs = ruleForRestore && Array.isArray(ruleForRestore.excludedCFs) && ruleForRestore.excludedCFs.length > 0;
       if (anyOverride || hasSelectedCFs || hasExcludedCFs) this.pdOverridesEnabled = true;
-      // Issue #52 — snapshot the just-restored state as the dirty-check
+      // Issue #52 - snapshot the just-restored state as the dirty-check
       // baseline. Anything the user changes after this point is an
       // unsaved edit that warrants a Stay/Discard prompt on navigation.
       this._captureProfileBaseline();
     },
 
     async removeSyncHistory(instanceId, arrProfileId) {
-      // Build a descriptive message — name the instance + Arr profile + ID
+      // Build a descriptive message - name the instance + Arr profile + ID
       // so the user can tell which rule they're about to delete (especially
       // important when multiple rules exist for the same TRaSH profile
       // across instances).
@@ -3241,7 +3241,7 @@ export default {
       const instName = (inst && inst.name) || 'instance';
       const arrName = this.resolveArrProfileName(instanceId, arrProfileId) || `profile #${arrProfileId}`;
       const rule = this.autoSyncRules.find(r => r.instanceId === instanceId && r.arrProfileId === arrProfileId);
-      const ruleSuffix = rule ? '' : ' (no active rule — only the history entry will be deleted)';
+      const ruleSuffix = rule ? '' : ' (no active rule - only the history entry will be deleted)';
       const message = `Delete the sync rule for "${arrName}" (#${arrProfileId}) on ${instName}, plus its sync history entry?${ruleSuffix}\n\nThis does NOT delete the profile from ${instName}.`;
       const confirmed = await new Promise(resolve => {
         this.confirmModal = { show: true, title: 'Remove Sync Rule', message, confirmLabel: 'Remove', onConfirm: () => resolve(true), onCancel: () => resolve(false) };
@@ -3310,17 +3310,33 @@ export default {
           return;
         }
         const result = await resp.json();
-        this.showToast(`Restored "${result.arrProfileName}" — ${result.cfsCreated} CF${result.cfsCreated === 1 ? '' : 's'} created, ${result.scoresUpdated} score${result.scoresUpdated === 1 ? '' : 's'} set`, 'info', 6000);
+        this.showToast(`Restored "${result.arrProfileName}" - ${result.cfsCreated} CF${result.cfsCreated === 1 ? '' : 's'} created, ${result.scoresUpdated} score${result.scoresUpdated === 1 ? '' : 's'} set`, 'info', 6000);
         await this.loadAutoSyncRules();
         await this.loadSyncHistory(inst.id);
         return;
       }
     },
 
+    // Distinct TRaSH profiles that have sync rules across this app type's
+    // instances - drives the "in use" filter pills on the Sync Rules tab.
+    syncRulesTrashProfiles(appType) {
+      const seen = new Map();
+      for (const inst of this.instancesOfType(appType)) {
+        for (const sh of (this.syncHistory[inst.id] || [])) {
+          if (sh.importedProfileId || !sh.profileTrashId) continue;
+          if (!seen.has(sh.profileTrashId)) seen.set(sh.profileTrashId, sh.profileName || sh.profileTrashId);
+        }
+      }
+      return Array.from(seen, ([trashId, name]) => ({ trashId, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
     // Deduplicate sync history to latest entry per arrProfileId (entries are newest-first
     // from backend). Then apply optional column sort.
     sortedSyncRules(instId) {
-      const all = (this.syncHistory[instId] || []).filter(sh => !sh.importedProfileId);
+      const all = (this.syncHistory[instId] || []).filter(sh => !sh.importedProfileId
+        // Optional "in use" drill-down filter (set from a TRaSH card or pill).
+        && (!this.syncRulesFilterTrashId || sh.profileTrashId === this.syncRulesFilterTrashId));
       const seen = new Set();
       const rules = [];
       for (const sh of all) {
@@ -3332,7 +3348,7 @@ export default {
       const col = this.syncRulesSort.col || 'arr';
       const dir = this.syncRulesSort.dir === 'desc' ? -1 : 1;
       // Status sort order: failed > drift > pending > ok (most-urgent first
-      // when sorting ascending — matches "show me what needs attention").
+      // when sorting ascending - matches "show me what needs attention").
       const statusOrder = { failed: 0, pending: 1, updates: 2, 'out-of-sync': 3, ok: 4 };
       // Pre-index this instance's rules by arrProfileId so the comparator
       // is O(1) per call. Without this, lastSync / status sorts do
@@ -3370,18 +3386,18 @@ export default {
     // Per-rule status badge. Pending and out-of-sync share the orange
     // colour (same urgency family) but stay separately labelled so the
     // user knows at a glance what action resolves the state.
-    //   'failed'      — lastSyncError set. Red. Wins over everything else
+    //   'failed'      - lastSyncError set. Red. Wins over everything else
     //                   so a broken sync doesn't get buried; tooltip
     //                   exposes the error.
-    //   'pending'     — user saved local overrides without syncing
+    //   'pending'     - user saved local overrides without syncing
     //                   (updatedAt > lastSyncTime). Orange. Resolved by
     //                   clicking Sync.
-    //   'out-of-sync' — upstream TRaSH changes affect this rule's CFs
+    //   'out-of-sync' - upstream TRaSH changes affect this rule's CFs
     //                   (pendingChanges populated by Profile Sync
     //                   detection). Orange. Resolved by clicking Pull.
     //                   Future Arr-side drift (Phase D) joins this state.
-    //   'ok'          — last sync succeeded and nothing pending.
-    //   ''            — no rule object (orphaned display path).
+    //   'ok'          - last sync succeeded and nothing pending.
+    //   ''            - no rule object (orphaned display path).
     v3RuleStatus(rule) {
       if (!rule) return '';
       if (rule.lastSyncError) return 'failed';
@@ -3389,11 +3405,11 @@ export default {
       // (same urgency family) but stay separately labelled so the user
       // can tell at a glance what CAUSE drives the state and what
       // action resolves it:
-      //   pending      — YOU edited locally without syncing
-      //   out-of-sync  — ARR-side drift: someone edited the profile
+      //   pending      - YOU edited locally without syncing
+      //   out-of-sync  - ARR-side drift: someone edited the profile
       //                  directly in Radarr/Sonarr, current state no
       //                  longer matches what clonarr would push
-      //   updates      — TRaSH-Guides UPSTREAM has changes pending
+      //   updates      - TRaSH-Guides UPSTREAM has changes pending
       // Precedence (most-actionable first):
       //   pending > out-of-sync > updates
       // Pending wins because the user already committed to a change
@@ -3420,7 +3436,7 @@ export default {
         case 'updates':      return 'Updates';
         case 'out-of-sync':  return 'Arr drift';
         case 'failed':       return 'Failed';
-        default:             return '—';
+        default:             return '-';
       }
     },
     v3RuleStatusTip(rule) {
@@ -3462,7 +3478,7 @@ export default {
           return lines.join('\n');
         }
         case 'pending': {
-          // Tooltip can't run an async dry-run, so it stays generic — the
+          // Tooltip can't run an async dry-run, so it stays generic - the
           // modal (opened via click) loads the actual change list from
           // /api/sync/dry-run. Earlier attempt to diff client-side here
           // produced false positives (rule.selectedCFs is opt-ins only,
@@ -3482,7 +3498,7 @@ export default {
           const pc = rule.pendingChanges || [];
           // Resolve CF names from local CF cache (backend populates
           // AffectedName at detection-time, but legacy entries written
-          // before that fix have it empty — this fallback covers them).
+          // before that fix have it empty - this fallback covers them).
           const appType = rule.instanceType || '';
           const cfs = (this.cfBrowseData && this.cfBrowseData[appType] && this.cfBrowseData[appType].cfs) || [];
           const nameByID = new Map();
@@ -3500,13 +3516,13 @@ export default {
       }
     },
 
-    // Customizations pill — reads from the ruleCustomizations cache
+    // Customizations pill - reads from the ruleCustomizations cache
     // populated by loadRuleCustomizations() on Sync Rules tab mount.
     // Backend (core.ComputeRuleCustomizations) does the actual diff
     // against TRaSH defaults; the frontend just reads the result.
     //
     // Returns an empty (all-zero) object until the cache loads, which
-    // the markup renders as "—". Once loaded, the breakdown matches
+    // the markup renders as "-". Once loaded, the breakdown matches
     // what the detail view's "Override mode · N changes" header shows
     // for the same rule.
     v3RuleCustomizations(rule) {
@@ -3527,7 +3543,7 @@ export default {
         this.ruleCustomizations = data || {};
         this.ruleCustomizationsLoaded = true;
       } catch (e) {
-        // Network error — keep whatever's in the cache. Pill renders "—"
+        // Network error - keep whatever's in the cache. Pill renders "-"
         // for entries we don't have.
         console.error('loadRuleCustomizations:', e);
       }
@@ -3567,7 +3583,7 @@ export default {
     // Number of CFs currently drifted on at least one instance, for the
     // card-header summary line ("3 drifted" / "All in sync").
     // Number of instances on this row that have a TRaSH upstream
-    // update pending. Symmetric with cfRowDriftCount — feeds the
+    // update pending. Symmetric with cfRowDriftCount - feeds the
     // per-row status pill + "X updates" badges.
     cfRowUpdateCount(row) {
       if (!row || !Array.isArray(row.instances)) return 0;
@@ -3579,7 +3595,7 @@ export default {
     },
 
     cfDriftedCount(appType) {
-      // Reflect what's actually in the current view — when the user
+      // Reflect what's actually in the current view - when the user
       // scopes to one instance via the picker, "drifted" should mean
       // "drifted on THIS instance", not the global cross-instance
       // total. cfSyncRulesFiltered already trims row.instances to
@@ -3652,7 +3668,7 @@ export default {
       //   2. ANY group whose name starts with "SQP" just above Custom
       //      (TRaSH's SQP-N + SQP MA Hybrid + SQP Disable If One...
       //      are profile-targeted quality presets, not content
-      //      categories — they belong as a group at the bottom).
+      //      categories - they belong as a group at the bottom).
       //   3. Everything else alphabetical.
       out.sort((a, b) => {
         if (a.name === 'Custom') return 1;
@@ -3699,7 +3715,7 @@ export default {
       return false;
     },
 
-    // Click on a sidebar parent label — sets it as the active
+    // Click on a sidebar parent label - sets it as the active
     // category AND clears any explicit chevron state so auto-expand
     // (via the active-match check above) takes over. Without the
     // clear, a previously-collapsed parent would stay closed even
@@ -3715,7 +3731,7 @@ export default {
       }
     },
 
-    // Click on a child sub-category — narrows to that sub AND
+    // Click on a child sub-category - narrows to that sub AND
     // clears the parent's explicit state for the same reason
     // (auto-match opens the parent so the picked child is visible).
     cfSRPickSubcategory(parentName, childName) {
@@ -3731,7 +3747,7 @@ export default {
 
     // True when AT LEAST ONE sidebar parent is currently shown
     // (either via auto-match, explicit lock-open, or the active
-    // filter). Drives the Expand all / Collapse all toggle label —
+    // filter). Drives the Expand all / Collapse all toggle label -
     // if any are open, the button reads "Collapse all"; if all are
     // closed, "Expand all".
     cfSRAnyParentExpanded(appType) {
@@ -3760,10 +3776,10 @@ export default {
     // Apply every active filter (category / subcategory / view /
     // instance / search) to the row list. Filters AND together.
     // Filter shapes:
-    //   'all'                                — no filter
-    //   'cat:<parent>'                       — narrow to parent bracket prefix
-    //   'sub:<parent>|<child>'               — narrow to a specific child
-    //   'view:drifted'                       — only rows with drift
+    //   'all'                                - no filter
+    //   'cat:<parent>'                       - narrow to parent bracket prefix
+    //   'sub:<parent>|<child>'               - narrow to a specific child
+    //   'view:drifted'                       - only rows with drift
     // The instance filter on top trims row.instances to just the
     // picked instance so per-row counts scope correctly. Search
     // matches CF name OR any profile name (TRaSH or Arr) inside any
@@ -3999,7 +4015,7 @@ export default {
         // Trim each row's instances to only the drifted ones, and
         // drop rows that end up with zero. Without the per-instance
         // trim, a CF drifted on Radarr (main) but in-sync on Radarr
-        // (4K) would still render an "In sync" row in the 4K card —
+        // (4K) would still render an "In sync" row in the 4K card -
         // surprising when the user explicitly asked for "drifted".
         rows = rows
           .map(r => {
@@ -4183,7 +4199,7 @@ export default {
     // Pull TRaSH then sync the rule(s) on this instance that pull
     // this CF in. The pull step is shared (a single Update click on
     // any CF gets the whole TRaSH-Guides advance), but only the
-    // specific rules tied to this CF run their per-Arr sync — other
+    // specific rules tied to this CF run their per-Arr sync - other
     // rules on the instance stay at their previous lastSyncCommit
     // so the user can opt in CF-by-CF instead of having to commit
     // to "sync everything".
@@ -4191,7 +4207,7 @@ export default {
       if (!instanceId || !trashId || !Array.isArray(ruleIds) || ruleIds.length === 0) return;
       const key = instanceId + ':' + trashId;
       if (this.cfApplyingKey === key) return;
-      // updatingRuleId intentionally NOT guarded — see comment on the
+      // updatingRuleId intentionally NOT guarded - see comment on the
       // button's :disabled binding. updatingInstance is still checked
       // since a card-level Update all on the same instance is a real
       // mutex (both flows pull TRaSH).
@@ -4203,7 +4219,7 @@ export default {
         await fetch('/api/trash/pull', { method: 'POST' });
         await this._waitForPullDone();
         if (this.trashStatus?.pullError) {
-          this.showToast(`Update CF: pull failed — ${this.trashStatus.pullError}`, 'error', 8000);
+          this.showToast(`Update CF: pull failed - ${this.trashStatus.pullError}`, 'error', 8000);
           return;
         }
         await this.loadCFBrowse(inst.type);
@@ -4211,7 +4227,7 @@ export default {
         // Narrow the candidate rule set to ONLY rules that actually
         // have a TRaSH-side pending change matching this trashId.
         // Without this filter, every rule that pulls the CF into its
-        // profile would re-sync — bumping their LastSyncTime to "just
+        // profile would re-sync - bumping their LastSyncTime to "just
         // now" and burning Arr API calls even when those rules had no
         // upstream change to act on. The split-on-first-colon mirrors
         // the backend's affectedId → trash_id recovery in cf_sync_rules.go.
@@ -4294,7 +4310,7 @@ export default {
 
     // Most recent sync timestamp across all profiles pulling this CF
     // into this instance. Used for the collapsed row's "Last sync"
-    // column — gives the user a single representative value when a
+    // column - gives the user a single representative value when a
     // CF is in multiple profiles on the same instance. ISO strings
     // compare lexicographically so a plain string max works. For
     // added-directly rows (no profile entries because no rule pushes
@@ -4311,7 +4327,7 @@ export default {
       return latest;
     },
 
-    // Update all for a single instance card — pushes the saved spec
+    // Update all for a single instance card - pushes the saved spec
     // for every drifted CF on that instance. Replaces the old
     // global Update all (which used the cross-instance filter).
     // Sequential with concurrency cap to avoid hammering Arr.
@@ -4418,7 +4434,7 @@ export default {
 
     // List of instance options for the picker. Sorted by name for
     // a predictable dropdown. Empty when the app type has only one
-    // instance — the picker is then redundant and gets hidden.
+    // instance - the picker is then redundant and gets hidden.
     cfSyncRulesInstanceOptions(appType) {
       const list = this.instancesOfType(appType) || [];
       return list.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -4426,7 +4442,7 @@ export default {
 
     // Toggle the per-(instance, CF) expand row. Single-open: opening
     // row B closes row A. Re-clicking the open row collapses it.
-    // Compound key "<instanceId>:<trashId>" — trashId may itself
+    // Compound key "<instanceId>:<trashId>" - trashId may itself
     // contain colons (custom: prefix) so we split on the FIRST colon
     // only, not via String.split which would mis-segment custom CFs.
     // When opening a drifted row, auto-load the diff for that
@@ -4479,7 +4495,7 @@ export default {
       }
     },
 
-    // Helper for the expand panel — returns true when the diff for
+    // Helper for the expand panel - returns true when the diff for
     // a given (instance, trashId) pair carries any reportable change.
     // Used to gate "Drift was already resolved" vs "Drift detail" sub-states.
     cfDriftDiffHasChanges(diff) {
@@ -4509,13 +4525,13 @@ export default {
         }
       }
       if (queue.length === 0) {
-        this.showToast('Nothing to apply — no drift detected.', 'info', 3000);
+        this.showToast('Nothing to apply - no drift detected.', 'info', 3000);
         return;
       }
       this.cfApplyAllProgress = { running: true, total: queue.length, done: 0, label: '' };
       let succeeded = 0;
       const failures = [];
-      // Worker pool — 2 parallel Apply calls feels safe on Arr. The
+      // Worker pool - 2 parallel Apply calls feels safe on Arr. The
       // body is tiny and the bottleneck is Arr-side validation.
       const concurrency = 2;
       let next = 0;
@@ -4628,7 +4644,7 @@ export default {
       const changeEntries = allEntries.filter(e => e.changes);
       const prevEntry = changeEntries[entryIdx + 1] || allEntries[allEntries.length - 1];
       if (!prevEntry || prevEntry === entry) {
-        this.showToast('No previous state to rollback to — this is the earliest recorded sync.', 'warning', 6000);
+        this.showToast('No previous state to rollback to - this is the earliest recorded sync.', 'warning', 6000);
         return;
       }
       const date = new Date(entry.appliedAt || entry.lastSync).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -4661,7 +4677,7 @@ export default {
       this.showToast(`Rolling back "${entry.arrProfileName}" to ${prevDate}...`, 'info', 3000);
       // useHistoryOnly=true: rebuild the request strictly from prevEntry's
       // snapshot. The rule's current state reflects the just-completed sync
-      // we're trying to undo — falling through to it would no-op the
+      // we're trying to undo - falling through to it would no-op the
       // rollback (push current rule state == post-undo state).
       const result = await this.quickSync(inst, prevEntry, true, true);
       if (result.ok) {
@@ -4709,7 +4725,7 @@ export default {
     //
     // Walks rule.selectedCFs and matches each entry against cf-groups data
     // to determine if it's a TRaSH customization (non-default
-    // activation). Returns 0 when cf-groups data isn't loaded yet — badge
+    // activation). Returns 0 when cf-groups data isn't loaded yet - badge
     // hidden in that case until user visits Custom Formats tab and the
     // browse data populates. Approximation note: a single trash_id can
     // theoretically appear in multiple cf-groups with different default
@@ -4745,7 +4761,7 @@ export default {
         if (info.cfRequired) {
           // Required CFs don't count individually. But if their group has
           // no optional members AND group is default-OFF, the group toggle
-          // is the only signal — count once per such group.
+          // is the only signal - count once per such group.
           if (!info.groupDefault && !info.hasOptionalMembers && !groupCountedOnce.has(info.groupName)) {
             n++;
             groupCountedOnce.add(info.groupName);
@@ -4774,7 +4790,7 @@ export default {
     },
 
     // Count how many Quality fields differ (currently: cutoffQuality only).
-    // Any value that isn't the TRaSH default counts — including "__skip__" (don't sync).
+    // Any value that isn't the TRaSH default counts - including "__skip__" (don't sync).
     pdQualityChangeCount() {
       const p = this.profileDetail?.detail?.profile || {};
       const cq = this.pdOverrides.cutoffQuality || '';
@@ -4792,28 +4808,28 @@ export default {
       const quality = this.pdQualityChangeCount() + this.pdQualityItemsChangeCount();
       // Customizations: union of cfScoreOverrides (TRaSH-base CFs whose
       // score the user changed) + extraCFs (CFs added beyond profile
-      // defaults). A CF can be in both maps (added + score-changed) — count
+      // defaults). A CF can be in both maps (added + score-changed) - count
       // once via Set union. Replaces the old separate cfScores + extraCFs
       // counts for the unified CF Customizations section.
-      // Walk pdAllCustomizations(). added and overridden OVERLAP — a CF that
+      // Walk pdAllCustomizations(). added and overridden OVERLAP - a CF that
       // was added beyond profile defaults AND has a custom score (≠ TRaSH
       // default) counts in BOTH. Visual row already paints both states
       // (orange name from isAdded + orange score from .overridden class);
       // the badge counts now mirror that. Sum (added + overridden) may
-      // therefore exceed customizations — that's intentional, the union
+      // therefore exceed customizations - that's intentional, the union
       // total stays accurate via customizations.
       const all = this.pdAllCustomizations();
       const added = all.filter(it => it.isAdded).length;
       const overridden = all.filter(it => it.isOverridden).length;
       const customizations = all.length;
-      // Legacy fields — mirror the filtered counts above so any binding
+      // Legacy fields - mirror the filtered counts above so any binding
       // that still references them stays consistent with the unified view
       // (orphan custom: refs are excluded). Will be removed once confirmed
       // unused.
       const cfScores = overridden;
       const extraCFs = added;
       const optional = this.pdOptionalCount();
-      // Phase 2c — excluded CFs (lock-icon opt-outs + default-on
+      // Phase 2c - excluded CFs (lock-icon opt-outs + default-on
       // optional opt-outs) count toward total. Without this the
       // header reads "0 changes" for a rule that materially excludes
       // CFs from sync (the user's "no changes" confusion).
@@ -4842,11 +4858,11 @@ export default {
     // and returns one entry per unique trashId, annotated with everything
     // the renderer needs to color-code by role:
     //
-    //   isAdded     — CF is in extraCFs (beyond profile's TRaSH-base set)
-    //   isOverridden — score differs from the CF's TRaSH default
-    //   defaultScore — the CF's TRaSH default for the active score-set
-    //   currentScore — what the user has set
-    //   groupName    — which TRaSH cf-group the CF belongs to (display label)
+    //   isAdded     - CF is in extraCFs (beyond profile's TRaSH-base set)
+    //   isOverridden - score differs from the CF's TRaSH default
+    //   defaultScore - the CF's TRaSH default for the active score-set
+    //   currentScore - what the user has set
+    //   groupName    - which TRaSH cf-group the CF belongs to (display label)
     //
     // Sorted by groupName then CF name so customizations group visually
     // by their source. CFs that are in both maps render once (isAdded
@@ -4872,7 +4888,7 @@ export default {
           const cf = (g.cfs || []).find(c => c.trashId === tid);
           if (cf) return { name: cf.name, category: g.category || 'Other', groupName: g.name, defaultScore: this.resolveCFDefaultScore(tid), description: cf.description, isDangling: false };
         }
-        // formatItemNames covers the "Required CFs" surface — TRaSH-base CFs
+        // formatItemNames covers the "Required CFs" surface - TRaSH-base CFs
         // that live directly in profile.FormatItems (no source cf-group).
         // Base Profile especially has many of these (Wrong Language etc.),
         // and without this lookup the CF Customizations row falls back to a
@@ -4894,16 +4910,16 @@ export default {
             return { name: cf.name, category: 'Custom', groupName: '', defaultScore: cf.score ?? 0, description: cf.description || '', isDangling: false };
           }
         }
-        // Dangling — rule references a CF that no longer exists. Two cases:
+        // Dangling - rule references a CF that no longer exists. Two cases:
         //
-        //   custom:<id>  — user deleted the custom CF. Permanent: it will
+        //   custom:<id>  - user deleted the custom CF. Permanent: it will
         //     never resolve again. Hide entirely; sync's cfSetDetails diff
         //     emits "Removed: <id>" once on the next sync (same UX as a
         //     TRaSH-upstream removal). Backend's
         //     CleanupDanglingCustomCFsOnRule strips it from rule data on
         //     the same successful sync so the diff fires exactly once.
         //
-        //   TRaSH ids    — usually transient: TRaSH cache empty right
+        //   TRaSH ids    - usually transient: TRaSH cache empty right
         //     after Reset (until Pull), or upstream restructure moved the
         //     CF. Will resolve again after the next Pull. Render as a
         //     placeholder row so the user keeps visibility of their full
@@ -4956,7 +4972,7 @@ export default {
       for (const [tid, score] of Object.entries(this.extraCFs)) {
         if (seen.has(tid)) continue;
         const meta = lookup(tid);
-        if (meta === null) { seen.add(tid); continue; } // permanent orphan (deleted custom CF) — hide
+        if (meta === null) { seen.add(tid); continue; } // permanent orphan (deleted custom CF) - hide
         const def = meta.defaultScore;
         items.push({
           trashId: tid,
@@ -4977,7 +4993,7 @@ export default {
         const def = this.resolveCFDefaultScore(tid);
         if (def !== '?' && score === def) continue; // not actually overridden
         const meta = lookup(tid);
-        if (meta === null) { seen.add(tid); continue; } // permanent orphan (deleted custom CF) — hide
+        if (meta === null) { seen.add(tid); continue; } // permanent orphan (deleted custom CF) - hide
         items.push({
           trashId: tid,
           name: meta.name,
@@ -4996,13 +5012,13 @@ export default {
       return items;
     },
 
-    // Phase 2c — count of excluded CFs that affect the synced output
+    // Phase 2c - count of excluded CFs that affect the synced output
     // (i.e. the CF would normally sync as part of the profile's
     // defaults). Mirrors backend ComputeRuleCustomizations.ExcludedCFs
     // so frontend + Sync Rules pill agree. Kept as a separate count
     // (rather than folded into pdAllCustomizations) so the existing
-    // CF Customizations card render — which only knows how to show
-    // added / score-overridden CFs — stays unchanged. Sync Preview's
+    // CF Customizations card render - which only knows how to show
+    // added / score-overridden CFs - stays unchanged. Sync Preview's
     // Diffs view surfaces the detail via spOverviewDiffs bucket 5.
     pdExcludedCFCount() {
       const sel = this.selectedOptionalCFs || {};
@@ -5012,7 +5028,7 @@ export default {
       // (the restore path intentionally skips per-CF sel writes to
       // avoid freezing them as Phase 2c locks on re-enable). Backend
       // ComputeRuleCustomizations counts them via rule.ExcludedCFs ∩
-      // ComputeTrashDefaults — match here so the Sync Rules pill total
+      // ComputeTrashDefaults - match here so the Sync Rules pill total
       // and the editor header total agree end-to-end.
       const offGroupCFs = new Set();
       for (const g of (this.profileDetail?.detail?.trashGroups || [])) {
@@ -5033,7 +5049,7 @@ export default {
 
     // Hybrid layout for the CF Customizations card: split pdAllCustomizations()
     // into flat rows (CFs whose source group has only one customized entry, or
-    // no group at all) and group cards (groups with 2+ customized entries —
+    // no group at all) and group cards (groups with 2+ customized entries -
     // collapsible to keep the section compact when many CFs are tweaked).
     // Returns { flat: [...], groups: [{name, category, items: []}] }.
     // Flat list preserves the parent sort (by groupName then name).
@@ -5083,7 +5099,7 @@ export default {
     // Counts non-required CFs whose selected state diverges from cf.default
     // (or from false when the group is default-OFF). For groups that have
     // optional members (any cf.required === false), the group toggle is NOT
-    // counted separately — toggling the group on/off is implicit in the
+    // counted separately - toggling the group on/off is implicit in the
     // per-CF count, so adding it would double-count. For groups whose only
     // members are REQUIRED (e.g. HDR Formats HDR / HDR Formats DV Boost,
     // single-CF groups marked required), the per-CF loop skips everything,
@@ -5123,13 +5139,13 @@ export default {
     },
 
     // ---------------------------------------------------------------
-    // Compare classification — taxonomy + status + sub-tab visibility
+    // Compare classification - taxonomy + status + sub-tab visibility
     // ---------------------------------------------------------------
     // Taxonomy answers: where does this CF live in the guide profile?
     //   'required'   = formatItem, OR cf.required:true inside a
     //                  default-on group (locked-on by guide default).
     //   'default-on' = default-on group + cf.default:true (on by
-    //                  default but unlocked — user can opt out).
+    //                  default but unlocked - user can opt out).
     //   'optional'   = everything else: optional cf-group (regardless
     //                  of internal flags), OR a non-required/non-
     //                  default CF inside a default-on group (e.g. MP3
@@ -5153,11 +5169,11 @@ export default {
       if (group?.exclusive) {
         // Exclusive groups (Golden Rule HD/UHD, HDR Formats SDR):
         // user must pick at most one. Unchosen variants at score=0
-        // are correct-per-exclusivity, not a diff — hide via 'na'.
+        // are correct-per-exclusivity, not a diff - hide via 'na'.
         const scoredCount = (group.cfs || []).filter(c => c.exists && c.currentScore !== 0).length;
         if (scoredCount === 0) {
           // No variant picked. For default-OFF exclusive groups the
-          // user has nothing to fix — they opted out. For default-ON
+          // user has nothing to fix - they opted out. For default-ON
           // ones the guide expects ONE pick; surface only the
           // TRaSH-recommended variant (cf.default) as missing so the
           // user gets a single actionable signal (not all variants
@@ -5178,7 +5194,7 @@ export default {
       }
       // Optional taxonomy
       if (cf.exists && cf.currentScore !== 0) {
-        // User opted in — compare vs guide score (which is the
+        // User opted in - compare vs guide score (which is the
         // recommended score when on)
         return cf.scoreMatch ? 'match' : 'wrong';
       }
@@ -5196,7 +5212,7 @@ export default {
           // Required-by-default rows only (no optional, no opted-in optional)
           return inDefault;
         case 'optional':
-          // All optional offerings — opted-in or not (showing the
+          // All optional offerings - opted-in or not (showing the
           // available menu of TRaSH optionals)
           return tax === 'optional';
         case 'all-diffs':
@@ -5209,7 +5225,7 @@ export default {
           // Score mismatches only, scoped to default-on + opted-in.
           return st === 'wrong';
         case 'missing':
-          // Missing only — strictly required/default-on bucket.
+          // Missing only - strictly required/default-on bucket.
           return st === 'missing';
         case 'all-active':
           // Arr-perspective: anything actually scored in Arr right now.
@@ -5223,12 +5239,12 @@ export default {
           return inDefault;
       }
     },
-    // Section-block visibility — show the group header if at least one
+    // Section-block visibility - show the group header if at least one
     // of its CFs is visible in the current sub-tab.
     cmpGroupVisibleIn(group, subTab) {
       return (group?.cfs || []).some(cf => this.cfVisibleIn(cf, group, subTab));
     },
-    // Required-CFs section (formatItems) visibility — same idea but
+    // Required-CFs section (formatItems) visibility - same idea but
     // for the synthetic Required CFs block. Synthesise a status using
     // the always-required taxonomy.
     cmpRequiredVisibleIn(cr, subTab) {
@@ -5249,7 +5265,7 @@ export default {
         return false;
       });
     },
-    // Group taxonomy badge — 'default-on' or 'optional'.
+    // Group taxonomy badge - 'default-on' or 'optional'.
     cmpGroupBadge(group) {
       return group?.defaultEnabled ? 'default-on' : 'optional';
     },
@@ -5264,7 +5280,7 @@ export default {
     cmpPaneDescription(subTab) {
       switch (subTab || this.compareFilter) {
         case 'overview':
-          return 'What the guide turns on by default — Required CFs and the CFs in groups the guide enables out of the box. Shows match, wrong score, or missing for each.';
+          return 'What the guide turns on by default - Required CFs and the CFs in groups the guide enables out of the box. Shows match, wrong score, or missing for each.';
         case 'optional':
           return 'CFs the guide makes available but does not turn on by default. Opt-in only.';
         case 'general':
@@ -5272,7 +5288,7 @@ export default {
         case 'quality':
           return 'Quality items and cutoff. Shows what is enabled in your profile vs what the guide enables.';
         case 'all-diffs':
-          return 'Everything that differs from the guide — grouped by Required → Default on → Optional. Optional CFs only appear here if you have enabled them.';
+          return 'Everything that differs from the guide - grouped by Required → Default on → Optional. Optional CFs only appear here if you have enabled them.';
         case 'wrong':
           return 'CFs where your Arr score does not match the guide score. Includes optional CFs you have opted into.';
         case 'extra':
@@ -5301,14 +5317,14 @@ export default {
         case 'all-active': return status !== 'optional-off' && status !== 'na';
         // Defensive fallback for unrecognised filter values (e.g. an
         // old persisted state value like 'all' / 'diff' / 'match').
-        // Render the row instead of swallowing it — better to over-
+        // Render the row instead of swallowing it - better to over-
         // show than to display an empty Compare view silently.
         default: return true;
       }
     },
     // Determine status class for a format-item row (required CF or group CF)
     // A CF with score=0 when the guide expects non-zero is functionally
-    // identical to "not in the profile" — Arr's scoring engine ignores
+    // identical to "not in the profile" - Arr's scoring engine ignores
     // 0-score entries. Two thin delegations to the unified classifier
     // so legacy callsites (compareRowVisible, ad-hoc x-show conditions
     // in older templates) keep working without churn.
@@ -5328,10 +5344,10 @@ export default {
     },
 
     // Returns compare summary counts for the sub-nav. Backend totals
-    // (s.missing / s.wrongScore) classify by name-match only — a CF
+    // (s.missing / s.wrongScore) classify by name-match only - a CF
     // with score=0 when guide expects non-zero counts as "wrong score"
     // there. Frontend reclassifies these as "missing" (they're
-    // functionally absent — Arr ignores 0-score entries), so we
+    // functionally absent - Arr ignores 0-score entries), so we
     // recompute missing + wrong client-side using the per-row helpers
     // for consistency with what the user sees in the tables.
     compareAdjustedCounts(cr) {
@@ -5379,7 +5395,7 @@ export default {
     },
 
     // Effective diff: how many leaf resolutions end up with a different `allowed` state than the
-    // TRaSH original after the user's edits. Grouping/rename/reorder alone don't count — only
+    // TRaSH original after the user's edits. Grouping/rename/reorder alone don't count - only
     // changes that actually affect the sync outcome (which resolutions Arr will see as enabled).
     pdQualityItemsChangeCount() {
       // Flatten a structure to a {leafName → allowed} map. Groups push their allowed down to members.
@@ -5433,7 +5449,7 @@ export default {
     },
 
     // Clear all profile-detail override flags and transient editor state.
-    // Does NOT touch pdOverrides values — caller handles that via pdInitOverrides() if needed.
+    // Does NOT touch pdOverrides values - caller handles that via pdInitOverrides() if needed.
     // Used by: loadProfileDetail (fresh load), Back-link (leaving the view), pdResetAllOverrides.
     pdResetDetailState() {
       this.pdOverridesEnabled = false;
@@ -5457,7 +5473,7 @@ export default {
       // They hold the heavy /all-cfs catalog which is identical for
       // every profile of the same Arr type. loadExtraCFList() checks
       // _extraCFGroupsCachedType and skips the network fetch when the
-      // cache still matches — wiping it here would force a refetch on
+      // cache still matches - wiping it here would force a refetch on
       // every profile-detail open. Invalidated by Pull/Reset via
       // clearTrashDerivedCaches.
       this._extraInProfileSet = null;
@@ -5467,7 +5483,7 @@ export default {
     // modal listing what will be cleared (per-section breakdown), then either
     // calls pdDisableOverrides() on confirm or no-ops on cancel. When there are
     // no actual overrides yet (user just enabled the toggle), skips the modal
-    // and disables silently — nothing to lose.
+    // and disables silently - nothing to lose.
     pdConfirmDisable() {
       const s = this.pdOverrideSummary();
       if (s.total === 0 && s.optional === 0) {
@@ -5499,7 +5515,7 @@ export default {
     // Disable the Profile Detail overrides toggle. Clears all override state
     // (general, quality, scores, extras) AND resets CF-group state
     // (selectedOptionalCFs) so the next Save & Sync sends a clean body that
-    // reverts the rule to profile defaults — equivalent to creating a fresh
+    // reverts the rule to profile defaults - equivalent to creating a fresh
     // sync from scratch. Caller (pdConfirmDisable) is responsible for
     // showing the confirm modal first.
     pdDisableOverrides() {
@@ -5520,7 +5536,7 @@ export default {
       // default-disabled group is off (no per-CF toggles set). Without this
       // call, a user who'd toggled "Optional Movie Versions" on or
       // "Unwanted Formats" off would see those decisions persist past
-      // Reset — exactly the divergence the button is meant to undo.
+      // Reset - exactly the divergence the button is meant to undo.
       const detail = this.profileDetail?.detail;
       if (detail) this.initSelectedCFs(detail);
       else this.selectedOptionalCFs = {};
@@ -5583,7 +5599,7 @@ export default {
     // True when the editor has unsaved changes vs the baseline taken
     // at load time. Returns false when no editor is open (no
     // profileDetail) or no baseline was captured yet (race window
-    // during initial load — better to say "not dirty" than to gate
+    // during initial load - better to say "not dirty" than to gate
     // navigation on a snapshot that doesn't exist).
     profileDetailIsDirty() {
       if (!this.profileDetail || !this._profileBaseline) return false;
@@ -5593,7 +5609,7 @@ export default {
     // Centralised editor-close handler. Called by the Cancel button +
     // sidebar navigation guards. When dirty, shows a Stay / Discard
     // modal. The done callback fires after Discard (or immediately if
-    // not dirty) — caller passes a function that performs whatever
+    // not dirty) - caller passes a function that performs whatever
     // destination action they wanted (route change, app switch,
     // open-other-rule, etc.).
     closeProfileEditor(done) {
@@ -5630,7 +5646,7 @@ export default {
     // user's saved sync rule pre-loaded (via applyRuleStateToEditor) AND
     // comparison-derived overrides layered on top (via
     // prefillOverridesFromCompare). The user then edits in the same UI as
-    // a normal Profile Sync — buildSyncBody / startApply / handleApply all
+    // a normal Profile Sync - buildSyncBody / startApply / handleApply all
     // run identical code to Profile Sync's Save & Sync, so the rule and
     // Sync All stay consistent.
     async openCompareEditor(inst, arrProfileId, trashProfileId) {
@@ -5648,12 +5664,12 @@ export default {
       // Pre-flight: detect CFs that exist in the Arr profile but not in
       // Clonarr (neither TRaSH guide nor user custom). Without warning,
       // they silently drop from the editor and get removed from the Arr
-      // profile on the next sync — Clonarr only manages what it knows
+      // profile on the next sync - Clonarr only manages what it knows
       // about. Load the catalog first, then surface a modal with the
       // user's three options: cancel, continue without importing, or
       // import them as Clonarr custom formats and then continue.
       //
-      // Explicit appType arg because profileDetail isn't set yet — the
+      // Explicit appType arg because profileDetail isn't set yet - the
       // default loadExtraCFList() path reads it from profileDetail and
       // would no-op here.
       await this.loadExtraCFList(inst.type);
@@ -5672,7 +5688,7 @@ export default {
           const ok = await this._importArrOnlyCFs(inst, arrOnlyNames);
           if (!ok) return;
           // Refresh the catalog so the freshly-imported customs resolve
-          // in prefillOverridesFromCompare below — without this, they'd
+          // in prefillOverridesFromCompare below - without this, they'd
           // still land in _compareArrOnlyExtras as if never imported.
           // Explicit appType again since profileDetail still isn't set.
           this._extraCFGroupsCachedType = null;
@@ -5760,7 +5776,7 @@ export default {
         }
         let msg = `Imported ${added} custom format${added === 1 ? '' : 's'} from ${inst.name}.`;
         if (skipped > 0) {
-          msg += ` Skipped ${skipped} due to name collisions — those stay in ${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} unmanaged.`;
+          msg += ` Skipped ${skipped} due to name collisions - those stay in ${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} unmanaged.`;
         }
         this.showToast(msg, 'success', 6000);
         // Refresh the Custom Formats tab data so the newly-imported CFs
@@ -5785,7 +5801,7 @@ export default {
     //                                                 // state as overrides
     //
     // Arr-only extras (CFs in Arr but not in any TRaSH cf-group, e.g. user-
-    // imported release-group customs) live in this._compareArrOnlyExtras —
+    // imported release-group customs) live in this._compareArrOnlyExtras -
     // they can't live in pdOverrides.extraCFs (trash-id-keyed) until those
     // CFs are imported as clonarr custom CFs first.
     prefillOverridesFromCompare(comparison) {
@@ -5877,7 +5893,7 @@ export default {
 
       // --- Additional CFs (CFs in Arr profile but not in any TRaSH cf-group
       // for this profile). These carry name + arrCFID + score in the
-      // comparison response — no trashID. To surface them in the editor's
+      // comparison response - no trashID. To surface them in the editor's
       // Additional CFs card (which is keyed by trashID), look up name in
       // extraCFAllCFs (loaded by loadExtraCFList in openCompareEditor) and
       // populate this.extraCFs by the resolved trashID. Includes:
@@ -5905,7 +5921,7 @@ export default {
           // Mark the CF as explicitly enabled so the per-CF toggle in
           // the editor renders ON (read by `:checked="selectedOptionalCFs[cf.trashId]"`).
           // Without this, the toggle visually reads false even though
-          // the CF is in extras and would sync correctly — the "X of Y
+          // the CF is in extras and would sync correctly - the "X of Y
           // enabled" counter also reads from this map, so the user
           // sees "0 of N enabled" while the CF is actually active.
           selOpt[tid] = true;
@@ -5919,7 +5935,7 @@ export default {
       this._compareArrOnlyExtras = unresolved;
 
       // Customize-this-profile must flip on whenever the comparison
-      // surfaced any divergence the user can act on — that includes
+      // surfaced any divergence the user can act on - that includes
       // resolved Additional CFs (TRaSH-guide or freshly-imported
       // customs) and unresolved Arr-only CFs alike. Without this,
       // the editor opens in non-customize mode and the Additional CFs
@@ -5998,7 +6014,7 @@ export default {
       const valid = source.some(it => it.name === cutoff && it.allowed);
       if (valid) return;
 
-      // Not valid — pick first allowed as fallback
+      // Not valid - pick first allowed as fallback
       const firstAllowed = source.find(it => it.allowed);
       this.pdOverrides.cutoffQuality = firstAllowed ? firstAllowed.name : '';
     },
@@ -6026,7 +6042,7 @@ export default {
 
     // Shared qs editor state (editMode / expanded / renaming) is used by BOTH the Builder's
     // inline editor and the Edit view's inline editor. Must be cleared whenever either editor
-    // closes — otherwise re-opening the other one lands mid-edit with drag handles visible.
+    // closes - otherwise re-opening the other one lands mid-edit with drag handles visible.
     qsCloseSharedState() {
       this.qualityStructureEditMode = false;
       this.qualityStructureExpanded = {};
@@ -6041,7 +6057,7 @@ export default {
     // Drag-drop on a gap → reorder (or ungroup-and-insert if dragging a member)
     // Resolve the target array for quality-editor helpers. 'edit' = profile-detail's qualityStructure,
     // 'builder' = Profile Builder's pb.qualityItems. Both share the same shape { name, allowed, items? }
-    // and the same editor UI state (qualityStructureEditMode/Expanded/Renaming/Drag) — only one
+    // and the same editor UI state (qualityStructureEditMode/Expanded/Renaming/Drag) - only one
     // editor is open at a time so shared state is safe.
     _qsArr(target) { return target === 'builder' ? this.pb.qualityItems : this.qualityStructure; },
     _qsSetArr(target, v) {
@@ -6094,7 +6110,7 @@ export default {
           this.inputModal = {
             show: true,
             title: 'New Quality Group',
-            message: 'Both qualities will be merged into a single group. Arr will treat them as equal — CF scores decide the winner.',
+            message: 'Both qualities will be merged into a single group. Arr will treat them as equal - CF scores decide the winner.',
             value: defaultName,
             placeholder: 'Group name',
             confirmLabel: 'Create',
@@ -6246,7 +6262,7 @@ export default {
           this.qualityStructureExpanded = {};
           this.qualityStructureRenaming = null;
           this.qsResetDrag();
-          // Close the editor after reset — the modal is now empty
+          // Close the editor after reset - the modal is now empty
           // (no structure overrides → profile defaults flow through
           // the underlying Profile editor without the modal). Without
           // this close, the user lands on an empty editor with only
@@ -6270,7 +6286,7 @@ export default {
     // Deep structural equality: does qualityStructure exactly match the
     // profile's default items (same order, same names, same allowed flags,
     // same group nesting)? Used by buildSyncBody to skip persisting a
-    // qualityStructure that's identical to defaults — prevents phantom
+    // qualityStructure that's identical to defaults - prevents phantom
     // overrides when the user just opened the editor without making changes.
     // Considers ordering significant (reorder is a real override).
     qualityStructureMatchesDefaults() {
@@ -6292,7 +6308,7 @@ export default {
       return true;
     },
 
-    // Debug logging helper — fire-and-forget POST to backend
+    // Debug logging helper - fire-and-forget POST to backend
     debugLog(category, message) {
       if (!this.config?.debugLogging) return;
       fetch('/api/debug/log', {
@@ -6304,7 +6320,7 @@ export default {
 
     timeAgo(isoString) {
       if (!isoString) return 'never';
-      void this._nowTick; // reactive dependency — triggers re-render every 30s
+      void this._nowTick; // reactive dependency - triggers re-render every 30s
       const diff = Date.now() - new Date(isoString).getTime();
       const mins = Math.floor(diff / 60000);
       if (mins < 1) return 'just now';
@@ -6349,7 +6365,7 @@ export default {
     // pdCurrentRule resolves the rule the editor is currently editing.
     // Returns null when the editor is in Create-New flow (no rule yet)
     // or when autoSyncRules hasn't loaded. Same lookup pattern as
-    // saveRuleOnly — by instance + locked Arr-profile-id.
+    // saveRuleOnly - by instance + locked Arr-profile-id.
     pdCurrentRule() {
       if (!this.profileDetail || !this.profileDetail.instance) return null;
       const inst = this.profileDetail.instance;
@@ -6424,10 +6440,10 @@ export default {
     },
     // Convert SyncPlan dry-run output into the same { general, quality, cfs }
     // shape the modal renders. SyncPlan structure (from internal/core/sync.go):
-    //   CFActions       []CFAction      — { trashId, name, action: create|update|unchanged, arrId }
-    //   ScoreActions    []ScoreAction   — { cfName, arrCfId, oldScore, newScore, action }
-    //   QualityPreview  []string        — human-readable "Bluray-2160p: Enabled → Disabled"
-    //   SettingsPreview []string        — human-readable "Upgrade Until: WEB 1080p → WEB 2160p"
+    //   CFActions       []CFAction      - { trashId, name, action: create|update|unchanged, arrId }
+    //   ScoreActions    []ScoreAction   - { cfName, arrCfId, oldScore, newScore, action }
+    //   QualityPreview  []string        - human-readable "Bluray-2160p: Enabled → Disabled"
+    //   SettingsPreview []string        - human-readable "Upgrade Until: WEB 1080p → WEB 2160p"
     syncPlanByCategory(plan) {
       const out = { general: [], quality: [], cfs: [] };
       if (!plan) return out;
@@ -6480,7 +6496,7 @@ export default {
           }
           continue;
         }
-        // General — profile-level settings (name, score thresholds,
+        // General - profile-level settings (name, score thresholds,
         // upgrade allowed, language). Score thresholds belong to General
         // tab in TRaSH/Arr's profile editor, not Quality items.
         if (t === 'profile-name' ||
@@ -6492,8 +6508,8 @@ export default {
           out.general.push(c);
           continue;
         }
-        // Quality items — cutoff QUALITY (not score) + per-quality allowed flips.
-        // profile-modified is the legacy generic emit (pre-granular) —
+        // Quality items - cutoff QUALITY (not score) + per-quality allowed flips.
+        // profile-modified is the legacy generic emit (pre-granular) -
         // map there since its phrasing was "quality settings updated".
         if (t === 'profile-modified' ||
             t === 'profile-quality-cutoff' ||
@@ -6503,7 +6519,7 @@ export default {
           out.quality.push(c);
           continue;
         }
-        // Custom Formats — cf-modified, cf-group-*, profile-formatitem-*
+        // Custom Formats - cf-modified, cf-group-*, profile-formatitem-*
         out.cfs.push(c);
       }
       return out;
@@ -6514,7 +6530,7 @@ export default {
     pdPendingByCategoryDrift() {
       return this._pdCategorizePending(this.pdPendingChangesDrift());
     },
-    // Resolve CF display name for CF-section entries — pulls from cache
+    // Resolve CF display name for CF-section entries - pulls from cache
     // when backend's AffectedName is empty (legacy entries written before
     // the AffectedName fix).
     pdResolveUpdateName(c) {
@@ -6549,7 +6565,7 @@ export default {
       const inst = this.profileDetail.instance;
       const arrId = this.profileDetail._editLockedArrProfileId || 0;
       if (!arrId) {
-        this.showToast('No saved rule yet — Save & Sync first to create the rule, then Update.', 'warning', 6000);
+        this.showToast('No saved rule yet - Save & Sync first to create the rule, then Update.', 'warning', 6000);
         return;
       }
       const rule = this.pdCurrentRule();
@@ -6580,7 +6596,7 @@ export default {
       if (mode === 'auto') {
         return when ? 'Otherwise scheduled pull will apply ' + when + '.' : '';
       }
-      // notify / delayed / manual — no automatic apply currently. The
+      // notify / delayed / manual - no automatic apply currently. The
       // delayed-mode auto-apply scheduler hasn't shipped yet (Phase D);
       // until it does, "delayed" behaves identically to "notify": detection
       // runs on schedule, apply is manual via this Update button.
@@ -6594,7 +6610,7 @@ export default {
       const suffix = clock ? ' (' + clock + ')' : '';
       // Mode-aware label: in Notify/Delayed mode the scheduler runs a
       // detection-only check (no pull), so the wording must reflect what
-      // actually happens on the next tick — not "pull" which implies
+      // actually happens on the next tick - not "pull" which implies
       // fetching new TRaSH data.
       const mode = (this.config?.profileSync?.mode || '').toLowerCase();
       const action = (mode === 'notify' || mode === 'delayed') ? 'check' : 'pull';
@@ -6603,10 +6619,10 @@ export default {
 
     // Sidebar-footer helpers. Together with the mode-aware nextPullLabel
     // they make the footer reflect what the scheduler actually does in the
-    // user's current Mode — "Last checked" in Notify/Delayed, "TRaSH
-    // pulled" in Auto — instead of always claiming "pulled" even when no
+    // user's current Mode - "Last checked" in Notify/Delayed, "TRaSH
+    // pulled" in Auto - instead of always claiming "pulled" even when no
     // pull happened.
-    // Sidebar footer status — is upstream ahead of local? True when
+    // Sidebar footer status - is upstream ahead of local? True when
     // ProfileSync detection has noticed new upstream commits we haven't
     // pulled yet. Length-normalised compare (matches backend gate)
     // since the persisted heads can be 7-char short or 40-char full
@@ -6651,7 +6667,7 @@ export default {
         }
       }
       if (seen.size === 0) {
-        return '<em>No specific affected items detected yet — click Check to refresh.</em>';
+        return '<em>No specific affected items detected yet - click Check to refresh.</em>';
       }
       // Map ChangeType into section vocabulary the editor already uses.
       const sectionFor = (t) => {
@@ -6704,10 +6720,10 @@ export default {
     },
     // Wait for a pull-only operation to finish. /api/trash/pull returns
     // 202 immediately + spawns a background goroutine. Two-phase poll:
-    //   Phase 1 — wait until trashStatus.pulling becomes TRUE (so we
+    //   Phase 1 - wait until trashStatus.pulling becomes TRUE (so we
     //             don't false-finish before the goroutine even acquired
     //             the pull mutex)
-    //   Phase 2 — wait until it becomes FALSE again (pull completed)
+    //   Phase 2 - wait until it becomes FALSE again (pull completed)
     // Without phase 1, downstream orchestration could chain sync against
     // pre-pull TRaSH data. 5s phase-1 budget; 120s phase-2.
     async _waitForPullDone(phase1Ms = 5000, phase2Ms = 120000) {
@@ -6721,7 +6737,7 @@ export default {
       if (!started) {
         // Goroutine never flipped pulling=true within budget. Could be
         // empty-clone fast-path, error, or pull already done by polling
-        // tick. Treat as done — caller's downstream loadTrashStatus
+        // tick. Treat as done - caller's downstream loadTrashStatus
         // covers staleness.
         return true;
       }
@@ -6736,7 +6752,7 @@ export default {
 
     // Update all enabled rules on this instance: pull TRaSH data first
     // (since the user wants the latest upstream), then run the existing
-    // per-instance sync-all loop. Other instances are not touched —
+    // per-instance sync-all loop. Other instances are not touched -
     // user must run Update all on each instance they care about.
     async updateAllForInstance(inst) {
       if (this.updatingInstance) return;
@@ -6746,7 +6762,7 @@ export default {
         await fetch('/api/trash/pull', { method: 'POST' });
         await this._waitForPullDone();
         if (this.trashStatus?.pullError) {
-          this.showToast(`Update all (${inst.name}): pull failed — ${this.trashStatus.pullError}`, 'error', 8000);
+          this.showToast(`Update all (${inst.name}): pull failed - ${this.trashStatus.pullError}`, 'error', 8000);
           return;
         }
         // Reload data sources that the sync loop reads from
@@ -6763,7 +6779,7 @@ export default {
           await this.loadCFSyncRules(inst.type);
         }
         if (this.trashStatus?.commitHash && this.trashStatus.commitHash !== prevCommit) {
-          this.showToast(`Update all complete (${inst.name}) — TRaSH advanced to ${this.trashStatus.commitHash}`, 'success', 4000);
+          this.showToast(`Update all complete (${inst.name}) - TRaSH advanced to ${this.trashStatus.commitHash}`, 'success', 4000);
         }
       } finally {
         this.updatingInstance = '';
@@ -6783,7 +6799,7 @@ export default {
         await fetch('/api/trash/pull', { method: 'POST' });
         await this._waitForPullDone();
         if (this.trashStatus?.pullError) {
-          this.showToast(`Update profile: pull failed — ${this.trashStatus.pullError}`, 'error', 8000);
+          this.showToast(`Update profile: pull failed - ${this.trashStatus.pullError}`, 'error', 8000);
           return;
         }
         await this.loadCFBrowse(inst.type);
@@ -6791,7 +6807,7 @@ export default {
         // Reuse the existing quickSync path for the actual Arr write.
         await this.quickSync(inst, sh);
         await this.loadAutoSyncRules();
-        // Same CF Sync Rules refresh as updateAllForInstance — without
+        // Same CF Sync Rules refresh as updateAllForInstance - without
         // this, a user updating one profile sees its pills clear on the
         // Profile Sync surface but the CF surface stays stuck.
         if (typeof this.loadCFSyncRules === 'function' && this.cfSyncRulesLoaded?.[inst.type]) {
@@ -6809,7 +6825,7 @@ export default {
         // Two parallel checks: TRaSH upstream + Arr-side drift. Both endpoints
         // are detection-only (no Arr writes), so running them concurrently is
         // safe. Drift bypasses the Sources.ArrDrift gate so a manual press
-        // always runs even when scheduled drift is off — the user's intent
+        // always runs even when scheduled drift is off - the user's intent
         // is "I want to know right now".
         const [tr, dr] = await Promise.allSettled([
           fetch('/api/profile-sync/check', { method: 'POST' }),
@@ -6911,11 +6927,11 @@ export default {
           if (channels.length > 0) {
             this.showToast(`TRaSH up to date\n\n${channels.join('\n\n')}`, driftFailed ? 'warning' : 'info', 7000);
           } else {
-            this.showToast('TRaSH-Guides is up to date — no upstream changes', 'success', 3000);
+            this.showToast('TRaSH-Guides is up to date - no upstream changes', 'success', 3000);
           }
           return;
         }
-        // Upstream ahead — same v3RuleStatus filter as drift, so toast
+        // Upstream ahead - same v3RuleStatus filter as drift, so toast
         // tally always matches what the row-level pills actually show.
         // Direct pendingChanges filter would include orphaned rules
         // with stale state that aren't rendered in the table.
@@ -6945,7 +6961,7 @@ export default {
         const cfCount = cfNames.size;
         const cfLabel = cfCount === 1 ? '1 CF' : `${cfCount} CFs`;
         const updLabel = ruleCount === 1 ? '1 profile' : `${ruleCount} profiles`;
-        // Profile names on their own line for readability — long lists wrap
+        // Profile names on their own line for readability - long lists wrap
         // poorly when crammed after the header.
         const updateLine = `Found ${cfLabel} affecting ${updLabel}:\n${namesShort(affectedRules)}`;
         const extras = [];
@@ -7021,7 +7037,7 @@ export default {
 
     toggleGroup(category, groupName, cfs) {
       // Legacy "select all CFs in group" toggle. Not currently invoked from
-      // any template path — Profile Detail uses pdToggleGroup below, which
+      // any template path - Profile Detail uses pdToggleGroup below, which
       // also tracks the `__grp_` enabled flag. Kept for any external caller.
       const anySelected = cfs.some(cf => this.selectedOptionalCFs[cf.trashId]);
       const updated = { ...this.selectedOptionalCFs };
@@ -7036,7 +7052,7 @@ export default {
     },
 
     // Profile Detail group on/off toggle.
-    //   - Enable: flag-only. Per-CF state stays untouched — required +
+    //   - Enable: flag-only. Per-CF state stays untouched - required +
     //     cf.default=true members come back via the render's
     //     undefined → cf.default fallback. Phase 2c lock-clicks
     //     (sel===false) and user-explicit opt-ins (sel===true) survive.

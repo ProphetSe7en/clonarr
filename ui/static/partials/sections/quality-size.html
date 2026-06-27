@@ -73,7 +73,7 @@
                   <div style="width:1px;background:var(--border-subtle);margin:0 4px;align-self:stretch"></div>
                 </template>
                 <template x-if="mediaInstanceId[activeAppType]">
-                  <div style="font-size:13px;color:var(--text-muted);font-family:inherit;width:58px;flex-shrink:0;text-align:center" x-tt="'Auto: follows TRaSH values. Custom: use your own values.'">Sync Mode</div>
+                  <div style="font-size:13px;color:var(--text-muted);font-family:inherit;width:104px;flex-shrink:0;text-align:center" x-tt="'Auto: follows TRaSH values. Custom: use your own values.'">Sync Mode</div>
                 </template>
                 <template x-if="mediaInstanceId[activeAppType]">
                   <div style="font-size:13px;color:var(--text-muted);font-family:inherit;width:68px;flex-shrink:0;text-align:center">Action</div>
@@ -126,13 +126,17 @@
                     <div style="width:1px;background:var(--bg-muted);margin:0 4px;align-self:stretch"></div>
                   </template>
                   <template x-if="mediaInstanceId[activeAppType]">
-                    <div style="width:58px;flex-shrink:0;text-align:center">
-                      <button class="qs-mode-btn"
-                              :class="{ 'is-custom': isQSCustom(activeAppType, qs.quality) }"
-                              @click="toggleQSMode(activeAppType, qs.quality)"
-                              x-tt="isQSCustom(activeAppType, qs.quality) ? 'Using custom values — click to revert to TRaSH' : 'Following TRaSH values — click to set custom values'"
-                              x-text="isQSCustom(activeAppType, qs.quality) ? 'Custom' : 'Auto'">
-                      </button>
+                    <div style="width:104px;flex-shrink:0;display:flex;justify-content:center">
+                      <div class="qs-mode-seg" role="group" aria-label="Sync mode">
+                        <button type="button" class="qs-mode-seg-btn"
+                                :class="{ 'is-active': !isQSCustom(activeAppType, qs.quality) }"
+                                @click="if (isQSCustom(activeAppType, qs.quality)) toggleQSMode(activeAppType, qs.quality)"
+                                x-tt="'Follow TRaSH values'">Auto</button>
+                        <button type="button" class="qs-mode-seg-btn"
+                                :class="{ 'is-active': isQSCustom(activeAppType, qs.quality) }"
+                                @click="if (!isQSCustom(activeAppType, qs.quality)) toggleQSMode(activeAppType, qs.quality)"
+                                x-tt="'Use your own values'">Custom</button>
+                      </div>
                     </div>
                   </template>
                   <template x-if="mediaInstanceId[activeAppType]">

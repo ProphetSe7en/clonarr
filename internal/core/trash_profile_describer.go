@@ -60,6 +60,7 @@ type DisclaimerNotice struct {
 // ProfileAxes is the 7-row quick-fact summary shown as pills on the profile card.
 type ProfileAxes struct {
 	Resolution string              `json:"resolution"`
+	Floor      string              `json:"floor,omitempty"` // lowest quality still accepted (e.g. "SDTV", "1080p"); empty when it equals the ceiling
 	Sources    []string            `json:"sources"`
 	Codec      string              `json:"codec"`
 	HDR        ProfileHDRSummary   `json:"hdr"`
@@ -159,6 +160,7 @@ func describeProfile(
 		TrashURL: sanitizeURL(profile.TrashURL),
 		Axes: ProfileAxes{
 			Resolution: deriveResolution(profile.Items),
+			Floor:      deriveFloor(profile.Items),
 			Sources:    deriveSources(profile.Items),
 			Codec:      deriveCodec(profile.Items),
 			Cutoff:     profile.Cutoff,
@@ -320,6 +322,31 @@ func deriveResolution(items []QualityItem) string {
 	return resOrder[0] + " (" + strings.Join(resOrder[1:], ", ") + " fallback)"
 }
 
+// deriveFloor returns the LOWEST resolution the profile still accepts, for the
+// resolution-range pill (ceiling -> floor). It is resolution-only on purpose:
+// SD-tier qualities (SDTV, DVD) carry no pixel resolution and belong on the
+// separate source/quality axis, not blended into the resolution pill. Returns
+// "" when the profile has a single resolution (no meaningful range to show).
+func deriveFloor(items []QualityItem) string {
+	resOrder := []string{}
+	seen := map[string]bool{}
+	for _, it := range items {
+		if !it.Allowed {
+			continue
+		}
+		res := itemResolution(it)
+		if res == "" || seen[res] {
+			continue
+		}
+		seen[res] = true
+		resOrder = append(resOrder, res)
+	}
+	if len(resOrder) < 2 {
+		return ""
+	}
+	return resOrder[len(resOrder)-1]
+}
+
 // deriveSources returns the deduplicated list of release types accepted by the
 // profile (Bluray, Bluray Remux, WEB-DL, WEBRip, etc.).
 func deriveSources(items []QualityItem) []string {
@@ -424,6 +451,8 @@ func extractSource(name string) string {
 		return "HDTV"
 	case strings.HasPrefix(name, "DVD"):
 		return "DVD"
+	case strings.HasPrefix(name, "SDTV"):
+		return "SDTV"
 	}
 	return ""
 }

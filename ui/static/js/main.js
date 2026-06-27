@@ -575,6 +575,23 @@ export function clonarr() {
       this.$watch('profileTabs', maybeLoadCustomizations);
       this.$watch('activeAppType', maybeLoadCustomizations);
 
+      // Clear the "in use" drill-down filter when landing on Sync Rules via
+      // normal navigation. tpdGoToSyncRules sets a one-shot guard so its own
+      // filtered jump from a TRaSH card survives; everything else resets.
+      const maybeClearSyncRulesFilter = () => {
+        if (this.currentSection === 'profiles'
+            && this.getProfileTab(this.activeAppType) === 'sync-rules') {
+          if (this._syncRulesFilterKeep) {
+            this._syncRulesFilterKeep = false; // consume guard, keep the filter
+          } else {
+            this.syncRulesFilterTrashId = null;
+          }
+        }
+      };
+      this.$watch('currentSection', maybeClearSyncRulesFilter);
+      this.$watch('profileTabs', maybeClearSyncRulesFilter);
+      this.$watch('activeAppType', maybeClearSyncRulesFilter);
+
       // Custom Formats → Sync Rules sub-tab: re-fetch the per-CF
       // state every time the user lands on the sub-tab (not just
       // the first time). Without this, auto-sync ticks that fire

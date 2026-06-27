@@ -208,9 +208,9 @@
          Movie/Episode Naming). -->
     <div class="topnav-subnav" x-show="currentSection === 'profiles'">
       <a class="topnav-subtab" :class="{ active: getProfileTab(activeAppType) === 'trash-profiles' }"
-         :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a>
+         :href="navHref('profiles', { profileTab: 'trash-profiles' })">Add Profiles</a>
       <a class="topnav-subtab" :class="{ active: getProfileTab(activeAppType) === 'sync-rules' }"
-         :href="navHref('profiles', { profileTab: 'sync-rules' })">Sync Rules</a>
+         :href="navHref('profiles', { profileTab: 'sync-rules' })">Manage Profiles</a>
       <a class="topnav-subtab" :class="{ active: getProfileTab(activeAppType) === 'history' }"
          :href="navHref('profiles', { profileTab: 'history' })">History</a>
       <a class="topnav-subtab" :class="{ active: getProfileTab(activeAppType) === 'compare' }"

@@ -1,4 +1,4 @@
-// trash-profile-discovery.js — drives the v3 TRaSH Profiles browse tab.
+// trash-profile-discovery.js - drives the v3 TRaSH Profiles browse tab.
 // Renders rich auto-derived descriptions (axes + cf-groups + markdown notes
 // + workflow logic) so users can pick a profile without entering the editor.
 //
@@ -6,7 +6,7 @@
 // ProfileDescription[] (see internal/core/trash_profile_describer.go for the
 // schema). We cache per-app, re-fetch on TRaSH pull-complete.
 //
-// View modes: 'grid' (default — 3-col auto-fill, all cards expanded) and
+// View modes: 'grid' (default - 3-col auto-fill, all cards expanded) and
 // 'list' (vertical compact rows, click-to-expand). Filter chips narrow
 // the set by HDR/audio/in-use/etc; search narrows by name + tagline.
 
@@ -18,18 +18,27 @@ export default {
     tpdLoading: { radarr: false, sonarr: false },
     // 'grid' | 'list' (per-browser localStorage)
     tpdView: localStorage.getItem('clonarr_tpdView') || 'grid',
-    // Multi-select feature filters — array of any combination of
-    // 'hd' | 'uhd' | 'hdr' | 'lossless' | 'in-use'. Empty means "All".
-    // Within the group selections are OR'd (HDR + Lossless → either),
-    // and the feature group AND's with the category group.
+    // Multi-select feature facets - array of keys: 'res:<token>' (accepted),
+    // 'src:<tier>' (accepted source), 'hdr' | 'dv', 'lossless' | 'lossy' |
+    // 'available', 'in-use'. Empty means "All". Within a facet selections are
+    // OR'd; across facets they AND, and the whole group AND's with category.
     tpdFeatureFilters: [],
-    // Multi-select category filters — array of group names from
+    // Multi-select category filters - array of group names from
     // tpdCategoryList (Standard / SQP / Anime / …). Empty means "All".
     // Selections within the group are OR'd.
     tpdCategoryFilters: [],
     tpdSearch: '',
     // trash_id → bool (which cards are expanded in list view)
     tpdOpenIds: {},
+    // Advanced filter mode. false = compact single row (common chips only);
+    // true = per-row grouped panel showing every available facet value.
+    tpdAdvanced: false,
+    // Sync Rules tab: when set, the rules list + filter pills show only this
+    // TRaSH profile (set by clicking a card's "in use" badge, or a pill).
+    syncRulesFilterTrashId: null,
+    // One-shot guard so a card-driven jump to Sync Rules keeps its filter;
+    // any other navigation onto the tab clears it (see watcher in main.js).
+    _syncRulesFilterKeep: false,
   },
 
   methods: {
@@ -40,7 +49,7 @@ export default {
       try {
         const r = await fetch(`/api/trash/${appType}/profiles/descriptions`);
         if (!r.ok) {
-          // 4xx/5xx — clear cached list so empty-state renders
+          // 4xx/5xx - clear cached list so empty-state renders
           this.trashProfileDescriptions = { ...this.trashProfileDescriptions, [appType]: [] };
           return;
         }
@@ -89,7 +98,7 @@ export default {
     },
 
     // tpdCategoryList returns category names in the same order they
-    // appear as section headers in tpdGrouped — by min `group` int
+    // appear as section headers in tpdGrouped - by min `group` int
     // ascending, alpha tiebreak. Drives the category-filter pill row
     // so its order matches the on-page grouping (Standard first,
     // SQP next, then Anime / French / German etc).
@@ -118,7 +127,7 @@ export default {
     },
 
     // True when at least one profile detail body is currently expanded.
-    // Drives the Expand-all / Collapse-all toggle label in list view —
+    // Drives the Expand-all / Collapse-all toggle label in list view -
     // the same button flips between the two actions based on this state.
     tpdAnyOpen() {
       return Object.values(this.tpdOpenIds).some(v => v);
@@ -147,38 +156,54 @@ export default {
       return rules.some(r => instIds.has(r.instanceId) && r.trashProfileId === trashId);
     },
 
-    // Multi-line tooltip body for the in-use badge — count line + bullet
+    // Multi-line tooltip body for the in-use badge - count line + bullet
     // list, same shape whether 1 or N instances so the badge itself stays
     // consistent ("in use" always) and details live in the tooltip.
     // Rendered via white-space: pre-line on the tooltip stylesheet.
-    // (Per-section instance picker would make this redundant — open
+    // (Per-section instance picker would make this redundant - open
     // redesign item noted in CLAUDE.md.)
     tpdInUseTooltip(appType, trashId) {
       const rules = this.autoSyncRules || [];
       const insts = this.instancesOfType(appType);
       const byId = new Map(insts.map(i => [i.id, i.name]));
-      const names = rules
-        .filter(r => r.trashProfileId === trashId && byId.has(r.instanceId))
-        // Collapse stray whitespace so an instance name with embedded
-        // newlines/tabs can't break the bullet-list layout.
-        .map(r => (byId.get(r.instanceId) || '').replace(/\s+/g, ' ').trim());
-      if (names.length === 0) return '';
-      const header = names.length === 1
+      const used = rules.filter(r => r.trashProfileId === trashId && byId.has(r.instanceId));
+      if (used.length === 0) return '';
+      const header = used.length === 1
         ? 'Used in 1 instance:'
-        : `Used in ${names.length} instances:`;
-      return header + '\n' + names.map(n => '• ' + n).join('\n');
+        : `Used in ${used.length} instances:`;
+      // Per usage: instance name, the profile name the user gave it in the
+      // Arr, and the Arr-side profile id. arrProfileName comes from the rules
+      // API (backed by sync history); fall back to the id when unsynced.
+      const lines = used.map(r => {
+        const inst = ((r.instanceName || byId.get(r.instanceId)) || '').replace(/\s+/g, ' ').trim();
+        const arrName = r.arrProfileName || ('Arr profile #' + r.arrProfileId);
+        const idPart = r.arrProfileId ? ' (#' + r.arrProfileId + ')' : '';
+        return '• ' + inst + ': ' + arrName + idPart;
+      });
+      return header + '\n' + lines.join('\n');
+    },
+
+    // Clicking the "in use" badge jumps to the Sync Rules tab, pre-filtered to
+    // this TRaSH profile so the user sees exactly the rules that use it.
+    tpdGoToSyncRules(trashId) {
+      this.syncRulesFilterTrashId = trashId;
+      this._syncRulesFilterKeep = true; // survive the tab-enter auto-clear
+      this.setProfileTab(this.activeAppType, 'sync-rules');
+      // Make sure the rules list has data even when navigating straight here.
+      this.instancesOfType(this.activeAppType).forEach(i => this.loadSyncHistory(i.id));
+      this.pushNav();
     },
 
     // Apply search + category filter + feature filter to the description
     // list. All three combine with AND (a profile must match all active
-    // filters to appear). Returns a new array — original state isn't
+    // filters to appear). Returns a new array - original state isn't
     // mutated.
     tpdFiltered(appType) {
       const all = this.trashProfileDescriptions[appType] || [];
       const q = (this.tpdSearch || '').toLowerCase().trim();
       const cats = this.tpdCategoryFilters || [];
       const feats = this.tpdFeatureFilters || [];
-      // Category lookup via the classic trashProfiles metadata — same
+      // Category lookup via the classic trashProfiles metadata - same
       // source tpdGrouped uses, so a profile matches its category-pill
       // exactly when its section heading on the page reads the same.
       const meta = this.trashProfiles[appType] || [];
@@ -187,11 +212,26 @@ export default {
 
       const matchesFeature = (d, f) => {
         switch (f) {
-          case 'hd':       return (d.axes?.resolution || '').includes('1080p') && !(d.axes?.resolution || '').includes('2160p');
-          case 'uhd':      return (d.axes?.resolution || '').includes('2160p');
-          case 'hdr':      return !!d.axes?.hdr?.scored;
-          case 'lossless': return !!d.axes?.audio?.scored;
-          case 'in-use':   return this.tpdProfileInUse(appType, d.trashId);
+          case 'hdr':       return !!d.axes?.hdr?.scored;
+          case 'dv':        return (d.axes?.hdr?.optIns || []).some(o => o.startsWith('DV'));
+          case 'lossless':  return !!d.axes?.audio?.scored;
+          // Mirror of the "Lossy audio" pill (tpdAudioPillText): neither
+          // scored nor opt-in lossless → the profile is lossy-audio.
+          case 'lossy':     return !d.axes?.audio?.scored && !d.axes?.audio?.optIn;
+          case 'available': return !!d.axes?.audio?.optIn; // lossless bundled, default-off
+          case 'in-use':    return this.tpdProfileInUse(appType, d.trashId);
+        }
+        // Resolution facets ('res:2160p' etc.) match any resolution the
+        // profile ACCEPTS (its full chain), so 480p finds the wide-range
+        // profiles, not only ones whose ceiling is 480p.
+        if (f.startsWith('res:')) {
+          return this._tpdResolutions(d).includes(f.slice(4));
+        }
+        // Source facets ('src:remux' etc.) - shared tier mapping so the chip
+        // and the source pill agree on what a profile accepts.
+        if (f.startsWith('src:')) {
+          const tier = f.slice(4);
+          return this._tpdSourceTiers(d).some(t => t.toLowerCase() === tier);
         }
         return false;
       };
@@ -219,19 +259,33 @@ export default {
           const hay = hayParts.join(' ').toLowerCase();
           if (!hay.includes(q)) return false;
         }
-        // Category — empty array means "All". Multiple selections OR'd
+        // Category - empty array means "All". Multiple selections OR'd
         // (Standard + SQP → either group qualifies).
         if (cats.length > 0) {
           const m = metaById.get(d.trashId);
           const groupName = (m && m.groupName) || 'Other';
           if (!cats.includes(groupName)) return false;
         }
-        // Features — empty array means "All". Multiple selections OR'd
-        // (HDR + Lossless → either feature qualifies). To require all
-        // selected features at once, swap .some → .every; OR was chosen
-        // because most chip-grids in this app behave additively.
+        // Features - empty array means "All". Grouped facet semantics: within
+        // a facet selections are OR'd (Source: Remux OR Bluray), but across
+        // facets they AND (Source AND Resolution AND Audio ...). So we bucket
+        // the selected keys by facet and require every bucket to have a match.
         if (feats.length > 0) {
-          if (!feats.some(f => matchesFeature(d, f))) return false;
+          const facetOf = (f) => {
+            if (f.startsWith('res:')) return 'res';
+            if (f.startsWith('src:')) return 'src';
+            if (f === 'hdr' || f === 'dv') return 'hdr';
+            if (f === 'lossless' || f === 'lossy' || f === 'available') return 'audio';
+            return f; // 'in-use' etc. - each its own facet
+          };
+          const buckets = {};
+          for (const f of feats) {
+            const fac = facetOf(f);
+            (buckets[fac] = buckets[fac] || []).push(f);
+          }
+          for (const keys of Object.values(buckets)) {
+            if (!keys.some(f => matchesFeature(d, f))) return false;
+          }
         }
         return true;
       });
@@ -272,7 +326,7 @@ export default {
 
     // --- Pill-rendering helpers ---
     // Principle: only ASSERT positive features. Don't render pills for
-    // missing features ("No HDR", "Lossy audio") — they were called out as
+    // missing features ("No HDR", "Lossy audio") - they were called out as
     // visual noise. A card with fewer pills correctly signals fewer
     // differentiators.
 
@@ -284,14 +338,14 @@ export default {
     // Template uses different pill classes (.aud for lossless = subtle
     // green, neutral for lossy / available) so the three states don't
     // visually compete. "Lossless available" sits with the neutral
-    // styling — it advertises capability without claiming the outcome.
+    // styling - it advertises capability without claiming the outcome.
     tpdAudioPillText(d) {
       if (d.axes?.audio?.scored) return 'Lossless audio';
       if (d.axes?.audio?.optIn)  return 'Lossless available';
       return 'Lossy audio';
     },
 
-    // tpdHDRPillText returns the SHORT HDR pill label — full opt-in
+    // tpdHDRPillText returns the SHORT HDR pill label - full opt-in
     // enumeration goes in the Highlights bullet list, not on the pill
     // (where long strings break the visual rhythm). Just "HDR" when no
     // variants are available; "HDR · DV available" when at least one
@@ -310,7 +364,7 @@ export default {
     // entries including HDTV / DVD / fallbacks that nobody cares about) to a
     // single canonical label per profile family.
     //
-    // Derived from the SOURCES list (not cutoff) — cutoff naming differs
+    // Derived from the SOURCES list (not cutoff) - cutoff naming differs
     // between standard ("Remux-1080p"), anime ("Remux 1080p", space), and
     // Sonarr ("WEB 1080p") profiles. The sources list normalises via
     // extractSource() in the backend so the same set of labels appears
@@ -318,19 +372,102 @@ export default {
     //   UHD Remux  > Bluray Remux  > UHD Bluray  > Bluray  > WEB-DL only
     // and "+ WEB" suffix added whenever WEB sources are also accepted, so
     // a Remux profile that also accepts WEB-DL reads as "Bluray Remux + WEB"
-    // — matches how users think about the profile.
+    // - matches how users think about the profile.
+    // tpdSourceLabel shows the source/quality RANGE the profile accepts, best
+    // tier -> worst tier, as its own axis (kept separate from the resolution
+    // pill so the two aren't blended). The backend source list is interleaved
+    // by resolution-then-source, so we rank against an explicit best->worst
+    // tier order rather than trusting list position. Single-tier profiles show
+    // just the one label.
+    // Pure source-type tiers, best -> worst. Resolution lives on its own pill,
+    // so source labels carry NO UHD/HD qualifier - that keeps the range
+    // consistent ("Remux → WEB" regardless of resolution class) and avoids the
+    // odd "UHD Remux vs Bluray Remux" mismatch. WEB-DL + WEBRip collapse to
+    // "WEB". Shared by the source pill AND the source facet filter so both
+    // agree on what tiers a profile has.
+    _tpdSourceTiers(d) {
+      const set = new Set(d.axes?.sources || []);
+      const tiers = [
+        { label: 'Remux',  keys: ['UHD Bluray Remux', 'Bluray Remux'] },
+        { label: 'Bluray', keys: ['UHD Bluray', 'Bluray'] },
+        { label: 'WEB',    keys: ['WEB-DL', 'WEBRip'] },
+        { label: 'HDTV',   keys: ['HDTV'] },
+        { label: 'DVD',    keys: ['DVD'] },
+        { label: 'SDTV',   keys: ['SDTV'] },
+      ];
+      return tiers.filter(t => t.keys.some(k => set.has(k))).map(t => t.label);
+    },
+
     tpdSourceLabel(d) {
-      const srcs = d.axes?.sources || [];
-      const set = new Set(srcs);
-      const hasWeb = set.has('WEB-DL') || set.has('WEBRip');
-      const webSuffix = hasWeb ? ' + WEB' : '';
-      if (set.has('UHD Bluray Remux')) return 'UHD Remux' + webSuffix;
-      if (set.has('Bluray Remux'))     return 'Bluray Remux' + webSuffix;
-      if (set.has('UHD Bluray'))       return 'UHD Bluray' + webSuffix;
-      if (set.has('Bluray'))           return 'Bluray' + webSuffix;
-      if (hasWeb)                       return 'WEB-DL';
-      // Truly unusual profile — just show first 2 sources so we don't lie
-      return srcs.slice(0, 2).join(' + ') || 'Mixed sources';
+      const present = this._tpdSourceTiers(d);
+      if (present.length === 0) return 'Mixed sources';
+      const best = present[0];
+      const worst = present[present.length - 1];
+      return best === worst ? best : best + ' → ' + worst;
+    },
+
+    // --- Grouped, data-driven facet options --------------------------------
+    // Each facet section shows its COMMON values inline plus an optional
+    // "+ more" that reveals the ADVANCED (less-common) values. A value only
+    // appears when at least one loaded profile actually has it, so the filter
+    // reflects what's in the data.
+
+    // All resolutions a profile ACCEPTS (not just its ceiling) - parsed from
+    // the full axes.resolution chain ("2160p (1080p, 720p, 480p fallback)").
+    // Acceptance-based so the advanced filter can surface every resolution in
+    // use (576p/480p), the same way the source facet surfaces HDTV/DVD/SDTV.
+    _tpdResolutions(d) {
+      const raw = d.axes?.resolution || '';
+      return ['2160p', '1080p', '720p', '576p', '480p'].filter(r => raw.includes(r));
+    },
+    // Display label for a resolution facet ("4K / UHD" for 2160p, else token).
+    tpdResLabel(res) {
+      return res === '2160p' ? '4K / UHD' : res;
+    },
+    // Resolution facets. advanced=false → common (4K/1080p/720p); advanced=true
+    // → the rest (576p/480p). Ordered high→low, data-driven.
+    tpdAvailableResolutions(appType, advanced) {
+      const all = this.trashProfileDescriptions[appType] || [];
+      const order = ['2160p', '1080p', '720p', '576p', '480p'];
+      const common = new Set(['2160p', '1080p', '720p']);
+      const present = new Set();
+      for (const d of all) for (const r of this._tpdResolutions(d)) present.add(r);
+      return order.filter(r => present.has(r) && (advanced ? !common.has(r) : common.has(r)));
+    },
+    // Source tiers present. advanced=false → common (Remux/Bluray/WEB);
+    // advanced=true → the rest (HDTV/DVD/SDTV). Ordered best→worst.
+    tpdAvailableSources(appType, advanced) {
+      const all = this.trashProfileDescriptions[appType] || [];
+      const order = ['Remux', 'Bluray', 'WEB', 'HDTV', 'DVD', 'SDTV'];
+      const common = new Set(['Remux', 'Bluray', 'WEB']);
+      const present = new Set();
+      for (const d of all) for (const t of this._tpdSourceTiers(d)) present.add(t);
+      return order.filter(t => present.has(t) && (advanced ? !common.has(t) : common.has(t)));
+    },
+    // Audio facet availability. 'lossless'/'lossy' are common; 'available'
+    // (lossless bundled but default-off) is the advanced one.
+    tpdHasAudio(appType, kind) {
+      const all = this.trashProfileDescriptions[appType] || [];
+      if (kind === 'lossless')  return all.some(d => d.axes?.audio?.scored);
+      if (kind === 'lossy')     return all.some(d => !d.axes?.audio?.scored && !d.axes?.audio?.optIn);
+      if (kind === 'available') return all.some(d => d.axes?.audio?.optIn);
+      return false;
+    },
+    // HDR facet availability. 'hdr' is common; 'dv' (Dolby Vision opt-in) is
+    // the advanced one.
+    tpdHasHdr(appType, kind) {
+      const all = this.trashProfileDescriptions[appType] || [];
+      if (kind === 'hdr') return all.some(d => d.axes?.hdr?.scored);
+      if (kind === 'dv')  return all.some(d => (d.axes?.hdr?.optIns || []).some(o => o.startsWith('DV')));
+      return false;
+    },
+    // Reset every filter (category + all feature facets) in one click.
+    tpdClearAllFilters() {
+      this.tpdFeatureFilters = [];
+      this.tpdCategoryFilters = [];
+    },
+    tpdAnyFilterActive() {
+      return (this.tpdFeatureFilters || []).length > 0 || (this.tpdCategoryFilters || []).length > 0;
     },
 
     // tpdResolutionLabel returns just the primary resolution token (1080p /
@@ -340,10 +477,16 @@ export default {
     tpdResolutionLabel(d) {
       const raw = d.axes?.resolution || '';
       const m = raw.match(/^(\d+p)/);
-      return m ? m[1] : raw;
+      const ceiling = m ? m[1] : raw;
+      // Show the acceptance floor next to the ceiling so wide-range profiles
+      // (e.g. "Remux 2160p (Alternative)" → down to SDTV) don't read as pure
+      // top-tier. Backend leaves floor empty for single-resolution profiles.
+      const floor = d.axes?.floor || '';
+      if (floor && floor !== ceiling) return ceiling + ' → ' + floor;
+      return ceiling;
     },
 
-    // Minimal card mode — true for SQP profiles ([SQP] prefix) and the
+    // Minimal card mode - true for SQP profiles ([SQP] prefix) and the
     // Base Profile (TRaSH's internal test profile). These profiles carry
     // hand-written disclaimer copy that explains what they are; our
     // auto-derived tagline + "What you get" highlights become redundant
@@ -489,7 +632,7 @@ export default {
     // Sidebar section expand/collapse for the Profile editor sub-nav.
     // Three sources, in priority order:
     //   1. Explicit override from chevron click (persisted localStorage)
-    //   2. Transient focus from label click (spExpandedSection) — when
+    //   2. Transient focus from label click (spExpandedSection) - when
     //      set, ONLY that section is expanded; auto-expand from active
     //      group is suppressed. Lets the user "look at section X"
     //      without main pane following along, and ensures the
@@ -511,7 +654,7 @@ export default {
       }
       return false;
     },
-    // Chevron click — toggles persistent expand state. Survives across
+    // Chevron click - toggles persistent expand state. Survives across
     // sessions via localStorage; overrides label-click transient and
     // auto-expand by being checked first.
     toggleSpSidebarSection(sectionName, sectionItems) {
@@ -520,14 +663,14 @@ export default {
       this.spSidebarExpanded = updated;
       try { window.localStorage.setItem('sp-sidebar-expanded', JSON.stringify(updated)); } catch (_) {}
     },
-    // Label click — selects the parent section so main pane renders
+    // Label click - selects the parent section so main pane renders
     // ALL groups under it (Custom Formats Browse parent mode). Side-
     // bar section auto-expands via isSpSidebarSectionExpanded's
     // spActiveParent check, so the user can still drill into a
     // specific child afterwards.
     //
     // Single-child shortcut: when the section has exactly one group,
-    // click navigates directly to that single child instead — parent
+    // click navigates directly to that single child instead - parent
     // mode would just render the same thing with extra structure.
     // Saves the wasted second click for sections like Unwanted
     // (only Unwanted Formats), Custom (one user-cat), etc.
@@ -538,7 +681,7 @@ export default {
       }
       this.spSelectParent(sectionName);
     },
-    // Parent selection — sets active parent + clears active group so
+    // Parent selection - sets active parent + clears active group so
     // main pane renders every group whose _section matches. Used by
     // section labels (multi-child case).
     spSelectParent(sectionName) {
@@ -554,7 +697,7 @@ export default {
         try { window.localStorage.setItem('sp-sidebar-expanded', JSON.stringify(updated)); } catch (_) {}
       }
     },
-    // Group selection — sets active group + clears active parent +
+    // Group selection - sets active group + clears active parent +
     // transient expand. Used by every group button (Required CFs +
     // per-group + Additional CF).
     spSelectGroup(name) {
@@ -573,7 +716,7 @@ export default {
     //  - Group with required and/or default-on CFs (hasToggle): when group
     //    is OFF, count is 0; when ON, count = required + effectively-on
     //    optional CFs.
-    //  - Group without auto-includes (opt-in only — no required, no
+    //  - Group without auto-includes (opt-in only - no required, no
     //    default-on): group-toggle is irrelevant; count purely by per-CF
     //    effective state.
     spGroupActiveCount(g) {
@@ -586,7 +729,7 @@ export default {
       const cfOn = (cf) => sel[cf.trashId] === undefined ? !!cf.default : !!sel[cf.trashId];
       // Phase 2c: a required CF can be individually excluded via lock-icon
       // click (sel[id] === false). Don't count it as active in that case
-      // — the group's sub-nav inactive-dim should lift only when at least
+      // - the group's sub-nav inactive-dim should lift only when at least
       // one CF actually syncs.
       const reqOn = (cf) => cf.required && sel[cf.trashId] !== false;
       if (!hasToggle) {
@@ -598,7 +741,7 @@ export default {
 
     // Active-count for the Additional CF tab sub-nav. Counts only
     // CFs that are user-opted-in among the group's UNIQUE CFs (the
-    // ones spAdditionalGroupCFs surfaces — already filtered to
+    // ones spAdditionalGroupCFs surfaces - already filtered to
     // exclude those active via the profile-default path).
     //
     // Why this is separate from spGroupActiveCount: shared CFs
@@ -607,7 +750,7 @@ export default {
     // sel[id] = true via the profile group. The generic active
     // count would treat the Additional group as "active" even
     // though the user hasn't actually opted into anything UNIQUE
-    // to it — giving the false impression that the sub-nav item is
+    // to it - giving the false impression that the sub-nav item is
     // engaged when none of its visible CFs are checked.
     spAdditionalGroupActiveCount(g) {
       const sel = this.selectedOptionalCFs || {};
@@ -615,14 +758,14 @@ export default {
     },
 
     // === Sync Preview "Profile overview" tab helpers ===
-    // Read-only summary of what's currently configured on the profile —
+    // Read-only summary of what's currently configured on the profile -
     // built so the user can see the whole spec at a glance without
     // navigating into each group. Edit-affordances layer on top later
     // once the Customize button wires basics-editing.
 
     // The 6 basics fields with effective value + whether the user has
     // overridden them. Modified detection compares values directly
-    // against the profile default — matches pdGeneralChangeCount
+    // against the profile default - matches pdGeneralChangeCount
     // (profiles.js:2963-2968). The .enabled flag on pdOverrides is
     // only set when loading a saved rule; live edits don't flip it,
     // so a flag-based check would miss in-flight changes.
@@ -679,15 +822,15 @@ export default {
         },
         {
           label: 'Cutoff quality',
-          value: this.pdOverrides?.cutoffQuality || pd.cutoff || '—',
+          value: this.pdOverrides?.cutoffQuality || pd.cutoff || '-',
           // pdInitOverrides seeds cutoffQuality with the profile's default
           // (profiles.js:3523 / :3417) so it's always non-empty. A truthy
-          // check would falsely flag it as modified — compare against the
+          // check would falsely flag it as modified - compare against the
           // default like profiles.js:1601 does in its canonical "did it
           // actually change?" check.
           modified: !!this.pdOverrides?.cutoffQuality
                  && this.pdOverrides.cutoffQuality !== pd.cutoff,
-          defaultValue: pd.cutoff || '—',
+          defaultValue: pd.cutoff || '-',
         },
       ]);
       return rows;
@@ -696,22 +839,22 @@ export default {
     // CFs grouped by source (Required first, then by in-profile group,
     // then by Additional CF group). Each section carries a `kind` flag
     // so sub-nav filter views can pick a subset:
-    //   'required'   — formatItemNames (profile-level required CFs)
-    //   'in-profile' — TRaSH groups inside profile.quality_profiles.include
-    //   'additional' — extraCFGroups (opt-in pool outside profile)
+    //   'required'   - formatItemNames (profile-level required CFs)
+    //   'in-profile' - TRaSH groups inside profile.quality_profiles.include
+    //   'additional' - extraCFGroups (opt-in pool outside profile)
     // Each CF carries `_isRequired` + a `_score` object with effective +
     // original + isOverridden, so the row can render strikethrough on
     // the original when the user has overridden a score (customizations
     // shown inline, not in a separate card).
     // De-dupes by trashId in case the same CF lives in multiple groups.
     // skipSort skips the per-section sort applied at the end. Used by
-    // spOverviewFlatCFs which re-sorts across the flattened list — the
+    // spOverviewFlatCFs which re-sorts across the flattened list - the
     // per-section sort would otherwise be wasted work.
     spOverviewEnabledCFs(skipSort) {
       if (!this.profileDetail) return [];
       const sel = this.selectedOptionalCFs || {};
       const overrides = this.cfScoreOverrides || {};
-      // Resolve TRaSH default score per CF — formatItems and trashGroups
+      // Resolve TRaSH default score per CF - formatItems and trashGroups
       // carry a pre-resolved cf.score, but extraCFGroups (Additional CFs)
       // come from /api/trash/{type}/all-cfs which only sends the raw
       // trashScores map (keyed by profile context). resolveCFDefaultScore
@@ -751,7 +894,7 @@ export default {
         if (filtered.length > 0) sections.push({ source: label, sourceCategory: category, cfs: filtered, kind });
       };
 
-      // 1. Required CFs at profile level — formatItemNames.
+      // 1. Required CFs at profile level - formatItemNames.
       // Phase 2c: skip CFs the user excluded via lock-icon click (they
       // won't sync, so showing them as "enabled" would lie).
       pushSection(
@@ -852,7 +995,7 @@ export default {
       return out;
     },
 
-    // Column-header click handler — cycles sort direction for the
+    // Column-header click handler - cycles sort direction for the
     // clicked field, drops sort on the other field.
     spToggleOverviewSort(field) {
       if (field === 'name') {
@@ -862,26 +1005,26 @@ export default {
       }
     },
 
-    // Persistent setter for the "Show CF Groups" toggle — writes
+    // Persistent setter for the "Show CF Groups" toggle - writes
     // localStorage so the user's pick survives reloads.
     spSetOverviewGroup(value) {
       this.spOverviewGroupCFs = !!value;
       try { window.localStorage.setItem('sp-ov-group-cfs', String(this.spOverviewGroupCFs)); } catch (e) {}
     },
 
-    // Diffs view — everything that diverges from the TRaSH default for
+    // Diffs view - everything that diverges from the TRaSH default for
     // this profile. Four buckets in priority order:
-    //   1. modifiedBasics — pdOverrides where .enabled === false (legacy
+    //   1. modifiedBasics - pdOverrides where .enabled === false (legacy
     //      inverse semantics) + cutoffQuality if set.
-    //   2. scoreOverrides — CFs with cfScoreOverrides[trashId] !== cf.score.
-    //   3. additionalCFs — CFs from extraCFGroups the user has opted into
+    //   2. scoreOverrides - CFs with cfScoreOverrides[trashId] !== cf.score.
+    //   3. additionalCFs - CFs from extraCFGroups the user has opted into
     //      (outside the profile's default scope entirely).
-    //   4. excludedCFs — default-on CFs in still-active groups that the
+    //   4. excludedCFs - default-on CFs in still-active groups that the
     //      user has explicitly turned off (selectedOptionalCFs[id] === false).
     //
     // Intentionally NOT included: optional CFs the user has activated
     // within in-profile groups. Those live inside the profile's own
-    // structure and aren't considered "external" deviations — they're
+    // structure and aren't considered "external" deviations - they're
     // visible via the "Optional CF" sub-nav view.
     //
     // Each bucket returns rich objects so the template can render the
@@ -890,7 +1033,7 @@ export default {
     spOverviewDiffs() {
       const out = { modifiedBasics: [], scoreOverrides: [], additionalCFs: [], excludedCFs: [], excludedRequiredCFs: [], disabledGroups: [], qualityItems: [] };
       if (!this.profileDetail) return out;
-      // Quality items diffs — leaf-flatten profile defaults vs user's
+      // Quality items diffs - leaf-flatten profile defaults vs user's
       // qualityStructure (or legacy qualityOverrides flat map) and
       // emit per-leaf rows for any changed `allowed` flag. Without
       // this, opening Quality Items editor → toggling a quality →
@@ -915,14 +1058,14 @@ export default {
         for (const [name, allowed] of curLeaves) {
           const orig = origLeaves.get(name);
           if (orig === undefined) {
-            out.qualityItems.push({ name, current: allowed ? 'Allowed' : 'Disallowed', original: '—', allowed });
+            out.qualityItems.push({ name, current: allowed ? 'Allowed' : 'Disallowed', original: '-', allowed });
           } else if (orig !== allowed) {
             out.qualityItems.push({ name, current: allowed ? 'Allowed' : 'Disallowed', original: orig ? 'Allowed' : 'Disallowed', allowed });
           }
         }
         for (const [name, orig] of origLeaves) {
           if (!curLeaves.has(name)) {
-            out.qualityItems.push({ name, current: '—', original: orig ? 'Allowed' : 'Disallowed', allowed: false });
+            out.qualityItems.push({ name, current: '-', original: orig ? 'Allowed' : 'Disallowed', allowed: false });
           }
         }
       } else if (this.qualityOverrides && Object.keys(this.qualityOverrides).length > 0) {
@@ -930,7 +1073,7 @@ export default {
           const orig = origLeaves.get(name);
           const a = !!allowed;
           if (orig !== a) {
-            out.qualityItems.push({ name, current: a ? 'Allowed' : 'Disallowed', original: orig === undefined ? '—' : (orig ? 'Allowed' : 'Disallowed'), allowed: a });
+            out.qualityItems.push({ name, current: a ? 'Allowed' : 'Disallowed', original: orig === undefined ? '-' : (orig ? 'Allowed' : 'Disallowed'), allowed: a });
           }
         }
       }
@@ -938,7 +1081,7 @@ export default {
       const overrides = this.cfScoreOverrides || {};
       const pd = this.profileDetail?.detail?.profile;
 
-      // 1. Modified basics — value-comparison detection (matches
+      // 1. Modified basics - value-comparison detection (matches
       // pdGeneralChangeCount, profiles.js:2963-2968). The .enabled flag
       // on pdOverrides is only set when loading a saved rule; live
       // edits don't flip it. Language is radarr-only.
@@ -998,7 +1141,7 @@ export default {
           });
         }
       }
-      // Same pattern as profiles.js:1601 — only flag as modified when
+      // Same pattern as profiles.js:1601 - only flag as modified when
       // the override actually differs from the profile default. Include
       // `field` so the Diffs row's reset-button knows what to restore
       // (pdResetBasic dispatches on the field name).
@@ -1007,17 +1150,17 @@ export default {
           label: 'Cutoff quality',
           field: 'cutoffQuality',
           current: this.pdOverrides.cutoffQuality,
-          original: pd?.cutoff || '—',
+          original: pd?.cutoff || '-',
           originalRaw: pd?.cutoff || '',
         });
       }
 
-      // 2. Score overrides — walk every CF source and pick out diffs
+      // 2. Score overrides - walk every CF source and pick out diffs
       const seenScoreOv = new Set();
       const collectScoreOv = (cf, fromGroup) => {
         if (seenScoreOv.has(cf.trashId)) return;
         // Custom CFs (user-created or imported) don't have a TRaSH default
-        // to deviate from — their score IS the user's score. Skip them in
+        // to deviate from - their score IS the user's score. Skip them in
         // "Score overrides" so the column "Profile default" doesn't read
         // a misleading 0. They surface in "Added Additional CFs" instead.
         if (cf.isCustom || (cf.trashId || '').startsWith('custom:')) return;
@@ -1038,10 +1181,10 @@ export default {
       // so `o !== cf.score` would falsely flag any override as different
       // from a meaningless undefined baseline and produce "undefined → N"
       // rows. Opted-in Additional CFs with score overrides surface in
-      // bucket 3 (Added Additional CFs) below — that row uses
+      // bucket 3 (Added Additional CFs) below - that row uses
       // resolveCFDefaultScore as fallback and renders the correct value.
 
-      // 3. Additional CFs activated — CFs the user opted into from
+      // 3. Additional CFs activated - CFs the user opted into from
       // extraCFGroups that are TRULY outside the profile's default
       // scope. Two filters:
       //   a) Skip groups whose name matches a profile trashGroup name
@@ -1051,7 +1194,7 @@ export default {
       //      active set (the CF syncs via a profile group, even when
       //      it also appears in a regional variant like French).
       // Without (b), the same CF appears 3-4 times in the Diffs list,
-      // once per Additional variant group it overlaps with — pure
+      // once per Additional variant group it overlaps with - pure
       // noise since the user hasn't actually opted into anything.
       const inProfileGroup = new Set();
       const profileActiveCFs = new Set();
@@ -1078,7 +1221,7 @@ export default {
       const seenAddCF = new Set();
       // extraCFs holds the user-saved score for opted-in Additional
       // CFs (out-of-profile entries). Restored via resyncProfile's
-      // scoreOverrides split — entries land here, NOT in
+      // scoreOverrides split - entries land here, NOT in
       // cfScoreOverrides (which is reserved for in-profile overrides).
       // Read it first so the score column shows the user's value, not
       // the TRaSH-context default.
@@ -1093,13 +1236,13 @@ export default {
           if (!!sel[cf.trashId]) {
             seenAddCF.add(cf.trashId);
             // Score priority:
-            //   1. extras[trashId]    — user's saved score for this
+            //   1. extras[trashId]    - user's saved score for this
             //      Additional CF (loaded from rule.scoreOverrides)
-            //   2. overrides[trashId] — defensive (live edits inside
+            //   2. overrides[trashId] - defensive (live edits inside
             //      Sync Preview Customize mode may write here)
-            //   3. cf.score           — extraCFGroups catalog usually
+            //   3. cf.score           - extraCFGroups catalog usually
             //      has trashScores map but no resolved cf.score
-            //   4. resolveCFDefaultScore — TRaSH default via profile
+            //   4. resolveCFDefaultScore - TRaSH default via profile
             //      scoreCtx (the eventual fallback)
             let score = extras[cf.trashId];
             if (score === undefined) score = overrides[cf.trashId];
@@ -1122,7 +1265,7 @@ export default {
         }
       }
 
-      // 4. Excluded default-on CFs — per-CF opt-outs within active
+      // 4. Excluded default-on CFs - per-CF opt-outs within active
       // groups (default-on groups still on, optional CF toggled off).
       // Default-on groups TOGGLED OFF land in bucket 6 (disabledGroups)
       // as a single rolled-up entry instead of 18 individual rows.
@@ -1148,7 +1291,7 @@ export default {
       // 6. Default-on groups the user toggled OFF. One row per group
       // (rather than per CF) so the diff reads "Streaming Services
       // General disabled (18 CFs excluded)" instead of 18 individual
-      // rows. Mirrors backend ComputeRuleCustomizations — its
+      // rows. Mirrors backend ComputeRuleCustomizations - its
       // ExcludedCFs bucket sums these via rule.ExcludedCFs ∩ defaults,
       // so we surface them too. Optional groups toggled OFF (default-
       // off → user opted IN, then OFF again) don't appear here: they
@@ -1165,7 +1308,7 @@ export default {
         const prefix = m ? m[1].trim() : '';
         // Display name combines the section prefix + short name so the
         // user sees "Streaming Services General" rather than just
-        // "General" — bracket-stripped version of the full TRaSH group
+        // "General" - bracket-stripped version of the full TRaSH group
         // name. "General" alone collides across sections (Streaming
         // Services General vs Streaming HQ General etc).
         const displayName = prefix ? (prefix + ' ' + shortName) : shortName;
@@ -1179,11 +1322,11 @@ export default {
         });
       }
 
-      // 5. Excluded required CFs — Phase 2c. Two sources:
+      // 5. Excluded required CFs - Phase 2c. Two sources:
       //    a) formatItemNames the user explicitly excluded (lock-icon
       //       click in the standalone Required CFs tab).
       //    b) Group-required CFs from active groups that the user
-      //       excluded individually. Inactive groups don't count — the
+      //       excluded individually. Inactive groups don't count - the
       //       whole group is off, so the CF isn't being filtered out
       //       specifically.
       for (const fi of (this.profileDetail.detail?.formatItemNames || [])) {
@@ -1199,7 +1342,7 @@ export default {
       // Required CFs from off groups are intentionally NOT surfaced
       // here. Design rationale: when the user turns a group OFF, the
       // entire group's CFs stop syncing regardless of individual
-      // exclusion state — so a "you excluded this" entry in Diffs
+      // exclusion state - so a "you excluded this" entry in Diffs
       // would be misleading (the CF wasn't going to sync anyway).
       // Backend's getExcludedCFIds + ComputeRuleCustomizations bucket 4
       // follow the same convention (only count entries whose trashId
@@ -1228,14 +1371,14 @@ export default {
       return out;
     },
 
-    // Additional CF groups — extraCFGroups minus:
+    // Additional CF groups - extraCFGroups minus:
     //   1. Groups already part of the profile by name match.
-    //   2. Variant groups — Additional groups whose entire CF set
+    //   2. Variant groups - Additional groups whose entire CF set
     //      (by trashId) equals a profile-active group's CF set.
     //      Catches Golden Rule HD vs UHD: identical CF lists, only
     //      the description targets a different resolution tier.
     //      When UHD is in profile.trashGroups, the user shouldn't
-    //      see HD as an "extra" — it's the same CFs.
+    //      see HD as an "extra" - it's the same CFs.
     // CF-level overlap filtering for non-variant partial-overlap
     // groups (Unwanted French vs Default) happens in the template
     // via spAdditionalGroupCFs which trims overlapping CFs and
@@ -1263,7 +1406,7 @@ export default {
     //
     // CRITICAL: active set is built ONLY from profile.trashGroups
     // (the groups that ARE part of this profile via
-    // quality_profiles.include) — NOT from raw selectedOptionalCFs
+    // quality_profiles.include) - NOT from raw selectedOptionalCFs
     // entries. selectedOptionalCFs is a flat map shared with
     // Additional CF activations; if we read it directly, every CF
     // the user toggles on in Additional CF would immediately
@@ -1277,25 +1420,25 @@ export default {
     //     sel[trashId] truthy OR fall back to cf.default)
     // formatItemNames at profile level always count as active.
     //
-    // Plain-object active map (not Set) — Alpine's reactive Proxy
+    // Plain-object active map (not Set) - Alpine's reactive Proxy
     // strips Set's .has() method making it un-callable from
     // template expressions. Property access bypasses the trap.
     spAdditionalGroupCFs(g) {
       const cfs = g?.cfs || [];
       if (cfs.length === 0) return cfs;
-      // Filter structurally — any CF that EXISTS in a profile-default
+      // Filter structurally - any CF that EXISTS in a profile-default
       // group (regardless of whether it's currently active) is hidden
       // from the Additional picker. Two reasons:
       //   1. Activating an opt-in CF inside the Additional group when
       //      it ALSO lives as an opt-in inside a profile-default group
-      //      is just confusing — the CF has a natural home in the
+      //      is just confusing - the CF has a natural home in the
       //      profile-default group (e.g. Scene / Retag in Unwanted),
       //      activating from there is the obvious path. Showing it in
       //      both places (Profile default's Unwanted + Additional's
       //      Unwanted SQP / German / French) produces visual duplicates.
       //   2. The previous active-only filter caused activated
       //      Additional CFs to vanish from the picker the moment the
-      //      user toggled them on — sel[id] = true → "active" → filter
+      //      user toggled them on - sel[id] = true → "active" → filter
       //      excluded them. The user couldn't deactivate without
       //      navigating elsewhere. Structural filtering separates
       //      "where it lives" from "is it currently on".
@@ -1318,7 +1461,7 @@ export default {
     // order, then Additional CFs). Backend currently returns these in
     // Go map iteration order (randomized per Go spec since 1.0).
     //
-    // TODO (deferred — backend fix, ~30-45 min): sort.SliceStable inside
+    // TODO (deferred - backend fix, ~30-45 min): sort.SliceStable inside
     // BuildSyncPlan + ExecuteSyncPlan so EVERY consumer (Classic editor,
     // sync history, API responses) gets natural-order results, not just
     // Sync Preview. Tracked in container CLAUDE.md.
@@ -1355,7 +1498,7 @@ export default {
     // Reset a single basics field to the profile's TRaSH default.
     // Called from the Diffs view + General section reset icons.
     // cutoffQuality is stored on pdOverrides directly (not under .value)
-    // — separate-case to keep the rest of the fields uniform.
+    // - separate-case to keep the rest of the fields uniform.
     pdResetBasic(field) {
       const pd = this.profileDetail?.detail?.profile || {};
       if (field === 'cutoffQuality') {
@@ -1382,7 +1525,7 @@ export default {
       if (!trashId) return;
       // Two stores carry overrides: cfScoreOverrides for in-profile
       // CFs, extraCFs for opted-in Additional CFs (out-of-profile).
-      // Reset must clear from BOTH — pre-fix the extras store kept
+      // Reset must clear from BOTH - pre-fix the extras store kept
       // its value when the user clicked Reset on the Profile overview
       // because the action only touched cfScoreOverrides, leaving
       // the stale value visible everywhere extras is read.
@@ -1398,7 +1541,7 @@ export default {
       }
     },
 
-    // Reset action for the Diffs view's Added Additional CFs row —
+    // Reset action for the Diffs view's Added Additional CFs row -
     // un-opts the CF so it stops syncing. Equivalent to flipping the
     // toggle off in the Additional CF tab.
     spRemoveAdditionalCF(trashId) {
@@ -1408,10 +1551,10 @@ export default {
       this.selectedOptionalCFs = updated;
     },
 
-    // Reset action for the Diffs view's Excluded default-on CFs row —
+    // Reset action for the Diffs view's Excluded default-on CFs row -
     // re-includes the CF that was previously turned off. Deletes the
     // entry (rather than writing explicit `true`) so the CF tracks its
-    // upstream default — if TRaSH later flips the CF's default to off,
+    // upstream default - if TRaSH later flips the CF's default to off,
     // we don't keep it pinned on against the new default.
     spReincludeExcludedCF(trashId) {
       if (!trashId) return;
@@ -1420,7 +1563,7 @@ export default {
       this.selectedOptionalCFs = updated;
     },
 
-    // Phase 2c — toggle a required CF between excluded and included.
+    // Phase 2c - toggle a required CF between excluded and included.
     // sel[trashId] === false → re-include (delete entry, tracks upstream
     // default). Anything else → exclude (write false). Backend's
     // getExcludedCFIds picks it up via computeTrashDefaults, which
@@ -1450,7 +1593,7 @@ export default {
     },
 
     // Customize-mode entry confirmation. Profile customization can
-    // change scores, exclude required CFs, add extras — each of which
+    // change scores, exclude required CFs, add extras - each of which
     // shifts how Sonarr/Radarr selects releases. A user who flips
     // Customize on without thinking can produce a profile that
     // syncs nothing or that ignores the curated baseline. The modal
@@ -1459,7 +1602,7 @@ export default {
       this.confirmModal = {
         show: true,
         title: 'Customize this profile',
-        message: 'Customizing this profile lets you change scores, exclude required CFs, and add extras beyond the profile defaults.\n\nThese edits can change how the profile picks releases — make sure you understand what each setting does before changing it.',
+        message: 'Customizing this profile lets you change scores, exclude required CFs, and add extras beyond the profile defaults.\n\nThese edits can change how the profile picks releases - make sure you understand what each setting does before changing it.',
         cancelLabel: 'Use defaults',
         confirmLabel: 'I understand',
         onConfirm: () => { this.pdOverridesEnabled = true; },
@@ -1472,7 +1615,7 @@ export default {
     // override entry is deleted so the rule payload stays clean
     // (matches save-time filter at profiles.js:1601 pattern). Otherwise
     // the override map is written. Empty-string check is explicit
-    // because Number("") === 0 — without the guard, clearing the field
+    // because Number("") === 0 - without the guard, clearing the field
     // would silently write a 0 override for CFs whose TRaSH default
     // is non-zero (e.g. HQ Source Groups at +500).
     spApplyCFScore(trashId, value, defaultScore) {
@@ -1492,7 +1635,7 @@ export default {
         for (const cf of (g.cfs || [])) inProfileGroups.add(cf.trashId);
       }
       const isExtra = !inProfileGroups.has(trashId);
-      // ALWAYS clear from the wrong store too — covers cases where
+      // ALWAYS clear from the wrong store too - covers cases where
       // the CF's classification changed (e.g. TRaSH restructure
       // moved it) or where an older code path wrote to the wrong
       // map. Without this the stale entry would shadow the new one.
@@ -1545,7 +1688,7 @@ export default {
     // as the editor's default working instance (so internal data flow and
     // the sync-modal's picker have a valid starting point), but mark the
     // overlay as browse-mode so the header doesn't display that default
-    // as if it were a committed target — the user picks the real instance
+    // as if it were a committed target - the user picks the real instance
     // when they hit Save & Sync. Sync Rule → Edit entries skip this flag
     // (they pass restoreFromRule=true) and continue to show the bound
     // instance as today.

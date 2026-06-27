@@ -77,9 +77,9 @@
       <!-- Sub-nav under Profiles, only when sidebar expanded -->
       <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'profiles'">
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'trash-profiles' }"
-           :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a>
+           :href="navHref('profiles', { profileTab: 'trash-profiles' })">Add Profiles</a>
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'sync-rules' }"
-           :href="navHref('profiles', { profileTab: 'sync-rules' })">Sync Rules</a>
+           :href="navHref('profiles', { profileTab: 'sync-rules' })">Manage Profiles</a>
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'history' }"
            :href="navHref('profiles', { profileTab: 'history' })">History</a>
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'compare' }"
@@ -451,9 +451,9 @@
       <div>
         <div class="sidebar-subnav-popup-header">Profiles</div>
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'trash-profiles' }"
-           :href="navHref('profiles', { profileTab: 'trash-profiles' })" @click="sidebarSubnavPopup = ''">TRaSH Profiles</a>
+           :href="navHref('profiles', { profileTab: 'trash-profiles' })" @click="sidebarSubnavPopup = ''">Add Profiles</a>
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'sync-rules' }"
-           :href="navHref('profiles', { profileTab: 'sync-rules' })" @click="sidebarSubnavPopup = ''">Sync Rules</a>
+           :href="navHref('profiles', { profileTab: 'sync-rules' })" @click="sidebarSubnavPopup = ''">Manage Profiles</a>
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'history' }"
            :href="navHref('profiles', { profileTab: 'history' })" @click="sidebarSubnavPopup = ''">History</a>
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'compare' }"

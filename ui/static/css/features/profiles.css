@@ -228,8 +228,22 @@ button.v3-status:hover { text-decoration: underline; }
   font-size: 13px; font-family: inherit;
 }
 .v3-action-icon:hover { color: var(--app-color); border-color: var(--app-color); }
-.v3-action-icon.danger:hover { color: var(--accent-red); border-color: var(--accent-red); }
 .v3-action-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Per-action colours so the icons read as distinct buttons at a glance, not
+   identical grey boxes. Colour shows at rest (the glyph), with a matching
+   border + faint fill tint on hover. Edit=green, Update=blue (matches the
+   "updates" status badge), Clone=purple, Remove/restore=red/green. */
+.v3-action-icon.edit    { color: var(--accent-green); }
+.v3-action-icon.update  { color: var(--accent-blue); }
+.v3-action-icon.clone   { color: var(--accent-purple); }
+.v3-action-icon.restore { color: var(--accent-green); }
+.v3-action-icon.danger  { color: var(--accent-red); }
+.v3-action-icon.edit:hover,
+.v3-action-icon.restore:hover { color: var(--accent-green); border-color: var(--accent-green); background: var(--accent-green-bg); }
+.v3-action-icon.update:hover  { color: var(--accent-blue); border-color: var(--accent-blue); background: var(--accent-blue-muted); }
+.v3-action-icon.clone:hover   { color: var(--accent-purple); border-color: var(--accent-purple); background: var(--bg-elevated-hover); }
+.v3-action-icon.danger:hover  { color: var(--accent-red); border-color: var(--accent-red); background: var(--accent-red-bg); }
 
 /* ============================================================
    v3 Sprint 3 slice 3 — History tab (per-instance + neutral palette)
@@ -535,6 +549,20 @@ button.v3-status:hover { text-decoration: underline; }
   font-size: 11.5px; color: var(--text-secondary); background: transparent; cursor: pointer;
 }
 .tpd-chip.active { background: var(--app-color); color: var(--text-on-accent); border-color: var(--app-color); font-weight: 500; }
+
+/* Transparent wrapper so the compact chip group flows inline in the toolbar
+   flex row, yet can be hidden as one unit when Advanced mode is on. display
+   lives in CSS (not inline) so x-show toggles none/contents correctly. */
+.tpd-chipwrap { display: contents; }
+
+/* Advanced filter panel: each facet on its own labeled row, showing every
+   available value. Toggled by the "Advanced filters" button. */
+.tpd-filters { display: flex; flex-direction: column; gap: 7px; margin: 0 0 18px; }
+.tpd-fgroup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tpd-fgroup-label {
+  flex: 0 0 76px; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.4px; color: var(--text-muted); user-select: none;
+}
 
 /* Mid-toolbar separator between the two filter dimensions (category
    pills on the left, feature pills on the right). Communicates "these

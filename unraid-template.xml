@@ -9,7 +9,7 @@
   </Branch>
   <Branch>
     <Tag>dev</Tag>
-    <TagDescription>Development builds — may contain bugs or breaking changes</TagDescription>
+    <TagDescription>Development builds - may contain bugs or breaking changes</TagDescription>
   </Branch>
   <Network>bridge</Network>
   <Shell>sh</Shell>
@@ -21,15 +21,11 @@
   <WebUI>http://[IP]:[PORT:6060]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/prophetse7en/unraid-templates/main/clonarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/prophetse7en/clonarr/main/ui/static/icons/clonarr.png</Icon>
-  <Date>2026-06-11</Date>
+  <Date>2026-06-24</Date>
+  <ReadMe>https://raw.githubusercontent.com/prophetse7en/clonarr/main/README.md</ReadMe>
   <Changes>
-### 2026-06-11
-- v3.2.1: Single-format groups (like several HDR groups) now use the same row layout as every other Custom Format in the Profile Editor, so the name, description, and score line up across the whole list. Three fixes to how sync results and scores are shown: sync no longer reports "No changes" when a Custom Format was actually added, turning a Custom Format off no longer leaves a stray custom score on the rule pill or editor header, and a Custom Format you just switched on stays on after a per-rule Sync.
-
-### 2026-06-07
-- v3.2.0: CF descriptions move inline next to the name on Profile Editor and Profile Overview, matching the Custom Formats Browse layout. Hide / Show toggle on the tab bar collapses back to compact view. Clicking a section label (Audio, HDR Formats, Streaming Services, etc.) in the sidebar now renders every group under it at once. The customizations counter now sees CFs excluded via group-off toggle, so a rule that disables a default-on group reads the right count in the header instead of "0", and the Diffs view shows a Re-enable row for the disabled group. Plus a stack of TRaSH description rendering fixes: bullet lists wrap into real lists, "!!! note" admonitions and image markup no longer leak as literal text, backticks vanish.
-
-For full version history, see CHANGELOG.md on GitHub.
+For release notes and full version history, see the changelog on GitHub:
+https://github.com/prophetse7en/clonarr/blob/main/CHANGELOG.md
   </Changes>
   <ExtraParams/>
   <PostArgs/>

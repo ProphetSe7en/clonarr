@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,8 +75,19 @@ func (s *Server) handleListAutoSyncRules(w http.ResponseWriter, r *http.Request)
 		core.AutoSyncRule
 		InstanceName   string `json:"instanceName"`
 		InstanceType   string `json:"instanceType"`
+		ArrProfileName string `json:"arrProfileName,omitempty"`
 		OptionalCount  int    `json:"optionalCount"`
 		OverridesCount int    `json:"overridesCount"`
+	}
+
+	// Arr-side profile name (user-chosen, inside Radarr/Sonarr) lives in sync
+	// history, not on the rule. Index it once by (instance, arrProfileID) so
+	// the rules list can show it without a separate sync-history fetch.
+	arrNames := make(map[string]string)
+	for _, h := range cfg.SyncHistory {
+		if h.ArrProfileName != "" {
+			arrNames[h.InstanceID+"\x00"+strconv.Itoa(h.ArrProfileID)] = h.ArrProfileName
+		}
 	}
 
 	// Cache per (instanceType, trashProfileID) to avoid duplicate
@@ -86,6 +98,7 @@ func (s *Server) handleListAutoSyncRules(w http.ResponseWriter, r *http.Request)
 	rules := make([]ruleResponse, 0, len(cfg.AutoSync.Rules))
 	for _, rule := range cfg.AutoSync.Rules {
 		rr := ruleResponse{AutoSyncRule: rule}
+		rr.ArrProfileName = arrNames[rule.InstanceID+"\x00"+strconv.Itoa(rule.ArrProfileID)]
 		if inst, ok := s.Core.Config.GetInstance(rule.InstanceID); ok {
 			rr.InstanceName = inst.Name
 			rr.InstanceType = inst.Type

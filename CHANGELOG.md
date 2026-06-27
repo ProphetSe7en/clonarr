@@ -1,5 +1,71 @@
 # Changelog
 
+## v3.3.0
+
+You can now run clonarr fully offline from a local TRaSH-Guides folder, keep your naming format in sync automatically, and the TRaSH update notification only fires when something you care about actually changed. The Profile Editor gains a Combined view, the Scoring Sandbox handles large paste lists smoothly, and browsing and managing profiles is clearer end to end.
+
+### Highlights
+
+- **Local source mode**: point clonarr at a local TRaSH-Guides folder and skip git entirely.
+- **Naming auto-sync**: keep your file/folder naming format aligned with TRaSH, per field, with drift detection and one-click rollback.
+- **Smarter update notifications**: only get notified when Custom Formats, quality, or naming actually changed, with a direct compare link.
+- **Combined profile view**: see a profile's default groups and your additional groups together in one list.
+- **Clearer profile browsing**: cards show the full quality range a profile accepts, with filters for resolution, source, audio, and HDR.
+- **Renamed tabs**: Add Profiles (browse and add) and Manage Profiles (edit what is in use).
+- **Automatic config backups**: clonarr keeps a rotating backup of your configuration for you.
+
+### New: Local source mode
+
+Run clonarr against a TRaSH-Guides folder on disk instead of pulling from git. Turn it on under Settings, point it at your folder, and clonarr loads Custom Formats, qualities, and naming straight from there. Useful for air-gapped setups, custom forks, or pinning to an exact local copy. In Local mode the git-specific actions are hidden and "Update" reads "Sync" so the buttons match what actually happens.
+
+### New: Naming auto-sync
+
+Keep your Radarr/Sonarr file and folder naming format in step with TRaSH-Guides, one field at a time. Pick which naming fields clonarr manages, and it detects two things: when TRaSH publishes a new recommended format (update available) and when something changed your Arr naming behind clonarr's back (drift). Each field keeps a change history with the old and new value, and you can roll a field back. Optional notifications tell you when a change is found or applied.
+
+### New: Combined and Split profile view
+
+The Profile Editor and Profile Overview gain a Combined / Split toggle. Combined folds your additional groups into the matching TRaSH categories so you read one organized list; Split keeps the classic separate sections. A subtle per-group note marks which groups are your additions.
+
+### New: Automatic config backups
+
+clonarr now keeps a rotating backup of its configuration file on its own. If a bad edit or an unexpected restart ever corrupts your setup, your instances, sync rules, and settings can be recovered from the most recent good copy. No setup required, it just runs.
+
+### Improved: TRaSH update notifications
+
+The "TRaSH-Guides updated" notification is now precise:
+
+- It only fires when the pull actually changed Custom Formats, quality definitions, or naming. Documentation-only or housekeeping updates upstream no longer ping you.
+- It includes a direct GitHub compare link so you can see exactly what changed.
+- The body is grouped by what changed (Custom Formats and scoring, the sync contract, and so on), with each line linking to its pull request.
+
+### Improved: Scoring Sandbox
+
+- **Handles large paste lists.** The results table now loads lazily and only renders rows in view, so pasting thousands of release titles stays smooth. Large pastes are parsed in chunks and the old practical limit is lifted.
+- **Sort toggle.** Switch the results between grab order and pure score.
+- **Simplify names on paste.** Optionally collapse pasted titles to a clean form (for example Movie.2026 / Series).
+- **Per-field reset** in the Score Editor, and you can **share or import** a Score Editor configuration.
+
+### Improved: Browsing and managing profiles
+
+- **Cards show the real range.** A profile card now shows the full span it accepts, both resolution (for example 2160p down to 480p) and source quality (for example Remux down to SDTV), instead of only the top target. A wide-range profile no longer looks like a pure 4K remux profile.
+- **Filters.** Filter the profile list by resolution, source, audio (lossless or lossy), and HDR. An Advanced view opens the full set, including the less common resolutions and sources. Every filter only shows values that actually exist in your profiles.
+- **Clearer in-use badge.** The "in use" mark on a card lists each instance with the profile name you gave it in Arr and its Arr profile id. Click it to jump straight to that profile in Manage Profiles, already filtered.
+- **Renamed tabs.** TRaSH Profiles is now Add Profiles, and Sync Rules is now Manage Profiles, so it is obvious where you add a profile versus where you edit one already in use. Manage Profiles also gains filter pills to narrow the list to a single profile.
+- **Quality Definitions toggle.** The per-quality Auto / Custom control is now an obvious two-option switch instead of a single label that was easy to miss.
+- **Action buttons stand out.** The edit, update, clone, and remove actions on Manage Profiles are color-coded under a new Actions heading, so it is clear they are buttons.
+
+### Improved: Offline instances are handled gracefully
+
+When an Arr instance is offline, the Backup view, Manage Profiles, and the Profile Editor now stay readable and tell you the instance is unreachable, instead of throwing errors or showing blank panels. Your rules are never removed just because an instance is temporarily down.
+
+### Fixed
+
+- **TRaSH branches with a slash in the name now sync (Issue #51).** Pointing a sync at a branch like `feature/my-formats` failed to fetch. clonarr now resolves these correctly.
+- **DD and DD+ Custom Formats no longer collide.** A Custom Format whose name ends in "+" (such as DD+) could overwrite the matching non-plus format on disk. Filenames now preserve the "+".
+- **No more phantom "TRaSH-Guides updated" notices.** A difference in how commit hashes were compared could report an update when nothing had changed. The comparison is now consistent.
+- **Profile Editor stops flickering.** The background instance check no longer redraws the open Profile Editor on every poll.
+- **Add-agent type dropdown shows the right selection on first open** in notification settings.
+
 ## v3.2.1
 
 A small follow-up to v3.2.0: a cleaner layout for single-format groups (such as several HDR groups) in the Profile Editor, plus three fixes to how sync results and scores are shown.

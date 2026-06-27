@@ -6,11 +6,22 @@
 
         <!-- ===== Sync Rules tab ===== -->
         <div class="page" x-show="getProfileTab(activeAppType) === 'sync-rules'">
-          <div style="font-size:18px;font-weight:600;margin-bottom:4px">Sync Rules</div>
+          <div style="font-size:18px;font-weight:600;margin-bottom:4px">Manage Profiles</div>
           <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
-            Every TRaSH profile you've set up to sync with this <span x-text="activeAppLabel"></span> instance. Toggle auto-sync, edit per-rule overrides, or update on demand.
-            Add new rules from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a>.
+            Every TRaSH profile you've set up to sync with this <span x-text="activeAppLabel"></span> instance. Edit a profile, toggle auto-sync, or update on demand.
+            Add more from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">Add Profiles</a>.
             For a per-CF view with drift status, see <a class="inline-link" :href="navHref('custom-formats', { customFormatsTab: 'in-use' })">Custom Formats &rarr; In use</a>.
+          </div>
+
+          <!-- "In use" drill-down: a pill per TRaSH profile that has sync
+               rules here. Set by clicking a card's "in use" badge, or here.
+               Hidden when there's nothing to choose between. -->
+          <div class="tpd-toolbar" x-show="syncRulesTrashProfiles(activeAppType).length > 1" style="margin-bottom:12px">
+            <span class="tpd-fgroup-label">Profile</span>
+            <button class="tpd-chip" :class="{ active: !syncRulesFilterTrashId }" @click="syncRulesFilterTrashId = null">All</button>
+            <template x-for="p in syncRulesTrashProfiles(activeAppType)" :key="'srf'+p.trashId">
+              <button class="tpd-chip" :class="{ active: syncRulesFilterTrashId === p.trashId }" @click="syncRulesFilterTrashId = (syncRulesFilterTrashId === p.trashId ? null : p.trashId)" x-text="p.name"></button>
+            </template>
           </div>
 
           <!-- Offline notice: this table needs a reachable instance for live state. Sync rules
@@ -90,7 +101,7 @@
                   </div>
                   <div>Auto-sync</div>
                   <div>Customizations</div>
-                  <div></div>
+                  <div style="text-align:right;padding-right:4px">Actions</div>
                 </div>
                 <template x-for="sh in sortedSyncRules(inst.id)" :key="sh.arrProfileId">
                   <div class="v3-rule-grid v3-rule-row"
@@ -193,19 +204,19 @@
                     <!-- Actions -->
                     <div class="v3-actions">
                       <template x-if="sh.orphanedAt">
-                        <button class="v3-action-icon" @click.stop="restoreOrphanedRule(inst, sh)" x-tt="'Recreate this profile in Arr from the last synced state'">&#8634;</button>
+                        <button class="v3-action-icon restore" @click.stop="restoreOrphanedRule(inst, sh)" x-tt="'Recreate this profile in Arr from the last synced state'">&#8634;</button>
                       </template>
                       <template x-if="!sh.orphanedAt">
-                        <button class="v3-action-icon" @click.stop="resyncProfile(inst, sh)" x-tt="'Edit sync rule'">&#9998;</button>
+                        <button class="v3-action-icon edit" @click.stop="resyncProfile(inst, sh)" x-tt="'Edit sync rule'">&#9998;</button>
                       </template>
                       <template x-if="!sh.orphanedAt">
-                        <button class="v3-action-icon"
+                        <button class="v3-action-icon update"
                                 @click.stop="updateThisProfile(inst, sh)"
                                 :disabled="updatingRuleId === ((autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId) || {}).id || '') || pulling"
                                 x-tt="(localMode() ? 'Sync ' : 'Update ') + (sh.arrProfileName || 'profile') + ' (#' + sh.arrProfileId + ')' + (localMode() ? ' from your local files' : ' with latest TRaSH-Guides data')">&#8635;</button>
                       </template>
                       <template x-if="!sh.orphanedAt">
-                        <button class="v3-action-icon" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>
+                        <button class="v3-action-icon clone" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>
                       </template>
                       <button class="v3-action-icon danger" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" x-tt="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
                     </div>
@@ -215,7 +226,7 @@
             </template>
           </template>
           <template x-if="!instancesOfType(activeAppType).some(inst => sortedSyncRules(inst.id).length > 0)">
-            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No sync rules yet. Sync a profile from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">TRaSH Profiles</a> to get started.</div>
+            <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No profiles set up yet. Add one from <a class="inline-link" :href="navHref('profiles', { profileTab: 'trash-profiles' })">Add Profiles</a> to get started.</div>
           </template>
 
         </div>
@@ -225,7 +236,7 @@
         <div class="page tpd-page"
              :class="tpdView === 'list' ? 'tpd-view-list' : 'tpd-view-grid'"
              x-show="getProfileTab(activeAppType) === 'trash-profiles'">
-          <div style="font-size:18px;font-weight:600;margin-bottom:4px">TRaSH Profiles</div>
+          <div style="font-size:18px;font-weight:600;margin-bottom:4px">Add Profiles</div>
           <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
             Browse TRaSH-Guides quality profiles. Each card describes what you get from a profile. Click "Use &rarr;" on a profile to set up a sync rule for your <span x-text="activeAppLabel"></span> instance.
           </div>
@@ -239,25 +250,95 @@
                    distinguishable without labels. Category-list order
                    matches the on-page section ordering (Standard, SQP,
                    Anime, foreign-language). -->
+              <!-- Compact single row by default: search + common chips grouped
+                   by · separators. "Advanced filters" swaps the chip group for
+                   a per-row panel showing every available value. All chips are
+                   data-driven. -->
               <div class="tpd-toolbar">
                 <input class="tpd-search" placeholder="Search profiles…" x-model="tpdSearch">
-                <button class="tpd-chip" :class="{ active: tpdCategoryFilters.length === 0 }" @click="tpdClearCategories()">All</button>
-                <template x-for="cat in tpdCategoryList(activeAppType)" :key="cat">
-                  <button class="tpd-chip" :class="{ active: tpdIsCategoryActive(cat) }" @click="tpdToggleCategory(cat)" x-text="cat"></button>
-                </template>
-                <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
-                <button class="tpd-chip" :class="{ active: tpdFeatureFilters.length === 0 }" @click="tpdClearFeatures()">All</button>
-                <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('hd') }" @click="tpdToggleFeature('hd')">1080p</button>
-                <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('uhd') }" @click="tpdToggleFeature('uhd')">4K / UHD</button>
-                <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('hdr') }" @click="tpdToggleFeature('hdr')">HDR</button>
-                <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossless') }" @click="tpdToggleFeature('lossless')">Lossless audio</button>
-                <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('in-use') }" @click="tpdToggleFeature('in-use')">In use</button>
-                <div class="tpd-view-toggle" role="group" aria-label="View mode">
+
+                <!-- Compact chips (hidden in advanced mode) -->
+                <div class="tpd-chipwrap" x-show="!tpdAdvanced">
+                  <!-- Type (category) -->
+                  <button class="tpd-chip" :class="{ active: tpdCategoryFilters.length === 0 }" @click="tpdClearCategories()">All</button>
+                  <template x-for="cat in tpdCategoryList(activeAppType)" :key="cat">
+                    <button class="tpd-chip" :class="{ active: tpdIsCategoryActive(cat) }" @click="tpdToggleCategory(cat)" x-text="cat"></button>
+                  </template>
+                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
+                  <!-- Resolution (common) -->
+                  <template x-for="res in tpdAvailableResolutions(activeAppType, false)" :key="'r'+res">
+                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
+                  </template>
+                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
+                  <!-- Source (common) -->
+                  <template x-for="src in tpdAvailableSources(activeAppType, false)" :key="'s'+src">
+                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
+                  </template>
+                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
+                  <!-- Audio -->
+                  <button x-show="tpdHasAudio(activeAppType,'lossless')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossless') }" @click="tpdToggleFeature('lossless')">Lossless</button>
+                  <button x-show="tpdHasAudio(activeAppType,'lossy')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossy') }" @click="tpdToggleFeature('lossy')">Lossy</button>
+                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
+                  <!-- HDR -->
+                  <button x-show="tpdHasHdr(activeAppType,'hdr')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('hdr') }" @click="tpdToggleFeature('hdr')">HDR</button>
+                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
+                  <!-- Status -->
+                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('in-use') }" @click="tpdToggleFeature('in-use')">In use</button>
+                </div>
+
+                <button class="tpd-chip" :class="{ active: tpdAdvanced }" @click="tpdAdvanced = !tpdAdvanced">Advanced filters</button>
+
+                <div class="tpd-view-toggle" role="group" aria-label="View mode" style="margin-left:auto">
                   <button class="tpd-view-btn" :class="{ active: tpdView === 'grid' }" @click="tpdSetView('grid')">Grid</button>
                   <button class="tpd-view-btn" :class="{ active: tpdView === 'list' }" @click="tpdSetView('list')">List</button>
                   <button x-show="tpdView === 'list'" class="tpd-view-btn"
                           @click="tpdAnyOpen() ? tpdCollapseAll() : tpdExpandAll(activeAppType)"
                           x-text="tpdAnyOpen() ? 'Collapse all' : 'Expand all'"></button>
+                </div>
+              </div>
+
+              <!-- Advanced filter panel: one labeled row per facet, every
+                   available value shown. Data-driven; rows hide when empty. -->
+              <div class="tpd-filters" x-show="tpdAdvanced" x-cloak>
+                <div class="tpd-fgroup">
+                  <span class="tpd-fgroup-label">Type</span>
+                  <button class="tpd-chip" :class="{ active: tpdCategoryFilters.length === 0 }" @click="tpdClearCategories()">All</button>
+                  <template x-for="cat in tpdCategoryList(activeAppType)" :key="'ac'+cat">
+                    <button class="tpd-chip" :class="{ active: tpdIsCategoryActive(cat) }" @click="tpdToggleCategory(cat)" x-text="cat"></button>
+                  </template>
+                </div>
+                <div class="tpd-fgroup" x-show="tpdAvailableResolutions(activeAppType, false).length || tpdAvailableResolutions(activeAppType, true).length">
+                  <span class="tpd-fgroup-label">Resolution</span>
+                  <template x-for="res in tpdAvailableResolutions(activeAppType, false)" :key="'ar'+res">
+                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
+                  </template>
+                  <template x-for="res in tpdAvailableResolutions(activeAppType, true)" :key="'ara'+res">
+                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
+                  </template>
+                </div>
+                <div class="tpd-fgroup" x-show="tpdAvailableSources(activeAppType, false).length || tpdAvailableSources(activeAppType, true).length">
+                  <span class="tpd-fgroup-label">Source</span>
+                  <template x-for="src in tpdAvailableSources(activeAppType, false)" :key="'as'+src">
+                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
+                  </template>
+                  <template x-for="src in tpdAvailableSources(activeAppType, true)" :key="'asa'+src">
+                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
+                  </template>
+                </div>
+                <div class="tpd-fgroup" x-show="tpdHasAudio(activeAppType,'lossless') || tpdHasAudio(activeAppType,'lossy') || tpdHasAudio(activeAppType,'available')">
+                  <span class="tpd-fgroup-label">Audio</span>
+                  <button x-show="tpdHasAudio(activeAppType,'lossless')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossless') }" @click="tpdToggleFeature('lossless')">Lossless</button>
+                  <button x-show="tpdHasAudio(activeAppType,'lossy')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossy') }" @click="tpdToggleFeature('lossy')">Lossy</button>
+                  <button x-show="tpdHasAudio(activeAppType,'available')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('available') }" @click="tpdToggleFeature('available')">Lossless available</button>
+                </div>
+                <div class="tpd-fgroup" x-show="tpdHasHdr(activeAppType,'hdr') || tpdHasHdr(activeAppType,'dv')">
+                  <span class="tpd-fgroup-label">HDR</span>
+                  <button x-show="tpdHasHdr(activeAppType,'hdr')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('hdr') }" @click="tpdToggleFeature('hdr')">HDR</button>
+                  <button x-show="tpdHasHdr(activeAppType,'dv')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('dv') }" @click="tpdToggleFeature('dv')">DV available</button>
+                </div>
+                <div class="tpd-fgroup">
+                  <span class="tpd-fgroup-label">Status</span>
+                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('in-use') }" @click="tpdToggleFeature('in-use')">In use</button>
                 </div>
               </div>
 
@@ -282,7 +363,7 @@
                           <h3 class="tpd-card-title" x-text="d.name"></h3>
                           <span x-show="tpdView === 'list' && !tpdIsMinimalCard(d)" class="tpd-card-list-tagline"
                                 x-text="(d.tagline || '') + (d.axes?.avgSize ? ' · ' + d.axes.avgSize : '')"></span>
-                          <span class="tpd-used-mark" x-show="tpdProfileInUse(activeAppType, d.trashId)" x-tt="tpdInUseTooltip(activeAppType, d.trashId)" @click.stop>in use</span>
+                          <span class="tpd-used-mark" role="button" tabindex="0" style="cursor:pointer" x-show="tpdProfileInUse(activeAppType, d.trashId)" x-tt="tpdInUseTooltip(activeAppType, d.trashId)" @click.stop="tpdGoToSyncRules(d.trashId)" @keydown.enter.stop="tpdGoToSyncRules(d.trashId)">in use</span>
                         </div>
 
                         <div class="tpd-card-body" x-show="tpdView === 'grid' || tpdIsOpen(d.trashId)">

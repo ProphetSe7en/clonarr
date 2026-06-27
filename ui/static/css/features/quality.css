@@ -1,4 +1,4 @@
-  /* Quality Definitions — Type picker pills (Movies / Series / Anime / …) */
+  /* Quality Definitions - Type picker pills (Movies / Series / Anime / …) */
   .qs-type-btn {
     background: transparent;
     border: 1px solid var(--border-subtle);
@@ -16,10 +16,37 @@
     background: var(--app-glow);
   }
 
-  /* Quality Definitions — per-row Sync Mode toggle (Auto / Custom).
-     Subtle toggle styling instead of primary/danger button colors —
-     Auto is the neutral default, Custom flips to an orange-tinted
-     hint that user values diverge from TRaSH. */
+  /* Quality Definitions - per-row Sync Mode segmented control (Auto / Custom).
+     Both options always visible so it reads as a switch, not a label. The
+     selected segment gets an app-color frame (outline only, not a filled
+     pill) to stay clean and obviously interactive. */
+  .qs-mode-seg {
+    display: inline-flex;
+    border: 1px solid var(--border-muted);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .qs-mode-seg-btn {
+    background: transparent;
+    border: 0;
+    color: var(--text-muted);
+    padding: 2px 9px;
+    font-size: 11px; font-weight: 500;
+    cursor: pointer; font-family: inherit;
+    line-height: 1.5;
+    transition: color 0.12s, box-shadow 0.12s;
+  }
+  .qs-mode-seg-btn + .qs-mode-seg-btn { border-left: 1px solid var(--border-muted); }
+  .qs-mode-seg-btn:hover { color: var(--text-primary); }
+  .qs-mode-seg-btn.is-active {
+    color: var(--app-color);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--app-color);
+  }
+
+  /* Compact pill button reused as a general action button (Quality Definitions
+     legacy + the Maintenance page Scan/Add/Remove buttons). Kept distinct from
+     the segmented control above. */
   .qs-mode-btn {
     background: transparent;
     border: 1px solid var(--border-muted);
@@ -38,7 +65,7 @@
     background: var(--accent-orange-bg);
   }
 
-  /* Quality Definitions — per-row Sync action. Compact text-link
+  /* Quality Definitions - per-row Sync action. Compact text-link
      style, blue (same external-action convention as the guide/json
      links on Custom Formats). Only renders when the row's values
      actually differ from TRaSH. */
@@ -78,7 +105,7 @@
   .qs-name.editable:hover { text-decoration: underline dotted; text-underline-offset: 2px; }
   .qs-badge { font-size:11px; color: var(--text-muted); padding: 1px 5px; border-radius: 3px; background: var(--bg-muted); flex-shrink: 0; }
   .qs-rename-input { background: transparent; border: 1px solid var(--accent-blue); color: var(--text-primary); font-size:13px; padding: 1px 4px; border-radius: 3px; flex: 1; min-width: 0; }
-  /* Drop gap: visually a thin 4px slit at all times — never changes height.
+  /* Drop gap: visually a thin 4px slit at all times - never changes height.
      The hit area is invisibly extended ±7px above and below via a ::before
      pseudo-element that only appears WHILE dragging, so the layout never
      shifts. Idle: 4px transparent. Drag in progress: 4px faint blue line +
