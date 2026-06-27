@@ -33,7 +33,7 @@ export default {
         } catch (e) { /* ignore */ }
       }
       // Load instance profiles for the "Score against" dropdown.
-      // Sort alphabetically so the dropdown is browsable — Arr returns
+      // Sort alphabetically so the dropdown is browsable - Arr returns
       // them in id order which feels random to the user.
       if (sb.instanceId && sb.instanceProfiles.length === 0) {
         try {
@@ -88,7 +88,7 @@ export default {
     // tie when the sandbox sorts by quality, and the score key inside
     // the sort breaks the tie within a group. Releases with a quality
     // not in the profile rank as -1 (sort below every allowed quality
-    // — Radarr wouldn't pick them anyway). Backend builds the map; we
+    // - Radarr wouldn't pick them anyway). Backend builds the map; we
     // just read from the cached profile-scores response.
     _sandboxQualityRank(appType, profileKey) {
       // profileKey override is for the compare row, which scores
@@ -144,15 +144,15 @@ export default {
     },
 
     // Sorted results. sortCol 'manual' (or empty) preserves the underlying sb.results
-    // order — set by drag-reorder so manual ordering survives until the user clicks
+    // order - set by drag-reorder so manual ordering survives until the user clicks
     // a column header to re-sort.
     //
     // Score and Quality sorts both rank by the active profile's quality
-    // first — TRaSH/Radarr's "current logic" rule states a higher
+    // first - TRaSH/Radarr's "current logic" rule states a higher
     // quality always trumps score, so a 1080p release outranks a 720p
     // one regardless of score. Group members (e.g. Bluray-1080p +
     // WEBDL-1080p + WEBRip-1080p in a "1080p" group) share rank, so
-    // within the group score breaks the tie — that matches Radarr's
+    // within the group score breaks the tie - that matches Radarr's
     // own behaviour where qualities inside a group are interchangeable.
     sortedSandboxResults(appType) {
       const sb = this.sandbox[appType];
@@ -160,7 +160,7 @@ export default {
       // Memoize the sort on the results-array REFERENCE plus the sort choice.
       // Every mutation that changes the data (parse, rescore, inline edit, drag,
       // delete, select-all) reassigns sb.results to a NEW array, so the reference
-      // changes and the cache invalidates on its own — no manual version bump to
+      // changes and the cache invalidates on its own - no manual version bump to
       // forget. Filters (set / selected / hide-failed) run fresh in
       // visibleSandboxResults on top of this, so selection and set-membership
       // changes are always reflected even though the sort is cached.
@@ -183,7 +183,7 @@ export default {
       };
       // Pass/fail outer key for score + quality sorts. PASS rows always
       // group above FAIL rows regardless of asc/desc on the secondary
-      // keys — intermixing passes and fails (e.g. score-too-low rows
+      // keys - intermixing passes and fails (e.g. score-too-low rows
       // landing between higher-scoring passes of the same quality)
       // makes the table read as random. FAIL rows still sort by the
       // same quality+score logic within their own block.
@@ -192,12 +192,12 @@ export default {
         switch (col) {
           case 'score': {
             // Pure-score mode: total CF score only, quality + pass/fail
-            // ignored — for browsing the CF picture, not Arr's pick order.
+            // ignored - for browsing the CF picture, not Arr's pick order.
             if (sb.scoreSortMode === 'score') {
               return dir * ((a.scoring?.total ?? -99999) - (b.scoring?.total ?? -99999));
             }
             // Grab order (default): pass/fail outer, then quality, then score
-            // within quality — what Arr would actually grab (Quality Trumps All).
+            // within quality - what Arr would actually grab (Quality Trumps All).
             const dp = passOf(b) - passOf(a);
             if (dp !== 0) return dp;
             const dq = rankOf(a) - rankOf(b);
@@ -268,7 +268,7 @@ export default {
     // The results list renders only the rows visible in the scroll viewport,
     // plus a buffer, instead of every row. The full set still lives in memory
     // and drives every count/sort/filter; only the DOM is bounded, so 50 rows or
-    // 50,000 rows cost the same to draw. This is the shared windowing engine —
+    // 50,000 rows cost the same to draw. This is the shared windowing engine -
     // the Scoring Generator reuses the same math. Requires a fixed row height
     // (see the fixed-height result rows in the template).
     SANDBOX_ROW_H: 34,         // px, one result row (single profile)
@@ -334,7 +334,7 @@ export default {
       const all = (sb.results || []);
       const allSelected = all.length > 0 && all.every(r => r._selected === true);
       all.forEach(r => { r._selected = !allSelected; });
-      // trigger reactivity — mutating props in place isn't always picked up
+      // trigger reactivity - mutating props in place isn't always picked up
       sb.results = [...all];
     },
 
@@ -491,7 +491,7 @@ export default {
       const m = this.sandboxConfigModal;
       m.error = '';
       let data;
-      try { data = JSON.parse(m.importText); } catch (e) { m.error = 'Could not read that — it is not valid JSON.'; return; }
+      try { data = JSON.parse(m.importText); } catch (e) { m.error = 'Could not read that - it is not valid JSON.'; return; }
       if (!data || !Array.isArray(data.cfs) || data.clonarrScoreConfig == null) { m.error = 'That does not look like a clonarr score config.'; return; }
       const scores = [], editToggles = {}, editScores = {}, addedNames = {}, addedDefaults = {};
       for (const cf of data.cfs) {
@@ -672,7 +672,7 @@ export default {
       }
     },
 
-    // Drag-reorder rows. Works only when sortCol is 'manual' (or user just dropped —
+    // Drag-reorder rows. Works only when sortCol is 'manual' (or user just dropped -
     // we set it to 'manual' so the drag outcome sticks). Operates on the underlying
     // sb.results array by matching the dragged/target result objects (identity-safe).
     sandboxDragStart(appType, res) {
@@ -722,7 +722,7 @@ export default {
 
     // Clean a pasted line: drop a trailing comma and surrounding quotes. People
     // paste a fragment of an exported JSON list (e.g. `"Movie.2025...-Tier1",`)
-    // and the quotes/comma are noise — harmless to the score, but they clutter
+    // and the quotes/comma are noise - harmless to the score, but they clutter
     // the title. Strips them so the release reads clean.
     _sandboxCleanLine(s) {
       let t = (s || '').trim();
@@ -733,8 +733,8 @@ export default {
 
     // "Simplify names": replace the movie title and year with a fixed
     // "Movie.2026", keeping the technical part (resolution, source, audio,
-    // codec, group) untouched. Neither title nor year affects the score — only
-    // the Custom Formats do — so this makes the list compact and anonymous. The
+    // codec, group) untouched. Neither title nor year affects the score - only
+    // the Custom Formats do - so this makes the list compact and anonymous. The
     // cut point uses Arr's PARSED year, not the first four digits, so a title
     // like "1917" isn't mistaken for the year. Releases that become identical
     // afterwards merge, which is fine: identical tags always score the same.
@@ -773,6 +773,268 @@ export default {
       let suffix = orig.slice(cut);
       if (suffix && !/^[\s._-]/.test(suffix)) suffix = '.' + suffix;
       return 'Movie.2026' + suffix;
+    },
+
+    // Generate candidate release titles from the selected profile's Custom
+    // Formats (audio/HDR/resolution/...), then score them through the normal
+    // parse pipeline - so you can see a profile's scoring landscape without
+    // pasting anything. The backend derives each CF's dimension and runs the
+    // generator; Arr's parse stays the source of truth for what matches.
+    // Load the profile's allowed quality items into the picker (once per
+    // profile). Default selection: every single quality, plus one representative
+    // member per group (WEBDL preferred over WEBRip, since group members usually
+    // score the same), so the user starts from full coverage and trims down.
+    async loadGenQualities(appType) {
+      const sb = this.sandbox[appType];
+      if (!sb.profileKey) return;
+      if (sb.genQualityFor === sb.profileKey && (sb.genQualityItems.length || sb.genScores.length)) return;
+      try {
+        const data = await this.fetchProfileScores(sb.profileKey, appType);
+        // Quality picker: every single quality + one representative member per
+        // group (WEBDL preferred), so the user starts at full coverage.
+        const items = data.qualityItems || [];
+        const qsel = {};
+        for (const it of items) {
+          if (it.members && it.members.length) {
+            const rep = it.members.find(m => /webdl/i.test(m)) || it.members[0];
+            qsel[rep] = true;
+          } else {
+            qsel[it.name] = true;
+          }
+        }
+        // Keep the FULL score list: axis CFs drive the pickers, but CFs with no
+        // axis (codec CFs like x265/x264 have no dim) must still reach the backend
+        // so its codec auto-detection works. Default-select the axis CFs only.
+        const scores = data.scores || [];
+        const asel = {};
+        for (const s of scores) if (s.dim) asel[s.trashId] = true;
+        sb.genQualityItems = items;
+        sb.genQualitySel = qsel;
+        sb.genQualityExpand = {};
+        sb.genScores = scores;
+        sb.genAxisSel = asel;
+        sb.genAxisOpen = {};
+        sb.genQualityFor = sb.profileKey;
+      } catch (e) { /* pickers stay empty; generation falls back to the tier grid */ }
+    },
+
+    // The leaf quality names currently selected in the picker.
+    genSelectedQualities(appType) {
+      const sel = this.sandbox[appType].genQualitySel || {};
+      return Object.keys(sel).filter(k => sel[k]);
+    },
+
+    // --- Per-axis CF pickers (unwanted, HDR, movie versions, ...) ---
+    // Quality is its own picker; resolution + source are covered by it, so they
+    // are not separate axes here.
+    genAxisDefs() {
+      return [
+        { dim: 'unwanted', label: 'Unwanted' },
+        { dim: 'edition', label: 'Movie Versions' },
+        { dim: 'hdr', label: 'HDR Formats' },
+        { dim: 'audio', label: 'Audio Formats' },
+        { dim: 'channels', label: 'Audio Channels' },
+        { dim: 'service', label: 'Streaming Services' },
+        { dim: 'modifier', label: 'Repack / Proper' },
+        { dim: 'group', label: 'Release Groups' },
+      ];
+    },
+    // The live "active CF set" the pickers + generation read from. When the
+    // Score Editor is open it is the editor's current CFs (profile CFs still
+    // enabled + additionals the user added), so an added IMAX/edition shows up
+    // immediately. Otherwise it is the profile's scored CFs from the last fetch.
+    // Each entry carries trashId + name + score + dim (release axis).
+    genActiveScores(appType) {
+      const sb = this.sandbox[appType];
+      if (sb.editOpen && sb.editOriginal) {
+        const out = [];
+        for (const s of (sb.editOriginal.scores || [])) {
+          const key = s.trashId || s.name;
+          if (sb.editToggles[key] === false) continue; // disabled in the editor
+          out.push({ trashId: s.trashId || '', name: s.name, score: sb.editScores[key] ?? s.score, dim: s.dim });
+        }
+        for (const key of Object.keys(sb.editToggles)) {
+          if (sb.editToggles[key] === 'added') {
+            out.push({ trashId: key, name: (sb._addedCFNames || {})[key] || key, score: sb.editScores[key] ?? 0, dim: (sb._addedCFDims || {})[key] || '' });
+          }
+        }
+        return out;
+      }
+      return sb.genScores || [];
+    },
+    // A CF is selected for generation unless its toggle was explicitly turned
+    // off, so newly-added CFs default to selected without a refresh step.
+    genAxisSelected(appType, trashId) {
+      return this.sandbox[appType].genAxisSel[trashId] !== false;
+    },
+    genAxisCFs(appType, dim) {
+      return this.genActiveScores(appType).filter(s => s.dim === dim);
+    },
+    // Generatable CFs in an axis: those that carry a score (score-0 CFs can't
+    // change the result, so the engine never generates for them). These are the
+    // ones offered in the axis picker.
+    genAxisGeneratable(appType, dim) {
+      return this.genAxisCFs(appType, dim).filter(cf => cf.score !== 0);
+    },
+    // What will actually be generated for this axis: generatable AND still
+    // selected for generation. Drives the summary. (Deselecting here only skips
+    // GENERATION; scoring always uses the full Score Editor.)
+    genAxisUsed(appType, dim) {
+      return this.genAxisGeneratable(appType, dim).filter(cf => this.genAxisSelected(appType, cf.trashId));
+    },
+    // Count of score-0 CFs in an axis: present in the Score Editor but skipped
+    // for generation because they cannot change the score.
+    genAxisSkippedCount(appType, dim) {
+      return this.genAxisCFs(appType, dim).filter(cf => cf.score === 0).length;
+    },
+    // Axes that have at least one CF (for the summary, which also notes skipped).
+    genAxesWithCFs(appType) {
+      return this.genAxisDefs().filter(ax => this.genAxisCFs(appType, ax.dim).length > 0);
+    },
+    // Axes that have at least one generatable CF (for the pickers).
+    genAxesGeneratable(appType) {
+      return this.genAxisDefs().filter(ax => this.genAxisGeneratable(appType, ax.dim).length > 0);
+    },
+    genAxisSelectedCount(appType, dim) {
+      return this.genAxisGeneratable(appType, dim).filter(cf => this.genAxisSelected(appType, cf.trashId)).length;
+    },
+    genAxisAllOn(appType, dim) {
+      const cfs = this.genAxisGeneratable(appType, dim);
+      return cfs.length > 0 && cfs.every(cf => this.genAxisSelected(appType, cf.trashId));
+    },
+    toggleGenAxisAll(appType, dim) {
+      const sb = this.sandbox[appType];
+      const cfs = this.genAxisGeneratable(appType, dim);
+      const allOn = cfs.length > 0 && cfs.every(cf => sb.genAxisSel[cf.trashId] !== false);
+      cfs.forEach(cf => { sb.genAxisSel[cf.trashId] = !allOn; });
+    },
+    toggleGenAxisOpen(appType, dim) {
+      const sb = this.sandbox[appType];
+      const open = !sb.genAxisOpen[dim];
+      sb.genAxisOpen = {}; // single picker open at a time
+      sb.genAxisOpen[dim] = open;
+      if (open) this.loadGenQualities(appType);
+    },
+    // Sent to the generator as scores[]: the selected axis CFs, plus CFs with no
+    // axis (codec, custom) so the backend's codec auto-detection still sees the
+    // x264/x265/HEVC names even though they aren't pickable.
+    genSelectedScores(appType) {
+      // Generation scope: send CFs the user has NOT deselected in the generator,
+      // plus no-dim CFs (codec, custom) so codec auto-detection still works.
+      // Scoring is unaffected - it always uses the full Score Editor; the engine
+      // additionally skips score-0 CFs.
+      return this.genActiveScores(appType).filter(s => !s.dim || this.genAxisSelected(appType, s.trashId));
+    },
+    // Live, exact generate count for the overview. Reading genSelectedScores +
+    // genSelectedQualities synchronously lets x-effect track the selection, so
+    // this re-runs whenever the Score Editor or qualities change; it then
+    // debounces a titles-only call to the engine (titles are cheap; scoring is
+    // the heavy step we are NOT doing here).
+    genUpdatePreviewCount(appType) {
+      const sb = this.sandbox[appType];
+      const scores = this.genSelectedScores(appType);       // reactive deps (tracked by x-effect)
+      const qualities = this.genSelectedQualities(appType); // reactive deps
+      const profileKey = sb.profileKey;                     // reactive dep
+      if (!profileKey) { sb.genPreviewCount = null; sb.genPreviewStats = null; return; }
+      clearTimeout(this._genPreviewTimer);
+      this._genPreviewTimer = setTimeout(async () => {
+        try {
+          const r = await fetch('/api/scoring/generate-titles', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ appType, scores, qualities, options: {} }),
+          });
+          if (!r.ok) { sb.genPreviewCount = null; sb.genPreviewStats = null; return; }
+          const data = await r.json();
+          sb.genPreviewCount = (data.titles || []).length;
+          sb.genPreviewStats = data.stats || null;
+        } catch (e) { sb.genPreviewCount = null; sb.genPreviewStats = null; }
+      }, 400);
+    },
+    // Human-readable breakdown of the live count: contexts x the axes that vary,
+    // minus impossible/duplicate combinations, plus the additive unwanted tags.
+    genPreviewMath(appType) {
+      const s = this.sandbox[appType].genPreviewStats;
+      if (!s) return '';
+      const parts = [s.contexts.toLocaleString() + ' context' + (s.contexts === 1 ? '' : 's')];
+      for (const [k, label] of [['audio', 'audio'], ['channels', 'channels'], ['hdr', 'HDR'], ['services', 'services'], ['modifiers', 'modifiers'], ['codecs', 'codecs'], ['editions', 'editions'], ['unwanted', 'unwanted']]) {
+        if (s[k] > 1) parts.push(label + ' ' + s[k]);
+      }
+      let str = parts.join(' × ') + ' = ' + s.product.toLocaleString();
+      if (s.skipped) str += ', minus ' + s.skipped.toLocaleString() + ' impossible';
+      if (s.deduped) str += ', minus ' + s.deduped.toLocaleString() + ' duplicate';
+      if (s.tagTitles) str += ', plus ' + s.tagTitles.toLocaleString() + ' unwanted-tag title' + (s.tagTitles === 1 ? '' : 's');
+      return str + ' = ' + s.total.toLocaleString() + ' titles';
+    },
+
+    genQualityGroupOn(appType, item) {
+      const sel = this.sandbox[appType].genQualitySel || {};
+      return (item.members || []).some(m => sel[m]);
+    },
+
+    // Toggle a whole group: off if any member is on, otherwise select its
+    // representative member (WEBDL preferred).
+    toggleGenQualityGroup(appType, item) {
+      const sb = this.sandbox[appType];
+      const members = item.members || [];
+      if (members.some(m => sb.genQualitySel[m])) {
+        members.forEach(m => { sb.genQualitySel[m] = false; });
+      } else {
+        const rep = members.find(m => /webdl/i.test(m)) || members[0];
+        if (rep) sb.genQualitySel[rep] = true;
+      }
+    },
+
+    async sandboxGenerateFromProfile(appType) {
+      const sb = this.sandbox[appType];
+      if (!sb.instanceId) { this.showToast('Pick an instance to parse with first.', 'info', 4000); return; }
+      if (!sb.profileKey) { this.showToast('Pick a profile to score against first.', 'info', 4000); return; }
+      await this.loadGenQualities(appType);
+      // Need at least one scored axis CF or one quality, otherwise the generator
+      // falls back to a single resolution-less placeholder title (confusing).
+      const hasScoredAxis = this.genActiveScores(appType).some(s => s.dim && s.score !== 0);
+      if (!hasScoredAxis && !this.genSelectedQualities(appType).length) {
+        this.showToast('Add a scored Custom Format in the Score Editor, or pick a quality, to generate.', 'warning', 5000);
+        return;
+      }
+      let titles = [];
+      this.showToast('Generating titles from the profile…', 'info', 4000);
+      try {
+        const r = await fetch('/api/scoring/generate-titles', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            appType,
+            scores: this.genSelectedScores(appType),
+            qualities: this.genSelectedQualities(appType),
+            options: {},
+          })
+        });
+        if (!r.ok) { this.showToast('Could not generate titles.', 'error', 6000); return; }
+        const data = await r.json();
+        titles = data.titles || [];
+      } catch (e) { this.showToast('Generate error: ' + e.message, 'error', 6000); return; }
+      if (!titles.length) {
+        this.showToast('No generatable Custom Formats in this profile (audio / HDR / resolution / ...).', 'warning', 6000);
+        return;
+      }
+      // Generating titles is cheap, but scoring each one through the instance is
+      // the heavy step (a big profile can produce thousands). Confirm the count
+      // before parsing so a large run is never a surprise.
+      const n = titles.length;
+      const confirmed = await new Promise(resolve => {
+        this.confirmModal = {
+          show: true,
+          title: 'Generate titles',
+          message: `${n.toLocaleString()} ${n === 1 ? 'title' : 'titles'} will be generated and scored against the selected instance. Larger profiles take longer to score. Proceed?`,
+          confirmLabel: 'Proceed',
+          cancelLabel: 'Cancel',
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+        };
+      });
+      if (!confirmed) return;
+      sb.bulkInput = titles.join('\n');
+      sb.showBulk = true;
+      await this.sandboxParseBulk(appType);
     },
 
     async sandboxParseBulk(appType) {
@@ -946,13 +1208,13 @@ export default {
           signal: abort.signal
         });
         if (r.status === 429) {
-          // Server cooldown active — sync our timer to the server's Retry-After
+          // Server cooldown active - sync our timer to the server's Retry-After
           // so the button reflects actual time remaining. Defends against
           // multiple browser tabs / lost-state edge cases.
           const retryAfter = parseInt(r.headers.get('Retry-After'), 10) || 120;
           this.startSearchCooldown(appType, retryAfter);
           const e = await r.json().catch(() => ({}));
-          sb.searchError = e.error || `Search rate limited — wait ${retryAfter}s`;
+          sb.searchError = e.error || `Search rate limited - wait ${retryAfter}s`;
           return;
         }
         if (!r.ok) { const e = await r.json().catch(() => ({})); sb.searchError = e.error || 'Search failed'; return; }
@@ -968,7 +1230,7 @@ export default {
     },
 
     // Per-app-type cooldown ticker. setInterval lives only while cooldown
-    // is active — cleaned up when remaining hits 0 or another search starts.
+    // is active - cleaned up when remaining hits 0 or another search starts.
     // No global timer, no leaked intervals.
     startSearchCooldown(appType, seconds) {
       const sb = this.sandbox[appType];
@@ -996,7 +1258,7 @@ export default {
       if (text) results = results.filter(r => r.title.toLowerCase().includes(text));
       const res = sb.searchFilterRes;
       if (res) {
-        // Match exact resolution token — not source descriptors like "UHD BluRay"
+        // Match exact resolution token - not source descriptors like "UHD BluRay"
         const patterns = {
           '2160p': /\b2160p\b/i,
           '1080p': /\b1080p\b/i,
@@ -1021,7 +1283,7 @@ export default {
     // localStorage immediately (synchronous, survives if the server is
     // unreachable mid-edit) and schedules a debounced PUT to the server
     // file. localStorage is intentionally kept in sync as a read-cache
-    // and emergency backup — never deleted on successful server write.
+    // and emergency backup - never deleted on successful server write.
     _sandboxPersistAll(appType) {
       const sb = this.sandbox[appType];
       if (!sb) return;
@@ -1066,7 +1328,7 @@ export default {
     },
 
     // Push current in-memory state to the server file. Server stores
-    // ONLY the stable user-curated data — release-title strings and
+    // ONLY the stable user-curated data - release-title strings and
     // named score sets. Parsed quality, matched CFs and per-profile
     // scoring all change as soon as the user picks a different profile,
     // so persisting them would be wasteful AND misleading. The file
@@ -1111,7 +1373,7 @@ export default {
     },
 
     // Merge freshly scored items into the existing results list, with
-    // title-based dedupe — fresh items take precedence so re-scoring the
+    // title-based dedupe - fresh items take precedence so re-scoring the
     // same title overwrites the old entry instead of stacking duplicates
     // (the prior behaviour produced "12 releases" lists where 4 were the
     // same title from earlier Score Selected runs).
@@ -1137,7 +1399,7 @@ export default {
     // saved title-list filter on top of the normal results list, so:
     //   - Adding new releases to a set is just append-titles.
     //   - Activating a set filters visibleSandboxResults to those titles.
-    //   - Score Selected still adds to the unfiltered main results — set
+    //   - Score Selected still adds to the unfiltered main results - set
     //     contents are explicitly curated, never auto-grown.
     // Persisted to localStorage per app-type so sets survive reloads
     // alongside the existing results storage.
@@ -1148,7 +1410,7 @@ export default {
       this._sandboxPersistAll(appType);
     },
 
-    // Legacy entry point — boot called sandboxLoadScoreSets after
+    // Legacy entry point - boot called sandboxLoadScoreSets after
     // loadSandboxResults; the unified loader handles both, so this is now
     // a thin guarded delegate. Idempotent: only the first call per
     // app-type does the network work, subsequent calls no-op against the
@@ -1235,7 +1497,7 @@ export default {
     },
 
     // Remove every checkbox-selected release from the active score set.
-    // Releases stay in sb.results — only their membership in the set is
+    // Releases stay in sb.results - only their membership in the set is
     // dropped. Selection-driven so the user controls scope by check vs
     // un-check, and the same checkbox UX that drives Add-to-existing /
     // New set drives this too.
@@ -1261,11 +1523,11 @@ export default {
       this.showToast(`Removed ${removed} release${removed > 1 ? 's' : ''} from "${set.name}" (still in results).`, 'info', 4000);
     },
 
-    // Wipe all release rows from the table. Destructive — no undo.
+    // Wipe all release rows from the table. Destructive - no undo.
     // Also clears the active score-set selection because keeping it
     // selected would show a count like "5 of 5" while displaying zero
     // rows (set's titles can no longer match anything in empty results).
-    // Score sets themselves are kept — only the active selection clears.
+    // Score sets themselves are kept - only the active selection clears.
     async sandboxClearResults(appType) {
       const sb = this.sandbox[appType];
       const count = (sb.results || []).length;
@@ -1274,7 +1536,7 @@ export default {
         this.confirmModal = {
           show: true,
           title: 'Clear all results?',
-          message: `Wipe all ${count} release row${count === 1 ? '' : 's'} from the table. Saved score sets are kept, but any active set will unselect since its releases are gone. This cannot be undone — paste/search again to repopulate.`,
+          message: `Wipe all ${count} release row${count === 1 ? '' : 's'} from the table. Saved score sets are kept, but any active set will unselect since its releases are gone. This cannot be undone - paste/search again to repopulate.`,
           confirmLabel: 'Clear',
           onConfirm: () => resolve(true),
           onCancel: () => resolve(false)
@@ -1296,7 +1558,7 @@ export default {
         this.confirmModal = {
           show: true,
           title: 'Delete score set?',
-          message: `Delete "${set.name}" (${(set.titles || []).length} release${(set.titles || []).length === 1 ? '' : 's'})? This only removes the saved set — the underlying releases stay in your results.`,
+          message: `Delete "${set.name}" (${(set.titles || []).length} release${(set.titles || []).length === 1 ? '' : 's'})? This only removes the saved set - the underlying releases stay in your results.`,
           confirmLabel: 'Delete',
           onConfirm: () => resolve(true),
           onCancel: () => resolve(false)
@@ -1388,7 +1650,7 @@ export default {
       return n;
     },
 
-    // Legacy entry point — main.js calls this on boot. Routes through
+    // Legacy entry point - main.js calls this on boot. Routes through
     // the unified loader which handles both results AND score sets.
     async loadSandboxResults(appType) {
       return this._sandboxLoadAll(appType);
@@ -1451,13 +1713,13 @@ export default {
       // null / string / missing-id entry would otherwise crash the
       // whole load and leave _sandboxLoadedFor true so retries are
       // dead. Wrap the entire decision tree in a try/catch and fall
-      // back to "keep the in-memory snapshot" on any throw — the user
+      // back to "keep the in-memory snapshot" on any throw - the user
       // sees their current session intact and a console warning points
       // a debugger at the cause.
       try {
         if (serverState === null) {
           // Server unreachable. Restore from localStorage only. Do NOT
-          // attempt to write anywhere — the user might be offline or
+          // attempt to write anywhere - the user might be offline or
           // the backend is restarting; we shouldn't risk overwriting
           // the server next time it's reachable.
           sb.results = this._sandboxMergeNew(inMemoryResultsBefore, lsResults);
@@ -1511,7 +1773,7 @@ export default {
                 needParse.push(title);
               }
             }
-            // Append any in-memory titles the server hasn't seen yet —
+            // Append any in-memory titles the server hasn't seen yet -
             // race protection for a user who scored a fresh title during
             // the load window. Those get persisted via the dirty path.
             const serverTitleSet = new Set(serverTitles);
@@ -1612,7 +1874,7 @@ export default {
     },
 
     // Only return an active-set id when the set still exists in the
-    // resolved list — prevents a "filter to nothing" UI state when the
+    // resolved list - prevents a "filter to nothing" UI state when the
     // active set was deleted on another device or never existed in the
     // merged result.
     // Reconstruct parsed quality + matched CFs for the given titles in
@@ -1620,7 +1882,7 @@ export default {
     // initial UI render so the user sees their title list immediately
     // and the per-row Quality / CFs / Score cells fill in as Arr
     // responds (~100ms per title). Results merge into sb.results by
-    // title — placeholders inserted by the loader get replaced; rows
+    // title - placeholders inserted by the loader get replaced; rows
     // already populated stay put.
     async _sandboxBatchParseAndMerge(appType, titles) {
       const sb = this.sandbox[appType];
@@ -1652,7 +1914,7 @@ export default {
       });
       // Persist so the localStorage cache holds the fresh records for
       // the next instant-render. Server file already has the title
-      // strings — this also makes the cache useful on next reload.
+      // strings - this also makes the cache useful on next reload.
       this._sandboxPersistAll(appType);
     },
 
@@ -1689,6 +1951,25 @@ export default {
         out.push({ ...s, name });
       }
       return out;
+    },
+
+    // Whether every currently-filtered search result is selected (drives the
+    // Select all checkbox state).
+    searchAllSelected(appType) {
+      const filtered = this.filteredSearchResults(appType);
+      return filtered.length > 0 && filtered.every(r => r._selected === true);
+    },
+
+    // Select or clear all currently-filtered search results in one click, so a
+    // large Prowlarr search (hundreds of hits) doesn't need a manual check on
+    // each row before Score Selected / Export. Respects the active text +
+    // resolution filter, so "filter to 2160p, select all" works.
+    toggleSelectAllSearch(appType) {
+      const sb = this.sandbox[appType];
+      const filtered = this.filteredSearchResults(appType);
+      const allOn = filtered.length > 0 && filtered.every(r => r._selected === true);
+      filtered.forEach(r => { r._selected = !allOn; });
+      sb.searchResults = [...(sb.searchResults || [])]; // trigger reactivity
     },
 
     async sandboxScoreSelected(appType) {
@@ -1762,6 +2043,7 @@ export default {
       delete this._profileScoreCache[cacheKey];
       const profileData = await this.fetchProfileScores(sb.profileKey, appType);
       sb.results = sb.results.map(res => this.applyScoring(res, profileData));
+      this._sbTouch(appType); // invalidate the virtualized-results memo so new scores render now
       // Re-score compare profile too
       if (sb.compareKey) this.rescoreCompare(appType);
     },
@@ -1840,6 +2122,10 @@ export default {
         }
       }
       sb.results = sb.results.map(res => this.applyScoring(res, modified));
+      // Invalidate the virtualized-results memo so the new scores show without
+      // needing a sort/filter change to bump the cache key. Without this, adding
+      // an additional CF (or editing a score) only takes effect after a re-sort.
+      this._sbTouch(appType);
     },
 
     _sandboxCFCache: {},
@@ -1895,6 +2181,7 @@ export default {
       if (!sb) return;
       if (!sb._addedCFNames) sb._addedCFNames = {};
       if (!sb._addedCFDefaults) sb._addedCFDefaults = {};
+      if (!sb._addedCFDims) sb._addedCFDims = {};
       // Remove previously-added CFs that the user has now deselected
       // in this modal session.
       for (const key of Object.keys(sb.editToggles)) {
@@ -1903,16 +2190,18 @@ export default {
           delete sb.editScores[key];
           delete sb._addedCFNames[key];
           delete sb._addedCFDefaults[key];
+          delete sb._addedCFDims[key];
         }
       }
       // Resolve display names so the sandbox UI can label the added
       // rows. Both TRaSH catalog (by trashId) and Custom CFs (by id).
       const allCFs = {};
       const cfScores = {}; // trashId → trash score map, for default-score inherit on add
+      const cfDim = {};    // trashId → release axis (from the group), so added CFs reach the right Generate picker
       for (const cat of br.categories) {
         for (const g of cat.groups) {
           // all-cfs serialises the score map as trashScores (camelCase).
-          for (const cf of g.cfs) { allCFs[cf.trashId] = cf.name; cfScores[cf.trashId] = cf.trashScores; }
+          for (const cf of g.cfs) { allCFs[cf.trashId] = cf.name; cfScores[cf.trashId] = cf.trashScores; cfDim[cf.trashId] = g.dim || ''; }
         }
       }
       for (const cf of br.customCFs || []) { allCFs[cf.id] = cf.name; }
@@ -1931,6 +2220,7 @@ export default {
             // TRaSH default score for this profile's score set (was hardcoded 0).
             sb.editScores[key] = br.scores[key] ?? sb._addedCFDefaults[key];
             sb._addedCFNames[key] = allCFs[key] || key;
+            sb._addedCFDims[key] = cfDim[key] || '';
           }
         }
       }
@@ -2019,7 +2309,7 @@ export default {
           // Push the unmatched CFs to the chosen instance, then re-parse
           // the existing sandbox results so the new Arr CFs surface in
           // matchedCFs. We deliberately ignore "skipped" entries (race
-          // where another tab added the same CF) — the re-parse picks
+          // where another tab added the same CF) - the re-parse picks
           // up whatever is there.
           try {
             const body = {};
@@ -2166,7 +2456,9 @@ export default {
       const sb = this.sandbox[appType];
       if (!sb._addedCFNames) sb._addedCFNames = {};
       if (!sb._addedCFDefaults) sb._addedCFDefaults = {};
+      if (!sb._addedCFDims) sb._addedCFDims = {};
       sb._addedCFNames[cf.trashId] = cf.name;
+      sb._addedCFDims[cf.trashId] = cf.dim || '';
       sb.editToggles[cf.trashId] = 'added';
       // /cfs serialises the score map as trash_scores (snake_case).
       sb._addedCFDefaults[cf.trashId] = this._sandboxDefaultScore(appType, cf.trash_scores);
@@ -2227,21 +2519,30 @@ export default {
       // tier CFs the profile actually has is what we match against, so Radarr
       // and Sonarr profiles that name or omit tiers differently both work.
       const q = (result?.parsed?.quality || '').toLowerCase();
-      let src;
-      if (q.includes('remux')) src = 'remux';
-      else if (q.includes('bluray') || q.includes('blu-ray') || q.includes('brdisk') || q.includes('bdrip')) src = 'bluray';
-      else if (q.includes('web')) src = 'web';
-      else if (q.includes('hdtv')) src = 'hdtv';
-      else if (q.includes('dvd')) src = 'dvd';
-      else if (q.includes('sdtv')) src = 'sdtv';
+      // Candidate name prefixes for this source, most specific first. Bluray
+      // tiers are split by resolution in TRaSH ("HD Bluray Tier 01" = 1080p,
+      // "UHD Bluray Tier 01" = 2160p), so pick the right one from the quality.
+      let prefixes;
+      if (q.includes('remux')) prefixes = ['remux'];
+      else if (q.includes('bluray') || q.includes('blu-ray') || q.includes('brdisk') || q.includes('bdrip')) {
+        prefixes = (q.includes('2160') || q.includes('uhd')) ? ['uhd bluray', 'bluray'] : ['hd bluray', 'bluray'];
+      }
+      else if (q.includes('web')) prefixes = ['web'];
+      else if (q.includes('hdtv')) prefixes = ['hdtv'];
+      else if (q.includes('dvd')) prefixes = ['dvd'];
+      else if (q.includes('sdtv')) prefixes = ['sdtv'];
       else return null;
       // Anchor the source at the START of the CF name so a plain WEB release
       // matches "WEB Tier 01", not "Anime Web Tier 01" (which begins with
-      // "Anime"). If the profile has no tier CF for this source (e.g. an app
-      // without HDTV tiers), find returns null and no tier is added — correct.
-      // Anime tiers would need anime detection, a separate concern.
-      const re = new RegExp('^' + src + '\\b.*\\btier\\s*0*' + n + '\\b', 'i');
-      return (profileData.scores || []).find(s => s.name && re.test(s.name)) || null;
+      // "Anime"). If the profile has no tier CF for this source, no tier is
+      // added - correct. Anime tiers would need anime detection, a separate
+      // concern.
+      for (const p of prefixes) {
+        const re = new RegExp('^' + p.replace(/ /g, '\\s+') + '\\b.*\\btier\\s*0*' + n + '\\b', 'i');
+        const hit = (profileData.scores || []).find(s => s.name && re.test(s.name));
+        if (hit) return hit;
+      }
+      return null;
     },
 
     applyScoring(result, profileData) {
@@ -2261,12 +2562,12 @@ export default {
       const matchedKeys = new Set();
 
       // Score matched CFs. Only include CFs that exist in the active
-      // profile — the Arr Parse API returns ALL CFs that matched the
+      // profile - the Arr Parse API returns ALL CFs that matched the
       // release in the user's Arr instance (TRaSH ones + user customs
       // + release-group CFs + anything else). Non-profile CFs would
       // show up as 0-score "matched" rows that pollute the breakdown
       // and confuse "what would this profile actually score". Filter
-      // them out entirely — if a CF isn't in the profile, the profile
+      // them out entirely - if a CF isn't in the profile, the profile
       // wouldn't score it.
       for (const cf of matched) {
         const entry = (cf.trashId && byTrashId[cf.trashId]) || byName[cf.name];

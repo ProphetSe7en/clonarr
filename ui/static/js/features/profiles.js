@@ -5419,6 +5419,12 @@ export default {
         }
         // Leaves dropped entirely from structure (rare) count too
         for (const name of orig.keys()) if (!cur.has(name)) n++;
+        // Pure structural edits (reorder, group, ungroup) flip no `allowed`
+        // flag, so the leaf comparison above counts zero. Fall back to the
+        // same structure-vs-defaults check that gates Save so the page still
+        // shows a change (and the Reset button) when only the order or
+        // grouping differs.
+        if (n === 0 && !this.qualityStructureMatchesDefaults()) n = 1;
         return n;
       }
       return Object.keys(this.qualityOverrides).length;
@@ -6019,6 +6025,65 @@ export default {
       this.pdOverrides.cutoffQuality = firstAllowed ? firstAllowed.name : '';
     },
 
+    // Context-aware reset of the cutoff quality. The cutoff is downstream of the
+    // quality structure, so a blind reset to the default can silently do nothing
+    // (the default quality may be turned off or merged into a group) or fight
+    // qsValidateCutoff. When the cutoff diff is a CONSEQUENCE of a Quality-items
+    // change to the default cutoff quality, both cases (turned off / merged into
+    // a group) show the SAME confirm popup with the SAME choices; the action
+    // restores ONLY that one quality and keeps every other quality change.
+    pdResetCutoff() {
+      const def = this.profileDetail?.detail?.profile?.cutoff || '';
+      if (!def) return;
+      const arr = this.qualityStructure || [];
+      const entry = arr.find(it => it.name === def);
+
+      // No structure override, or the default cutoff is already an allowed
+      // top-level single: a plain reset, nothing in Quality items to touch.
+      if (!arr.length || (entry && entry.allowed && !entry.items)) {
+        this.pdOverrides.cutoffQuality = def;
+        return;
+      }
+
+      // Otherwise figure out why the cutoff moved and how to restore just it.
+      const groupIdx = arr.findIndex(it => it.items && it.items.includes(def));
+      let detail, apply;
+      if (entry && !entry.allowed && !entry.items) {
+        // Turned off.
+        detail = `turns ${def} back on in Quality items (it is currently off)`;
+        apply = () => { entry.allowed = true; this.pdOverrides.cutoffQuality = def; };
+      } else if (groupIdx >= 0) {
+        // Merged into a group: pull just this quality back out as an allowed single.
+        detail = `pulls ${def} back out of the group it was merged into, in Quality items`;
+        apply = () => {
+          const g = arr[groupIdx];
+          g.items = g.items.filter(n => n !== def);
+          if (g.items.length === 1) {
+            // a one-member group is just that quality: collapse to a single
+            arr.splice(groupIdx, 1, { _id: ++this._qsIdCounter, name: g.items[0], allowed: g.allowed });
+          } else if (g.items.length === 0) {
+            arr.splice(groupIdx, 1);
+          }
+          arr.push({ _id: ++this._qsIdCounter, name: def, allowed: true });
+          this.pdOverrides.cutoffQuality = def;
+        };
+      } else {
+        // Default not present as a single or a group member (unusual); best-effort.
+        this.pdOverrides.cutoffQuality = def;
+        return;
+      }
+
+      this.confirmModal = {
+        show: true,
+        title: 'Reset cutoff quality',
+        message: `Resetting the cutoff to ${def} also ${detail}. Your other quality changes are kept.`,
+        confirmLabel: 'Reset cutoff',
+        cancelLabel: 'Cancel',
+        onConfirm: apply,
+        onCancel: () => {},
+      };
+    },
+
     // Toggle Edit Groups mode. On first activation, lazy-init structure from TRaSH default.
     qsToggleEditMode() {
       if (!this.qualityStructureEditMode && this.qualityStructure.length === 0) {
@@ -6078,7 +6143,7 @@ export default {
         const grp = arr[d.srcGroup];
         if (!grp || !grp.items) { this.qsResetDrag(); return; }
         const memberName = grp.items.splice(d.srcMember, 1)[0];
-        const newSingle = { _id: ++this._qsIdCounter, name: memberName, allowed: false };
+        const newSingle = { _id: ++this._qsIdCounter, name: memberName, allowed: grp.allowed }; // keep group's allowed state
         let insertAt = gapIdx;
         if (grp.items.length === 0) {
           arr.splice(d.srcGroup, 1);
@@ -6086,6 +6151,7 @@ export default {
         }
         arr.splice(insertAt, 0, newSingle);
       }
+      this._qsSetArr(target, arr.slice()); // reassign so the diff/overview recomputes
       this.qsResetDrag();
     },
 
@@ -6163,11 +6229,13 @@ export default {
               };
               arr.splice(tIdx, 1, newGroup);
               this.qualityStructureExpanded[newGroup._id] = true;
+              this._qsSetArr(target, this._qsArr(target).slice());
             },
             onCancel: null,
           };
         }
       }
+      this._qsSetArr(target, this._qsArr(target).slice()); // reassign so the diff/overview recomputes
       this.qsResetDrag();
     },
 
@@ -6214,14 +6282,17 @@ export default {
       this.qsResetDrag();
     },
 
-    qsDeleteGroup(idx, target = 'edit') {
+    // Ungroup a whole group: members become individual qualities and KEEP the
+    // group's allowed state. We never silently disable them; to remove a
+    // quality, toggle it off afterwards.
+    qsUngroupGroup(idx, target = 'edit') {
       const arr = this._qsArr(target);
       const grp = arr[idx];
       if (!grp || !grp.items) return;
       const singles = grp.items.map(name => ({
         _id: ++this._qsIdCounter,
         name,
-        allowed: false,
+        allowed: grp.allowed,
       }));
       arr.splice(idx, 1, ...singles);
     },
@@ -6234,7 +6305,7 @@ export default {
       arr.splice(groupIdx + 1, 0, {
         _id: ++this._qsIdCounter,
         name: removed,
-        allowed: false,
+        allowed: grp.allowed, // keep the group's allowed state, do not disable
       });
       if (grp.items.length === 0) {
         arr.splice(groupIdx, 1);

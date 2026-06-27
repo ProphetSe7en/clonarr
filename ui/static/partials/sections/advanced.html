@@ -56,13 +56,13 @@
           Group your custom formats so they're easy to reuse across profiles. Pick the custom formats that belong together, mark which are required, and link them to quality profiles. Save the group locally to keep iterating on it, or export it as JSON for backup.
         </div>
         <div x-show="config.devFeatures" style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
-          Build a <code>cf-groups/*.json</code> file — for TRaSH-Guides contribution, or for your own personal use. Pick custom formats, mark which are required, link to quality profiles. Save locally to iterate on later, or export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
+          Build a <code>cf-groups/*.json</code> file - for TRaSH-Guides contribution, or for your own personal use. Pick custom formats, mark which are required, link to quality profiles. Save locally to iterate on later, or export as JSON. Hash (<code>trash_id</code>) auto-computed from the group name.
         </div>
 
-        <!-- Load-error banner — visible when /api/trash/* calls fail -->
+        <!-- Load-error banner - visible when /api/trash/* calls fail -->
         <div x-show="cfgbLoadError" x-cloak style="background:var(--accent-red-bg);border:1px solid var(--accent-red-bg);color:var(--accent-red-soft);padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:13px" x-text="cfgbLoadError"></div>
 
-        <!-- Saved cf-groups list — persistent storage, scoped to current appType. -->
+        <!-- Saved cf-groups list - persistent storage, scoped to current appType. -->
         <div x-show="cfgbSavedGroups.length > 0" style="margin-bottom:20px" x-cloak>
           <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px" x-text="'Saved ' + activeAppType + ' cf-groups (' + cfgbSavedGroups.length + ')'"></div>
           <div class="card" style="padding:0">
@@ -89,7 +89,7 @@
           </div>
         </div>
 
-        <!-- TRaSH upstream cf-groups — collapsed by default. Each row has an
+        <!-- TRaSH upstream cf-groups - collapsed by default. Each row has an
              Edit button that loads the group into the builder form; saving
              creates a NEW local cf-group in /config/custom/json/{app}/cf-groups/
              (the TRaSH repo clone is never modified). Useful for basing a
@@ -112,7 +112,7 @@
                     <span x-show="g.default === 'true'" style="background:var(--border-subtle);color:var(--accent-green);padding:0 6px;border-radius:4px;font-size:10px;margin-left:6px;text-transform:uppercase;letter-spacing:0.5px">default</span>
                   </div>
                 </div>
-                <button class="btn" @click="cfgbLoadFromTrash(g)" style="font-size:12px;padding:4px 10px" x-tt="'Load this TRaSH group into the builder for editing. Save writes a new local copy under /config/custom/json/{app}/cf-groups/ — the TRaSH repo clone is never modified.'">Edit</button>
+                <button class="btn" @click="cfgbLoadFromTrash(g)" style="font-size:12px;padding:4px 10px" x-tt="'Load this TRaSH group into the builder for editing. Save writes a new local copy under /config/custom/json/{app}/cf-groups/ - the TRaSH repo clone is never modified.'">Edit</button>
               </div>
             </template>
           </div>
@@ -121,30 +121,30 @@
         <!-- Anchor so cfgbLoadForEdit can scroll the form back into view. -->
         <div id="cfgb-form-top"></div>
 
-        <!-- Mode banner — shows whether the form is editing an existing local
+        <!-- Mode banner - shows whether the form is editing an existing local
              group, copying from a TRaSH upstream group, or creating a fresh
              new one. A TRaSH copy still saves to the local store (POST); the
              banner makes that visible so the user isn't worried about
              overwriting the repo clone.
-             When an original trash_id is loaded, a lock toggle appears —
+             When an original trash_id is loaded, a lock toggle appears -
              locked means the hash stays frozen even when the name changes
              (default for edits, so typo fixes don't invalidate downstream
              references). Unlocked means the hash tracks the name. -->
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:8px">
           <span x-show="!cfgbEditingId && !cfgbFromTrashName">New cf-group</span>
           <span x-show="!cfgbEditingId && cfgbFromTrashName" x-cloak>
-            Copying from TRaSH: <span x-text="cfgbFromTrashName"></span> — will save as new local cf-group
+            Copying from TRaSH: <span x-text="cfgbFromTrashName"></span> - will save as new local cf-group
           </span>
           <span x-show="cfgbEditingId" x-cloak>
             Editing <span x-text="cfgbName || '(unnamed)'"></span>
           </span>
-          <!-- Hash lock — visible whenever an original trash_id is loaded -->
+          <!-- Hash lock - visible whenever an original trash_id is loaded -->
           <button type="button"
                   x-show="cfgbOriginalTrashID"
                   x-cloak
                   @click="cfgbToggleHashLock()"
                   x-tt="cfgbHashLocked
-                    ? 'ID locked: the group ID stays the same when you rename it. Click to unlock — renaming will then generate a fresh ID.'
+                    ? 'ID locked: the group ID stays the same when you rename it. Click to unlock - renaming will then generate a fresh ID.'
                     : 'ID tracks name: renaming will generate a fresh ID, which can break links from existing profiles to this group. Click to lock the current ID.'"
                   :style="cfgbHashLocked
                     ? 'background:var(--fill-blue-soft);border:1px solid var(--accent-blue-strong);color:var(--accent-blue)'
@@ -156,7 +156,7 @@
           <button class="btn" x-show="cfgbEditingId || cfgbFromTrashName" x-cloak @click="cfgbUIReset()" style="font-size:11px;padding:2px 8px;margin-left:auto;text-transform:none;letter-spacing:0">Start new instead</button>
         </div>
 
-        <!-- Top metadata — name + hash are short inputs so they don't need
+        <!-- Top metadata - name + hash are short inputs so they don't need
              full width; description keeps full width for multi-line text. -->
         <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:16px">
           <div style="flex:0 1 400px;min-width:240px">
@@ -175,7 +175,7 @@
             </label>
           </div>
           <div style="flex:0 1 130px;min-width:120px"
-               x-tt="'Sort order in the cf-group list. Lower number sorts higher up; ties break alphabetically. Leave empty for default placement (groups without a number land in the \'Other\' tier between numbered groups and Custom). Common ranges per TRaSH\'s profile-JSON convention: 1-9 (English public), 11-19 (German), 21-29 (French), 81-89 (Anime), 91-99 (Restricted/SQP). Future ranges (e.g. 31-39 for Spanish) work too — any positive integer is accepted. NOTE: TRaSH-Guides hasn\'t adopted this field on cf-groups yet — when he does, our sort picks it up automatically. Until then, only your local groups use this field. Contributors PRing to TRaSH-Guides should leave this empty until TRaSH-Guides adds the field to their schema.'">
+               x-tt="'Sort order in the cf-group list. Lower number sorts higher up; ties break alphabetically. Leave empty for default placement (groups without a number land in the \'Other\' tier between numbered groups and Custom). Common ranges per TRaSH\'s profile-JSON convention: 1-9 (English public), 11-19 (German), 21-29 (French), 81-89 (Anime), 91-99 (Restricted/SQP). Future ranges (e.g. 31-39 for Spanish) work too - any positive integer is accepted. NOTE: TRaSH-Guides hasn\'t adopted this field on cf-groups yet - when he does, our sort picks it up automatically. Until then, only your local groups use this field. Contributors PRing to TRaSH-Guides should leave this empty until TRaSH-Guides adds the field to their schema.'">
             <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px">Group <span style="color:var(--text-muted-secondary)">(sort order)</span></label>
             <input type="number" class="input" style="width:100%" x-model.number="cfgbGroup" placeholder="e.g. 1, 11, 81" min="0">
           </div>
@@ -186,7 +186,7 @@
           <textarea class="input" style="width:100%;min-height:60px;resize:vertical;font-family:inherit" x-model="cfgbDescription" placeholder="Describe what this group is for and any guidance about when to use it."></textarea>
         </div>
 
-        <!-- Selected CFs — live preview of the group being built.
+        <!-- Selected CFs - live preview of the group being built.
              Full-width card above the Custom Formats / Profiles two-col,
              showing every currently-selected CF in the chosen sort order.
              Owns: sort mode (Alpha / Manual), manual reorder arrows,
@@ -209,7 +209,7 @@
                     style="margin-left:auto;background:none;border:none;color:var(--accent-blue);cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline"
                     x-text="cfgbAllSelectedRequired() ? 'Clear required' : 'Mark all required'"></button>
             <button type="button" x-show="cfgbSelectedCFCount() > 0" x-cloak @click="cfgbClearCFs()"
-                    x-tt="'Deselect every CF — profile selection and group metadata stay'"
+                    x-tt="'Deselect every CF - profile selection and group metadata stay'"
                     style="background:none;border:none;color:var(--accent-red);cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Remove all</button>
           </div>
           <div style="overflow-y:auto;flex:1">
@@ -217,7 +217,7 @@
                  drag-handle | # | name (flex) | required | default | ×
                  Handle only renders in manual mode; alpha mode keeps the
                  same column width for vertical alignment. Drag-and-drop
-                 replaces the earlier up/down arrows — same state it
+                 replaces the earlier up/down arrows - same state it
                  wrote (cfgbCFManualOrder) so import/export/save logic is
                  unchanged. -->
             <template x-for="(cf, idx) in cfgbOrderedSelectedCFs()" :key="cf.trashId">
@@ -271,7 +271,7 @@
             <div style="padding:10px 16px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Custom Formats</span>
               <span style="background:var(--bg-muted);color:var(--text-muted);padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedCFCount() + ' / ' + cfgbFilteredCount() + (cfgbGroupFilter === 'all' ? '' : ' in ' + cfgbGroupFilterLabel())"></span>
-              <!-- v2.2.0 phase 2: Card A is now a pure "browse + add" view —
+              <!-- v2.2.0 phase 2: Card A is now a pure "browse + add" view -
                    sort-mode toggle, manual-order arrows, and selection bulk
                    actions (Mark-all-required / Remove all) migrated to the
                    Selected CFs card above, where the group's state actually
@@ -279,10 +279,10 @@
               <select x-model="cfgbGroupFilter" style="padding:4px 6px;background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:4px;color:var(--text-primary);font-size:12px;max-width:240px" x-tt="'Narrow to one TRaSH cf-group, your custom CFs, or ungrouped CFs'">
                 <option value="all">All CFs (no filter)</option>
                 <option value="custom" x-show="cfgbHasCustom">— Custom CFs (yours)</option>
-                <option value="other-trash" x-show="cfgbUngroupedTrashCount > 0" x-text="'— Ungrouped per TRaSH (' + cfgbUngroupedTrashCount + ')'"></option>
+                <option value="other-trash" x-show="cfgbUngroupedTrashCount > 0" x-text="'- Ungrouped per TRaSH (' + cfgbUngroupedTrashCount + ')'"></option>
                 <!-- Only useful when the user has built any local groups;
                      equal to Ungrouped-per-TRaSH otherwise, so hide it then. -->
-                <option value="other-remaining" x-show="cfgbSavedGroups.length > 0 && cfgbUngroupedRemainingCount !== cfgbUngroupedTrashCount" x-text="'— Ungrouped after local work (' + cfgbUngroupedRemainingCount + ')'"></option>
+                <option value="other-remaining" x-show="cfgbSavedGroups.length > 0 && cfgbUngroupedRemainingCount !== cfgbUngroupedTrashCount" x-text="'- Ungrouped after local work (' + cfgbUngroupedRemainingCount + ')'"></option>
                 <template x-for="gr in cfgbGroups" :key="gr.groupTrashId">
                   <option :value="gr.groupTrashId" x-text="(gr.isLocal ? '[local] ' : '') + gr.name + ' (' + gr.count + ')'"></option>
                 </template>
@@ -291,7 +291,7 @@
               <!-- Select-all toggle: only visible when filters have narrowed
                    the list. For "All cf-groups" with no text filter this
                    would mean selecting every CF in TRaSH, which is almost
-                   never what the user wants — so it's hidden in that state. -->
+                   never what the user wants - so it's hidden in that state. -->
               <button type="button"
                       x-show="cfgbGroupFilter !== 'all' || (cfgbCFFilter || '').trim().length > 0"
                       x-cloak
@@ -307,7 +307,7 @@
                    required/default, and remove happen in the Selected CFs
                    card above.
                    auto-fill grid collapses to a single column on narrow
-                   viewports and packs into 2+ columns when there's room —
+                   viewports and packs into 2+ columns when there's room -
                    reduces dead space for short CF names (AMZN, ATV, 10bit)
                    without sacrificing readability on wide names. -->
               <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:0">
@@ -322,8 +322,8 @@
                     <input type="checkbox" :id="'cfgb-cf-' + cf.trashId" x-model="cfgbSelectedCFs[cf.trashId]" @change="cfgbSelectedCFs = {...cfgbSelectedCFs}">
                     <label :for="'cfgb-cf-' + cf.trashId" style="flex:1;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden">
                       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.name"></span>
-                      <span x-show="cf.isCustom" style="background:var(--border-subtle);color:var(--accent-blue);padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0" x-tt="'Custom format from your Custom Formats tab — won\'t resolve in the public TRaSH-Guides repo'">custom</span>
-                      <span x-show="cfgbSelectedCFs[cf.trashId]" style="color:var(--accent-green);font-size:10px;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0" x-tt="'In group — manage required/default/order in the Selected CFs card above'">in group</span>
+                      <span x-show="cf.isCustom" style="background:var(--border-subtle);color:var(--accent-blue);padding:0 6px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0" x-tt="'Custom format from your Custom Formats tab - won\'t resolve in the public TRaSH-Guides repo'">custom</span>
+                      <span x-show="cfgbSelectedCFs[cf.trashId]" style="color:var(--accent-green);font-size:10px;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0" x-tt="'In group - manage required/default/order in the Selected CFs card above'">in group</span>
                     </label>
                     <span x-show="cfgbGroupFilter === 'all' && cf.groupNames && cf.groupNames.length > 0" style="font-size:10px;color:var(--text-muted-secondary);flex-shrink:0;max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="cf.groupNames.join(' · ')" x-tt="cf.groupNames.join('\n')"></span>
                   </div>
@@ -335,13 +335,13 @@
             </div>
           </div>
 
-          <!-- Profiles panel — card layout matching the Profiles tab, with
+          <!-- Profiles panel - card layout matching the Profiles tab, with
                per-card select-all + a top-level select-all. -->
           <div class="card" style="padding:0;display:flex;flex-direction:column;max-height:500px">
             <div style="padding:10px 16px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:center;gap:8px">
               <span style="font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Quality Profiles</span>
               <span style="background:var(--bg-muted);color:var(--text-muted);padding:0 6px;border-radius:8px;font-size:12px" x-text="cfgbSelectedProfileCount() + ' / ' + cfgbProfiles.length"></span>
-              <button type="button" x-show="cfgbSelectedProfileCount() > 0" x-cloak @click="cfgbClearProfiles()" x-tt="'Deselect every profile — CF selection stays'" style="background:none;border:none;color:var(--accent-red);cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear profiles</button>
+              <button type="button" x-show="cfgbSelectedProfileCount() > 0" x-cloak @click="cfgbClearProfiles()" x-tt="'Deselect every profile - CF selection stays'" style="background:none;border:none;color:var(--accent-red);cursor:pointer;font-size:11px;padding:2px 4px;text-decoration:underline">Clear profiles</button>
               <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:var(--text-muted);margin-left:auto" x-tt="'Select every profile across all groups'">
                 <input type="checkbox" :checked="cfgbAllProfilesSelected()" @change="cfgbToggleAllProfiles($event.target.checked)">
                 select all
@@ -399,7 +399,7 @@
         <!-- Save/delete feedback -->
         <div x-show="cfgbSavingMsg" x-cloak :style="'background:' + (cfgbSavingOk ? 'var(--accent-green-bg)' : 'var(--accent-red-bg)') + ';border:1px solid ' + (cfgbSavingOk ? 'var(--accent-green-bg)' : 'var(--accent-red-bg)') + ';color:' + (cfgbSavingOk ? 'var(--accent-green)' : 'var(--accent-red-soft)') + ';padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px'" x-text="cfgbSavingMsg"></div>
 
-        <!-- Custom-CF warning — surfaces when the selected set includes custom CFs
+        <!-- Custom-CF warning - surfaces when the selected set includes custom CFs
              which won't resolve in the public TRaSH-Guides repo. -->
         <div x-show="cfgbSelectedCustomCFCount() > 0" x-cloak style="background:var(--accent-orange-bg);border:1px solid var(--accent-orange-bg);color:var(--accent-orange-bright);padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:12px">
           <span x-text="cfgbSelectedCustomCFCount()"></span>
@@ -407,7 +407,7 @@
           selected. These have IDs starting <code>custom:</code> and won't resolve in TRaSH-Guides. Save locally for personal use, but don't include them in a Download meant for contribution.
         </div>
 
-        <!-- JSON preview (collapsible — Alpine pattern, matches other Clonarr collapsibles) -->
+        <!-- JSON preview (collapsible - Alpine pattern, matches other Clonarr collapsibles) -->
         <div style="margin-top:8px">
           <button type="button" class="collapse-toggle" @click="cfgbPreviewOpen = !cfgbPreviewOpen"
                   :aria-expanded="cfgbPreviewOpen"
@@ -418,6 +418,266 @@
           </button>
           <pre id="cfgb-preview-body" x-show="cfgbPreviewOpen" x-cloak style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:12px;overflow-x:auto;font-size:12px;color:var(--text-body);max-height:300px;overflow-y:auto" x-text="cfgbGenerateJSON()"></pre>
         </div>
+      </div>
+    </div>
+
+    <!-- Scoring Generator sub-tab (gated in the UI by Advanced Mode) -->
+    <div x-show="advancedTab === 'generator' && calculatorEnabled" x-cloak>
+      <div class="page">
+        <div class="page-header">
+          <h1>Scoring Generator</h1>
+          <p style="font-size:13px;color:var(--text-muted);line-height:1.5;max-width:760px">
+            Paste release titles, put them in the order you want them grabbed, and Generate. Clonarr finds the Custom Formats in play and works out the scores (plus a minimum score) that reproduce your ranking. The opposite of the Scoring Sandbox.
+          </p>
+        </div>
+
+        <!-- Saved sets: each set is a named ordering/selection of the shared
+             title pool. Pool + sets persist server-side. -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px" x-init="genLoadDoc()">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:500">Set:</span>
+          <select class="pb-input" style="min-width:200px" x-model="genCurrentSetId" @change="genLoadSet(genCurrentSetId)" x-tt="'Load a saved set, or show every title in the pool'">
+            <option value="">- all titles -</option>
+            <template x-for="s in genSets" :key="s.id">
+              <option :value="s.id" x-text="s.name"></option>
+            </template>
+          </select>
+          <button class="btn btn-sm" :disabled="!genCurrentSetId" @click="genSaveSet()" x-tt="'Save changes to the loaded set'">Save</button>
+          <button class="btn btn-sm" :disabled="!genTitles.length" @click="genSaveSetAs()" x-tt="'Save the current ordering as a new set'">Save as…</button>
+          <button class="btn btn-sm" :disabled="!genCurrentSetId" @click="genRenameSet()" x-tt="'Rename the loaded set'">Rename</button>
+          <button class="btn btn-sm" :disabled="!genCurrentSetId" @click="genDeleteSet()" style="color:var(--accent-red)" x-tt="'Delete the saved set - titles stay in the pool'">Delete set</button>
+        </div>
+
+        <!-- Bind: parse instance + add-from-pool + clear -->
+        <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+          <label style="font-size:12px;color:var(--text-muted)">Parse against<br>
+            <select class="pb-input" style="min-width:180px" x-model="genInstanceId">
+              <option value="">select instance…</option>
+              <template x-for="i in genArrInstances()" :key="i.id">
+                <option :value="i.id" x-text="i.name"></option>
+              </template>
+            </select>
+          </label>
+          <button class="btn btn-sm" :disabled="!genPoolAvailable().length" @click="genShowPool = !genShowPool"
+                  x-tt="'Add titles already in your pool to this list'"
+                  x-text="(genShowPool ? 'Hide pool' : 'Add from pool') + ' (' + genPoolAvailable().length + ')'"></button>
+          <button class="btn btn-sm" :disabled="!genPool.length" @click="genShowAll()" x-tt="'Show every title in the pool'">Show all</button>
+          <button class="btn btn-sm" :disabled="!genTitles.length" @click="genClearWorking()" x-tt="'Empty the working list (pool + saved sets are untouched)'">Clear list</button>
+        </div>
+
+        <!-- Pool browser: add already-parsed titles to the working list. -->
+        <div x-show="genShowPool" x-cloak style="margin-bottom:12px;border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px;max-height:200px;overflow-y:auto">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Title pool - click to add</div>
+          <template x-for="p in genPoolAvailable()" :key="p.id">
+            <div style="display:flex;gap:8px;align-items:center;padding:3px 0;border-top:1px solid var(--bg-muted)">
+              <button class="btn btn-sm" style="padding:1px 8px" @click="genAddFromPool(p.id)">+ add</button>
+              <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" x-text="p.title" :title="p.title"></span>
+              <span style="font-size:11px;color:var(--text-muted)" x-text="p.parsedQuality"></span>
+              <button type="button" style="background:none;border:none;color:var(--accent-red);cursor:pointer;font-size:12px;padding:0 4px"
+                      @click="genRemoveFromPool(p.id)" x-tt="'Remove from the pool entirely'" aria-label="Remove from pool">✕</button>
+            </div>
+          </template>
+          <div x-show="!genPoolAvailable().length" style="font-size:12px;color:var(--text-muted)">Every pooled title is already in the list.</div>
+        </div>
+
+        <!-- Paste + primary actions on one row: add titles, generate, and the
+             minimum score all stay at the top, in reach, without a second row. -->
+        <div style="margin-bottom:12px">
+          <textarea class="pb-input" style="width:100%;min-height:64px;font-size:12px;font-family:monospace"
+                    x-model="genPasteText" placeholder="Paste release titles, one per line…"></textarea>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px">
+            <button class="btn btn-sm" :disabled="genBusy" @click="genParseTitles()">Add titles</button>
+            <button class="btn" :disabled="genBusy || !genTitles.length" @click="genCalc()" x-text="genResult ? 'Re-generate' : 'Generate'"></button>
+            <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px"
+                   x-tt="'The profile minimum score. Wanted releases must reach it, unwanted stay below it, and CF scores solve against it. Leave blank to let the calculator pick the smallest scores.'">
+              Minimum score
+              <input type="number" class="pb-input" style="width:90px" x-model="genMinScore" placeholder="auto">
+            </label>
+            <span x-show="genResult && genResult.feasible" x-cloak style="font-size:13px">
+              minFormatScore: <strong x-text="genResult ? Math.round(genResult.minFormatScore) : ''"></strong>
+            </span>
+          </div>
+        </div>
+
+        <div x-show="genError && !genIssues.length && !genConflict" x-cloak class="field-error" x-text="genError" style="margin-bottom:10px"></div>
+
+        <!-- Resolution proposal: the solver worked out exactly what must change
+             to make the ranking achievable, both releases that must share a
+             priority (identical Custom Formats) and releases that are out of
+             position and must move. One click applies it all and recalculates. -->
+        <div x-show="genGrouping" x-cloak
+             style="margin-bottom:12px;border:1px solid var(--accent-blue);border-left:3px solid var(--accent-blue);border-radius:6px;background:var(--accent-blue-muted);padding:10px 12px">
+          <div style="font-size:13px;color:var(--text-body);line-height:1.4;margin-bottom:8px" x-text="genGrouping?.message"></div>
+
+          <template x-if="(genGrouping?.groups || []).length">
+            <div style="margin-bottom:6px">
+              <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px">Tie together (same Custom Formats)</div>
+              <template x-for="(grp, gi) in (genGrouping?.groups || [])" :key="'grp'+gi">
+                <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px">
+                  <span style="font-size:11px;color:var(--text-muted);margin-right:2px" x-text="'Group ' + (gi+1) + ':'"></span>
+                  <template x-for="(nm, ni) in genGroupTitles(grp)" :key="'grp'+gi+'-'+ni">
+                    <span style="font-size:11px;padding:2px 7px;border-radius:10px;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-body)" x-text="nm"></span>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <template x-if="(genGrouping?.moves || []).length">
+            <div style="margin-bottom:6px">
+              <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px">Move into position</div>
+              <template x-for="(mv, mi) in (genGrouping?.moves || [])" :key="'mv'+mi">
+                <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px;font-size:12px;color:var(--text-body)">
+                  <span style="padding:2px 7px;border-radius:10px;background:var(--bg-elevated);border:1px solid var(--border)" x-text="genTitleName(mv.titleId)"></span>
+                  <span style="color:var(--text-muted)" x-text="mv.afterId ? (mv.tie ? 'tie beside' : 'below') : 'to the top'"></span>
+                  <span x-show="mv.afterId" style="padding:2px 7px;border-radius:10px;background:var(--bg-elevated);border:1px solid var(--border)" x-text="genTitleName(mv.afterId)"></span>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <button class="btn btn-sm" style="margin-top:4px;border-color:var(--accent-blue);color:var(--accent-blue)"
+                  @click="genApplyResolution(genGrouping)"
+                  x-tt="'Apply these changes and generate scores'">Apply and generate</button>
+        </div>
+
+        <!-- Actionable conflicts: validation errors (with a one-click fix) and
+             solver infeasibility (with suggested resolutions). -->
+        <div x-show="genIssues.length || genConflict" x-cloak
+             style="margin-bottom:12px;border:1px solid var(--accent-orange);border-left:3px solid var(--accent-orange);border-radius:6px;background:var(--accent-orange-bg);padding:10px 12px">
+          <div style="font-size:12px;font-weight:600;color:var(--accent-orange);margin-bottom:6px">This ranking can't be configured yet</div>
+          <template x-for="(iss, k) in genIssues" :key="'iss'+k">
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:4px 0;border-top:k===0?'none':'1px solid var(--accent-orange-bg)'">
+              <span style="flex:1;font-size:13px;color:var(--text-body);line-height:1.4" x-text="iss.message"></span>
+              <button x-show="iss.kind === 'identical-cfs' && (iss.titles||[]).length >= 2"
+                      class="btn btn-sm" style="white-space:nowrap;border-color:var(--accent-blue);color:var(--accent-blue)"
+                      @click="genMakeEqual(iss.titles)"
+                      x-tt="'Give these releases equal priority and regroup them'">Make equal</button>
+            </div>
+          </template>
+          <template x-if="genConflict">
+            <div>
+              <div style="font-size:13px;color:var(--text-body);line-height:1.4;margin-bottom:4px" x-text="genConflict.message"></div>
+              <button x-show="(genConflict.involved||[]).length >= 2" class="btn btn-sm"
+                      style="border-color:var(--accent-blue);color:var(--accent-blue);margin-bottom:4px"
+                      @click="genMakeEqual(genConflict.involved)"
+                      x-tt="'Give the involved releases equal priority'">Make equal</button>
+              <ul style="margin:2px 0 0 16px;padding:0;font-size:12px;color:var(--text-muted)">
+                <template x-for="(sug, k) in (genConflict.suggestions||[])" :key="'sug'+k">
+                  <li x-text="sug"></li>
+                </template>
+              </ul>
+            </div>
+          </template>
+        </div>
+
+        <!-- Two-column work area: ranked releases (wide, left) + Custom Format
+             overview (narrow, right), so a long title list doesn't bury the CFs.
+             x-show on the outer block, flex on the inner div - x-show clobbers an
+             inline display:flex (same trap as the disable-auth modal). -->
+        <div x-show="genTitles.length" x-cloak style="margin-bottom:12px">
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <!-- LEFT: ranked release list -->
+          <div style="flex:1.7;min-width:0;border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">
+            Release titles <span x-text="'(' + genTitles.length + ')'"></span> · top = highest priority
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px" x-show="genTitles.some(t => t.partition === 'unwanted')" x-cloak>
+            Tip: on a rejected release, click the Custom Format that makes you not want it - it gets penalised so every release with that format is rejected, not just this one.
+          </div>
+          <template x-for="(t, i) in genTitles" :key="t.id">
+            <div draggable="true"
+                 @dragstart="event.dataTransfer.setData('text/plain',''); genDragStart(t.id)"
+                 @dragover.prevent="genDragOver(t.id)"
+                 @drop.prevent="genDrop(t.id)"
+                 @dragend="genDragEnd()"
+                 style="display:grid;grid-template-columns:28px minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:5px 0 5px 5px;border-top:1px solid var(--bg-muted);border-left:2px solid transparent"
+                 :style="{
+                   background: t.partition === 'unwanted' ? 'var(--accent-red-bg)' : (genInTie(i) ? 'var(--accent-blue-muted)' : ''),
+                   borderLeftColor: genInTie(i) ? 'var(--accent-blue)' : 'transparent',
+                   borderTopColor: genInTie(i) && genTiePos(i) !== 'start' ? 'transparent' : 'var(--bg-muted)',
+                   opacity: genDragSrcId === t.id ? 0.4 : 1,
+                   boxShadow: (genDragOverId === t.id && genDragSrcId && genDragSrcId !== t.id) ? 'inset 0 2px 0 var(--accent-blue)' : ''
+                 }">
+              <span style="cursor:grab;font-size:12px;font-family:monospace;user-select:none;display:flex;align-items:center;gap:2px" x-tt="'Drag to reorder'">
+                <span style="color:var(--text-muted)" x-text="genRowPriority(i)+'.'"></span>
+                <span x-show="genInTie(i)" x-cloak style="color:var(--accent-blue);font-weight:600"
+                      x-tt="genTiePos(i) === 'start' ? 'Equal priority with the release(s) below - same rank' : 'Equal priority with the release above - same rank'">=</span>
+              </span>
+              <div style="min-width:0">
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px"
+                     :style="t.partition === 'unwanted' ? 'text-decoration:line-through;color:var(--text-muted)' : ''"
+                     x-text="t.title" :title="t.title"></div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;align-items:center">
+                  <span style="font-size:11px;color:var(--text-muted)" x-text="t.parsedQuality || 'unknown quality'"></span>
+                  <template x-for="cf in t.matchedCFs" :key="cf.trashId">
+                    <span style="font-size:10px"
+                          :class="'cf-pill ' + (t.partition === 'unwanted' && genIsCFUnwanted(cf.trashId) ? 'cf-pill-negate' : 'cf-pill-include')"
+                          :style="t.partition === 'unwanted' ? 'cursor:pointer' : ''"
+                          x-tt="t.partition === 'unwanted' ? (genIsCFUnwanted(cf.trashId) ? 'Reason this is rejected - click to unset' : 'Click if this format is why you do not want it') : null"
+                          @click="t.partition === 'unwanted' && genToggleCFUnwanted(cf.trashId)"
+                          x-text="cf.name"></span>
+                  </template>
+                  <span x-show="!t.matchedCFs.length" style="font-size:10px;color:var(--text-muted)">no custom formats</span>
+                </div>
+              </div>
+              <span x-show="genResult && genResult.feasible" x-cloak style="font-family:monospace;font-size:13px;text-align:right"
+                    :style="genTitleScore(t) >= (genResult?.minFormatScore||0) ? 'color:var(--accent-green)' : 'color:var(--accent-red)'"
+                    x-text="genTitleScore(t)"></span>
+              <span style="display:flex;gap:2px">
+                <button x-show="i>0" class="btn btn-sm" style="padding:2px 7px"
+                        :style="t.tie ? 'border-color:var(--accent-blue);color:var(--accent-blue)' : ''"
+                        @click="genToggleTie(i)"
+                        x-tt="t.tie ? 'Equal priority with the release above - click to separate' : 'Tie with the release above (equal priority)'">=</button>
+                <button class="btn btn-sm" style="padding:2px 7px"
+                        :style="t.partition === 'unwanted' ? 'border-color:var(--accent-red);color:var(--accent-red)' : ''"
+                        @click="genToggleUnwanted(i)"
+                        x-tt="t.partition === 'unwanted' ? 'Rejected - click to want' : 'Mark as unwanted (reject)'"
+                        x-text="t.partition === 'unwanted' ? '✗' : '✓'"></button>
+                <button class="btn btn-sm" style="padding:2px 7px;color:var(--accent-red)" @click="genRemoveTitle(i)" aria-label="Remove">✕</button>
+              </span>
+            </div>
+          </template>
+          </div>
+          <!-- RIGHT: Custom Format overview - always shown with titles. Per CF:
+               score (after Generate), ignore (drop from calc), unwanted (-10000). -->
+          <div style="flex:1;min-width:240px;border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px">
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">
+              Custom formats in use <span x-text="'(' + genCFsInUse().length + ')'"></span>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Ignore a duplicate, or mark one unwanted (forced to -10000 so it is never grabbed).</div>
+            <template x-for="cf in genCFsInUse()" :key="cf.trashId">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:6px;align-items:center;font-size:12px;padding:3px 0;border-top:1px solid var(--bg-muted)"
+                   :style="{ opacity: cf.ignored ? 0.5 : 1 }">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                      :style="cf.ignored ? 'text-decoration:line-through' : (cf.unwanted ? 'color:var(--accent-red)' : '')"
+                      x-text="cf.name" :title="cf.name"></span>
+                <span style="font-family:monospace;text-align:right;min-width:46px"
+                      :style="cf.unwanted ? 'color:var(--accent-red)' : ''"
+                      x-text="cf.ignored ? '-' : (cf.score != null ? Math.round(cf.score) : '')"></span>
+                <button type="button" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 4px;cursor:pointer;display:inline-flex;color:var(--text-muted)"
+                        :style="cf.ignored ? 'border-color:var(--accent-blue);color:var(--accent-blue)' : ''"
+                        @click="genToggleIgnore(cf.trashId)"
+                        x-tt="cf.ignored ? 'Ignored - click to include' : 'Ignore this CF (drop it from the calculation)'" aria-label="Ignore">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                </button>
+                <button type="button" style="background:none;border:1px solid var(--border-subtle);border-radius:4px;padding:2px 4px;cursor:pointer;display:inline-flex;color:var(--text-muted)"
+                        :style="cf.unwanted ? 'border-color:var(--accent-red);color:var(--accent-red)' : ''"
+                        @click="genToggleCFUnwanted(cf.trashId)"
+                        x-tt="cf.unwanted ? 'Unwanted (-10000) - click to unset' : 'Mark unwanted: force to -10000 so releases with it are never grabbed'" aria-label="Mark unwanted">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>
+                </button>
+              </div>
+            </template>
+            <div x-show="genScoreDiff().length" x-cloak style="margin-top:8px;font-size:11px;color:var(--text-muted)">
+              <div style="margin-bottom:2px">Changes vs last generate:</div>
+              <template x-for="d in genScoreDiff()" :key="d.name">
+                <div x-text="d.name + ': ' + (d.before == null ? 'new (' + d.after + ')' : (d.before + ' → ' + d.after))"></div>
+              </template>
+            </div>
+          </div>
+        </div>
+        </div>
+
       </div>
     </div>
   </div>

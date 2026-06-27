@@ -17,6 +17,7 @@ import (
 	"clonarr/internal/api"
 	"clonarr/internal/auth"
 	"clonarr/internal/core"
+	"clonarr/internal/core/calculator"
 	"clonarr/internal/netsec"
 	"clonarr/internal/utils"
 	"clonarr/ui"
@@ -113,17 +114,22 @@ func main() {
 
 	sandboxStore := core.NewSandboxStore(configDir)
 
+	// Scoring Generator sessions (back-solve CF scores from a ranked release
+	// list). Gated in the UI by Advanced Mode, same as the Scoring Sandbox.
+	calcStore := calculator.NewStore(filepath.Join(configDir, "calculator-sessions"))
+
 	app := &core.App{
-		Config:        cfgStore,
-		Trash:         trashStore,
-		Profiles:      profilesStore,
-		CustomCFs:     customCFsStore,
-		CFGroups:      cfGroupsStore,
-		Sandbox:       sandboxStore,
-		DebugLog:      debugLogStore,
-		ActivityLog:   activityLogStore,
-		Version:       Version,
-		DevFeatures:   devFeatures,
+		Config:            cfgStore,
+		Trash:             trashStore,
+		Profiles:          profilesStore,
+		CustomCFs:         customCFsStore,
+		CFGroups:          cfGroupsStore,
+		Sandbox:           sandboxStore,
+		CalcSessions:      calcStore,
+		DebugLog:          debugLogStore,
+		ActivityLog:       activityLogStore,
+		Version:           Version,
+		DevFeatures:       devFeatures,
 		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
 		NotifyClient:  &http.Client{Timeout: 10 * time.Second},
 		SafeClient:    netsec.NewSafeHTTPClient(10*time.Second, nil),

@@ -172,6 +172,8 @@
            :href="navHref('advanced', { advancedTab: 'scoring' })">Scoring Sandbox</a>
         <a class="sidebar-subnav-item" :class="{ active: advancedTab === 'group-builder' }"
            :href="navHref('advanced', { advancedTab: 'group-builder' })">CF Group Builder</a>
+        <a class="sidebar-subnav-item" x-show="calculatorEnabled" :class="{ active: advancedTab === 'generator' }"
+           :href="navHref('advanced', { advancedTab: 'generator' })">Scoring Generator</a>
       </div>
 
       <div class="sidebar-section-label" x-show="!sidebarCollapsed">App</div>

@@ -39,6 +39,12 @@
             <div x-show="sandboxCFBrowser.expanded[cat.category]" style="padding:0 8px">
               <template x-for="group in cat.groups" :key="group.name">
                 <div>
+                  <!-- Subgroup header: split a category (e.g. Optional, Unwanted) into its
+                       distinct cf-groups instead of one long flat list. Shown only when the
+                       category has more than one group and this group has addable CFs. -->
+                  <div x-show="cat.groups.length > 1 && group.cfs.some(cf => !sandboxCFBrowser.inProfile[cf.trashId] && !sandboxCFBrowser.inProfile[cf.name] && (!sandboxCFBrowser.filter || cf.name.toLowerCase().includes(sandboxCFBrowser.filter.toLowerCase())))"
+                       style="padding:4px 14px 2px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px"
+                       x-text="group.shortName || group.name"></div>
                   <template x-for="cf in group.cfs" :key="cf.trashId">
                     <div x-show="(!sandboxCFBrowser.filter || cf.name.toLowerCase().includes(sandboxCFBrowser.filter.toLowerCase())) && !sandboxCFBrowser.inProfile[cf.trashId] && !sandboxCFBrowser.inProfile[cf.name]"
                          style="display:flex;align-items:center;gap:8px;padding:2px 14px;font-size:13px"

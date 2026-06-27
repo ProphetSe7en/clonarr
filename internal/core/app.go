@@ -8,6 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"clonarr/internal/core/calculator"
 )
 
 // App holds shared application state.
@@ -41,6 +43,7 @@ type App struct {
 	CustomCFs      *CustomCFStore
 	CFGroups       *CFGroupStore
 	Sandbox        *SandboxStore
+	CalcSessions   *calculator.Store // Scoring Generator sessions
 	DebugLog       *DebugLogger
 	ActivityLog    *ActivityLogger
 	Version        string

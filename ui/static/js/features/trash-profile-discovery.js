@@ -1068,6 +1068,12 @@ export default {
             out.qualityItems.push({ name, current: '-', original: orig ? 'Allowed' : 'Disallowed', allowed: false });
           }
         }
+        // Reordering qualities or moving one into an existing group changes no
+        // `allowed` flag, so the per-leaf comparison above sees nothing. Flag the
+        // structural change explicitly so it is still detected as a customization.
+        if (out.qualityItems.length === 0 && typeof this.qualityStructureMatchesDefaults === 'function' && !this.qualityStructureMatchesDefaults()) {
+          out.qualityItems.push({ name: 'Quality order / grouping', current: 'Customized', original: 'Default', allowed: true });
+        }
       } else if (this.qualityOverrides && Object.keys(this.qualityOverrides).length > 0) {
         for (const [name, allowed] of Object.entries(this.qualityOverrides)) {
           const orig = origLeaves.get(name);

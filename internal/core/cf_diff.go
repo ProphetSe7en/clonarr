@@ -347,6 +347,13 @@ func extractField(raw json.RawMessage, name string) any {
 	return nil
 }
 
+// SpecValue returns a Specification's "value" field as a string (the regex for
+// ReleaseGroup/ReleaseTitle specs). Exported for callers outside core that need
+// the raw pattern, e.g. the title generator deriving unwanted-format tokens.
+func SpecValue(fields json.RawMessage) string {
+	return decodeStringField(fields, "value")
+}
+
 func decodeStringField(raw json.RawMessage, key string) string {
 	v := extractField(raw, key)
 	if v == nil {

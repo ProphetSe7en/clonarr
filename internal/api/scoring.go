@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"clonarr/internal/arr"
 	"clonarr/internal/core"
+	"clonarr/internal/core/titlegen"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -384,6 +385,7 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 		TrashID string `json:"trashId"`
 		Name    string `json:"name"`
 		Score   int    `json:"score"`
+		Dim     string `json:"dim,omitempty"` // release axis (unwanted, hdr, edition, ...) for the Generate pickers
 	}
 
 	// QualityRanks maps each ALLOWED quality name to its rank in the
@@ -401,10 +403,18 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 	// index for trash + import sources so all three populate the same
 	// "high rank = high priority" convention. Sort logic in scoring.js
 	// then ranks deterministically across all profile types.
+	// QualityItem is an allowed quality slot the title generator can target.
+	// Members lists a group's sub-qualities (e.g. WEB 1080p -> WEBDL/WEBRip);
+	// empty for a single quality. The Quality Item Picker renders these.
+	type QualityItem struct {
+		Name    string   `json:"name"`
+		Members []string `json:"members,omitempty"`
+	}
 	result := struct {
-		Scores       []ScoreEntry   `json:"scores"`
-		MinScore     int            `json:"minScore"`
-		QualityRanks map[string]int `json:"qualityRanks"`
+		Scores        []ScoreEntry   `json:"scores"`
+		MinScore      int            `json:"minScore"`
+		QualityRanks  map[string]int `json:"qualityRanks"`
+		QualityItems  []QualityItem  `json:"qualityItems"`
 	}{
 		QualityRanks: map[string]int{},
 	}
@@ -440,8 +450,10 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 						for _, sub := range it.Items {
 							result.QualityRanks[sub] = rank
 						}
+						result.QualityItems = append(result.QualityItems, QualityItem{Name: it.Name, Members: it.Items})
 					} else {
 						result.QualityRanks[it.Name] = rank
+						result.QualityItems = append(result.QualityItems, QualityItem{Name: it.Name})
 					}
 				}
 				break
@@ -476,6 +488,14 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 				}
 				for _, cf := range g.CFs {
 					if seen[cf.TrashID] {
+						continue
+					}
+					// Within a default-on group, only required + per-CF
+					// default-on CFs are actually enabled (a group can mark
+					// some members default-off). This mirrors the profile
+					// editor's initSelectedCFs and ComputeTrashDefaults, so the
+					// scored set matches what a default sync would apply.
+					if !cf.Required && !cf.Default {
 						continue
 					}
 					// Look up score from TRaSH CF data using the profile's score context
@@ -592,6 +612,25 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 				}
 				break
 			}
+		}
+	}
+
+	// Tag each scored CF with its release axis (dimension) so the Scoring
+	// Sandbox can render one Generate picker per axis (unwanted, HDR, movie
+	// versions, ...). The axis comes from the CF's TRaSH cf-group; custom CFs
+	// with no group stay unclassified (dim == "") and just don't appear in a
+	// generator picker.
+	if ad := core.SnapshotAppData(s.Core.Trash.Snapshot(), appType); ad != nil {
+		dimOf := map[string]titlegen.Dimension{}
+		for _, g := range ad.CFGroups {
+			if d := titlegen.DimensionForGroup(g.Name); d != "" {
+				for _, cf := range g.CustomFormats {
+					dimOf[cf.TrashID] = d
+				}
+			}
+		}
+		for i := range result.Scores {
+			result.Scores[i].Dim = string(dimOf[result.Scores[i].TrashID])
 		}
 	}
 

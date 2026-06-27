@@ -116,9 +116,9 @@
                            x-init="$nextTick(() => $el.focus())">
                   </template>
                   <span x-show="item.items" class="qs-badge" x-text="item.items?.length"></span>
-                  <button x-show="item.items" class="qs-tiny-x"
-                          style="font-size:11px;padding:0 6px"
-                          @click="qsDeleteGroup(idx, _target)" x-tt="'Delete group (members become individual singles)'">× delete</button>
+                  <button x-show="item.items" class="btn btn-sm"
+                          style="font-size:11px;padding:0 8px"
+                          @click="qsUngroupGroup(idx, _target)" x-tt="'Ungroup: members become individual qualities and keep their allowed state. To remove a quality, turn it off afterwards.'">Ungroup</button>
                 </div>
                 <div class="qs-group-members"
                      x-show="item.items && qualityStructureExpanded[item._id]"

@@ -392,9 +392,9 @@
         </template>
         <template x-if="_mod">
           <button class="sp-basics-reset"
-                  @click="pdOverrides.cutoffQuality = _def"
+                  @click="pdResetCutoff()"
                   :aria-label="'Reset Cutoff quality to ' + _def"
-                  x-tt="'Reset to ' + _def">&#8634;</button>
+                  x-tt="'Reset to ' + _def + '. If ' + _def + ' is turned off in Quality items, this re-enables that one quality (you will be asked first).'">&#8634;</button>
         </template>
       </div>
 

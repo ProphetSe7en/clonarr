@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"clonarr/internal/core/titlegen"
 )
 
 // ErrTrashBusy indicates a TRaSH pull, load, or reset operation already holds
@@ -1732,7 +1734,11 @@ type CFPickerGroup struct {
 	// for custom groups). Pointer + omitempty so absent stays absent over JSON.
 	Group    *int            `json:"group,omitempty"`
 	IsCustom bool            `json:"isCustom,omitempty"`
-	CFs      []CategorizedCF `json:"cfs"`
+	// Dim is the release-title axis (unwanted, hdr, edition, ...) this group's
+	// CFs belong to, or "" if not generatable. Lets the Scoring generator route
+	// an added CF into the right axis picker. Derived from the group name.
+	Dim string          `json:"dim,omitempty"`
+	CFs []CategorizedCF `json:"cfs"`
 }
 
 // CFPickerCategory groups CF groups by category for the profile builder.
@@ -1794,6 +1800,7 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 			Exclusive:        exclusive,
 			IncludeProfiles:  includeProfiles,
 			Group:            group.Group,
+			Dim:              string(titlegen.DimensionForGroup(group.Name)),
 		}
 
 		for _, cfEntry := range group.CustomFormats {

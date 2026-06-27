@@ -160,4 +160,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/scoring/parse", s.handleScoringParse)
 	mux.HandleFunc("POST /api/scoring/parse/batch", s.handleScoringParseBatch)
 	mux.HandleFunc("GET /api/scoring/profile-scores", s.handleScoringProfileScores)
+	mux.HandleFunc("POST /api/scoring/generate-titles", s.handleScoringGenerateTitles)
+
+	// Scoring Generator (back-solve CF scores from a ranked release list).
+	// Gated in the UI by Advanced Mode, same as the Scoring Sandbox.
+	mux.HandleFunc("GET /api/calculator/{app}/doc", s.handleCalcDocGet)
+	mux.HandleFunc("PUT /api/calculator/{app}/doc", s.handleCalcDocSave)
+	mux.HandleFunc("POST /api/calculator/test", s.handleCalcTest)
+	mux.HandleFunc("POST /api/calculator/calc", s.handleCalcCalculate)
+	mux.HandleFunc("GET /api/calculator/grab-titles", s.handleCalcGrabTitles)
 }

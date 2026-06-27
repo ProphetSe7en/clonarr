@@ -14,7 +14,7 @@
               </template>
             </select>
             <label style="font-size:12px;color:var(--text-muted);white-space:nowrap;margin-left:12px" x-tt="'Profile whose CF scores are applied to calculate total'">Score against:</label>
-            <select class="input" style="max-width:300px;font-size:12px" x-model="sandbox[activeAppType].profileKey" @change="rescoreSandbox(activeAppType)">
+            <select class="input" style="max-width:300px;font-size:12px" x-model="sandbox[activeAppType].profileKey" @change="rescoreSandbox(activeAppType); loadGenQualities(activeAppType)">
               <option value="">— Select profile —</option>
               <template x-for="gn in getTrashProfileGroups(activeAppType)" :key="'sg:'+gn">
                 <optgroup :label="'TRaSH — ' + gn">
@@ -248,10 +248,145 @@
                   :disabled="sandbox[activeAppType].parsing || !sandbox[activeAppType].searchResults?.some(r => r._selected)">
                   Score Selected
                 </button>
+                <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;user-select:none"
+                  x-tt="'Select or clear every result currently shown (respects the filter), so you can score or export the whole search at once'">
+                  <input type="checkbox" style="accent-color:var(--accent-blue);cursor:pointer"
+                    :checked="searchAllSelected(activeAppType)" @change="toggleSelectAllSearch(activeAppType)">
+                  Select all<span x-show="sandbox[activeAppType].searchFilterText || sandbox[activeAppType].searchFilterRes"> shown</span>
+                </label>
                 <span style="font-size:13px;color:var(--text-muted)"
                   x-text="(sandbox[activeAppType].searchResults?.filter(r => r._selected)?.length || 0) + ' selected'"></span>
               </div>
               <div x-show="sandbox[activeAppType].searchError" style="margin-top:8px;font-size:12px;color:var(--accent-red)" x-text="sandbox[activeAppType].searchError"></div>
+            </div>
+          </div>
+
+          <!-- RLS Title Generator -->
+          <div class="card" style="padding:16px;margin-bottom:16px;overflow:visible">
+            <div style="font-size:14px;font-weight:600;margin-bottom:8px">RLS Title Generator</div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">Generate candidate release titles from the selected profile's Custom Formats and score them, no pasting needed. The axes below come from what is scored in the Score Editor. Use the pickers to choose what to generate titles for, for example skip generating more Unwanted releases when you already have some in the list. This only limits generation; it does not change scoring, every title is still scored against the full Score Editor. Custom Formats scored 0 are skipped, since they cannot change the result.</div>
+            <div>
+                <button class="btn btn-sm" style="margin-left:8px;border-color:var(--accent-green);color:var(--accent-green)"
+                  @click="sandboxGenerateFromProfile(activeAppType)" :disabled="sandbox[activeAppType].parsing"
+                  x-tt="'Generate candidate release titles from the selected profile\'s Custom Formats and score them, no pasting needed'">Generate from profile</button>
+                <span style="position:relative;display:inline-block;margin-left:8px" @click.outside="sandbox[activeAppType].genQualityOpen = false">
+                  <button class="btn btn-sm" type="button"
+                    @click="sandbox[activeAppType].genQualityOpen = !sandbox[activeAppType].genQualityOpen; if (sandbox[activeAppType].genQualityOpen) loadGenQualities(activeAppType)"
+                    x-tt="'Pick which qualities to generate releases for. Group members like WEBDL and WEBRip usually score the same, so one is selected by default. Expand a group to include both.'">
+                    Qualities<span x-show="sandbox[activeAppType].genQualityItems.length">: <span x-text="genSelectedQualities(activeAppType).length"></span></span> <span style="opacity:.6">&#9662;</span>
+                  </button>
+                  <div x-show="sandbox[activeAppType].genQualityOpen" x-cloak
+                    style="position:absolute;z-index:50;top:100%;left:0;margin-top:4px;width:300px;max-height:360px;overflow:auto;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px;box-shadow:0 8px 24px rgba(0,0,0,.5)">
+                    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;line-height:1.4">Toggle which qualities to generate. Expand a group to pick WEBDL/WEBRip separately.</div>
+                    <div x-show="!sandbox[activeAppType].genQualityItems.length" style="font-size:12px;color:var(--text-muted);padding:6px">No quality items for this profile.</div>
+                    <template x-for="it in sandbox[activeAppType].genQualityItems" :key="it.name">
+                      <div>
+                        <!-- single quality -->
+                        <div class="qs-row" x-show="!(it.members && it.members.length)">
+                          <span style="width:10px;display:inline-block;flex-shrink:0"></span>
+                          <label class="toggle toggle-sm" style="flex-shrink:0">
+                            <input type="checkbox" :checked="sandbox[activeAppType].genQualitySel[it.name]"
+                              @change="sandbox[activeAppType].genQualitySel[it.name] = $event.target.checked">
+                            <span class="slider"></span>
+                          </label>
+                          <span class="qs-name" :style="sandbox[activeAppType].genQualitySel[it.name] ? 'color:var(--text-primary)' : 'color:var(--text-muted)'" x-text="it.name"></span>
+                        </div>
+                        <!-- group -->
+                        <div x-show="it.members && it.members.length">
+                          <div class="qs-row is-group">
+                            <span class="qs-chevron" :class="{ open: sandbox[activeAppType].genQualityExpand[it.name] }"
+                              @click="sandbox[activeAppType].genQualityExpand[it.name] = !sandbox[activeAppType].genQualityExpand[it.name]">&#9654;</span>
+                            <label class="toggle toggle-sm" style="flex-shrink:0">
+                              <input type="checkbox" :checked="genQualityGroupOn(activeAppType, it)"
+                                @change="toggleGenQualityGroup(activeAppType, it)">
+                              <span class="slider"></span>
+                            </label>
+                            <span class="qs-name" :style="genQualityGroupOn(activeAppType, it) ? 'color:var(--text-primary)' : 'color:var(--text-muted)'" x-text="it.name"></span>
+                            <span class="qs-badge" x-text="it.members.length"></span>
+                          </div>
+                          <div x-show="sandbox[activeAppType].genQualityExpand[it.name]" style="padding-left:24px">
+                            <template x-for="m in it.members" :key="m">
+                              <div class="qs-row" style="border:none">
+                                <label class="toggle toggle-sm" style="flex-shrink:0">
+                                  <input type="checkbox" :checked="sandbox[activeAppType].genQualitySel[m]"
+                                    @change="sandbox[activeAppType].genQualitySel[m] = $event.target.checked">
+                                  <span class="slider"></span>
+                                </label>
+                                <span class="qs-name" :style="sandbox[activeAppType].genQualitySel[m] ? 'color:var(--text-primary)' : 'color:var(--text-muted)'" x-text="m"></span>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </span>
+                <!-- Per-axis generation pickers (like Qualities): choose what to generate
+                     titles for. Generation scope ONLY - it does not change scoring; every
+                     title is scored against the full Score Editor. Axes are built from what
+                     is scored in the Score Editor. -->
+                <template x-for="ax in genAxesGeneratable(activeAppType)" :key="'pick'+ax.dim">
+                  <span style="position:relative;display:inline-block;margin-left:8px" @click.outside="sandbox[activeAppType].genAxisOpen[ax.dim] = false">
+                    <button class="btn btn-sm" type="button" @click="toggleGenAxisOpen(activeAppType, ax.dim)"
+                      x-tt="'Pick which '+ax.label+' to generate titles for. Generation only - does not change scoring.'">
+                      <span x-text="ax.label"></span>: <span x-text="genAxisSelectedCount(activeAppType, ax.dim)"></span> <span style="opacity:.6">&#9662;</span>
+                    </button>
+                    <div x-show="sandbox[activeAppType].genAxisOpen[ax.dim]" x-cloak
+                      style="position:absolute;z-index:50;top:100%;left:0;margin-top:4px;width:280px;max-height:360px;overflow:auto;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px;box-shadow:0 8px 24px rgba(0,0,0,.5)">
+                      <div class="qs-row is-group">
+                        <label class="toggle toggle-sm" style="flex-shrink:0">
+                          <input type="checkbox" :checked="genAxisAllOn(activeAppType, ax.dim)" @change="toggleGenAxisAll(activeAppType, ax.dim)">
+                          <span class="slider"></span>
+                        </label>
+                        <span class="qs-name" style="font-weight:600">Select all</span>
+                      </div>
+                      <template x-for="cf in genAxisGeneratable(activeAppType, ax.dim)" :key="cf.trashId">
+                        <div class="qs-row" style="border:none">
+                          <label class="toggle toggle-sm" style="flex-shrink:0">
+                            <input type="checkbox" :checked="genAxisSelected(activeAppType, cf.trashId)"
+                              @change="sandbox[activeAppType].genAxisSel[cf.trashId] = $event.target.checked">
+                            <span class="slider"></span>
+                          </label>
+                          <span class="qs-name" :style="genAxisSelected(activeAppType, cf.trashId) ? 'color:var(--text-primary)' : 'color:var(--text-muted)'" x-text="cf.name"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </span>
+                </template>
+                <!-- Summary of what will be generated: reflects the pickers above and the
+                     Score Editor. Generation scope only; scoring uses the full Score Editor. -->
+                <div style="margin-top:12px;border-top:1px solid var(--border-subtle);padding-top:10px">
+                  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">
+                    Summary of what will be generated, across the selected qualities:
+                    <span x-show="sandbox[activeAppType].genPreviewCount !== null" style="font-weight:600;color:var(--text-body)" x-text="' ' + (sandbox[activeAppType].genPreviewCount || 0).toLocaleString() + ' titles'"></span>
+                    <!-- hidden reactive trigger: recomputes the live count when the selection or qualities change -->
+                    <span x-effect="genUpdatePreviewCount(activeAppType)" style="display:none"></span>
+                  </div>
+                  <!-- The math, so the count is auditable and a collapsing axis is obvious -->
+                  <div x-show="sandbox[activeAppType].genPreviewStats" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;font-family:monospace;line-height:1.4" x-text="genPreviewMath(activeAppType)"></div>
+                  <!-- Qualities: the structural base (picked in the Qualities button above), not part of the Score Editor -->
+                  <div style="display:flex;gap:10px;padding:2px 0;font-size:12px;align-items:baseline">
+                    <span style="flex:0 0 140px;color:var(--text-muted);font-weight:600">Qualities</span>
+                    <span style="flex:1;min-width:0">
+                      <template x-for="q in genSelectedQualities(activeAppType)" :key="q">
+                        <span style="margin-right:12px;color:var(--text-body)" x-text="q"></span>
+                      </template>
+                      <span x-show="genSelectedQualities(activeAppType).length === 0" style="color:var(--text-muted);font-style:italic">none selected</span>
+                    </span>
+                  </div>
+                  <template x-for="ax in genAxesWithCFs(activeAppType)" :key="ax.dim">
+                    <div style="display:flex;gap:10px;padding:2px 0;font-size:12px;align-items:baseline">
+                      <span style="flex:0 0 140px;color:var(--text-muted);font-weight:600" x-text="ax.label"></span>
+                      <span style="flex:1;min-width:0">
+                        <template x-for="cf in genAxisUsed(activeAppType, ax.dim)" :key="cf.trashId">
+                          <span style="margin-right:12px;white-space:nowrap"><span style="color:var(--text-body)" x-text="cf.name"></span><span style="font-family:monospace;color:var(--text-muted)" x-text="' ' + (cf.score > 0 ? '+' : '') + cf.score"></span></span>
+                        </template>
+                        <span x-show="genAxisUsed(activeAppType, ax.dim).length === 0" style="color:var(--text-muted);font-style:italic">none scored, skipped</span>
+                        <span x-show="genAxisUsed(activeAppType, ax.dim).length > 0 && genAxisSkippedCount(activeAppType, ax.dim) > 0" style="color:var(--text-muted)" x-text="' (+' + genAxisSkippedCount(activeAppType, ax.dim) + ' unscored, skipped)'"></span>
+                      </span>
+                    </div>
+                  </template>
+                </div>
             </div>
           </div>
 

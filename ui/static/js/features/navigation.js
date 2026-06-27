@@ -219,7 +219,9 @@ export default {
       const validCustomFormatsTabs = ['browse','in-use'];
       const validMediaTabs = ['quality','naming'];
       const validMaintenanceTabs = ['backup','cleanup'];
+      // 'generator' (Calculator) only routable while dark-launched flag is on.
       const validAdvancedTabs = ['builder','group-builder','scoring','import'];
+      if (this.calculatorEnabled) validAdvancedTabs.push('generator');
       this._navSkipPush = true;
       try {
         if (parts[0] === 'settings') {
@@ -373,7 +375,7 @@ export default {
       }
       if (this.currentSection === 'advanced') {
         const tab = this.advancedTab;
-        const tabLabel = { 'builder': 'Profile Builder', 'scoring': 'Scoring Sandbox', 'group-builder': 'CF Group Builder' }[tab] || '';
+        const tabLabel = { 'builder': 'Profile Builder', 'scoring': 'Scoring Sandbox', 'group-builder': 'CF Group Builder', 'generator': 'Scoring Generator' }[tab] || '';
         return tabLabel ? `${section} / ${tabLabel}` : section;
       }
       return section;

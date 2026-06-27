@@ -161,9 +161,9 @@
                          active auto-sync scheme, if any), then the full current
                          pattern on its own line in a scrollable monospace field so
                          the whole value is readable. -->
-                    <div style="display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
                       <template x-for="row in namingCurrentRows(activeAppType)" :key="row.field">
-                        <div>
+                        <div style="min-width:0">
                           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
                             <span style="font-size:12px;font-weight:600;color:var(--text-body)" x-text="row.label + ':'"></span>
                             <!-- Scheme marker for fields clonarr has synced (⟳ = auto-sync;

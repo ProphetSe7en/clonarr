@@ -9,6 +9,7 @@ import baseState from './state.js';
 import authSecurity from './features/auth-security.js';
 import autoSync from './features/auto-sync.js';
 import backupRestore from './features/backup-restore.js';
+import calculator from './features/calculator.js';
 import cfGroupBuilder from './features/cf-group-builder.js';
 import customFormats from './features/custom-formats.js';
 import importExport from './features/import-export.js';
@@ -44,6 +45,7 @@ const featureModules = [
   trashProfileDiscovery,
   scoring,
   cfGroupBuilder,
+  calculator,
 ];
 
 function applyFeatureModules(target) {
@@ -576,16 +578,21 @@ export function clonarr() {
       this.$watch('activeAppType', maybeLoadCustomizations);
 
       // Clear the "in use" drill-down filter when landing on Sync Rules via
-      // normal navigation. tpdGoToSyncRules sets a one-shot guard so its own
-      // filtered jump from a TRaSH card survives; everything else resets.
+      // normal navigation, but keep it when a TRaSH card jumped here with a
+      // specific profile. tpdGoToSyncRules sets _syncRulesFilterKeep; it must
+      // survive ALL watcher fires of that one navigation (setProfileTab AND the
+      // hash-reparse from pushNav both fire). So we do NOT consume the guard
+      // while on the tab; instead we reset it (and the filter) when the user
+      // LEAVES Sync Rules, so the next normal entry shows all again.
       const maybeClearSyncRulesFilter = () => {
-        if (this.currentSection === 'profiles'
-            && this.getProfileTab(this.activeAppType) === 'sync-rules') {
-          if (this._syncRulesFilterKeep) {
-            this._syncRulesFilterKeep = false; // consume guard, keep the filter
-          } else {
-            this.syncRulesFilterTrashId = null;
-          }
+        const onSyncRules = this.currentSection === 'profiles'
+          && this.getProfileTab(this.activeAppType) === 'sync-rules';
+        if (onSyncRules) {
+          if (!this._syncRulesFilterKeep) this.syncRulesFilterTrashId = null;
+        } else {
+          // Left the tab: drop the guard + filter so a later normal open is unfiltered.
+          this._syncRulesFilterKeep = false;
+          this.syncRulesFilterTrashId = null;
         }
       };
       this.$watch('currentSection', maybeClearSyncRulesFilter);
