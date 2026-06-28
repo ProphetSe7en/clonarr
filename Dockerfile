@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.Version=${VERSION}" -o clonarr .
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 ARG VERSION=3.2.1
 
