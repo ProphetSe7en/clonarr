@@ -3,7 +3,7 @@ package api
 import "net/http"
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
-	// UI manifest — static metadata (enum lists, agent field specs, category
+	// UI manifest - static metadata (enum lists, agent field specs, category
 	// colors) consumed once by the frontend on init. Single source of truth
 	// shared with backend validators in core/enums.go and core/categories.go.
 	mux.HandleFunc("GET /api/ui/manifest", s.handleGetUIManifest)
@@ -88,7 +88,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/custom-cfs/import-from-instance", s.handleImportCFsFromInstance)
 	mux.HandleFunc("GET /api/customformat/schema/{app}", s.handleCFSchema)
 
-	// CF Groups — user-created TRaSH-style custom-format groups saved locally
+	// CF Groups - user-created TRaSH-style custom-format groups saved locally
 	// so they can be iterated on (edit, duplicate, redownload). The "Download
 	// JSON" action exports a TRaSH-schema file suitable for contributing
 	// upstream; the local store keeps extra fields (id, appType, timestamps).
@@ -126,11 +126,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/auto-sync/rules/{id}", s.handleDeleteAutoSyncRule)
 	mux.HandleFunc("POST /api/auto-sync/rules/{id}/add-cf", s.handleAddCFToRule)
 	mux.HandleFunc("POST /api/auto-sync/rules/{id}/restore", s.handleRestoreAutoSyncRule)
+	mux.HandleFunc("GET /api/auto-sync/rules/{id}/export", s.handleExportRule)
+	mux.HandleFunc("POST /api/auto-sync/rules/import", s.handleImportRule)
 
-	// External widget summary (homepage, glance, etc.) — stable contract
+	// External widget summary (homepage, glance, etc.) - stable contract
 	mux.HandleFunc("GET /api/widget/summary", s.handleWidgetSummary)
 
-	// Profile Sync — config + telemetry
+	// Profile Sync - config + telemetry
 	mux.HandleFunc("GET /api/profile-sync", s.handleGetProfileSync)
 	mux.HandleFunc("PUT /api/profile-sync", s.handlePutProfileSync)
 	mux.HandleFunc("POST /api/profile-sync/check", s.handleProfileSyncCheck)

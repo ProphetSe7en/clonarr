@@ -1,0 +1,27 @@
+{{define "modals/export-rule"}}
+  <!-- ============ EXPORT SYNC RULE MODAL ============ -->
+  <!-- Portable, self-contained export of one sync rule. Copy to share quickly,
+       or download the .json to carry to another Clonarr and Import there. -->
+  <div class="modal-overlay" x-show="showExportRuleModal" @click.self="closeExportRuleModal()" @keydown.escape.window="closeExportRuleModal()" x-cloak>
+    <div class="modal" style="max-width:700px" role="dialog" aria-modal="true" aria-labelledby="modal-title-export-rule" x-trap.noscroll.inert="showExportRuleModal">
+      <h2 id="modal-title-export-rule" class="modal-title">Export sync rule</h2>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
+        A complete copy of this rule: base profile, scores, overrides, custom Custom Formats, and notes. Import it into another Clonarr to recreate the exact same rule.
+      </div>
+
+      <div style="position:relative">
+        <pre style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:12px 16px;font-size:13px;font-family:monospace;color:var(--text-body);max-height:400px;overflow:auto;white-space:pre;margin:0;line-height:1.5"><code x-text="exportRuleContent"></code></pre>
+        <button class="btn btn-sm" style="position:absolute;top:8px;right:8px;font-size:13px"
+                @click="copyToClipboard(exportRuleContent).then(ok => { if (ok) { exportRuleCopied = true; setTimeout(() => exportRuleCopied = false, 2000); } else { showToast('Could not copy automatically (browser blocked it). Use Download instead, or select the text and copy.', 'warning', 6000); } })">
+          <span x-show="!exportRuleCopied">Copy</span>
+          <span x-show="exportRuleCopied" style="color:var(--accent-green)">Copied!</span>
+        </button>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-sm" @click="closeExportRuleModal()">Close</button>
+        <button class="btn btn-sm btn-primary" @click="downloadRuleExport()">Download .json</button>
+      </div>
+    </div>
+  </div>
+{{end}}

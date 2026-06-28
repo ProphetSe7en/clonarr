@@ -1,0 +1,47 @@
+{{define "modals/generate-titles"}}
+  <!-- ============ GENERATE TITLES / BULK PARSE MODAL ============ -->
+  <!-- One modal for the whole run: it confirms the count, then becomes a live
+       progress view with a single Cancel. Used by both "Generate from profile"
+       and a non-trivial manual bulk paste, so progress + cancel live in one
+       obvious place instead of a tiny inline counter. Backdrop never closes it
+       (avoid losing an in-flight run); Escape cancels only in the confirm phase. -->
+  <div class="modal-overlay" x-show="genModal.show" x-cloak
+       @keydown.escape.window="genModal.phase === 'confirm' && genModalCancel()">
+    <div class="modal" style="max-width:460px" role="dialog" aria-modal="true" aria-labelledby="modal-title-gen">
+      <h2 id="modal-title-gen" class="modal-title">Generate titles</h2>
+
+      <!-- Confirm phase -->
+      <template x-if="genModal.phase === 'confirm'">
+        <div>
+          <div style="font-size:13px;color:var(--text-body);line-height:1.5;margin-bottom:18px">
+            <strong x-text="(genModal.total || 0).toLocaleString()"></strong><span x-text="genModal.total === 1 ? ' title' : ' titles'"></span>
+            will be generated and scored against the selected instance. Larger profiles take longer to score.
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-sm" @click="genModalCancel()">Cancel</button>
+            <button class="btn btn-sm btn-primary" @click="genModalProceed()">Proceed</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Progress phase -->
+      <template x-if="genModal.phase === 'progress'">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-body);margin-bottom:12px">
+            <span class="spinner" style="width:14px;height:14px;border-width:2px"></span>
+            <span x-text="sandbox[genModal.appType].parseProgress || ('Scoring ' + (genModal.total || 0).toLocaleString() + ' titles…')"></span>
+          </div>
+          <div style="height:6px;border-radius:3px;background:var(--bg-muted);overflow:hidden;margin-bottom:18px">
+            <div style="height:100%;background:var(--accent-blue);transition:width .15s"
+                 :style="`width:${sandbox[genModal.appType].parseTotal ? Math.round(100 * sandbox[genModal.appType].parseDone / sandbox[genModal.appType].parseTotal) : 0}%`"></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end">
+            <button class="btn btn-sm" style="border-color:var(--accent-orange);color:var(--accent-orange)"
+                    @click="genModalCancel()"
+                    x-tt="'Stop scoring. Titles already scored are kept.'">Cancel</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+{{end}}

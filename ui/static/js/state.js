@@ -1,9 +1,9 @@
 export default function baseState() {
   return {
-    currentTab: 'settings',  // LEGACY — being replaced by currentSection + activeAppType
-    currentSection: 'profiles',  // NEW — feature-first: 'profiles', 'custom-formats', 'quality-size', 'naming', 'maintenance', 'advanced', 'settings', 'about'
-    activeAppType: 'radarr',     // NEW — 'radarr' or 'sonarr', independent of section
-    advancedTab: 'builder',      // NEW — sub-tab within Advanced: 'builder', 'scoring', 'group-builder'
+    currentTab: 'settings',  // LEGACY - being replaced by currentSection + activeAppType
+    currentSection: 'profiles',  // NEW - feature-first: 'profiles', 'custom-formats', 'quality-size', 'naming', 'maintenance', 'advanced', 'settings', 'about'
+    activeAppType: 'radarr',     // NEW - 'radarr' or 'sonarr', independent of section
+    advancedTab: 'builder',      // NEW - sub-tab within Advanced: 'builder', 'scoring', 'group-builder'
     // Calculator (Scoring Generator) is dark-launched: hidden from everyone on
     // dev until it is verified. Enable for local testing by setting localStorage
     // clonarr_calc_preview = 1 (then reload). The Scoring Sandbox stays visible.
@@ -17,7 +17,7 @@ export default function baseState() {
     // the matching button can switch to "Applying..." without racing
     // multiple Apply clicks on the same row.
     cfApplyingKey: '',
-    // CF sub-tab sidebar filter — 'all' shows every managed CF,
+    // CF sub-tab sidebar filter - 'all' shows every managed CF,
     // 'cat:<name>' narrows to one category. Per-browser persisted so
     // returning to the sub-tab restores the last filter the user
     // picked. Matches the Custom Formats Browse tab's own persisted
@@ -32,23 +32,23 @@ export default function baseState() {
     // the Check button only make sense in 'managed' so they hide on
     // 'unmanaged'.
     cfSyncRulesViewMode: 'managed',
-    // CF sub-tab instance picker — '' means "every instance of the
+    // CF sub-tab instance picker - '' means "every instance of the
     // active app type"; otherwise a specific instance ID. Narrowing
     // to one instance scopes the row list AND the drift counts AND
     // the Update all batch to that instance, so a 4K-Radarr-only
     // drift event can be acted on without touching main Radarr.
     cfSyncRulesActiveInstance: '',
-    // CF sub-tab search query — matches against CF name OR any of
+    // CF sub-tab search query - matches against CF name OR any of
     // the row's usedByProfiles[].profileName entries. Lets a user
     // find "all CFs in SQP-3" or "Bad Release Group" without
     // scrolling. Case-insensitive substring.
     cfSyncRulesSearch: '',
-    // CF sub-tab expand-row state — trashId of the currently-open
+    // CF sub-tab expand-row state - trashId of the currently-open
     // detail row showing per-profile usage. Single-open (clicking a
     // different row collapses the previous) to keep the layout
     // compact; empty string = nothing expanded.
     cfSyncRulesExpandedRow: '',
-    // "Apply all" progress state — total drifted (instance, trashId)
+    // "Apply all" progress state - total drifted (instance, trashId)
     // pairs queued, completed so far, current label. Visible while
     // running so the user sees the batch progressing rather than a
     // single multi-second spinner with no indication something's
@@ -71,15 +71,15 @@ export default function baseState() {
 
     // Debug-log download options. When true, the Download button hits
     // ?activity=1 and the server bundles activity.log alongside debug.log
-    // in a ZIP. Default off — most bug reports only need the operation
+    // in a ZIP. Default off - most bug reports only need the operation
     // trace (debug.log alone).
     includeActivityLog: false,
 
-    // CF Group Builder state — advancedTab === 'group-builder'
+    // CF Group Builder state - advancedTab === 'group-builder'
     // Mirrors the on-disk shape of TRaSH cf-groups/*.json so export is a straight serialize.
     cfgbName: '',
     cfgbDescription: '',
-    cfgbTrashID: '',                         // MD5 of cfgbName — auto-computed on input (unless cfgbHashLocked)
+    cfgbTrashID: '',                         // MD5 of cfgbName - auto-computed on input (unless cfgbHashLocked)
     // When true, cfgbTrashID is frozen at cfgbOriginalTrashID and name
     // changes do NOT regenerate the hash. Flips on automatically when the
     // form is populated by an edit / TRaSH copy so the user can fix typos
@@ -93,22 +93,22 @@ export default function baseState() {
     // numbered groups and custom). Per TRaSH convention: 1-9 English public,
     // 11-19 German, 21-29 French, 81-89 Anime, 91-99 SQP.
     cfgbGroup: null,
-    cfgbCFs: [],                             // [{trashId, name, groupTrashId, groupName, isCustom}] — flattened from /api/trash/{app}/all-cfs
-    cfgbGroups: [],                          // [{groupTrashId, name, count}] — actual TRaSH cf-groups for the dropdown
+    cfgbCFs: [],                             // [{trashId, name, groupTrashId, groupName, isCustom}] - flattened from /api/trash/{app}/all-cfs
+    cfgbGroups: [],                          // [{groupTrashId, name, count}] - actual TRaSH cf-groups for the dropdown
     cfgbGroupFilter: 'all',                  // 'all' | 'custom' | 'other' | a TRaSH groupTrashId
     cfgbHasCustom: false,                    // true if the list contains any user-custom CFs (toggles the Custom filter option)
     // Ungrouped counts come in two flavours so TRaSH can see both the raw
     // upstream scope ("CFs TRaSH hasn't grouped yet") and the residual
     // after his local work ("still to do after what I've placed locally").
     cfgbUngroupedTrashCount: 0,              // CFs with 0 TRaSH group memberships (ignores local groups)
-    cfgbUngroupedRemainingCount: 0,          // CFs with 0 memberships at all — TRaSH and local combined
+    cfgbUngroupedRemainingCount: 0,          // CFs with 0 memberships at all - TRaSH and local combined
     cfgbCFFilter: '',
     cfgbSelectedCFs: {},                     // trashId → true (boolean map for easier Alpine binding)
     cfgbRequiredCFs: {},                     // trashId → true (per-CF required flag)
-    cfgbDefaultCFs: {},                      // trashId → true (per-CF default override — rare; see Golden Rule UHD)
-    cfgbProfiles: [],                        // [{trashId, name, group, groupName}] — all TRaSH profiles for current appType
+    cfgbDefaultCFs: {},                      // trashId → true (per-CF default override - rare; see Golden Rule UHD)
+    cfgbProfiles: [],                        // [{trashId, name, group, groupName}] - all TRaSH profiles for current appType
     cfgbSelectedProfiles: {},                // trashId → true
-    cfgbProfileGroupExpanded: {},            // groupName → bool — card collapse state (all expanded by default)
+    cfgbProfileGroupExpanded: {},            // groupName → bool - card collapse state (all expanded by default)
     cfgbCopyLabel: 'Copy JSON',              // swaps to "Copied!" briefly on click
     cfgbLoadError: '',                        // user-visible error when /api/trash/* fails
     cfgbPreviewOpen: false,                   // JSON-preview collapsible state
@@ -128,13 +128,13 @@ export default function baseState() {
     // new, PUT for existing). Storage is scoped per appType on disk so a
     // Radarr and Sonarr group with the same name never overwrite each other.
     cfgbSavedGroups: [],                     // CFGroup[] from GET /api/cf-groups/{app}
-    cfgbTrashCFGroups: [],                   // TrashCFGroup[] from GET /api/trash/{app}/cf-groups — upstream groups the user can copy into local storage
+    cfgbTrashCFGroups: [],                   // TrashCFGroup[] from GET /api/trash/{app}/cf-groups - upstream groups the user can copy into local storage
     cfgbTrashListOpen: false,                // whether the "TRaSH cf-groups" section is expanded; default collapsed to keep the page short
     cfgbEditingId: '',                       // '' = new (POST), non-empty = editing existing (PUT)
     // trash_id captured at the moment the form was populated (either from a
     // local edit or a TRaSH copy). Used by cfgbSave to detect a rename that
     // would regenerate the MD5 so we can prompt the user to keep vs regenerate
-    // the hash. '' means "fresh new group" — no prompt needed.
+    // the hash. '' means "fresh new group" - no prompt needed.
     cfgbOriginalTrashID: '',
     // Human-readable name of the TRaSH group the user copied from, for the
     // mode banner. '' when not copying from TRaSH.
@@ -151,7 +151,7 @@ export default function baseState() {
     expandedProfileGroups: {},
     pulling: false,
     checkingUpdates: false,
-    // Quick action modal — opens on row-level status pill click. Lets the
+    // Quick action modal - opens on row-level status pill click. Lets the
     // user see what changed AND sync without going through the full editor.
     statusReviewOpen: false,
     statusReviewKind: '',     // 'drift' | 'updates' | 'pending'
@@ -179,7 +179,7 @@ export default function baseState() {
     // *arr-savvy users find both under the same "Media Management" heading.
     mediaTabs: {},
     // Per app-type Maintenance sub-tab: { radarr: 'backup' | 'cleanup', sonarr: ... }.
-    // Splits the long Backup & Maintenance page into focused workflows —
+    // Splits the long Backup & Maintenance page into focused workflows -
     // Backup & Restore (data preservation) vs Cleanup (data hygiene).
     maintenanceTabs: {},
     compareInstanceIds: {},  // per app-type: { radarr: 'id', sonarr: 'id' }
@@ -203,13 +203,13 @@ export default function baseState() {
     groupExpanded: {},
     cfDescExpanded: {},
     cfTooltip: {},
-    // Custom viewport-aware tooltip — replaces native title="" for elements
+    // Custom viewport-aware tooltip - replaces native title="" for elements
     // where the browser tooltip would overflow the viewport (right-edge inputs,
     // long messages, etc.). Driven by showTooltip / hideTooltip helpers in
     // main.js. The global tooltip element lives in partials/modals/tooltip.html.
     tt: { show: false, text: '', x: 0, y: 0, flip: false, placement: 'top' },
     selectedOptionalCFs: {},
-    // Profile detail — single global toggle that gates all override editing affordances.
+    // Profile detail - single global toggle that gates all override editing affordances.
     // OFF (default): user sees a clean "All values follow profile defaults" summary;
     // override cards (General, Quality, Overridden Scores, Extra CFs) are hidden;
     // CF score inputs in Required/Group sections render as read-only colored badges.
@@ -223,12 +223,12 @@ export default function baseState() {
     // its rendered preview.
     pdDescription: '',
     pdDescriptionPreview: false,
-    // Profile overview's Notes card defaults to collapsed — keeps the
+    // Profile overview's Notes card defaults to collapsed - keeps the
     // overview compact since notes are optional. Header always shows;
     // body (editor + preview) renders only when expanded.
     pdNotesExpanded: false,
     // Snapshot of profile-editor state at open time. Used by
-    // profileDetailIsDirty to detect unsaved changes — set in
+    // profileDetailIsDirty to detect unsaved changes - set in
     // openProfileDetail after restoration completes, cleared on
     // save-success + on explicit Discard. JSON string for cheap
     // structural compare.
@@ -239,19 +239,19 @@ export default function baseState() {
     // Persisted per browser, global across profiles. Default combined.
     pdAdditionalView: (typeof localStorage !== 'undefined' && localStorage.getItem('clonarr_pdAdditionalView') === 'split') ? 'split' : 'combined',
     spActiveGroup: '__required', // '__required' | <trashGroup.name>
-    spActiveParent: null,        // null | <sectionName> — when set, main pane
+    spActiveParent: null,        // null | <sectionName> - when set, main pane
                                  // renders ALL groups whose _section matches
                                  // (mirrors Custom Formats Browse's parent
                                  // mode). Mutually exclusive with spActiveGroup
-                                 // — spSelectGroup clears this, spSelectParent
+                                 // - spSelectGroup clears this, spSelectParent
                                  // clears spActiveGroup.
     spOverviewSection: 'all',    // 'all' | 'diffs' | 'general' | 'quality' | 'all-cf' | 'optional-cf' | 'additional-cf'
     // Inline CF descriptions toggle. True = show description column
-    // beside the name (default — matches Browse). False = hide,
+    // beside the name (default - matches Browse). False = hide,
     // collapsing the row to icon + name + score. LocalStorage-
     // persisted per browser so the preference survives reload.
     spShowCFDesc: (typeof localStorage !== 'undefined' && localStorage.getItem('clonarr_spShowCFDesc') === '0') ? false : true,
-    // Sync Preview CF search — single state shared across the three
+    // Sync Preview CF search - single state shared across the three
     // sub-nav surfaces (Profile default, Additional CF, Profile
     // overview). When set, panes filter their CF rows to ones whose
     // name matches case-insensitively.
@@ -277,24 +277,24 @@ export default function baseState() {
     spOverviewGroupCFs: (() => {
       try { return window.localStorage.getItem('sp-ov-group-cfs') === 'true'; } catch (e) { return false; }
     })(),
-    // Quality editor modal target — drives which array the modal binds to:
+    // Quality editor modal target - drives which array the modal binds to:
     //   'builder' → pb.qualityItems (Profile Builder flow)
     //   'edit'    → qualityStructure (Profile Detail / Sync Preview flow)
     // Set by the launcher button before flipping pb.qualityEditorOpen.
     qualityEditorTarget: 'builder',
-    // Sync Preview's Customize state reads pdOverridesEnabled directly —
+    // Sync Preview's Customize state reads pdOverridesEnabled directly -
     // no separate spCustomize field. A separate field could drift when
     // user toggles Customize in one overlay then switches to the other.
     pdGeneralCollapsed: false,  // Profile-detail General card chevron collapse state (default expanded)
     pdQualityCollapsed: false,  // Profile-detail Quality card chevron collapse state (default expanded)
-    pdCFScoresCollapsed: true,  // Profile-detail Overridden Scores card chevron collapse state (default collapsed — list-style sections opened on demand)
-    pdExtraCFsCollapsed: true,  // Profile-detail Extra CFs card chevron collapse state (default collapsed — picker lazy-loaded only when user expands)
+    pdCFScoresCollapsed: true,  // Profile-detail Overridden Scores card chevron collapse state (default collapsed - list-style sections opened on demand)
+    pdExtraCFsCollapsed: true,  // Profile-detail Extra CFs card chevron collapse state (default collapsed - picker lazy-loaded only when user expands)
     // Compare-tab sub-nav. Values:
     // 'overview' | 'optional' | 'general' | 'quality' | 'all-diffs'
     // 'wrong' | 'extra' | 'missing' | 'all-active'
     compareFilter: 'overview',
     cfScoreOverrides: {}, // per-CF score overrides { trashId: score }
-    qualityOverrides: {}, // legacy flat overrides { name: allowed(bool) } — kept for backwards compat
+    qualityOverrides: {}, // legacy flat overrides { name: allowed(bool) } - kept for backwards compat
     qualityOverrideActive: false, // Quality Items editor modal-open flag (NOT a persistence gate)
     // Quality structure override (full structure replacing TRaSH items).
     // Format: [{ _id, name, allowed, items?: [string] }]. Empty when not in use.
@@ -306,7 +306,7 @@ export default function baseState() {
     qualityStructureDrag: { kind: null, src: null, srcGroup: null, srcMember: null, dropGap: null, dropMerge: null, dropMemberGroup: null, dropMemberGap: null },
     _qsIdCounter: 0,
     _sbIdCounter: 0,
-    extraCFs: {}, // { trashId: score } — extra CFs not in profile
+    extraCFs: {}, // { trashId: score } - extra CFs not in profile
     // Compare → override-editor convergence (Phase 1): list of Arr CFs not in
     // any TRaSH cf-group for the compared profile. Populated by
     // prefillOverridesFromCompare; rendered in a Phase 2 UI sub-section that
@@ -315,7 +315,7 @@ export default function baseState() {
     _compareArrOnlyExtras: [],
     extraCFSearch: '',
     extraCFAllCFs: [], // flat list of all TRaSH CFs (for filtering)
-    extraCFGroups: [], // { name, cfs[] } — TRaSH groups + ungrouped "Other"
+    extraCFGroups: [], // { name, cfs[] } - TRaSH groups + ungrouped "Other"
     pdOverrides: {
       language: { enabled: true, value: 'Original' },
       upgradeAllowed: { enabled: true, value: true },
@@ -403,7 +403,7 @@ export default function baseState() {
     cfEditorScoreCounter: 0,    // unique ID counter for x-for keys (trashScores)
     cfEditorActiveTab: 'general', // selected tab inside the editor modal (General / Conditions / TRaSH)
     cfEditorDescriptionPreview: false, // toggle for the Description field's edit-vs-preview view
-    // Inline link-popover state for the markdown editor — replaces the
+    // Inline link-popover state for the markdown editor - replaces the
     // native window.prompt that used to back the Link toolbar button.
     cfMdLinkPopover: { open: false, target: null, url: '', selStart: 0, selEnd: 0 },
 
@@ -414,7 +414,7 @@ export default function baseState() {
     // Per app-type Media Management instance picker. Shared by both
     // Quality Definitions and Movie/Episode Naming sub-tabs so the
     // picker stays at the same position when the user switches
-    // sub-tabs — previously each sub-tab had its own picker that
+    // sub-tabs - previously each sub-tab had its own picker that
     // jittered between them.
     mediaInstanceId: {},
     qsInstanceDefs: {},  // per app-type: current instance quality definitions
@@ -423,10 +423,13 @@ export default function baseState() {
     qsSyncResult: {},    // per app-type: { ok, message }
     qsAutoSync: {},      // per app-type: { enabled, type }
     confirmModal: { show: false, title: '', message: '', confirmLabel: '', cancelLabel: '', secondaryLabel: '', hideCancel: false, onConfirm: null, onCancel: null, onSecondary: null },
+    // Scoring "Generate titles" / bulk-parse modal: confirm the count, then the
+    // same modal becomes a progress view with a single Cancel.
+    genModal: { show: false, phase: 'confirm', appType: 'radarr', total: 0 },
     inputModal: { show: false, title: '', message: '', value: '', placeholder: '', confirmLabel: '', onConfirm: null, onCancel: null },
     cloneProfileModal: { open: false, sh: null, sourceInstanceId: '', appType: '', sourceName: '', name: '', targetInstanceId: '', saving: false, error: '' },
     sandboxCopyModal: { show: false, title: '', text: '', copied: false },
-    // Sandbox export modal — exports the currently-visible-and-sorted
+    // Sandbox export modal - exports the currently-visible-and-sorted
     // result list as plain text, diff-tool friendly (line-per-release).
     // includeBreakdown toggles between "title + total only" (compact,
     // good for high-level diff) and "per-release block with CF rows"
@@ -504,8 +507,8 @@ export default function baseState() {
       requiredCFs: {},
       defaultOnCFs: {},
       formatItemCFs: {},    // CFs that go into formatItems (required/mandatory)
-      enabledGroups: {},    // { groupTrashId: true } — which CF groups are included
-      cfStateOverrides: {}, // { trashId: 'required'|'optional' } — overrides TRaSH default per CF
+      enabledGroups: {},    // { groupTrashId: true } - which CF groups are included
+      cfStateOverrides: {}, // { trashId: 'required'|'optional' } - overrides TRaSH default per CF
       scoreOverrides: {},
       // Dev mode
       trashProfileId: '',
@@ -526,7 +529,7 @@ export default function baseState() {
     // opens a flyout to the right with the same options. Value holds the
     // section key whose popup is open, or '' for closed.
     sidebarSubnavPopup: '',
-    // Top viewport coordinate where the popup should anchor — captured
+    // Top viewport coordinate where the popup should anchor - captured
     // from the clicked icon's getBoundingClientRect on open so the popup
     // sits aligned with whichever nav-item was clicked.
     sidebarSubnavPopupTop: 0,
@@ -574,27 +577,27 @@ export default function baseState() {
     settingsSection: 'instances',
     uiScale: localStorage.getItem('clonarr-ui-scale') || '1',
     theme: localStorage.getItem('clonarr-theme') || 'system',
-    // v3 sidebar collapse state — persists per-browser. Default expanded.
+    // v3 sidebar collapse state - persists per-browser. Default expanded.
     sidebarCollapsed: localStorage.getItem('clonarr-sidebar-collapsed') === '1',
-    // v3 content alignment — 'center' (default, balanced) or 'left'
+    // v3 content alignment - 'center' (default, balanced) or 'left'
     // (anchored next to the sidebar, shorter mouse travel on widescreen).
     contentAlign: localStorage.getItem('clonarr-content-align') || 'center',
-    // v3 navigation style — 'sidebar' (default) or 'topnav'. Some beta
+    // v3 navigation style - 'sidebar' (default) or 'topnav'. Some beta
     // testers prefer the classic horizontal navigation; the topnav variant
     // is v3-styled (app-color underline, app pill, 4-sub-tab Profiles
     // split) so it carries the same visual language as the sidebar.
     navStyle: localStorage.getItem('clonarr-nav-style') || 'sidebar',
-    // v3 Sync Rules — per-rule customization-count cache. Keyed by rule
+    // v3 Sync Rules - per-rule customization-count cache. Keyed by rule
     // ID, populated by loadRuleCustomizations() when the Sync Rules tab
     // mounts. Each entry: { quality, extraCFs, customScores, general, total }.
-    // Empty {} = not yet loaded; missing keys = unknown rule (will render —).
+    // Empty {} = not yet loaded; missing keys = unknown rule (will render -).
     ruleCustomizations: {},
     ruleCustomizationsLoaded: false,
 
     // Scoring Sandbox (per app-type state)
     sandbox: {
-      radarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, parseProgress: '', parseAbort: null, _vTop: 0, _vH: 600, _rowH: null, simplifyNames: false, genScores: [], genAxisSel: {}, genAxisOpen: {}, genQualityItems: [], genQualitySel: {}, genQualityFor: '', genQualityOpen: false, genQualityExpand: {}, genCardOpen: false, genPreviewCount: null, genPreviewStats: null, searching: false, searchAbort: null, instanceProfiles: [], showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', scoreSortMode: 'grab', filterToSelected: false, hideFailed: false, dragSrc: null, dragOver: null, scoreSets: [], activeScoreSet: '', searchCooldownRemaining: 0 },
-      sonarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, parseProgress: '', parseAbort: null, _vTop: 0, _vH: 600, _rowH: null, simplifyNames: false, genScores: [], genAxisSel: {}, genAxisOpen: {}, genQualityItems: [], genQualitySel: {}, genQualityFor: '', genQualityOpen: false, genQualityExpand: {}, genCardOpen: false, genPreviewCount: null, genPreviewStats: null, searching: false, searchAbort: null, instanceProfiles: [], showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', scoreSortMode: 'grab', filterToSelected: false, hideFailed: false, dragSrc: null, dragOver: null, scoreSets: [], activeScoreSet: '', searchCooldownRemaining: 0 },
+      radarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, parseProgress: '', parseDone: 0, parseTotal: 0, parseAbort: null, _vTop: 0, _vH: 600, _rowH: null, colReleaseW: 360, simplifyNames: false, genScores: [], genAxisSel: {}, genAxisOpen: {}, genQualityItems: [], genQualitySel: {}, genQualityFor: '', genQualityOpen: false, genQualityExpand: {}, genCardOpen: false, genPreviewCount: null, genPreviewStats: null, searching: false, searchAbort: null, showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', scoreSortMode: 'grab', filterToSelected: false, hideFailed: false, dragSrc: null, dragOver: null, scoreSets: [], activeScoreSet: '', searchCooldownRemaining: 0 },
+      sonarr: { instanceId: '', profileKey: '', compareKey: '', editOpen: false, editScores: {}, editToggles: {}, editMinScore: null, editOriginal: null, inputMode: 'paste', pasteInput: '', bulkInput: '', searchQuery: '', selectedIndexers: [], indexers: [], searchResults: [], results: [], parsing: false, parseProgress: '', parseDone: 0, parseTotal: 0, parseAbort: null, _vTop: 0, _vH: 600, _rowH: null, colReleaseW: 360, simplifyNames: false, genScores: [], genAxisSel: {}, genAxisOpen: {}, genQualityItems: [], genQualitySel: {}, genQualityFor: '', genQualityOpen: false, genQualityExpand: {}, genCardOpen: false, genPreviewCount: null, genPreviewStats: null, searching: false, searchAbort: null, showBulk: false, searchError: '', indexerDropdown: false, searchFilterText: '', searchFilterRes: '', sortCol: 'score', sortDir: 'desc', scoreSortMode: 'grab', filterToSelected: false, hideFailed: false, dragSrc: null, dragOver: null, scoreSets: [], activeScoreSet: '', searchCooldownRemaining: 0 },
     },
     prowlarrTestResult: null,
     prowlarrTesting: false,

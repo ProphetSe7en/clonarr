@@ -22,6 +22,7 @@ import notifications from './features/notifications.js';
 import profileBuilder from './features/profile-builder.js';
 import profiles from './features/profiles.js';
 import qualitySizes from './features/quality-sizes.js';
+import rulePortability from './features/rule-portability.js';
 import scoring from './features/scoring.js';
 import toasts from './features/toasts.js';
 import trashProfileDiscovery from './features/trash-profile-discovery.js';
@@ -46,6 +47,7 @@ const featureModules = [
   scoring,
   cfGroupBuilder,
   calculator,
+  rulePortability,
 ];
 
 function applyFeatureModules(target) {

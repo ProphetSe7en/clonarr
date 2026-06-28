@@ -32,7 +32,7 @@ var errArrUnreachable = errors.New("arr unreachable")
 // trigger tracker rate-limits / bans. 120s between searches is generous for
 // realistic Sandbox use (search → look at results → score-select → repeat)
 // and aggressive enough to stop button-mash abuse. In-memory state, single-
-// tenant, no persistence — resets on container restart.
+// tenant, no persistence - resets on container restart.
 const prowlarrSearchCooldown = 120 * time.Second
 
 var (
@@ -47,7 +47,7 @@ func (s *Server) handleTestProwlarr(w http.ResponseWriter, r *http.Request) {
 		APIKey string `json:"apiKey"`
 	}
 	// Accept ad-hoc URL/key in body, fall back to saved config
-	json.NewDecoder(r.Body).Decode(&req) // ignore error — fields optional
+	json.NewDecoder(r.Body).Decode(&req) // ignore error - fields optional
 	cfg := s.Core.Config.Get()
 	if req.URL == "" {
 		req.URL = cfg.Prowlarr.URL
@@ -109,14 +109,14 @@ func (s *Server) handleScoringProwlarrSearch(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Cooldown check — block rapid-fire searches before they hit Prowlarr.
+	// Cooldown check - block rapid-fire searches before they hit Prowlarr.
 	prowlarrSearchMu.Lock()
 	elapsed := time.Since(prowlarrSearchLastAt)
 	if !prowlarrSearchLastAt.IsZero() && elapsed < prowlarrSearchCooldown {
 		retryAfter := int((prowlarrSearchCooldown - elapsed).Seconds()) + 1
 		prowlarrSearchMu.Unlock()
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-		writeError(w, 429, fmt.Sprintf("Search rate limited — wait %ds before searching again", retryAfter))
+		writeError(w, 429, fmt.Sprintf("Search rate limited - wait %ds before searching again", retryAfter))
 		return
 	}
 	prowlarrSearchLastAt = time.Now()
@@ -200,7 +200,7 @@ func (s *Server) handleScoringParseBatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	// Cap is a safety net against accidental huge pastes, not a per-request
-	// rate limit — the loop below is sequential against the Arr Parse API,
+	// rate limit - the loop below is sequential against the Arr Parse API,
 	// which is lightweight (in-process regex matching, no DB writes). 1000
 	// matches the Prowlarr search cap so a full search-and-score round-trip
 	// works in one batch (~100s at ~100ms/call against a healthy Arr).
@@ -208,7 +208,7 @@ func (s *Server) handleScoringParseBatch(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "Maximum 1000 titles per batch")
 		return
 	}
-	// Disable the global write timeout for this route — 1000 sequential Parse
+	// Disable the global write timeout for this route - 1000 sequential Parse
 	// calls against a slow Arr can exceed the default 30s. Resetting the
 	// http.ResponseController gives this handler unlimited time to stream
 	// the response. The Arr request itself still has its own timeout via
@@ -273,7 +273,7 @@ func (s *Server) handleScoringParseBatch(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, results)
 }
 
-// isLanguageCF returns true for CFs that depend on language matching — these can't
+// isLanguageCF returns true for CFs that depend on language matching - these can't
 // be evaluated without movie context (TMDB lookup) so they're stripped from sandbox
 // parse results. Matches: "Wrong Language", "Language: Not French", "Language: XXX".
 func isLanguageCF(name string) bool {
@@ -294,7 +294,7 @@ func (s *Server) parseSingleRelease(inst core.Instance, title string) (*ScoringP
 		return nil, fmt.Errorf("HTTP %d: %s", status, string(data))
 	}
 
-	// Parse the raw response — Radarr uses parsedMovieInfo, Sonarr uses parsedEpisodeInfo
+	// Parse the raw response - Radarr uses parsedMovieInfo, Sonarr uses parsedEpisodeInfo
 	var raw struct {
 		Title             string          `json:"title"`
 		ParsedMovieInfo   json.RawMessage `json:"parsedMovieInfo"`
@@ -367,7 +367,7 @@ func (s *Server) parseSingleRelease(inst core.Instance, title string) (*ScoringP
 	}
 
 	// Fallback for numeric release groups that Arr's parser drops (e.g. "-126811").
-	// Only fires when Arr returned empty — alphanumeric groups stay on Arr's parse.
+	// Only fires when Arr returned empty - alphanumeric groups stay on Arr's parse.
 	if parsed.ReleaseGroup == "" {
 		if m := numericReleaseGroupRE.FindStringSubmatch(title); m != nil {
 			parsed.ReleaseGroup = m[1]
@@ -439,7 +439,7 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 	// active profile. Convention: HIGHER rank = HIGHER priority, group
 	// members share the group's outer rank. Disallowed qualities are
 	// omitted so the sandbox can use absence-in-map as the "Sonarr/
-	// Radarr would reject this quality" signal — that turns the
+	// Radarr would reject this quality" signal - that turns the
 	// sandbox PASS/FAIL into a real Sonarr/Radarr search-result
 	// simulation, not just a score threshold check.
 	//
@@ -466,8 +466,43 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 		QualityRanks: map[string]int{},
 	}
 
-	if strings.HasPrefix(profileKey, "trash:") {
-		trashID := strings.TrimPrefix(profileKey, "trash:")
+	// Resolve the profile to score against. A "rule:" key resolves to its base
+	// profile (TRaSH or imported) and then layers the rule's CF opt-ins/opt-outs
+	// and score overrides on top, so the scored set matches exactly what that
+	// sync rule pushes. Unlike a raw Arr instance profile, every CF keeps its
+	// trash_id, so the release-title generator can map each one to a release axis.
+	var rule *core.AutoSyncRule
+	baseKey := profileKey
+	if strings.HasPrefix(profileKey, "rule:") {
+		ruleID := strings.TrimPrefix(profileKey, "rule:")
+		cfg := s.Core.Config.Get()
+		for i := range cfg.AutoSync.Rules {
+			if cfg.AutoSync.Rules[i].ID == ruleID {
+				rule = &cfg.AutoSync.Rules[i]
+				break
+			}
+		}
+		if rule == nil {
+			writeError(w, 404, "Sync rule not found")
+			return
+		}
+		switch {
+		case rule.TrashProfileID != "":
+			baseKey = "trash:" + rule.TrashProfileID
+		case rule.ImportedProfileID != "":
+			baseKey = "imported:" + rule.ImportedProfileID
+		default:
+			writeError(w, 422, "This sync rule has no base profile to score against.")
+			return
+		}
+	}
+
+	// scoreCtx is the TRaSH score context of a trash-based profile; used when a
+	// rule opts in CFs that are not part of the base profile's default set.
+	var scoreCtx string
+
+	if strings.HasPrefix(baseKey, "trash:") {
+		trashID := strings.TrimPrefix(baseKey, "trash:")
 		snap := s.Core.Trash.Snapshot()
 		ad := core.SnapshotAppData(snap, appType)
 		if ad == nil {
@@ -481,7 +516,7 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 		// convention used everywhere else (sort code, inst-source).
 		// Group members share the group's outer rank. Only Allowed=true
 		// items are recorded so the sandbox can use map-absence as the
-		// "Sonarr/Radarr would reject this quality" signal — TRaSH guide
+		// "Sonarr/Radarr would reject this quality" signal - TRaSH guide
 		// confirms "Only checked qualities are wanted" for both
 		// Radarr and Sonarr.
 		for _, p := range ad.Profiles {
@@ -508,7 +543,8 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Get core CFs with scores
-		resolvedCFs, scoreCtx := core.ResolveProfileCFs(ad, trashID)
+		resolvedCFs, sc := core.ResolveProfileCFs(ad, trashID)
+		scoreCtx = sc
 		seen := make(map[string]bool)
 		for _, cf := range resolvedCFs {
 			result.Scores = append(result.Scores, ScoreEntry{
@@ -564,15 +600,15 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			}
 		}
 
-	} else if strings.HasPrefix(profileKey, "imported:") {
-		id := strings.TrimPrefix(profileKey, "imported:")
+	} else if strings.HasPrefix(baseKey, "imported:") {
+		id := strings.TrimPrefix(baseKey, "imported:")
 		prof, ok := s.Core.Profiles.Get(id)
 		if !ok {
 			writeError(w, 404, "Imported profile not found")
 			return
 		}
 		result.MinScore = prof.MinFormatScore
-		// Quality ranks — only Allowed items. Imported profiles inherit
+		// Quality ranks - only Allowed items. Imported profiles inherit
 		// TRaSH/Recyclarr's HIGHEST-FIRST item order, so invert idx to
 		// match the "high rank = high priority" convention (see top
 		// comment).
@@ -606,58 +642,95 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			})
 		}
 
-	} else if strings.HasPrefix(profileKey, "inst:") {
-		// inst:<profileId> — needs instanceId query param
-		instanceID := r.URL.Query().Get("instanceId")
-		profileIDStr := strings.TrimPrefix(profileKey, "inst:")
-		profileID, err := strconv.Atoi(profileIDStr)
-		if err != nil || instanceID == "" {
-			writeError(w, 400, "Invalid instance profile key")
-			return
-		}
-		inst, ok := s.Core.Config.GetInstance(instanceID)
-		if !ok {
-			writeError(w, 404, "Instance not found")
-			return
-		}
-		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
-		profiles, err := client.ListProfiles()
-		if err != nil {
-			writeError(w, 502, "Failed to fetch profiles: "+err.Error())
-			return
-		}
-		for _, p := range profiles {
-			if p.ID == profileID {
-				result.MinScore = p.MinFormatScore
-				for _, fi := range p.FormatItems {
-					result.Scores = append(result.Scores, ScoreEntry{
-						TrashID: "",
-						Name:    fi.Name,
-						Score:   fi.Score,
-					})
+	}
+
+	// Layer a sync rule's CF opt-ins / opt-outs / score overrides on top of the
+	// base profile so the scored set is exactly what the rule syncs. Trash CFs
+	// keep their trash_id (so the generator can classify them); "custom:" CFs
+	// carry no trash_id / release axis and are not part of the generator pickers.
+	if rule != nil {
+		ad := core.SnapshotAppData(s.Core.Trash.Snapshot(), appType)
+
+		// Quality structure override: when the rule customizes its qualities,
+		// rebuild the allowed-quality ranks + items from it (it replaces the
+		// base profile's qualities). Same HIGHEST-FIRST ordering as TRaSH, so
+		// invert the index to the "high rank = high priority" convention.
+		if len(rule.QualityStructure) > 0 {
+			result.QualityRanks = map[string]int{}
+			result.QualityItems = nil
+			n := len(rule.QualityStructure)
+			for idx, it := range rule.QualityStructure {
+				if !it.Allowed {
+					continue
 				}
-				// Quality ranks — only Allowed items. Arr's qualityprofile
-				// API returns items[] HIGHEST-LAST (items[0] = lowest
-				// priority, items[len-1] = top of UI = highest priority),
-				// which already matches our "high rank = high priority"
-				// convention — use idx directly. Group members share the
-				// group's outer index. Arr returns nested ArrQualityItem
-				// so we walk inside each outer item without bumping rank.
-				for idx, it := range p.Items {
-					if !it.Allowed {
-						continue
+				rank := n - 1 - idx
+				if len(it.Items) > 0 {
+					for _, sub := range it.Items {
+						result.QualityRanks[sub] = rank
 					}
-					if len(it.Items) > 0 {
-						for _, sub := range it.Items {
-							if sub.Quality != nil && sub.Quality.Name != "" {
-								result.QualityRanks[sub.Quality.Name] = idx
-							}
-						}
-					} else if it.Quality != nil && it.Quality.Name != "" {
-						result.QualityRanks[it.Quality.Name] = idx
+					result.QualityItems = append(result.QualityItems, QualityItem{Name: it.Name, Members: it.Items})
+				} else {
+					result.QualityRanks[it.Name] = rank
+					result.QualityItems = append(result.QualityItems, QualityItem{Name: it.Name})
+				}
+			}
+		}
+
+		// Build the opt-out set once. It both drops excluded CFs and ignores a
+		// contradictory opt-in that is also excluded (sync removes such a CF
+		// after adding it, so the scored set must too).
+		excl := make(map[string]bool, len(rule.ExcludedCFs))
+		for _, id := range rule.ExcludedCFs {
+			excl[id] = true
+		}
+		if len(excl) > 0 {
+			kept := result.Scores[:0]
+			for _, sc := range result.Scores {
+				if !excl[sc.TrashID] {
+					kept = append(kept, sc)
+				}
+			}
+			result.Scores = kept
+		}
+
+		// Opt-ins: add CFs the rule selects that the base profile does not
+		// already include. Trash CFs keep their trash_id (so the generator can
+		// classify them) and take their TRaSH score in the profile's context;
+		// "custom:" CFs are user custom formats the rule pushes too. They carry
+		// no trash_id / release axis (so they never reach a generator picker),
+		// but they do carry a real score, so include them for accurate totals.
+		// All scores are finalised by the score-override pass below.
+		present := make(map[string]bool, len(result.Scores))
+		for _, sc := range result.Scores {
+			present[sc.TrashID] = true
+		}
+		for _, id := range rule.SelectedCFs {
+			if excl[id] || present[id] {
+				continue
+			}
+			name, score := id, 0
+			if strings.HasPrefix(id, "custom:") {
+				if cf, ok := s.Core.CustomCFs.Get(id); ok {
+					name = cf.Name
+				}
+			} else if ad != nil {
+				if cf, ok := ad.CustomFormats[id]; ok {
+					name = cf.Name
+					if v, ok := cf.TrashScores[scoreCtx]; ok {
+						score = v
+					} else if v, ok := cf.TrashScores["default"]; ok {
+						score = v
 					}
 				}
-				break
+			}
+			result.Scores = append(result.Scores, ScoreEntry{TrashID: id, Name: name, Score: score})
+			present[id] = true
+		}
+
+		// Per-CF score overrides win over the base/opt-in score.
+		for i := range result.Scores {
+			if ov, ok := rule.ScoreOverrides[result.Scores[i].TrashID]; ok {
+				result.Scores[i].Score = ov
 			}
 		}
 	}
@@ -714,7 +787,7 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 // backwards compatibility with anything the frontend explicitly tags
 // as SYNC/ERROR/etc. An authenticated caller who can inject control
 // characters (newlines, escape sequences) could forge `[TIMESTAMP]
-// [CATEGORY] …` lines to pollute the forensic trail — we whitelist
+// [CATEGORY] …` lines to pollute the forensic trail - we whitelist
 // Category and sanitize Message before writing.
 func (s *Server) handleDebugLog(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -770,7 +843,7 @@ func sanitizeLogField(st string) string {
 
 // handleDebugDownload serves the debug log file for download. When the
 // `activity` query parameter is truthy, it bundles debug.log together
-// with activity.log in a ZIP — needed for full bug-report context, but
+// with activity.log in a ZIP - needed for full bug-report context, but
 // optional so the typical case (operation trace only) stays a small
 // plain-text download.
 //
@@ -817,7 +890,7 @@ func (s *Server) serveLogsZip(w http.ResponseWriter, debugPath string) {
 	addFile := func(srcPath, archiveName string) {
 		f, err := os.Open(srcPath)
 		if err != nil {
-			return // missing file — skip, not an error
+			return // missing file - skip, not an error
 		}
 		defer f.Close()
 		entry, err := zw.Create(archiveName)

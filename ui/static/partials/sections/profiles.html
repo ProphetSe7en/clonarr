@@ -218,6 +218,9 @@
                       <template x-if="!sh.orphanedAt">
                         <button class="v3-action-icon clone" @click.stop="cloneProfile(inst, sh)" x-tt="'Clone to new profile'">&#10697;</button>
                       </template>
+                      <template x-if="!sh.orphanedAt">
+                        <button class="v3-action-icon export" @click.stop="exportRule(autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId))" x-tt="'Export this sync rule to a file you can import into another Clonarr'">&#8682;</button>
+                      </template>
                       <button class="v3-action-icon danger" @click.stop="removeSyncHistory(inst.id, sh.arrProfileId)" x-tt="sh.orphanedAt ? 'Permanently remove this orphaned sync rule and history' : 'Remove sync rule'">&#10005;</button>
                     </div>
                   </div>
@@ -293,12 +296,16 @@
                 <template x-for="src in tpdAvailableSources(activeAppType, true)" :key="'sa'+src">
                   <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
                 </template>
-                <div class="tpd-view-toggle" role="group" aria-label="View mode" style="margin-left:auto">
-                  <button class="tpd-view-btn" :class="{ active: tpdView === 'grid' }" @click="tpdSetView('grid')">Grid</button>
-                  <button class="tpd-view-btn" :class="{ active: tpdView === 'list' }" @click="tpdSetView('list')">List</button>
-                  <button x-show="tpdView === 'list'" class="tpd-view-btn"
-                          @click="tpdAnyOpen() ? tpdCollapseAll() : tpdExpandAll(activeAppType)"
-                          x-text="tpdAnyOpen() ? 'Collapse all' : 'Expand all'"></button>
+                <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+                  <button class="tpd-toolbar-btn" @click="openImportRuleModal()"
+                          x-tt="'Import a sync rule exported from another Clonarr'">&#8681; Import rule</button>
+                  <div class="tpd-view-toggle" role="group" aria-label="View mode">
+                    <button class="tpd-view-btn" :class="{ active: tpdView === 'grid' }" @click="tpdSetView('grid')">Grid</button>
+                    <button class="tpd-view-btn" :class="{ active: tpdView === 'list' }" @click="tpdSetView('list')">List</button>
+                    <button x-show="tpdView === 'list'" class="tpd-view-btn"
+                            @click="tpdAnyOpen() ? tpdCollapseAll() : tpdExpandAll(activeAppType)"
+                            x-text="tpdAnyOpen() ? 'Collapse all' : 'Expand all'"></button>
+                  </div>
                 </div>
               </div>
 

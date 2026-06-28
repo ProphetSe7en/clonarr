@@ -10,11 +10,12 @@
       <div class="modal-body" style="padding:24px">
       <h2 id="modal-title-sync-profile" class="modal-title">Sync Profile</h2>
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
-        Deploy <strong x-text="syncForm.profileName" style="color:var(--text-primary)"></strong> to an instance
+        Deploy <strong x-text="syncForm.profileName" style="color:var(--text-primary)"></strong> to <strong x-text="syncForm.instanceName" style="color:var(--text-primary)"></strong>
       </div>
 
-      <!-- Instance selector -->
-      <div class="form-group" style="margin-bottom:16px">
+      <!-- Instance selector, hidden when there is only one instance of this
+           app type (nothing to choose, the target is already implied). -->
+      <div class="form-group" style="margin-bottom:16px" x-show="instancesOfType(syncForm.appType).length > 1">
         <label>Target Instance</label>
         <select class="input" :value="syncForm.instanceId" @change="switchSyncInstance($event.target.value)">
           <template x-for="inst in instancesOfType(syncForm.appType)" :key="inst.id">
@@ -23,17 +24,10 @@
         </select>
       </div>
 
-      <!-- Mode selector -->
-      <div style="display:flex;gap:16px;margin-bottom:16px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
-          <input type="radio" value="create" x-model="syncMode" @change="autoSyncRuleForSync = null; syncForm.arrProfileId = '0'" style="accent-color:var(--accent-blue)">
-          Create new profile
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
-          <input type="radio" value="update" x-model="syncMode" @change="updateAutoSyncRuleForSync()" style="accent-color:var(--accent-blue)">
-          Update existing profile
-        </label>
-      </div>
+      <!-- Mode (create vs update) is preset by the action button that opened
+           this modal: "Create New" forces create, "Apply & Sync" updates the
+           locked profile when editing a rule, else creates. No radio here, the
+           choice was already made. -->
 
       <!-- Create mode: profile name input -->
       <div class="form-group" x-show="syncMode === 'create'">
@@ -42,7 +36,7 @@
         <div style="font-size:13px;color:var(--text-muted);margin-top:4px">A new quality profile will be created with CFs, scores, quality items, and cutoff</div>
         <div x-show="syncForm.newProfileName && arrProfiles.some(p => p.name.toLowerCase() === syncForm.newProfileName.trim().toLowerCase())"
              style="margin-top:8px;padding:8px 12px;background:var(--fill-orange-soft);border:1px solid var(--accent-orange);border-radius:4px;font-size:12px;color:var(--accent-orange)">
-          &#9888; Profile "<span x-text="syncForm.newProfileName.trim()"></span>" already exists in <span x-text="syncForm.instanceName"></span>. Choose a different name to create a separate profile, or use <strong>Update existing profile</strong> to sync changes to it.
+          &#9888; Profile "<span x-text="syncForm.newProfileName.trim()"></span>" already exists in <span x-text="syncForm.instanceName"></span>. Choose a different name to create a separate profile, or close and use <strong>Apply &amp; Sync</strong> to update the existing one.
         </div>
       </div>
 

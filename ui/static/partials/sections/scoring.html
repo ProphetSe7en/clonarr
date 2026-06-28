@@ -28,9 +28,9 @@
                   <option :value="'imported:'+p.id" x-text="p.name"></option>
                 </template>
               </optgroup>
-              <optgroup label="Instance Profiles" x-show="(sandbox[activeAppType].instanceProfiles || []).length > 0">
-                <template x-for="p in sandbox[activeAppType].instanceProfiles || []" :key="'inst:'+p.id">
-                  <option :value="'inst:'+p.id" x-text="p.name"></option>
+              <optgroup label="Clonarr profiles" x-show="sandboxSyncRules(activeAppType).length > 0">
+                <template x-for="p in sandboxSyncRules(activeAppType)" :key="'rule:'+p.id">
+                  <option :value="'rule:'+p.id" x-text="p.name"></option>
                 </template>
               </optgroup>
             </select>
@@ -49,9 +49,9 @@
                   <option :value="'imported:'+p.id" x-text="p.name"></option>
                 </template>
               </optgroup>
-              <optgroup label="Instance Profiles" x-show="(sandbox[activeAppType].instanceProfiles || []).length > 0">
-                <template x-for="p in sandbox[activeAppType].instanceProfiles || []" :key="'cinst:'+p.id">
-                  <option :value="'inst:'+p.id" x-text="p.name"></option>
+              <optgroup label="Clonarr profiles" x-show="sandboxSyncRules(activeAppType).length > 0">
+                <template x-for="p in sandboxSyncRules(activeAppType)" :key="'crule:'+p.id">
+                  <option :value="'rule:'+p.id" x-text="p.name"></option>
                 </template>
               </optgroup>
             </select>
@@ -160,13 +160,7 @@
                 <a style="font-size:13px;color:var(--accent-blue);cursor:pointer" @click="sandbox[activeAppType].showBulk = !sandbox[activeAppType].showBulk"
                   x-text="sandbox[activeAppType].showBulk ? 'Hide bulk input' : 'Bulk paste (multiple releases)'"></a>
                 <button x-show="sandbox[activeAppType].showBulk && sandbox[activeAppType].bulkInput?.trim()" class="btn btn-sm" style="margin-left:8px"
-                  @click="sandboxParseBulk(activeAppType)" :disabled="sandbox[activeAppType].parsing">Parse All</button>
-                <span x-show="sandbox[activeAppType].parseProgress" x-cloak
-                  style="margin-left:8px;font-size:12px;color:var(--text-muted)" x-text="sandbox[activeAppType].parseProgress"></span>
-                <button x-show="sandbox[activeAppType].parsing" x-cloak class="btn btn-sm"
-                  style="margin-left:8px;border-color:var(--accent-orange);color:var(--accent-orange)"
-                  @click="sandbox[activeAppType].parseAbort?.abort()"
-                  x-tt="'Stop parsing. Titles already scored are kept.'">Cancel</button>
+                  @click="startBulkParse(activeAppType)" :disabled="sandbox[activeAppType].parsing">Parse All</button>
                 <label style="margin-left:12px;font-size:12px;color:var(--text-muted);cursor:pointer;user-select:none"
                        x-tt="activeAppType === 'sonarr' ? 'Replace the series title with Series when adding releases (the season/episode and technical tags are kept). Scoring is unaffected, and releases that become identical are merged.' : 'Replace the movie title and year with Movie.2026 when adding releases. Scoring is unaffected (only the Custom Formats matter), and releases that become identical are merged.'">
                   <input type="checkbox" style="accent-color:var(--accent-blue);vertical-align:middle;margin-right:4px"
@@ -280,10 +274,6 @@
                 <button class="btn btn-sm" style="margin-left:8px;border-color:var(--accent-green);color:var(--accent-green)"
                   @click="sandboxGenerateFromProfile(activeAppType)" :disabled="sandbox[activeAppType].parsing"
                   x-tt="'Generate candidate release titles from the selected profile\'s Custom Formats and score them, no pasting needed'">Generate from profile</button>
-                <button x-show="sandbox[activeAppType].parsing" x-cloak class="btn btn-sm"
-                  style="margin-left:8px;border-color:var(--accent-orange);color:var(--accent-orange)"
-                  @click="sandbox[activeAppType].parseAbort?.abort()"
-                  x-tt="'Stop generating and scoring. Titles already scored are kept.'">Cancel</button>
                 <span style="position:relative;display:inline-block;margin-left:8px" @click.outside="sandbox[activeAppType].genQualityOpen = false">
                   <button class="btn btn-sm" type="button"
                     @click="sandbox[activeAppType].genQualityOpen = !sandbox[activeAppType].genQualityOpen; if (sandbox[activeAppType].genQualityOpen) loadGenQualities(activeAppType)"
@@ -564,7 +554,7 @@
               <table style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0">
                 <colgroup>
                   <col style="width:24px"><col style="width:28px"><col style="width:24px">
-                  <col><col style="width:34%">
+                  <col :style="`width:${sandbox[activeAppType].colReleaseW || 360}px`"><col>
                   <col style="width:78px"><col style="width:58px"><col style="width:52px"><col style="width:24px">
                 </colgroup>
                 <thead>
@@ -576,11 +566,15 @@
                              @change="toggleSandboxSelectAll(activeAppType)">
                     </th>
                     <th style="width:22px;padding:5px 2px"></th>
-                    <th style="text-align:left;padding:5px 6px;font-weight:500;white-space:nowrap"
+                    <th style="text-align:left;padding:5px 6px;font-weight:500;white-space:nowrap;position:relative"
                         :aria-sort="sandbox[activeAppType].sortCol === 'title' ? (sandbox[activeAppType].sortDir === 'asc' ? 'ascending' : 'descending') : 'none'">
                       <button type="button" class="sort-header" style="width:100%;text-align:left;text-transform:inherit;letter-spacing:inherit" @click="toggleSandboxSort(activeAppType, 'title')">
                         Release <span x-show="sandbox[activeAppType].sortCol==='title'" x-text="sandbox[activeAppType].sortDir==='asc'?'▲':'▼'" style="font-size:10px"></span>
                       </button>
+                      <!-- Drag the boundary to give Release vs Matched CFs more/less room. -->
+                      <div class="sb-col-resizer" @mousedown.stop.prevent="sbStartColResize(activeAppType, $event)"
+                           @dblclick.stop.prevent="sbResetColResize(activeAppType)"
+                           x-tt="'Drag to resize, double-click to reset'"></div>
                     </th>
                     <th style="text-align:left;padding:5px 4px;font-weight:500;white-space:nowrap">Matched CFs</th>
                     <th style="text-align:center;padding:5px 4px;font-weight:500;width:80px;white-space:nowrap"

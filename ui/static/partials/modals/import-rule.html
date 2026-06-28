@@ -1,0 +1,56 @@
+{{define "modals/import-rule"}}
+  <!-- ============ IMPORT SYNC RULE MODAL ============ -->
+  <!-- Paste or upload a Clonarr sync-rule export. Validates it is a Clonarr
+       file, recreates any bundled custom Custom Formats (asking what to do on
+       name collisions), then opens the editor pre-filled to name + Apply & Sync. -->
+  <div class="modal-overlay" x-show="showImportRuleModal" @keydown.escape.window="closeImportRuleModal()" x-cloak>
+    <div class="modal" style="max-width:680px" role="dialog" aria-modal="true" aria-labelledby="modal-title-import-rule" x-trap.noscroll.inert="showImportRuleModal">
+      <h2 id="modal-title-import-rule" class="modal-title">Import sync rule</h2>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        Paste a Clonarr sync-rule export, or upload the <code>.json</code> file. It opens in the editor so you can name it and Apply &amp; Sync.
+      </div>
+
+      <div style="margin-bottom:12px">
+        <input type="file" accept="application/json,.json" @change="onImportFileChange($event)"
+               style="font-size:12px;color:var(--text-muted)">
+      </div>
+
+      <textarea class="input" x-model="importRuleText" rows="8" placeholder="…or paste the exported JSON here"
+                style="width:100%;font-family:monospace;font-size:12px;resize:vertical"></textarea>
+
+      <!-- Custom CF name collisions: one choice per colliding CF. -->
+      <template x-if="importRuleCollisions.length > 0">
+        <div style="margin-top:14px;border:1px solid var(--accent-orange);border-radius:6px;padding:10px 12px;background:var(--fill-orange-soft)">
+          <div style="font-size:12px;font-weight:600;color:var(--accent-orange);margin-bottom:8px">These custom formats already exist. Choose what to do with each:</div>
+          <template x-for="c in importRuleCollisions" :key="c.name">
+            <div style="margin-bottom:10px">
+              <div style="font-size:13px;color:var(--text-primary);font-weight:500" x-text="c.name"></div>
+              <div style="display:flex;gap:14px;margin-top:4px">
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                  <input type="radio" :name="'col-'+c.name" value="skip" @change="importRuleResolutions[c.name.toLowerCase()] = 'skip'"> Keep mine
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                  <input type="radio" :name="'col-'+c.name" value="rename" @change="importRuleResolutions[c.name.toLowerCase()] = 'rename'"> Import as a copy
+                </label>
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+                  <input type="radio" :name="'col-'+c.name" value="replace" @change="importRuleResolutions[c.name.toLowerCase()] = 'replace'"> Replace
+                </label>
+              </div>
+              <div x-show="importRuleResolutions[c.name.toLowerCase()] === 'replace' && (c.usedByRules || []).length > 0"
+                   style="font-size:11px;color:var(--accent-orange);margin-top:3px">
+                &#9888; Replacing changes this format for every rule using it: <span x-text="(c.usedByRules || []).join(', ')"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <div x-show="importRuleError" x-cloak style="margin-top:10px;font-size:12px;color:var(--accent-orange)" x-text="importRuleError"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-sm" @click="closeImportRuleModal()">Cancel</button>
+        <button class="btn btn-sm btn-primary" :disabled="importRuleBusy" @click="submitImportRule()" x-text="importRuleBusy ? 'Importing…' : 'Import'"></button>
+      </div>
+    </div>
+  </div>
+{{end}}

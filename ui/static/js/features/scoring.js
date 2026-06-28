@@ -20,6 +20,7 @@ export default {
       this.loadSandboxResults(appType);
       // Restore the "Simplify names" preference (per app type, per browser).
       try { sb.simplifyNames = localStorage.getItem('clonarr-sandbox-simplify-' + appType) === '1'; } catch (_) {}
+      try { const w = parseInt(localStorage.getItem('clonarr-sb-col-release-' + appType) || '', 10); if (w >= 140 && w <= 1000) sb.colReleaseW = w; } catch (_) {}
       // Default to first instance of this type
       if (!sb.instanceId) {
         const insts = this.instancesOfType(appType);
@@ -32,38 +33,13 @@ export default {
           if (r.ok) sb.indexers = await r.json();
         } catch (e) { /* ignore */ }
       }
-      // Load instance profiles for the "Score against" dropdown.
-      // Sort alphabetically so the dropdown is browsable - Arr returns
-      // them in id order which feels random to the user.
-      if (sb.instanceId && sb.instanceProfiles.length === 0) {
-        try {
-          const r = await fetch(`/api/instances/${sb.instanceId}/profiles`);
-          if (r.ok) {
-            const profs = await r.json();
-            sb.instanceProfiles = (profs || []).slice().sort((a, b) =>
-              (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
-          }
-        } catch (e) { /* ignore */ }
-      }
     },
 
     async sandboxInstanceChanged(appType) {
-      const sb = this.sandbox[appType];
-      sb.instanceProfiles = [];
-      if (sb.instanceId) {
-        try {
-          const r = await fetch(`/api/instances/${sb.instanceId}/profiles`);
-          if (r.ok) {
-            const profs = await r.json();
-            sb.instanceProfiles = (profs || []).slice().sort((a, b) =>
-              (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
-          }
-        } catch (e) { /* ignore */ }
-      }
-      // Re-score if using instance profile
-      if (sb.profileKey?.startsWith('inst:')) {
-        sb.profileKey = '';
-      }
+      // The test instance only decides which indexers/releases are queried.
+      // The score-against profiles (TRaSH, imported, and our own sync rules)
+      // are not Arr-instance profiles, so the list does not change here.
+      // Just re-score against the current selection.
       this.rescoreSandbox(appType);
     },
 
@@ -73,6 +49,56 @@ export default {
 
     sandboxImportedProfiles(appType) {
       return (this.importedProfiles[appType] || []).map(p => ({ id: p.id, name: p.name }));
+    },
+
+    // Sync rules ("Clonarr profiles") for the Score against / Compare with
+    // pickers. Scoring a rule reuses the exact CF set + overrides the rule
+    // syncs, so every CF keeps its trash_id and the release-title generator can
+    // classify it. A raw Arr instance profile, by contrast, has CFs with no
+    // trash_id and therefore yields no dimensions (and almost no titles).
+    sandboxSyncRules(appType) {
+      const rules = (this.autoSyncRules || []).filter(r => {
+        const inst = (this.instances || []).find(i => i.id === r.instanceId);
+        return inst && inst.type === appType && (r.trashProfileId || r.importedProfileId);
+      });
+      const multiInst = new Set(rules.map(r => r.instanceId)).size > 1;
+      return rules.map(r => {
+        const inst = (this.instances || []).find(i => i.id === r.instanceId);
+        const arrName = (typeof this.resolveArrProfileName === 'function')
+          ? this.resolveArrProfileName(r.instanceId, r.arrProfileId) : '';
+        const base = arrName || r.trashProfileName || ('Profile #' + r.arrProfileId);
+        const name = (multiInst && inst) ? `${inst.name}: ${base}` : base;
+        return { id: r.id, name };
+      }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    },
+
+    // --- Resizable Release / Matched CFs columns ---
+    // The Release column width is user-adjustable by dragging the boundary in
+    // its header; Matched CFs absorbs the remaining width. Persisted per app
+    // type so the layout sticks between visits.
+    sbStartColResize(appType, ev) {
+      const sb = this.sandbox[appType];
+      const startX = ev.clientX;
+      const startW = sb.colReleaseW || 360;
+      const onMove = (e) => {
+        let w = startW + (e.clientX - startX);
+        sb.colReleaseW = Math.max(140, Math.min(1000, w));
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        try { localStorage.setItem('clonarr-sb-col-release-' + appType, String(sb.colReleaseW)); } catch (_) {}
+      };
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    sbResetColResize(appType) {
+      this.sandbox[appType].colReleaseW = 360;
+      try { localStorage.removeItem('clonarr-sb-col-release-' + appType); } catch (_) {}
     },
 
     // Stamp stable _sid on sandbox results for :key tracking during drag reorder.
@@ -807,7 +833,11 @@ export default {
         // so its codec auto-detection works. Default-select the axis CFs only.
         const scores = data.scores || [];
         const asel = {};
-        for (const s of scores) if (s.dim) asel[s.trashId] = true;
+        // Default-select every release axis except Repack / Proper ('modifier'):
+        // repack/proper variants multiply the title count without exercising any
+        // new scoring path most of the time, so they start off and the user can
+        // opt back in. (genAxisSelected treats only an explicit false as off.)
+        for (const s of scores) if (s.dim) asel[s.trashId] = (s.dim !== 'modifier');
         sb.genQualityItems = items;
         sb.genQualitySel = qsel;
         sb.genQualityExpand = {};
@@ -1034,24 +1064,50 @@ export default {
         return;
       }
       // Generating titles is cheap, but scoring each one through the instance is
-      // the heavy step (a big profile can produce thousands). Confirm the count
-      // before parsing so a large run is never a surprise.
+      // the heavy step (a big profile can produce thousands). The Generate modal
+      // confirms the count first, then turns into a progress view with a single
+      // Cancel, so progress is front-and-centre instead of a tiny inline
+      // counter that is easy to miss.
       const n = titles.length;
-      const confirmed = await new Promise(resolve => {
-        this.confirmModal = {
-          show: true,
-          title: 'Generate titles',
-          message: `${n.toLocaleString()} ${n === 1 ? 'title' : 'titles'} will be generated and scored against the selected instance. Larger profiles take longer to score. Proceed?`,
-          confirmLabel: 'Proceed',
-          cancelLabel: 'Cancel',
-          onConfirm: () => resolve(true),
-          onCancel: () => resolve(false),
-        };
-      });
-      if (!confirmed) return;
       sb.bulkInput = titles.join('\n');
-      sb.showBulk = true;
-      await this.sandboxParseBulk(appType);
+      this.genModal = { show: true, phase: 'confirm', appType, total: n };
+    },
+
+    // Proceed from the Generate-titles confirm modal: switch the same modal to
+    // its progress phase and run the parse. The modal closes when parsing ends
+    // (finished or cancelled).
+    async genModalProceed() {
+      const appType = this.genModal.appType;
+      this.genModal.phase = 'progress';
+      this.sandbox[appType].showBulk = true;
+      try { await this.sandboxParseBulk(appType); }
+      finally { this.genModal.show = false; }
+    },
+    // Cancel the Generate-titles modal. In the confirm phase it just closes and
+    // drops the generated titles; in the progress phase it aborts the run
+    // (titles already scored are kept) and the modal closes as it unwinds.
+    genModalCancel() {
+      const appType = this.genModal.appType;
+      if (this.genModal.phase === 'progress') {
+        this.sandbox[appType].parseAbort?.abort();
+      } else {
+        this.sandbox[appType].bulkInput = '';
+        this.genModal.show = false;
+      }
+    },
+    // Manual bulk paste: show the same progress modal as the generator for a
+    // non-trivial batch, so there is one consistent place to watch and cancel.
+    // Small pastes parse inline (fast enough to not need a modal).
+    async startBulkParse(appType) {
+      const count = (this.sandbox[appType].bulkInput || '').split('\n').filter(l => l.trim()).length;
+      if (count === 0) return;
+      if (count > 30) {
+        this.genModal = { show: true, phase: 'progress', appType, total: count };
+        try { await this.sandboxParseBulk(appType); }
+        finally { this.genModal.show = false; }
+      } else {
+        await this.sandboxParseBulk(appType);
+      }
     },
 
     async sandboxParseBulk(appType) {
@@ -1095,6 +1151,8 @@ export default {
 
       sb.parsing = true;
       sb.parseProgress = '';
+      sb.parseTotal = lines.length;
+      sb.parseDone = 0;
       // AbortController lets the user cancel an in-progress run (the Cancel
       // button calls sb.parseAbort.abort()). The signal is passed to each
       // chunk fetch, and we also check it between chunks so a cancel takes
@@ -1143,6 +1201,7 @@ export default {
             }
             const part = await r.json();
             rawResults.push(...part);
+            sb.parseDone = rawResults.length;
           }
           if (rawResults.length === 0 && (failed || cancelled)) {
             if (cancelled) this.showToast('Generation cancelled.', 'info', 4000);
@@ -1180,7 +1239,7 @@ export default {
         if (e.name === 'AbortError') { this.showToast('Generation cancelled.', 'info', 4000); }
         else { this.showToast('Batch parse error: ' + e.message, 'error', 8000); }
       }
-      finally { sb.parsing = false; sb.parseProgress = ''; sb.parseAbort = null; }
+      finally { sb.parsing = false; sb.parseProgress = ''; sb.parseDone = 0; sb.parseTotal = 0; sb.parseAbort = null; }
     },
 
     sandboxIndexerLabel(appType) {
@@ -2064,9 +2123,7 @@ export default {
     async fetchProfileScores(profileKey, appType) {
       const cacheKey = appType + ':' + profileKey;
       if (this._profileScoreCache[cacheKey]) return this._profileScoreCache[cacheKey];
-      const sb = this.sandbox[appType];
       const params = new URLSearchParams({ profileKey, appType });
-      if (profileKey.startsWith('inst:')) params.set('instanceId', sb.instanceId);
       try {
         const r = await fetch('/api/scoring/profile-scores?' + params);
         if (!r.ok) return { scores: [], minScore: 0 };
@@ -2519,9 +2576,9 @@ export default {
         const p = (this.importedProfiles[appType] || []).find(p => p.id === id);
         return p?.name || id;
       }
-      if (key.startsWith('inst:')) {
-        const id = parseInt(key.replace('inst:', ''));
-        const p = (this.sandbox[appType].instanceProfiles || []).find(p => p.id === id);
+      if (key.startsWith('rule:')) {
+        const id = key.replace('rule:', '');
+        const p = this.sandboxSyncRules(appType).find(p => p.id === id);
         return p?.name || key;
       }
       return key;

@@ -590,6 +590,30 @@ button.v3-status:hover { text-decoration: underline; }
 .tpd-view-btn:last-child { border-right: 0; }
 .tpd-view-btn.active { background: var(--bg-elevated-hover); color: var(--text-primary); }
 
+/* Standalone toolbar action (e.g. Import rule) that sits beside the
+   Grid/List toggle. Matches the toggle's border, radius, height and type
+   so it reads as part of the same control cluster rather than a stray pill. */
+.tpd-toolbar-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px;
+  border: 1px solid var(--border-subtle); border-radius: 5px;
+  background: var(--bg-elevated); color: var(--text-secondary);
+  font-size: 12px; cursor: pointer;
+}
+.tpd-toolbar-btn:hover { background: var(--bg-elevated-hover); color: var(--text-primary); }
+
+/* Drag handle on the Release/Matched-CFs column boundary in the Scoring
+   results table. A wide hit area with an always-visible divider line that
+   brightens on hover so it reads as a draggable separator. */
+.sb-col-resizer {
+  position: absolute; top: 0; right: -5px; width: 11px; height: 100%;
+  cursor: col-resize; z-index: 3; user-select: none;
+}
+.sb-col-resizer::after {
+  content: ''; position: absolute; top: 1px; bottom: 1px; left: 5px; width: 2px;
+  border-radius: 1px; background: var(--text-muted-secondary);
+}
+.sb-col-resizer:hover::after { background: var(--accent-blue); width: 3px; left: 4px; }
+
 .tpd-cat { margin-bottom: 24px; }
 /* Category headers (Standard / SQP / Anime / French / German) use the
    same app-color treatment as the v3-inst-header pattern from Sync

@@ -42,6 +42,7 @@
 <link rel="modulepreload" href="js/features/profile-builder.js?v={{.Version}}">
 <link rel="modulepreload" href="js/features/cf-group-builder.js?v={{.Version}}">
 <link rel="modulepreload" href="js/features/calculator.js?v={{.Version}}">
+<link rel="modulepreload" href="js/features/rule-portability.js?v={{.Version}}">
 </head>
 <body>
 
@@ -70,6 +71,9 @@
   {{template "modals/sync-profile" .}}
   {{template "modals/export-profile" .}}
   {{template "modals/import-profile" .}}
+  {{template "modals/export-rule" .}}
+  {{template "modals/import-rule" .}}
+  {{template "modals/generate-titles" .}}
   {{template "modals/backup-instance" .}}
   {{template "modals/restore-instance" .}}
   {{template "modals/confirm-dialog" .}}
