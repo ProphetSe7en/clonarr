@@ -33,7 +33,7 @@
   .subtab:hover { color: var(--text-primary); }
   .subtab.active { color: var(--text-primary); border-bottom-color: var(--accent-blue); }
   .subtab:focus-visible { outline-offset: -2px; }
-  /* .profile-tabs / .profile-tab — removed in v3 Sprint 3 slice 1 along
+  /* .profile-tabs / .profile-tab - removed in v3 Sprint 3 slice 1 along
      with the in-page top-nav bar (app-pages.html). Sidebar is now the
      single nav source. */
 
@@ -47,7 +47,7 @@
   .section-desc { font-size: 12px; color: var(--text-muted); padding: 4px 20px 8px; line-height: 1.4; }
 
 /* ============================================================
-   v3 Sprint 3 — Sync Rules tab (per-instance compact layout)
+   v3 Sprint 3 - Sync Rules tab (per-instance compact layout)
    ============================================================ */
 
 /* Per-instance card */
@@ -61,7 +61,7 @@
 .v3-inst-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 7px; margin-bottom: 12px; overflow-x: auto; }
 .v3-inst-header {
   display: flex; align-items: center; gap: 10px; padding: 8px 14px;
-  /* Match the app banner's gradient fade — the instance card is the
+  /* Match the app banner's gradient fade - the instance card is the
      content-level analog of the banner, so the same color-language reads
      as "this section belongs to the active app". */
   background: linear-gradient(90deg, var(--app-glow) 0%, transparent 60%), var(--bg-elevated);
@@ -75,7 +75,7 @@
 .v3-inst-actions { margin-left: auto; display: flex; gap: 6px; }
 .v3-inst-action { padding: 3px 9px; background: transparent; border: 1px solid var(--border-subtle); border-radius: 3px; color: var(--text-secondary); font-size: 11.5px; cursor: pointer; font-family: inherit; }
 .v3-inst-action:hover { color: var(--app-color); border-color: var(--app-color); }
-/* Paused-state button — same slot as Pause, but its visible label IS
+/* Paused-state button - same slot as Pause, but its visible label IS
    the current state ("Auto-sync paused") and clicking it resumes. Uses
    --app-color treatment so the button reads as "active state of this
    app" rather than a generic warning, and we don't need a separate
@@ -91,7 +91,7 @@
   background: var(--app-glow);
 }
 
-/* Column grid — shared by header + rows.
+/* Column grid - shared by header + rows.
    TRaSH | → | ID | Notes | Arr | Last sync | Status | Auto-sync | Customizations | Actions
    Notes is a fixed 18px slot for the info-icon so the Arr profile name
    stays at the same x-position whether or not the rule has notes. */
@@ -130,7 +130,7 @@
 .v3-rule-row:hover { background: var(--bg-elevated); }
 .v3-rule-row.orphaned { background: var(--accent-orange-bg); }
 
-/* TRaSH profile name — neutral text, no link-blue */
+/* TRaSH profile name - neutral text, no link-blue */
 .v3-prof-trash {
   display: flex; align-items: center; gap: 6px;
   color: var(--text-body); font-weight: 500;
@@ -143,7 +143,7 @@
 
 .v3-arrow { color: var(--text-muted); text-align: center; font-size: 13px; }
 
-/* Arr profile — single line: name + ID inline */
+/* Arr profile - single line: name + ID inline */
 .v3-prof-arr { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v3-prof-arr-rename { background: none; border: 0; padding: 0; color: var(--text-primary); font-weight: 500; cursor: pointer; font: inherit; border-bottom: 1px dashed transparent; }
 .v3-prof-arr-rename:hover { border-bottom-color: var(--border-subtle); }
@@ -166,7 +166,7 @@
 .v3-last-sync { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
 .v3-last-sync.never { color: var(--text-muted); font-style: italic; }
 
-/* Status pill — no leading dot (the text colour is signal enough; the
+/* Status pill - no leading dot (the text colour is signal enough; the
    dot was redundant noise). */
 .v3-status {
   display: inline-flex; align-items: center; gap: 5px;
@@ -178,7 +178,7 @@
    between informational and action-needed:
      pending     → orange. User saved local edits, click Sync/Apply to push.
      updates     → blue. TRaSH-Guides has upstream updates for this rule;
-                   informational — you may or may not want to adopt them.
+                   informational - you may or may not want to adopt them.
      out-of-sync → orange. Arr-side drift; needs Apply or Update.
    Matches the CF Sync Rules pill family so users learn one color
    vocabulary across both surfaces. Red stays reserved for failure. */
@@ -192,7 +192,7 @@
 button.v3-status { background: transparent; border: 0; cursor: pointer; font-family: inherit; }
 button.v3-status:hover { text-decoration: underline; }
 /* Span variant gains pointer-affordance only when status is actionable
-   (updates / out-of-sync / pending — opens Quick action modal). */
+   (updates / out-of-sync / pending - opens Quick action modal). */
 .v3-status.clickable { cursor: pointer; }
 .v3-status.clickable:hover,
 .v3-status.clickable:focus-visible { text-decoration: underline; outline: none; }
@@ -202,7 +202,7 @@ button.v3-status:hover { text-decoration: underline; }
 .v3-auto-label { font-size: 11px; color: var(--text-muted); }
 .v3-auto-label.on { color: var(--accent-green); }
 
-/* Customizations pill — single count, tooltip carries breakdown.
+/* Customizations pill - single count, tooltip carries breakdown.
    Neutral background (matches other chips in the row) so the pill
    doesn't carry Radarr-yellow tint that would clash with Sonarr-blue
    foreground when active app is Sonarr. Token-driven for theme parity. */
@@ -218,7 +218,7 @@ button.v3-status:hover { text-decoration: underline; }
 }
 .v3-cust-empty { color: var(--text-muted); font-size: 11px; }
 
-/* Action icon cluster — neutral color, no per-action tint */
+/* Action icon cluster - neutral color, no per-action tint */
 .v3-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .v3-action-icon {
   width: 26px; height: 26px;
@@ -246,10 +246,10 @@ button.v3-status:hover { text-decoration: underline; }
 .v3-action-icon.danger:hover  { color: var(--accent-red); border-color: var(--accent-red); background: var(--accent-red-bg); }
 
 /* ============================================================
-   v3 Sprint 3 slice 3 — History tab (per-instance + neutral palette)
+   v3 Sprint 3 slice 3 - History tab (per-instance + neutral palette)
    ============================================================ */
 
-/* Column grid — TRaSH | → | ID | Arr | Last changed | Events | Last changes */
+/* Column grid - TRaSH | → | ID | Arr | Last changed | Events | Last changes */
 .v3-hist-grid {
   display: grid;
   grid-template-columns: minmax(160px, 1.4fr) 18px 60px minmax(160px, 1.4fr) 100px 60px minmax(140px, 1fr);
@@ -267,7 +267,7 @@ button.v3-status:hover { text-decoration: underline; }
 .v3-hist-row:hover,
 .v3-hist-row.expanded { background: var(--bg-elevated); }
 
-/* Expand chevron — rotates when row is open */
+/* Expand chevron - rotates when row is open */
 .v3-hist-chev {
   color: var(--text-muted); font-size: 10px;
   display: inline-block; transition: transform 0.15s;
@@ -275,7 +275,7 @@ button.v3-status:hover { text-decoration: underline; }
 }
 .v3-hist-chev.open { transform: rotate(90deg); color: var(--app-color); }
 
-/* Events count pill — single neutral chip */
+/* Events count pill - single neutral chip */
 .v3-hist-events {
   display: inline-block;
   padding: 1px 8px;
@@ -293,7 +293,7 @@ button.v3-status:hover { text-decoration: underline; }
   font-style: italic;
 }
 
-/* Last changes — single neutral pill (no rainbow) with breakdown in tooltip */
+/* Last changes - single neutral pill (no rainbow) with breakdown in tooltip */
 .v3-hist-changes {
   display: inline-block;
   padding: 1px 8px;
@@ -308,7 +308,7 @@ button.v3-status:hover { text-decoration: underline; }
   color: var(--text-muted); font-size: 11px; font-style: italic;
 }
 
-/* Expanded events panel — sits under the profile row */
+/* Expanded events panel - sits under the profile row */
 .v3-hist-events-panel {
   background: var(--bg-page);
   border-bottom: 1px solid var(--border-muted);
@@ -344,7 +344,7 @@ button.v3-status:hover { text-decoration: underline; }
   width: 10px; flex-shrink: 0;
 }
 .v3-hist-event-chev.open { transform: rotate(90deg); color: var(--app-color); }
-/* Status icon — ✓ green check, the only colored element on the row.
+/* Status icon - ✓ green check, the only colored element on the row.
    History only logs successful syncs (failures don't change state, so
    nothing to roll back to); every event is a success by construction. */
 .v3-hist-event-status {
@@ -407,7 +407,7 @@ button.v3-status:hover { text-decoration: underline; }
   display: flex; align-items: baseline; gap: 6px;
   overflow: hidden;
 }
-/* Count badge — neutral pill, fixed-shrink so the preview takes the
+/* Count badge - neutral pill, fixed-shrink so the preview takes the
    leftover space. Bolder weight than preview text so the eye lands on
    the total first. */
 .v3-hist-event-count {
@@ -421,7 +421,7 @@ button.v3-status:hover { text-decoration: underline; }
   min-width: 0;
 }
 
-/* Rollback button — neutral until hover (Sync Rules action-icon pattern) */
+/* Rollback button - neutral until hover (Sync Rules action-icon pattern) */
 .v3-hist-rollback {
   padding: 3px 10px;
   background: transparent;
@@ -434,7 +434,7 @@ button.v3-status:hover { text-decoration: underline; }
 .v3-hist-rollback:hover { color: var(--accent-orange); border-color: var(--accent-orange); }
 .v3-hist-rollback:disabled { opacity: 0.4; cursor: not-allowed; color: var(--text-muted); border-color: var(--border-muted); }
 
-/* Expanded event detail — neutral monochrome text (no rainbow) */
+/* Expanded event detail - neutral monochrome text (no rainbow) */
 .v3-hist-event-detail {
   margin: 4px 0 8px 24px;
   padding: 10px 14px;
@@ -530,7 +530,7 @@ button.v3-status:hover { text-decoration: underline; }
 }
 
 /* ============================================================
-   v3 TRaSH Profile Discovery — compact cards with pill axes
+   v3 TRaSH Profile Discovery - compact cards with pill axes
    ============================================================
    Drives /profiles → TRaSH Profiles tab in the v3 Modern UI.
    Card content is auto-derived (see internal/core/trash_profile_describer.go);
@@ -545,10 +545,18 @@ button.v3-status:hover { text-decoration: underline; }
   background: var(--bg-elevated); color: var(--text-body); font-size: 12.5px;
 }
 .tpd-chip {
-  padding: 4px 11px; border: 1px solid var(--border-subtle); border-radius: 12px;
+  padding: 3px 9px; border: 1px solid var(--border-subtle); border-radius: 12px;
   font-size: 11.5px; color: var(--text-secondary); background: transparent; cursor: pointer;
 }
 .tpd-chip.active { background: var(--app-color); color: var(--text-on-accent); border-color: var(--app-color); font-weight: 500; }
+
+/* Filter rows: two tight rows (category, then faceted features) that replace
+   the old single chip row + advanced panel. Smaller gap than the toolbar so
+   the pills sit close together. */
+.tpd-filterrow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 0 0 7px; }
+.tpd-filterrow:last-of-type { margin-bottom: 14px; }
+/* Group divider between facet families (resolution | audio | HDR-DV | source). */
+.tpd-fsep { color: var(--text-muted); opacity: 0.45; padding: 0 4px; user-select: none; font-size: 13px; }
 
 /* Transparent wrapper so the compact chip group flows inline in the toolbar
    flex row, yet can be hidden as one unit when Advanced mode is on. display
@@ -585,7 +593,7 @@ button.v3-status:hover { text-decoration: underline; }
 .tpd-cat { margin-bottom: 24px; }
 /* Category headers (Standard / SQP / Anime / French / German) use the
    same app-color treatment as the v3-inst-header pattern from Sync
-   Rules — gradient fade + border-image fade + name colored in
+   Rules - gradient fade + border-image fade + name colored in
    --app-color. Reads visually as "this section belongs to the active
    app context" exactly like the instance cards on Sync Rules/History. */
 .tpd-cat-head {
@@ -601,15 +609,15 @@ button.v3-status:hover { text-decoration: underline; }
 .tpd-cat-name { font-size: 13px; font-weight: 600; color: var(--app-color); text-transform: uppercase; letter-spacing: 0.6px; }
 .tpd-cat-count { margin-left: auto; color: var(--text-muted); font-size: 11.5px; text-transform: none; letter-spacing: 0; font-weight: 400; }
 
-/* === Pills (axis-row) — almost monochrome, subtle hints for HDR/Audio === */
+/* === Pills (axis-row) - almost monochrome, subtle hints for HDR/Audio === */
 .tpd-pills { display: flex; flex-wrap: wrap; gap: 4px; }
 .tpd-pill {
   font-size: 10.5px; padding: 2px 8px; border-radius: 10px; font-weight: 500;
   background: rgba(139, 147, 158, 0.10); border: 1px solid rgba(139, 147, 158, 0.20);
   color: var(--text-secondary); white-space: nowrap;
 }
-.tpd-pill.vid { color: #a08fcc; }     /* HDR / DV — muted violet */
-.tpd-pill.aud { color: #69a87a; }     /* Lossless audio — muted green */
+.tpd-pill.vid { color: #a08fcc; }     /* HDR / DV - muted violet */
+.tpd-pill.aud { color: #69a87a; }     /* Lossless audio - muted green */
 .tpd-pill.muted { color: var(--text-muted); opacity: 0.7; }
 
 .tpd-used-mark {
@@ -631,7 +639,7 @@ button.v3-status:hover { text-decoration: underline; }
 .tpd-card-title-row .tpd-used-mark { flex-shrink: 0; margin-top: 2px; }
 .tpd-card-tagline { color: var(--text-secondary); font-size: 12.5px; font-style: italic; margin: 0; }
 .tpd-card-list-tagline { color: var(--text-muted); font-size: 12px; font-style: italic; }
-.tpd-card-list-tagline::before { content: " — "; }
+.tpd-card-list-tagline::before { content: " - "; }
 
 /* Verbatim TRaSH-Guides disclaimer from profile.trash_description.
    Used for SQP and Base profiles where TRaSH ships explicit "read this
@@ -655,7 +663,7 @@ button.v3-status:hover { text-decoration: underline; }
 
 /* Editorial bullet lists ("What you get" / "Best for") composed from
    axes + formatItems + variant-prefix recognition. Sparse profiles get
-   shorter lists — never empty filler. */
+   shorter lists - never empty filler. */
 .tpd-section {
   display: flex; flex-direction: column; gap: 4px;
   /* extra top spacing so the section header doesn't visually collide
@@ -691,7 +699,7 @@ button.v3-status:hover { text-decoration: underline; }
   transition: border-color 120ms ease;
 }
 /* Body fills remaining card height as a flex column so the footer's
-   margin-top:auto pushes it to the card bottom — without flex:1 here,
+   margin-top:auto pushes it to the card bottom - without flex:1 here,
    varying highlights-bullet counts left footers floating mid-card and
    misaligned across the row. */
 .tpd-view-grid .tpd-card-body {
@@ -711,14 +719,14 @@ button.v3-status:hover { text-decoration: underline; }
   /* 4 cells: chevron | title (natural width) | tagline (truncates with
      ellipsis when row narrows) | used-mark (pinned right). The earlier
      3-column template pushed used-mark to row 2 because the title-row
-     has 4 children, not 3 — long-named profiles like "[German] UHD
+     has 4 children, not 3 - long-named profiles like "[German] UHD
      Bluray + WEB (Alternative)" rendered with double-height collapsed
      rows. minmax(0,1fr) on the tagline cell is what enables ellipsis. */
   display: grid;
   grid-template-columns: 14px auto minmax(0, 1fr) auto;
   gap: 8px; align-items: center;
 }
-/* Minimal cards (SQP / Base) hide the tagline entirely — drop the
+/* Minimal cards (SQP / Base) hide the tagline entirely - drop the
    tagline column from the grid so the used-mark doesn't claim the 1fr
    slot and stretch across the row. Title gets the 1fr instead so it
    can still truncate on narrow viewports. */
@@ -768,7 +776,7 @@ button.v3-status:hover { text-decoration: underline; }
   text-transform: uppercase; letter-spacing: 0.5px;
   background: var(--bg-page);
 }
-/* Sort button — looks identical to the previous static label, just
+/* Sort button - looks identical to the previous static label, just
    clickable. Inherits the header row's uppercase / muted styling so
    the table looks the same when no sort is active. */
 .cf-sr-sort-btn {
@@ -797,7 +805,7 @@ button.v3-status:hover { text-decoration: underline; }
 .cf-sr-cat { color: var(--text-muted); font-size: 12px; }
 .cf-sr-uses { color: var(--text-muted); font-size: 12px; cursor: help; }
 
-/* Status indicators — plain colored text, no pill background.
+/* Status indicators - plain colored text, no pill background.
    Reads quieter on the eye when the table is full and matches the
    Profile Sync Rules' inline .v3-status pattern. Colors carry the
    meaning; weight (600) gives enough visual weight to stand out. */
@@ -807,13 +815,13 @@ button.v3-status:hover { text-decoration: underline; }
 }
 .cf-sr-pill-ok { color: var(--accent-green); }
 .cf-sr-pill-drift {
-  /* Orange — matches Profile Sync Rules' .v3-status.out-of-sync.
+  /* Orange - matches Profile Sync Rules' .v3-status.out-of-sync.
      Red stays reserved for true errors (failed sync, diff fetch). */
   color: var(--accent-orange);
   cursor: help;
 }
 .cf-sr-pill-upd {
-  /* Blue — informational; TRaSH-Guides has new content not yet
+  /* Blue - informational; TRaSH-Guides has new content not yet
      synced. Distinct hue from the orange drift family so the user
      reads "informational" vs "action needed" at a glance. */
   color: var(--accent-blue);
@@ -952,7 +960,7 @@ button.v3-status:hover { text-decoration: underline; }
 }
 .cf-sr-side-item.active .cf-sr-side-count { color: inherit; opacity: 0.8; }
 
-/* View-filter pin variant (Drifted). Orange family — matches the
+/* View-filter pin variant (Drifted). Orange family - matches the
    row pill + per-card chip + Profile Sync Rules' "Arr drift" status
    so the user reads one consistent color across all drift surfaces.
    Active state pulls the app-color treatment same as a category pin
@@ -965,7 +973,7 @@ button.v3-status:hover { text-decoration: underline; }
   font-weight: 700;
   opacity: 0.9;
 }
-/* Updates view-pin — blue family to match the row pill so the user
+/* Updates view-pin - blue family to match the row pill so the user
    reads both as the same "informational / upstream-ready" channel. */
 .cf-sr-side-view-upd {
   color: var(--accent-blue);
@@ -992,7 +1000,7 @@ button.v3-status:hover { text-decoration: underline; }
   opacity: 0.85;
 }
 
-/* Main pane wrapper — owns the header bar above the table so the
+/* Main pane wrapper - owns the header bar above the table so the
    counts + actions sit visually attached to the table they describe. */
 .cf-sr-main {
   background: var(--bg-elevated);
@@ -1033,10 +1041,10 @@ button.v3-status:hover { text-decoration: underline; }
 .cf-sr-counts-warn { color: var(--accent-red); }
 .cf-sr-header-actions { display: flex; gap: 8px; }
 
-/* Filter row — instance picker + search. Lighter weight than the
+/* Filter row - instance picker + search. Lighter weight than the
    action row above so the action buttons read as primary.
    Sticks immediately below the header bar (49 + ~46 = ~95px) so
-   the filter UI travels with the toolbar — switching view / search
+   the filter UI travels with the toolbar - switching view / search
    is reachable no matter how far down the rules list you scroll. */
 .cf-sr-filter-bar {
   display: flex; align-items: center; gap: 14px;
@@ -1100,7 +1108,7 @@ button.v3-status:hover { text-decoration: underline; }
   background: var(--bg-row-hover, var(--bg-page));
   color: var(--text-body);
 }
-/* In-flight Apply-all label — shows the CF+instance currently being
+/* In-flight Apply-all label - shows the CF+instance currently being
    pushed. Compact one-liner so it doesn't push the table down. */
 .cf-sr-progress {
   padding: 6px 18px;
@@ -1110,7 +1118,7 @@ button.v3-status:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--border-subtle);
 }
 
-/* Used-by cell — passive visual indicator now that the entire row
+/* Used-by cell - passive visual indicator now that the entire row
    is the expand affordance. Chevron flips to indicate open state. */
 .cf-sr-uses {
   display: inline-flex; align-items: center; gap: 4px;
@@ -1167,7 +1175,7 @@ button.v3-status:hover { text-decoration: underline; }
   font-weight: 500;
 }
 
-/* Expand-row sectioning — distinct visual blocks for "In profiles"
+/* Expand-row sectioning - distinct visual blocks for "In profiles"
    and "Drift detail" so the user scans for what they care about.
    Section title is small + uppercase to read as a label. */
 .cf-sr-expand-section { margin-bottom: 10px; }
@@ -1181,7 +1189,7 @@ button.v3-status:hover { text-decoration: underline; }
   margin-bottom: 6px;
 }
 
-/* Per-instance diff block — one card per drifted instance so the
+/* Per-instance diff block - one card per drifted instance so the
    per-instance context is unmistakable in a multi-instance setup. */
 .cf-sr-diff-block {
   border: 1px solid var(--border-subtle);
@@ -1235,7 +1243,7 @@ button.v3-status:hover { text-decoration: underline; }
   margin: 0 2px;
 }
 
-/* Hierarchical sidebar — parent + children with chevron toggle.
+/* Hierarchical sidebar - parent + children with chevron toggle.
    Mirrors Browse tab's tree visually so users carry one mental
    model across both surfaces. */
 .cf-sr-side-group { display: flex; flex-direction: column; }
@@ -1263,11 +1271,11 @@ button.v3-status:hover { text-decoration: underline; }
   font-size: 12px;
 }
 
-/* Per-instance card extras — drift chip in header + sub-category tag */
+/* Per-instance card extras - drift chip in header + sub-category tag */
 .cf-sr-inst-card { margin-bottom: 14px; }
 .cf-sr-inst-card:last-child { margin-bottom: 0; }
 /* Plain-text drift indicator in the per-instance card header.
-   No badge background, no accent color — just muted text so it
+   No badge background, no accent color - just muted text so it
    reads as quiet metadata next to the CF count instead of a
    second pill. The orange family already lives in the row pills
    + sidebar Drifted filter; we don't need another instance of it
@@ -1285,7 +1293,7 @@ button.v3-status:hover { text-decoration: underline; }
   font-size: 11px;
 }
 
-/* Expand-row profile table — rich per-rule breakdown of which
+/* Expand-row profile table - rich per-rule breakdown of which
    profiles use this CF on this instance, with auto-sync state and
    last-sync timestamp. */
 .cf-sr-prof-table {

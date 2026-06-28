@@ -17,7 +17,7 @@
      that may not match the rest of the dep graph. Issue #50. -->
 <script type="module" src="js/main.js?v={{.Version}}"></script>
 <!-- Self-hosted Alpine.js v3.14.9. Embedded in the binary (see ui/embed.go)
-     so the app has no third-party CDN dependency at runtime — works
+     so the app has no third-party CDN dependency at runtime - works
      offline / behind firewalls and avoids browser tracking-prevention
      warnings about cross-origin storage access. To upgrade, replace
      ui/static/js/vendor/alpine.min.js with the new cdn.min.js bundle. -->
@@ -47,10 +47,10 @@
 
 <!-- Skip-link: first focusable element on the page so keyboard users can
      jump past the topnav. Click is intercepted by registerSkipLinkHandler()
-     in main.js (CSP-tightening compatibility — no inline onclick). -->
+     in main.js (CSP-tightening compatibility - no inline onclick). -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<div x-data="clonarr" x-init="init()" x-cloak :data-app="activeAppType || 'radarr'" :data-content-align="contentAlign" :data-nav-style="navStyle" :data-noinstance-banner="navStyle === 'sidebar' && !isGlobalSection() && instances && !instances.some(i => i.type === activeAppType) ? 'true' : 'false'">
+<div x-data="clonarr" x-init="init()" x-cloak :data-app="isGlobalSection() ? 'clonarr' : (activeAppType || 'radarr')" :data-content-align="contentAlign" :data-nav-style="navStyle" :data-noinstance-banner="navStyle === 'sidebar' && !isGlobalSection() && instances && !instances.some(i => i.type === activeAppType) ? 'true' : 'false'">
 
   {{template "layout/sidebar" .}}
   {{template "layout/top-nav" .}}

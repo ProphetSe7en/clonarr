@@ -10,17 +10,17 @@ import (
 // ProfileDescription is the full auto-derived description of a TRaSH quality
 // profile, computed from two data sources without any per-profile hand-curation:
 //
-//  1. Profile JSON (quality-profiles/X.json) — items[], cutoff, formatItems
-//  2. CF-group JSONs (cf-groups/*.json) — quality_profiles.include maps,
+//  1. Profile JSON (quality-profiles/X.json) - items[], cutoff, formatItems
+//  2. CF-group JSONs (cf-groups/*.json) - quality_profiles.include maps,
 //     default flag tells whether HDR/Audio scoring is enabled by default
 //     and which HDR variants (DV Boost, HDR10+ Boost) are available as
-//     opt-ins. The cf-group lists themselves aren't stored — only the
+//     opt-ins. The cf-group lists themselves aren't stored - only the
 //     boolean conclusions on Axes.HDR / Axes.Audio.
 //
 // On top of those raw fields, two composed bullet-lists give the editorial
 // framing TRaSH itself doesn't ship: Highlights ("what you get") and
 // BestFor ("who it suits"). Both are derived from axes + formatItems
-// patterns + the profile-name prefix — no invented prose, every bullet
+// patterns + the profile-name prefix - no invented prose, every bullet
 // asserts a fact the data supports.
 //
 // New profiles TRaSH adds get described automatically on the next pull.
@@ -91,17 +91,25 @@ type ProfileHDRSummary struct {
 //	                 User-facing: "Lossless available".
 //	neither        → group is NOT in include list. User-facing: "Lossy audio".
 //
-// Scored takes precedence — if both flags could be set (theoretical), the
+// Scored takes precedence - if both flags could be set (theoretical), the
 // stronger statement wins.
 type ProfileAudioSummary struct {
 	Scored bool `json:"scored"`
 	OptIn  bool `json:"optIn,omitempty"`
+	// LosslessExcluded = the profile actively penalizes lossless audio with a
+	// strongly negative score (e.g. SQP-1 scores TrueHD / DTS-HD MA at -10000
+	// to keep files small). The card then hides the "Lossless" pill, since the
+	// profile does not want lossless at all. Distinct from "not Scored": an
+	// audio-agnostic profile neither prefers nor excludes lossless, so it still
+	// accepts it. Lossy is never excluded by any TRaSH profile, so there is no
+	// matching LossyExcluded flag.
+	LosslessExcluded bool `json:"losslessExcluded,omitempty"`
 }
 
 // DescribeProfiles returns ProfileDescription for every profile in the app's
-// loaded TRaSH data. Combines profile JSONs and cf-groups — all fields
+// loaded TRaSH data. Combines profile JSONs and cf-groups - all fields
 // auto-derived from data, no external markdown dependency. Safe to call
-// before data is loaded — returns empty slice if no profiles available.
+// before data is loaded - returns empty slice if no profiles available.
 func (ts *TrashStore) DescribeProfiles(app string) ([]ProfileDescription, error) {
 	snap := ts.Snapshot()
 	if snap == nil {
@@ -121,9 +129,31 @@ func (ts *TrashStore) DescribeProfiles(app string) ([]ProfileDescription, error)
 	}
 	out := make([]ProfileDescription, 0, len(appData.Profiles))
 	for _, p := range appData.Profiles {
-		out = append(out, describeProfile(app, p, appData.CFGroups))
+		out = append(out, describeProfile(app, p, appData.CFGroups, appData.CustomFormats))
 	}
 	return out, nil
+}
+
+// cfScoreInProfile resolves a CF's effective score under the profile's score
+// set, falling back to the "default" set, and returns 0 when the CF or a score
+// is absent. Used to decide whether a CF that merely appears in a profile's
+// FormatItems is actually scored: presence alone is not enough, since every
+// profile carries the full CF list. SQP profiles in particular de-prioritize
+// CFs with a 0 or strongly negative score (e.g. TrueHD ATMOS at -10000 in the
+// streaming-focused sqp-1-1080p set), so only a positive score means the
+// profile actually wants that feature.
+func cfScoreInProfile(cfs map[string]*TrashCF, trashID, scoreSet string) int {
+	cf := cfs[trashID]
+	if cf == nil {
+		return 0
+	}
+	if s, ok := cf.TrashScores[scoreSet]; ok {
+		return s
+	}
+	if s, ok := cf.TrashScores["default"]; ok {
+		return s
+	}
+	return 0
 }
 
 // DescribeProfile returns the description for a single profile by trash_id.
@@ -146,12 +176,13 @@ func (ts *TrashStore) DescribeProfile(app, trashID string) (*ProfileDescription,
 // matching markdown section.
 //
 // Falls back to JSON-only data when markdown is missing or the section is
-// absent — UI gets empty Tagline/Note and still renders the axes + composed
+// absent - UI gets empty Tagline/Note and still renders the axes + composed
 // Highlights / BestFor (which only need JSON-derivable facts).
 func describeProfile(
 	app string,
 	profile *TrashQualityProfile,
 	allGroups []*TrashCFGroup,
+	cfs map[string]*TrashCF,
 ) ProfileDescription {
 	out := ProfileDescription{
 		TrashID:  profile.TrashID,
@@ -175,7 +206,7 @@ func describeProfile(
 	out.Axes.AvgSize = typicalSize(app, profile, out.Axes)
 
 	// Walk cf-groups looking for HDR/Audio scoring inclusion. The cf-group
-	// LISTS themselves aren't stored — only the boolean conclusions on
+	// LISTS themselves aren't stored - only the boolean conclusions on
 	// Axes.HDR.Scored / Axes.Audio.Scored / Axes.HDR.OptIns. That info
 	// drives the pills + the composer.
 	var hdrOptIns []string
@@ -201,9 +232,9 @@ func describeProfile(
 			// pill stops short of "Lossless audio".
 			out.Axes.Audio.OptIn = true
 		} else if label := hdrVariantOptInLabel(app, g.TrashID); label != "" {
-			// default=false HDR variant — surface as opt-in on the pill.
+			// default=false HDR variant - surface as opt-in on the pill.
 			// Matched by trash_id (stable across TRaSH-Guides updates)
-			// rather than name prefix — TRaSH adjusts CF-group names
+			// rather than name prefix - TRaSH adjusts CF-group names
 			// occasionally but trash_ids never change once assigned.
 			hdrOptIns = append(hdrOptIns, label)
 		}
@@ -213,13 +244,40 @@ func describeProfile(
 	// [Audio] Audio Formats cf-group. Detect that case by looking for any
 	// known lossless-audio trash_id in profile.FormatItems. Without this,
 	// audio-focused profiles get a false "lossy" pill.
+	//
+	// Crucially, require a POSITIVE score: every profile carries the full CF
+	// list, and SQP-1 (1080p/2160p) lists the lossless CFs but scores them 0
+	// or -10000 because it prefers efficient lossy audio. Presence alone would
+	// wrongly claim "lossless"; only a positive score means the profile wants
+	// it. (DD+ ATMOS / DTS-HD HRA / ATMOS-undefined were also removed from the
+	// set below, they are lossy or ambiguous, not lossless.)
 	if !out.Axes.Audio.Scored && profile.FormatItems != nil {
 		for _, tid := range profile.FormatItems {
-			if losslessAudioCFTrashIDs[tid] {
+			if losslessAudioCFTrashIDs[tid] && cfScoreInProfile(cfs, tid, profile.TrashScoreSet) > 0 {
 				out.Axes.Audio.Scored = true
 				break
 			}
 		}
+	}
+	// Lossless excluded: the profile lists lossless CFs but scores them
+	// strongly negative with none positive (SQP-1 sets TrueHD / DTS-HD MA to
+	// -10000). Then it actively does NOT want lossless, so the card hides the
+	// Lossless pill. A profile that simply doesn't score audio is not excluded,
+	// it still accepts lossless. Skip when Scored is already true.
+	if !out.Axes.Audio.Scored && profile.FormatItems != nil {
+		var hasNeg, hasPos bool
+		for _, tid := range profile.FormatItems {
+			if !losslessAudioCFTrashIDs[tid] {
+				continue
+			}
+			sc := cfScoreInProfile(cfs, tid, profile.TrashScoreSet)
+			if sc > 0 {
+				hasPos = true
+			} else if sc <= -1000 {
+				hasNeg = true
+			}
+		}
+		out.Axes.Audio.LosslessExcluded = hasNeg && !hasPos
 	}
 	// Same fallback for HDR scoring. Profiles like SQP-1 (2160p) include
 	// DV / HDR10+ CFs directly in formatItems rather than via the
@@ -247,7 +305,7 @@ func describeProfile(
 	out.Axes.HDR.OptIns = hdrOptIns
 
 	// Compose Highlights from the now-populated axes + profile data.
-	// "Best for" was tried earlier but dropped — claiming "best for X TVs"
+	// "Best for" was tried earlier but dropped - claiming "best for X TVs"
 	// is editorial interpretation we don't have authority to make. The
 	// pills + Highlights tell users what the profile DOES; who it suits
 	// is the user's own call.
@@ -260,15 +318,15 @@ func describeProfile(
 	//
 	// Surface the disclaimer as a prominent notice on the card. Currently
 	// applies to:
-	//   - SQP profiles — TRaSH ships an "advanced profile, join Discord"
+	//   - SQP profiles - TRaSH ships an "advanced profile, join Discord"
 	//     disclaimer they want shown verbatim on every SQP card
-	//   - Base Profile — TRaSH's internal test profile ("This is a base
+	//   - Base Profile - TRaSH's internal test profile ("This is a base
 	//     profile that we use for testing"); users shouldn't pick it
 	//     thinking it's a real profile
 	if profile.TrashDescription != "" && (isSQPProfile(profile.Name) || isBaseProfile(profile.Name)) {
 		notice := parseDisclaimerHTML(profile.TrashDescription)
 		notice.LinkURL = sanitizeURL(notice.LinkURL)
-		// Drop the link entirely when the URL fails the scheme gate — otherwise
+		// Drop the link entirely when the URL fails the scheme gate - otherwise
 		// the frontend would render a click-able label pointing to "" which is
 		// either confusing (re-navigates the current page) or a vector if a
 		// future framework upgrade interprets the empty href differently.
@@ -318,7 +376,7 @@ func deriveResolution(items []QualityItem) string {
 	if len(resOrder) == 1 {
 		return resOrder[0]
 	}
-	// Multiple resolutions — main + fallback list
+	// Multiple resolutions - main + fallback list
 	return resOrder[0] + " (" + strings.Join(resOrder[1:], ", ") + " fallback)"
 }
 
@@ -458,7 +516,7 @@ func extractSource(name string) string {
 }
 
 // cleanTagline strips redundant prefixes from TRaSH's markdown tagline.
-// Most start with "If you prefer " which adds no info on a profile card —
+// Most start with "If you prefer " which adds no info on a profile card -
 // the user is on the profile's card, of course they're considering it.
 func cleanTagline(raw string) string {
 	if raw == "" {
@@ -502,48 +560,45 @@ func audioFormatsTrashID(app string) string {
 // pulling them in via the [Audio] Audio Formats cf-group (e.g. all
 // Radarr SQP profiles do this).
 //
-// What counts as "lossless audio" for this signal:
-//   - True lossless: FLAC, PCM, TrueHD, DTS-HD MA, DTS-HD HRA
-//   - Object-based / Atmos-bearing (premium audio scoring): TrueHD
-//     ATMOS, DTS X, ATMOS (undefined), DD+ ATMOS
-// Excluded (lossy, not premium-scored): AAC, DD, DD+, DTS, DTS-ES,
-// MP3, Opus.
+// What counts as genuinely lossless for this signal (the codec is bit-for-bit
+// lossless, or an object layer riding on a lossless core):
+//   - TrueHD, DTS-HD MA, PCM/LPCM, FLAC
+//   - TrueHD ATMOS (TrueHD core), DTS X (DTS-HD MA core)
+// Deliberately EXCLUDED:
+//   - DD+ ATMOS: Dolby Digital Plus is lossy (Atmos rides a lossy core)
+//   - DTS-HD HRA: High Resolution Audio is lossy, not Master Audio
+//   - ATMOS (undefined): base codec unknown, cannot claim lossless
+//   - AAC, DD, DD+, DTS, DTS-ES, MP3, Opus: lossy
 //
-// Includes both Radarr and Sonarr trash_ids — app prefixes happen to
+// Includes both Radarr and Sonarr trash_ids - app prefixes happen to
 // differ but membership-by-trash_id is stable across TRaSH updates.
 var losslessAudioCFTrashIDs = map[string]bool{
 	// Radarr
 	"496f355514737f7d83bf7aa4d24f8169": true, // TrueHD ATMOS
 	"2f22d89048b01681dde8afe203bf2e95": true, // DTS X
-	"417804f7f2c4308c1f4c5d380d4c4475": true, // ATMOS (undefined)
-	"1af239278386be2919e1bcee0bde047e": true, // DD+ ATMOS
 	"3cafb66171b47f226146a0770576870f": true, // TrueHD
 	"dcf3ec6938fa32445f590a4da84256cd": true, // DTS-HD MA
 	"a570d4a0e56a2874b64e5bfa55202a1b": true, // FLAC
 	"e7c2fcae07cbada050a0af3357491d7b": true, // PCM
-	"8e109e50e0a0b83a5098b056e13bf6db": true, // DTS-HD HRA
-	// Sonarr (parallel set — no profiles currently use these via
+	// Sonarr (parallel set - no profiles currently use these via
 	// formatItems but pre-populated so future SQP-style profiles get
 	// the same detection automatically).
 	"0d7824bb924701997f874e7ff7d4844a": true, // TrueHD ATMOS
 	"9d00418ba386a083fbf4d58235fc37ef": true, // DTS X
-	"b6fbafa7942952a13e17e2b1152b539a": true, // ATMOS (undefined)
-	"4232a509ce60c4e208d13825b7c06264": true, // DD+ ATMOS
 	"1808e4b9cee74e064dfae3f1db99dbfe": true, // TrueHD
 	"c429417a57ea8c41d57e6990a8b0033f": true, // DTS-HD MA
 	"851bd64e04c9374c51102be3dd9ae4cc": true, // FLAC
 	"30f70576671ca933adbdcfc736a69718": true, // PCM
-	"cfa5fbd8f02a86fc55d8d223d06a5e1f": true, // DTS-HD HRA
 }
 
 // hdrCFTrashIDsByID lookup: trash_id → human label for HDR-related CFs
 // that profiles can include directly in formatItems. Mirrors the
 // losslessAudio fallback but for HDR scoring. Profiles like SQP-1 (2160p)
-// list these CFs directly, bypassing the cf-group route — without this
+// list these CFs directly, bypassing the cf-group route - without this
 // fallback they'd get a false "no HDR" pill.
 //
 // Includes the basic HDR CF + the variant CFs (DV Boost, DV w/o HDR
-// fallback, HDR10+ Boost). Excludes SDR — that's the absence of HDR.
+// fallback, HDR10+ Boost). Excludes SDR - that's the absence of HDR.
 var hdrCFTrashIDLabels = map[string]string{
 	// Radarr
 	"493b6d1dbec3c3364c59d7607f7e3405": "HDR",                    // basic HDR
@@ -576,7 +631,7 @@ func hdrFormatsTrashID(app string) string {
 //
 // Trash_id matching (not name prefix) is deliberate: TRaSH renames or
 // restructures cf-group names occasionally, but trash_ids never change
-// once assigned. The cost is a small per-app lookup table — manageable
+// once assigned. The cost is a small per-app lookup table - manageable
 // for the ~5 HDR variants TRaSH ships, and adding new ones is a single
 // table entry when they appear.
 func hdrVariantOptInLabel(app, trashID string) string {
@@ -587,7 +642,7 @@ func hdrVariantOptInLabel(app, trashID string) string {
 			"1616617ab3a14397a2b2321bcbda44d1": "DV Boost",
 			"7fc2751eef7e6bdc70b74136e5e35c76": "DV (w/o HDR fallback)",
 			"b29413a7487478fe98228ce79e5689e4": "HDR10+ Boost",
-			// "47f0d69750de9e16855915fa73bb7b08" (SDR) intentionally omitted —
+			// "47f0d69750de9e16855915fa73bb7b08" (SDR) intentionally omitted -
 			// it's a negative-prefer "exclude SDR" toggle, not a user-facing
 			// HDR-format choice; cluttering the pill with it hurts more than
 			// helps.
@@ -608,28 +663,28 @@ func hdrVariantOptInLabel(app, trashID string) string {
 // profile name into bullet-list editorial framing TRaSH itself doesn't
 // ship. The rule is strict: each bullet must assert a FACT the data
 // supports. No invented use-cases, no aspirational marketing copy. If a
-// profile's data doesn't justify a bullet, we leave it out — sparse cards
+// profile's data doesn't justify a bullet, we leave it out - sparse cards
 // are fine.
 
 // composeHighlights returns "What you get" bullets describing what the
 // profile picks for and what it prefers. Phrasing rule: speak to end
-// users, not to TRaSH-Guides power-users. No internal jargon — terms
+// users, not to TRaSH-Guides power-users. No internal jargon - terms
 // like "BD Tier 1-8", "Repack/Proper", "DV Boost CF" mean nothing to
 // someone choosing a profile for the first time. We translate to
 // plain-English equivalents that describe outcomes.
 func composeHighlights(profile *TrashQualityProfile, axes ProfileAxes) []string {
 	var out []string
 
-	// 1) Source statement — most important fact, always first.
+	// 1) Source statement - most important fact, always first.
 	//    Note: SQP profiles get their warning via the Disclaimer field
 	//    (TRaSH's own verbatim text from profile.trash_description),
-	//    rendered as a separate notice block above Highlights — not
+	//    rendered as a separate notice block above Highlights - not
 	//    duplicated here.
 	if src := sourceHighlight(profile, axes.Sources); src != "" {
 		out = append(out, src)
 	}
 
-	// 1b) Fallback behavior — critical for differentiating
+	// 1b) Fallback behavior - critical for differentiating
 	//     "strict" vs "Alternative" vs "Combined" profile variants. Three
 	//     profiles can have the same cutoff + same sources but completely
 	//     different fallback chains (Remux + WEB 2160p = strict 2160p,
@@ -640,7 +695,7 @@ func composeHighlights(profile *TrashQualityProfile, axes ProfileAxes) []string 
 		out = append(out, fb)
 	}
 
-	// 2) HDR — describe what the user gets, not the toggle mechanism.
+	// 2) HDR - describe what the user gets, not the toggle mechanism.
 	//    Inline format list with "etc." since the exact mix varies per
 	//    profile and the user just needs "this profile picks HDR".
 	if axes.HDR.Scored {
@@ -652,26 +707,26 @@ func composeHighlights(profile *TrashQualityProfile, axes ProfileAxes) []string 
 		}
 	}
 
-	// 3) Audio — name the formats users recognise, drop "DTS-HD MA" tail
+	// 3) Audio - name the formats users recognise, drop "DTS-HD MA" tail
 	//    which non-cinephiles don't parse anyway. Three states:
 	//    - Scored: lossless is the default behaviour
 	//    - OptIn: lossless CFs are bundled but the user has to enable
-	//      the [Audio] Audio Formats group to prefer them — common on
+	//      the [Audio] Audio Formats group to prefer them - common on
 	//      WEB profiles where TRaSH lists Audio Formats as available
 	//      but leaves the default off because lossless is rarer on WEB
 	//    - Neither: profile ships lossy-only
 	if axes.Audio.Scored {
 		out = append(out, "Prefers releases with lossless audio (Atmos, DTS-X, TrueHD)")
 	} else if axes.Audio.OptIn {
-		out = append(out, "Lossless audio available — enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD")
+		out = append(out, "Lossless audio available, enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD")
 	}
 
-	// 4) Variant-specific tuning. No "Tier 1-8" detail — users don't know
+	// 4) Variant-specific tuning. No "Tier 1-8" detail - users don't know
 	//    what TRaSH tiers are.
 	//
 	//    Anime Dual Audio CF: previously triggered a "prefers multi-audio
 	//    releases" bullet. Dropped after verifying the CF has trash_scores
-	//    = null in TRaSH data — its presence in formatItems doesn't mean
+	//    = null in TRaSH data - its presence in formatItems doesn't mean
 	//    scoring; could just be tracking. The German Anime variant has
 	//    German DL +11000 doing the multi-audio work, not Anime Dual Audio.
 	//    Generic claim about anime multi-audio isn't data-supported.
@@ -682,17 +737,17 @@ func composeHighlights(profile *TrashQualityProfile, axes ProfileAxes) []string 
 		out = append(out, vlabel)
 	}
 	// SQP profiles vary widely (SQP-1 = streaming 1080p, SQP-3 Audio = UHD
-	// audio-focused, etc.) — the generic "stricter streaming scoring"
+	// audio-focused, etc.) - the generic "stricter streaming scoring"
 	// blurb doesn't fit them all. The Disclaimer already conveys "advanced
 	// profile, read the Discord guide" via TRaSH's own wording; no need
 	// for clonarr to add a separate guess about what SQP does.
 
-	// 5) Repack/Proper — say what it DOES, not what the CFs are called.
+	// 5) Repack/Proper - say what it DOES, not what the CFs are called.
 	if hasRepackScoring(profile) {
 		out = append(out, "Automatically upgrades when an improved release of the same file is published")
 	}
 
-	// 6) Typical file size — last bullet, useful sanity-check before
+	// 6) Typical file size - last bullet, useful sanity-check before
 	//    committing storage. Skipped when markdown didn't ship a size for
 	//    this profile (anime / SQP / foreign variants).
 	if axes.AvgSize != "" {
@@ -744,9 +799,9 @@ func joinAnd(items []string) string {
 // label (the same vocabulary extractSource produces). Returns "" when the
 // profile has no cutoff field or when the cutoff item has no resolvable
 // source (e.g. quality-grouping shells whose own name doesn't carry a
-// source token AND whose children are empty — degenerate case).
+// source token AND whose children are empty - degenerate case).
 //
-// The cutoff drives "what the profile is ASKING for" — anything ranked
+// The cutoff drives "what the profile is ASKING for" - anything ranked
 // lower in the items list is fallback. Without this signal, sourceHighlight
 // and pickSourceClass have to guess from the flat set of allowed sources,
 // which yields wrong answers on profiles like WEB-2160p (Alternative)
@@ -779,11 +834,11 @@ func cutoffSource(profile *TrashQualityProfile) string {
 // sourceHighlight returns the canonical primary-source-description bullet
 // derived from the profile's CUTOFF when available, falling back to the
 // normalised source set for profiles without a recognisable cutoff. The
-// cutoff path matters for "Alternative" variants — WEB-2160p (Alternative)
+// cutoff path matters for "Alternative" variants - WEB-2160p (Alternative)
 // has Bluray allowed as fallback but the cutoff is WEB 2160p, so the
 // primary description must talk about WEB-DL, not Bluray.
 //
-// Describes ONLY the cutoff-tier source — the "+ WEB" / fallback wording
+// Describes ONLY the cutoff-tier source - the "+ WEB" / fallback wording
 // lives elsewhere:
 //   - Source pill (e.g. "Bluray Remux + WEB") covers what other sources
 //     are accepted at the same resolution
@@ -792,7 +847,7 @@ func cutoffSource(profile *TrashQualityProfile) string {
 // Earlier versions appended "with WEB-DL fallback" here too, which
 // contradicted fallbackHighlight on permissive profiles ("(Alternative)"
 // variants that fall through to SDTV/DVD). Keeping primary-source-only
-// makes the three signals — pill, source bullet, fallback bullet —
+// makes the three signals - pill, source bullet, fallback bullet -
 // non-overlapping and consistent.
 func sourceHighlight(profile *TrashQualityProfile, sources []string) string {
 	// Two-step resolve: try cutoff first (authoritative answer for
@@ -874,12 +929,12 @@ func hasRepackScoring(p *TrashQualityProfile) bool {
 // recognised French/German naming prefixes. These prefixes encode well-
 // documented torrenting-community conventions, not editorial speculation:
 //
-//   [French MULTi.VF]  — multi-audio with French dub (Version Française)
-//   [French MULTi.VO]  — multi-audio with original audio (e.g. English)
-//   [French VOSTFR]    — original audio with French subtitles
-//   [German]           — German-audio variant of the same base profile
+//   [French MULTi.VF]  - multi-audio with French dub (Version Française)
+//   [French MULTi.VO]  - multi-audio with original audio (e.g. English)
+//   [French VOSTFR]    - original audio with French subtitles
+//   [German]           - German-audio variant of the same base profile
 //
-// Returns empty for unrecognised prefixes — caller skips the bullet.
+// Returns empty for unrecognised prefixes - caller skips the bullet.
 func languageVariantHighlight(name string) string {
 	switch {
 	case strings.HasPrefix(name, "[French MULTi.VF]"):
@@ -917,13 +972,13 @@ func fallbackHighlight(items []QualityItem) string {
 		resOrder = append(resOrder, res)
 	}
 	if len(resOrder) <= 1 {
-		// Strict profile — no fallback to describe (saves a bullet
+		// Strict profile - no fallback to describe (saves a bullet
 		// that would just repeat the cutoff resolution).
 		return ""
 	}
 	primary := resOrder[0]
 	rest := resOrder[1:]
-	// Very permissive profiles (4+ fallback rungs) — describe as full
+	// Very permissive profiles (4+ fallback rungs) - describe as full
 	// fallback rather than enumerating "1080p, 720p, 576p, 480p" which
 	// reads like data noise.
 	if len(rest) >= 4 {
@@ -955,7 +1010,7 @@ func sanitizeURL(u string) string {
 // DisclaimerNotice with the first <a href="...">label</a> preserved as
 // structured Before / LinkText / LinkURL / After fields. <br> tags become
 // spaces. Disclaimers without a link end up with only Before populated.
-// NOT a general-purpose sanitiser — assumes input is TRaSH-shipped JSON
+// NOT a general-purpose sanitiser - assumes input is TRaSH-shipped JSON
 // content, not user input. Keeps to stdlib regex rather than pulling in
 // bluemonday for a single field.
 func parseDisclaimerHTML(s string) DisclaimerNotice {
@@ -973,7 +1028,7 @@ func parseDisclaimerHTML(s string) DisclaimerNotice {
 		return strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(x, " "))
 	}
 	if m == nil {
-		// No anchor found — whole string becomes Before
+		// No anchor found - whole string becomes Before
 		return DisclaimerNotice{Before: clean(s)}
 	}
 	return DisclaimerNotice{
@@ -997,7 +1052,7 @@ func parseDisclaimerHTML(s string) DisclaimerNotice {
 
 // composeTagline returns a short "what the profile prefers" descriptor
 // like "Prefers high-quality 1080p encodes" or "Prefers uncompressed 4K
-// UHD Remux". The "Prefers" verb is deliberate — without it the tagline
+// UHD Remux". The "Prefers" verb is deliberate - without it the tagline
 // reads as a guarantee ("Uncompressed 4K UHD Remux") which is misleading
 // when the profile actually has fallback policies. "Prefers" signals
 // this is the target, not the outcome. Pills + What you get cover the
@@ -1025,14 +1080,14 @@ func composeTagline(profile *TrashQualityProfile, axes ProfileAxes) string {
 		}
 		body += p
 	}
-	// "Prefers ... when available" — the verb signals goal, the "when
+	// "Prefers ... when available" - the verb signals goal, the "when
 	// available" suffix signals fallback exists (even strict profiles
 	// fall back from Remux to WEB-DL at the same resolution).
 	out := "Prefers " + body + " when available"
 	// Extra-honesty suffix for the permissive variants. Distinction:
-	//   (Combined)   — falls back on RESOLUTION only (2160p → 1080p),
+	//   (Combined)   - falls back on RESOLUTION only (2160p → 1080p),
 	//                  same quality tiers (Remux + Bluray + WEB) at both
-	//   (Alternative) — falls back on QUALITY too (accepts HDTV / DVD /
+	//   (Alternative) - falls back on QUALITY too (accepts HDTV / DVD /
 	//                  SDTV that the strict + Combined profiles reject)
 	switch {
 	case strings.Contains(profile.Name, "(Alternative)"):
@@ -1045,7 +1100,7 @@ func composeTagline(profile *TrashQualityProfile, axes ProfileAxes) string {
 
 // lowercaseTierAdjective lowercases the first letter of the tier
 // adjective so it reads naturally after the "Prefers" prefix
-// ("uncompressed", "high-quality") — UNLESS it starts with a proper
+// ("uncompressed", "high-quality") - UNLESS it starts with a proper
 // noun (French / German), which stays capitalized regardless of
 // sentence position ("Prefers French-dubbed", "Prefers German-language").
 func lowercaseTierAdjective(adj string) string {
@@ -1059,7 +1114,7 @@ func lowercaseTierAdjective(adj string) string {
 }
 
 // pickTierAdjective picks the leading word for the tagline. Each branch
-// maps from an observable profile property to a defensible label — no
+// maps from an observable profile property to a defensible label - no
 // invented descriptors. Standard fallthrough = "High-quality".
 func pickTierAdjective(profile *TrashQualityProfile, axes ProfileAxes) string {
 	switch {
@@ -1097,7 +1152,7 @@ func pickResolutionLabel(axes ProfileAxes) string {
 }
 
 // pickSourceClass returns the trailing word/phrase for the tagline. Uses
-// the profile's CUTOFF source as the authoritative signal — that's what
+// the profile's CUTOFF source as the authoritative signal - that's what
 // the profile is actually preferring. Falls back to a flat-set heuristic
 // only when the cutoff doesn't resolve (e.g. hand-built profile without
 // a recognisable cutoff item).
@@ -1120,7 +1175,7 @@ func pickSourceClass(profile *TrashQualityProfile, axes ProfileAxes) string {
 	case "UHD Bluray", "Bluray":
 		return "Bluray"
 	}
-	// Fallback heuristic — runs for empty cutoff OR unknown cutoff
+	// Fallback heuristic - runs for empty cutoff OR unknown cutoff
 	// source. The order matters: Remux > WEB-only > generic encodes.
 	if hasRemuxSource(axes) {
 		return "Remux"
@@ -1162,7 +1217,7 @@ func isWebOnlyProfile(axes ProfileAxes) bool {
 // "1–3 GB / episode") chosen from a small lookup based on Remux/WEB
 // classification and resolution. NOT computed from TRaSH's
 // quality-size JSONs (which give bitrate caps, not real-world typical
-// sizes) — these ranges reflect typical observed sizes in practice
+// sizes) - these ranges reflect typical observed sizes in practice
 // and align with what TRaSH's own setup-quality-profiles.md reports
 // for the standard profiles that have a documented _Size:_ line.
 func typicalSize(app string, profile *TrashQualityProfile, axes ProfileAxes) string {

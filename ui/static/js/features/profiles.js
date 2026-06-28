@@ -3526,7 +3526,7 @@ export default {
     // what the detail view's "Override mode · N changes" header shows
     // for the same rule.
     v3RuleCustomizations(rule) {
-      const empty = { total: 0, quality: 0, extraCFs: 0, customScores: 0, general: 0, excludedCFs: 0 };
+      const empty = { total: 0, quality: 0, extraCFs: 0, customScores: 0, general: 0, excludedCFs: 0, generalLabels: [] };
       if (!rule || !this.ruleCustomizationsLoaded) return empty;
       return this.ruleCustomizations[rule.id] || empty;
     },

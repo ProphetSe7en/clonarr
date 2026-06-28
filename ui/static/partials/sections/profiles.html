@@ -194,7 +194,7 @@
                       <template x-if="(() => { const r = autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId); return r && v3RuleCustomizations(r).total > 0; })()">
                         <span class="v3-cust-pill"
                               x-data="{ get _summary() { const r = autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId); return v3RuleCustomizations(r); } }"
-                              x-tt="(() => { const p = []; if (_summary.quality)      p.push('Quality: '       + _summary.quality);      if (_summary.extraCFs)     p.push('Extra CFs: '     + _summary.extraCFs);     if (_summary.customScores) p.push('Custom scores: ' + _summary.customScores); if (_summary.general)      p.push('General: '       + _summary.general);      if (_summary.excludedCFs)  p.push('Excluded CFs: '  + _summary.excludedCFs);  return p.join('\n'); })()"
+                              x-tt="(() => { const p = []; if (_summary.quality)      p.push('Quality: '       + _summary.quality);      if (_summary.extraCFs)     p.push('Extra CFs: '     + _summary.extraCFs);     if (_summary.customScores) p.push('Custom scores: ' + _summary.customScores); if (_summary.generalLabels && _summary.generalLabels.length) { _summary.generalLabels.forEach(l => p.push(l)); } else if (_summary.general) { p.push('General: ' + _summary.general); } if (_summary.excludedCFs)  p.push('Excluded CFs: '  + _summary.excludedCFs);  return p.join('\n'); })()"
                               x-text="_summary.total + ' change' + (_summary.total !== 1 ? 's' : '')"></span>
                       </template>
                       <template x-if="(() => { const r = autoSyncRules.find(rl => rl.instanceId === inst.id && rl.arrProfileId === sh.arrProfileId); return !r || v3RuleCustomizations(r).total === 0; })()">
@@ -254,91 +254,51 @@
                    by · separators. "Advanced filters" swaps the chip group for
                    a per-row panel showing every available value. All chips are
                    data-driven. -->
-              <div class="tpd-toolbar">
+              <!-- Filters on two tight rows, no separate toolbar or advanced
+                   panel. Row 1: search + profile category (TEST/Base excluded).
+                   Row 2: feature facets grouped by | separators
+                   (resolution | audio | HDR-DV | source | status) plus the
+                   Grid/List toggle on the right, so it sits just above the
+                   cards instead of floating far above them. -->
+              <div class="tpd-filterrow">
                 <input class="tpd-search" placeholder="Search profiles…" x-model="tpdSearch">
+                <button class="tpd-chip" :class="{ active: tpdCategoryFilters.length === 0 }" @click="tpdClearCategories()">All</button>
+                <template x-for="cat in tpdCategoryList(activeAppType).filter(c => c !== 'TEST')" :key="'c'+cat">
+                  <button class="tpd-chip" :class="{ active: tpdIsCategoryActive(cat) }" @click="tpdToggleCategory(cat)" x-text="cat"></button>
+                </template>
+                <span class="tpd-fsep" aria-hidden="true">|</span>
+                <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('in-use') }" @click="tpdToggleFeature('in-use')">In use</button>
+              </div>
 
-                <!-- Compact chips (hidden in advanced mode) -->
-                <div class="tpd-chipwrap" x-show="!tpdAdvanced">
-                  <!-- Type (category) -->
-                  <button class="tpd-chip" :class="{ active: tpdCategoryFilters.length === 0 }" @click="tpdClearCategories()">All</button>
-                  <template x-for="cat in tpdCategoryList(activeAppType)" :key="cat">
-                    <button class="tpd-chip" :class="{ active: tpdIsCategoryActive(cat) }" @click="tpdToggleCategory(cat)" x-text="cat"></button>
-                  </template>
-                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
-                  <!-- Resolution (common) -->
-                  <template x-for="res in tpdAvailableResolutions(activeAppType, false)" :key="'r'+res">
-                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
-                  </template>
-                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
-                  <!-- Source (common) -->
-                  <template x-for="src in tpdAvailableSources(activeAppType, false)" :key="'s'+src">
-                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
-                  </template>
-                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
-                  <!-- Audio -->
-                  <button x-show="tpdHasAudio(activeAppType,'lossless')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossless') }" @click="tpdToggleFeature('lossless')">Lossless</button>
-                  <button x-show="tpdHasAudio(activeAppType,'lossy')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossy') }" @click="tpdToggleFeature('lossy')">Lossy</button>
-                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
-                  <!-- HDR -->
-                  <button x-show="tpdHasHdr(activeAppType,'hdr')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('hdr') }" @click="tpdToggleFeature('hdr')">HDR</button>
-                  <span class="tpd-toolbar-sep" aria-hidden="true">·</span>
-                  <!-- Status -->
-                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('in-use') }" @click="tpdToggleFeature('in-use')">In use</button>
-                </div>
-
-                <button class="tpd-chip" :class="{ active: tpdAdvanced }" @click="tpdAdvanced = !tpdAdvanced">Advanced filters</button>
-
+              <div class="tpd-filterrow">
+                <!-- Resolution (all values) -->
+                <template x-for="res in tpdAvailableResolutions(activeAppType, false)" :key="'r'+res">
+                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
+                </template>
+                <template x-for="res in tpdAvailableResolutions(activeAppType, true)" :key="'ra'+res">
+                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
+                </template>
+                <!-- Audio -->
+                <span class="tpd-fsep" x-show="tpdHasAudio(activeAppType,'lossless') || tpdHasAudio(activeAppType,'lossy')" aria-hidden="true">|</span>
+                <button x-show="tpdHasAudio(activeAppType,'lossless')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossless') }" @click="tpdToggleFeature('lossless')">Lossless</button>
+                <button x-show="tpdHasAudio(activeAppType,'lossy')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossy') }" @click="tpdToggleFeature('lossy')">Lossy</button>
+                <!-- HDR / DV (combined) -->
+                <span class="tpd-fsep" x-show="tpdHasHdr(activeAppType,'hdr')" aria-hidden="true">|</span>
+                <button x-show="tpdHasHdr(activeAppType,'hdr')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('hdr') }" @click="tpdToggleFeature('hdr')">HDR / DV</button>
+                <!-- Source (all values) -->
+                <span class="tpd-fsep" aria-hidden="true">|</span>
+                <template x-for="src in tpdAvailableSources(activeAppType, false)" :key="'s'+src">
+                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
+                </template>
+                <template x-for="src in tpdAvailableSources(activeAppType, true)" :key="'sa'+src">
+                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
+                </template>
                 <div class="tpd-view-toggle" role="group" aria-label="View mode" style="margin-left:auto">
                   <button class="tpd-view-btn" :class="{ active: tpdView === 'grid' }" @click="tpdSetView('grid')">Grid</button>
                   <button class="tpd-view-btn" :class="{ active: tpdView === 'list' }" @click="tpdSetView('list')">List</button>
                   <button x-show="tpdView === 'list'" class="tpd-view-btn"
                           @click="tpdAnyOpen() ? tpdCollapseAll() : tpdExpandAll(activeAppType)"
                           x-text="tpdAnyOpen() ? 'Collapse all' : 'Expand all'"></button>
-                </div>
-              </div>
-
-              <!-- Advanced filter panel: one labeled row per facet, every
-                   available value shown. Data-driven; rows hide when empty. -->
-              <div class="tpd-filters" x-show="tpdAdvanced" x-cloak>
-                <div class="tpd-fgroup">
-                  <span class="tpd-fgroup-label">Type</span>
-                  <button class="tpd-chip" :class="{ active: tpdCategoryFilters.length === 0 }" @click="tpdClearCategories()">All</button>
-                  <template x-for="cat in tpdCategoryList(activeAppType)" :key="'ac'+cat">
-                    <button class="tpd-chip" :class="{ active: tpdIsCategoryActive(cat) }" @click="tpdToggleCategory(cat)" x-text="cat"></button>
-                  </template>
-                </div>
-                <div class="tpd-fgroup" x-show="tpdAvailableResolutions(activeAppType, false).length || tpdAvailableResolutions(activeAppType, true).length">
-                  <span class="tpd-fgroup-label">Resolution</span>
-                  <template x-for="res in tpdAvailableResolutions(activeAppType, false)" :key="'ar'+res">
-                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
-                  </template>
-                  <template x-for="res in tpdAvailableResolutions(activeAppType, true)" :key="'ara'+res">
-                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('res:' + res) }" @click="tpdToggleFeature('res:' + res)" x-text="tpdResLabel(res)"></button>
-                  </template>
-                </div>
-                <div class="tpd-fgroup" x-show="tpdAvailableSources(activeAppType, false).length || tpdAvailableSources(activeAppType, true).length">
-                  <span class="tpd-fgroup-label">Source</span>
-                  <template x-for="src in tpdAvailableSources(activeAppType, false)" :key="'as'+src">
-                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
-                  </template>
-                  <template x-for="src in tpdAvailableSources(activeAppType, true)" :key="'asa'+src">
-                    <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('src:' + src.toLowerCase()) }" @click="tpdToggleFeature('src:' + src.toLowerCase())" x-text="src"></button>
-                  </template>
-                </div>
-                <div class="tpd-fgroup" x-show="tpdHasAudio(activeAppType,'lossless') || tpdHasAudio(activeAppType,'lossy') || tpdHasAudio(activeAppType,'available')">
-                  <span class="tpd-fgroup-label">Audio</span>
-                  <button x-show="tpdHasAudio(activeAppType,'lossless')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossless') }" @click="tpdToggleFeature('lossless')">Lossless</button>
-                  <button x-show="tpdHasAudio(activeAppType,'lossy')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('lossy') }" @click="tpdToggleFeature('lossy')">Lossy</button>
-                  <button x-show="tpdHasAudio(activeAppType,'available')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('available') }" @click="tpdToggleFeature('available')">Lossless available</button>
-                </div>
-                <div class="tpd-fgroup" x-show="tpdHasHdr(activeAppType,'hdr') || tpdHasHdr(activeAppType,'dv')">
-                  <span class="tpd-fgroup-label">HDR</span>
-                  <button x-show="tpdHasHdr(activeAppType,'hdr')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('hdr') }" @click="tpdToggleFeature('hdr')">HDR</button>
-                  <button x-show="tpdHasHdr(activeAppType,'dv')" class="tpd-chip" :class="{ active: tpdIsFeatureActive('dv') }" @click="tpdToggleFeature('dv')">DV available</button>
-                </div>
-                <div class="tpd-fgroup">
-                  <span class="tpd-fgroup-label">Status</span>
-                  <button class="tpd-chip" :class="{ active: tpdIsFeatureActive('in-use') }" @click="tpdToggleFeature('in-use')">In use</button>
                 </div>
               </div>
 
@@ -374,11 +334,26 @@
                               <span x-text="d.disclaimer?.before"></span><a x-show="d.disclaimer?.linkUrl" :href="d.disclaimer?.linkUrl" target="_blank" rel="noopener" x-text="d.disclaimer?.linkText"></a><span x-text="d.disclaimer?.after"></span>
                             </span>
                           </div>
+                          <!-- Fact pills: what the profile accepts, never a ranking.
+                               No arrows or highlighting, so nothing reads as
+                               "preferred over". One pill per accepted resolution
+                               and source, plus the audio outcome and a combined
+                               HDR/DV pill when in use. -->
                           <div class="tpd-pills">
-                            <span class="tpd-pill" x-text="tpdResolutionLabel(d)"></span>
-                            <span class="tpd-pill" x-text="tpdSourceLabel(d)"></span>
-                            <span class="tpd-pill" :class="d.axes?.audio?.scored ? 'aud' : ''" x-text="tpdAudioPillText(d)"></span>
-                            <span class="tpd-pill vid" x-show="d.axes?.hdr?.scored" x-text="tpdHDRPillText(d)"></span>
+                            <template x-for="res in _tpdResolutions(d)" :key="'pr'+res">
+                              <span class="tpd-pill" x-text="tpdResLabel(res)"></span>
+                            </template>
+                            <template x-for="src in _tpdSourceTiers(d)" :key="'ps'+src">
+                              <span class="tpd-pill" x-text="src"></span>
+                            </template>
+                            <!-- Audio: Lossless shown unless the profile excludes it
+                                 (only SQP-1 does), highlighted green when lossless is
+                                 actually preferred. Lossy shown always (no TRaSH profile
+                                 excludes lossy). So most profiles read "Lossless Lossy"
+                                 (supports both), SQP-1 reads "Lossy" only. -->
+                            <span x-show="!d.axes?.audio?.losslessExcluded" class="tpd-pill" :class="d.axes?.audio?.scored ? 'aud' : ''">Lossless</span>
+                            <span class="tpd-pill">Lossy</span>
+                            <span class="tpd-pill vid" x-show="d.axes?.hdr?.scored">HDR / DV</span>
                           </div>
                           <div class="tpd-section" x-show="d.highlights && d.highlights.length && !tpdIsMinimalCard(d)">
                             <div class="tpd-section-label">What you get</div>

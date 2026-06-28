@@ -16,7 +16,7 @@
   --border-muted: #21262d;
   --border-faint: #161b22;
 
-  /* Text — bumped for higher dark-mode legibility (all values WCAG AAA on --bg-page) */
+  /* Text - bumped for higher dark-mode legibility (all values WCAG AAA on --bg-page) */
   --text-primary: #f0f6fc;
   --text-body: #e6edf3;
   --text-secondary: #b8c0c8;
@@ -89,7 +89,7 @@
   --cat-german: #f0883e;
   --cat-miscellaneous: #6b8aa8;
   --cat-other: #8b949e;
-  --cat-custom: #ff8c42;   /* user-managed bucket — orange-tan, distinct from Other's grey */
+  --cat-custom: #ff8c42;   /* user-managed bucket - orange-tan, distinct from Other's grey */
   --cat-required-core: #5eccac;
   --cat-required: #5eccac;
   --cat-sqp: #7c83eb;
@@ -116,7 +116,7 @@
   --banner-warn-border: #8b2d2d;
   --banner-warn-text: #ffdada;
 
-  /* v3 app brand colors — official Radarr/Sonarr hex from their source repos.
+  /* v3 app brand colors - official Radarr/Sonarr hex from their source repos.
      Clonarr green matches the energy-core green in the clonarr logo and is
      used on app-agnostic global sections (Settings, About) so they get the
      same fade-banner treatment as Radarr/Sonarr pages, just with Clonarr's
@@ -144,10 +144,18 @@
   --app-glow: var(--sonarr-glow);
 }
 
+/* Global sections (Settings, About) set data-app="clonarr" so the sidebar
+   accents AND the banner share Clonarr's own identity color, signalling these
+   are app-wide Clonarr settings, not Radarr/Sonarr-specific. */
+[x-data="clonarr"][data-app="clonarr"] {
+  --app-color: var(--clonarr-color);
+  --app-glow: var(--clonarr-glow);
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* Surface — muted warm-grey page; white cards pop on top */
+  /* Surface - muted warm-grey page; white cards pop on top */
   --bg-app: #ebeef2;
   --bg-page: #ebeef2;
   --bg-card: #ffffff;
@@ -161,14 +169,14 @@
   --border-muted: #d0d7de;
   --border-faint: #dde2e7;
 
-  /* Text — bumped contrast for legibility on muted bg.
+  /* Text - bumped contrast for legibility on muted bg.
      --text-secondary was #32383f (luminance ~20%, almost indistinguishable
      from --text-primary at ~13%). Raised to #57606a (~38%, GitHub-light
      `--fgColor-muted`) so the secondary text reads visually subordinate
      to primary and matches dark-mode's relative hierarchy (where
      secondary b8 is less prominent than muted c0). Affects ~118 usages
-     across the codebase — descriptions, helper text, tab inactive
-     states, app-banner meta, settings nav, etc. — restoring proper
+     across the codebase - descriptions, helper text, tab inactive
+     states, app-banner meta, settings nav, etc. - restoring proper
      hierarchy in light mode where it was collapsed. */
   --text-primary: #1f2328;
   --text-body: #24292f;
@@ -179,7 +187,7 @@
   --text-inverse: #ffffff;
   --text-on-accent: #ffffff;
 
-  /* Accent — keep hue, adjust lightness for contrast on light bg */
+  /* Accent - keep hue, adjust lightness for contrast on light bg */
   --accent-blue: #0969da;
   --accent-blue-muted: #ddf4ff;
   --accent-blue-strong: #0550ae;
@@ -211,7 +219,7 @@
   --fill-purple-soft: #f0e7ff;
   --fill-radarr: #fff1c2;
 
-  /* Alpha overlays — invert to dark-on-light */
+  /* Alpha overlays - invert to dark-on-light */
   --alpha-overlay: rgba(0,0,0,0.4);
   --alpha-shadow: rgba(0,0,0,0.08);
   --alpha-hover: rgba(0,0,0,0.04);
@@ -227,7 +235,7 @@
   --alpha-green: rgba(26,127,55,0.15);
   --alpha-purple: rgba(130,80,223,0.18);
 
-  /* CF categories / profile groups inherit dark-mode values from :root —
+  /* CF categories / profile groups inherit dark-mode values from :root -
      they are decorative chips that read on either background, and the
      backend manifest may override them at runtime. */
 
@@ -245,7 +253,7 @@
   --banner-warn-text: #82071e;
 
   /* v3 app brand colors (light-mode override). Radarr's #ffc230 has
-     poor contrast against white/near-white backgrounds — text + borders
+     poor contrast against white/near-white backgrounds - text + borders
      in that hex disappear in light theme. Darkened to a deeper amber
      for light mode only; dark mode keeps the original brand hex. Glow
      follows the new base hue so the soft fade behind app banners

@@ -216,7 +216,7 @@ func TestComposeTagline_AltWebProfile(t *testing.T) {
 }
 
 // composeHighlights — bug 3: opt-in lossless audio surfaces as a distinct
-// bullet ("Lossless audio available — enable...") when Audio.OptIn is true
+// bullet ("Lossless audio available, enable...") when Audio.OptIn is true
 // even though Audio.Scored is false. Scored still wins outright when both
 // flags happen to be set.
 func TestComposeHighlights_AudioOptInBullet(t *testing.T) {
@@ -229,7 +229,7 @@ func TestComposeHighlights_AudioOptInBullet(t *testing.T) {
 	got := composeHighlights(profile, axes)
 	found := false
 	for _, b := range got {
-		if b == "Lossless audio available — enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD" {
+		if b == "Lossless audio available, enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD" {
 			found = true
 			break
 		}
@@ -268,7 +268,7 @@ func TestComposeHighlights_NoAudioBulletWhenNeither(t *testing.T) {
 		if b == "Prefers releases with lossless audio (Atmos, DTS-X, TrueHD)" {
 			t.Errorf("Scored bullet leaked when both audio flags are false: %v", got)
 		}
-		if b == "Lossless audio available — enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD" {
+		if b == "Lossless audio available, enable the [Audio] Audio Formats group to prefer Atmos / DTS-X / TrueHD" {
 			t.Errorf("OptIn bullet leaked when both audio flags are false: %v", got)
 		}
 	}

@@ -314,9 +314,9 @@ function registerTooltipEscapeListener() {
 }
 
 // Skip-link click → focus #main-content. preventDefault keeps location.hash
-// clean — our hash routing would otherwise interpret #main-content as a nav
+// clean - our hash routing would otherwise interpret #main-content as a nav
 // target. Delegated listener so we don't need an inline onclick on the anchor
-// (CSP-tightening compatibility — see docs/security TODO #8).
+// (CSP-tightening compatibility - see docs/security TODO #8).
 function registerSkipLinkHandler() {
   if (skipLinkHandlerRegistered) return;
   skipLinkHandlerRegistered = true;
@@ -350,7 +350,7 @@ export function clonarr() {
       return this.instances.find(i => i.id === this.maintenanceInstanceId) || null;
     },
 
-    // Custom tooltip helpers — show/hide a viewport-aware tooltip anchored to
+    // Custom tooltip helpers - show/hide a viewport-aware tooltip anchored to
     // an element. Use instead of native title="" when the trigger element sits
     // near the right edge of the viewport (where the OS-level native tooltip
     // would render off-screen). Auto-flips below if too close to the top edge,
@@ -367,7 +367,7 @@ export function clonarr() {
       // interpreted as CSS pixels and then zoom-scaled by the browser at
       // render time. With UI Scale != 1 (zoom on <html>), assigning the raw
       // actual-pixel value as style.left makes the tooltip render at
-      // (value * zoom) actual pixels — offset from the trigger by the zoom
+      // (value * zoom) actual pixels - offset from the trigger by the zoom
       // factor. Divide every actual-pixel measurement by zoom so the values
       // round-trip back to the same physical position. Defaults to 1 when
       // no zoom is applied.
@@ -399,7 +399,7 @@ export function clonarr() {
       this.tt.show = false;
     },
 
-    // v3 collapsed-sidebar sub-nav flyout — hover-based, VS Code activity-bar
+    // v3 collapsed-sidebar sub-nav flyout - hover-based, VS Code activity-bar
     // pattern. Hover icon → 150ms delay → popup appears anchored to icon.
     // Move mouse to popup → stays open. Move away → 250ms delay → closes.
     // Switching between hovered sections is instant (no delay) when a popup
@@ -415,22 +415,30 @@ export function clonarr() {
       if (this._sidebarHoverHideTimer) { clearTimeout(this._sidebarHoverHideTimer); this._sidebarHoverHideTimer = null; }
       if (this.sidebarSubnavPopup === section) return; // already showing this section
       if (this.sidebarSubnavPopup) {
-        // Switching from another section's popup — instant, no delay
+        // Switching from another section's popup - instant, no delay
         if (this._sidebarHoverShowTimer) { clearTimeout(this._sidebarHoverShowTimer); this._sidebarHoverShowTimer = null; }
-        this.sidebarSubnavPopupTop = el.getBoundingClientRect().top;
+        // Divide by the UI-scale zoom: the popup is position:fixed but lives
+        // under documentElement's `zoom`, so a raw rect.top (visual px) gets
+        // re-scaled by zoom and lands too low. Dividing keeps it aligned with
+        // the hovered icon at any UI scale (1 = no change).
+        this.sidebarSubnavPopupTop = el.getBoundingClientRect().top / (parseFloat(this.uiScale) || 1);
         this.sidebarSubnavPopup = section;
         return;
       }
-      // Fresh hover — delayed open avoids flicker on quick sweep-by
+      // Fresh hover - delayed open avoids flicker on quick sweep-by
       if (this._sidebarHoverShowTimer) clearTimeout(this._sidebarHoverShowTimer);
       this._sidebarHoverShowTimer = setTimeout(() => {
-        this.sidebarSubnavPopupTop = el.getBoundingClientRect().top;
+        // Divide by the UI-scale zoom: the popup is position:fixed but lives
+        // under documentElement's `zoom`, so a raw rect.top (visual px) gets
+        // re-scaled by zoom and lands too low. Dividing keeps it aligned with
+        // the hovered icon at any UI scale (1 = no change).
+        this.sidebarSubnavPopupTop = el.getBoundingClientRect().top / (parseFloat(this.uiScale) || 1);
         this.sidebarSubnavPopup = section;
         this._sidebarHoverShowTimer = null;
       }, 150);
     },
     scheduleHideSidebarSubnav() {
-      // Cancel any pending show — user moved away before delay elapsed
+      // Cancel any pending show - user moved away before delay elapsed
       if (this._sidebarHoverShowTimer) { clearTimeout(this._sidebarHoverShowTimer); this._sidebarHoverShowTimer = null; }
       if (this._sidebarHoverHideTimer) clearTimeout(this._sidebarHoverHideTimer);
       this._sidebarHoverHideTimer = setTimeout(() => {
@@ -454,7 +462,7 @@ export function clonarr() {
       matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
         if (this.theme === 'system') this.applyTheme();
       });
-      // v3 sidebar mobile auto-collapse — sidebars on narrow viewports
+      // v3 sidebar mobile auto-collapse - sidebars on narrow viewports
       // (Unraid sub-window side-by-side, half-screen split, etc.) eat too
       // much real estate. Force collapsed below 1100px; restore the user's
       // last manual preference (from localStorage) when going wide again.
@@ -470,7 +478,7 @@ export function clonarr() {
       };
       narrowMQ.addEventListener('change', (e) => applyNarrow(e.matches));
       if (narrowMQ.matches) applyNarrow(true);
-      // Load the UI manifest first — it carries enum option lists, agent
+      // Load the UI manifest first - it carries enum option lists, agent
       // field specs, and category-color tokens that downstream renders need.
       // Awaited so getCategoryClass() / agent modal lookups don't race on
       // initial render. Endpoint payload is small (~3 KB) and cached for 60s.
@@ -480,12 +488,12 @@ export function clonarr() {
       this.$watch('qualityStructure', () => this.qsValidateCutoff());
       // Builder: auto-assign stable _id to every pb.qualityItems entry on any reassignment
       // (Apply template/preset/instance, group add/remove). Needed so shared qs-helpers can
-      // track drag/drop/rename/expand by identity. pbEnsureQualityIds is idempotent — the
+      // track drag/drop/rename/expand by identity. pbEnsureQualityIds is idempotent - the
       // spread-reassignment inside only fires when something actually changed, so the watch
       // settles after one tick.
       this.$watch('pb.qualityItems', () => this.pbEnsureQualityIds());
       // Scoring Sandbox must run loadSandbox whenever the page becomes
-      // visible — otherwise sb.instanceId stays empty and Score Selected
+      // visible - otherwise sb.instanceId stays empty and Score Selected
       // returns early + Instance Profiles dropdown stays empty. The
       // existing call from switchAppType only fires on app-type change,
       // not on direct URL/hash navigation or section/sub-tab switches.
@@ -503,9 +511,9 @@ export function clonarr() {
       // is safe to fire alongside watchers that call pushNav.
       window.addEventListener('hashchange', () => this.restoreFromHash(location.hash));
 
-      // Issue #52 — guard sidebar anchor navigation when the profile
+      // Issue #52 - guard sidebar anchor navigation when the profile
       // editor has unsaved changes. Sidebar links are pure <a href="#x">
-      // anchors so hashchange fires AFTER the location update — too late
+      // anchors so hashchange fires AFTER the location update - too late
       // to revert without flicker. Intercept the click in the capture
       // phase, prevent default, show Stay/Discard via closeProfileEditor,
       // then manually navigate on Discard.
@@ -518,7 +526,7 @@ export function clonarr() {
         // Only guard nav-style anchors (sidebar + topnav). Filter
         // tooltip-anchors, in-page #section links, etc. by requiring
         // the href to look like our hash routes (radarr/sonarr/settings/
-        // about) — anything else is a real in-page anchor we shouldn't
+        // about) - anything else is a real in-page anchor we shouldn't
         // hijack.
         const href = anchor.getAttribute('href') || '';
         if (!/^#(radarr|sonarr|settings|about)(\/|$)/.test(href)) return;
@@ -530,7 +538,7 @@ export function clonarr() {
         });
       }, true);
 
-      // Issue #52 — browser-level guard for reload / tab close / cross-
+      // Issue #52 - browser-level guard for reload / tab close / cross-
       // site navigation. Modern browsers ignore the returnValue text and
       // show their own generic "Leave site?" prompt, but setting
       // returnValue (or calling preventDefault) is enough to trigger it.
@@ -538,7 +546,7 @@ export function clonarr() {
         // Profile editor (Sync Preview) dirty-check from Issue #52.
         const profileDirty = typeof this.profileDetailIsDirty === 'function'
           && this.profileDetailIsDirty();
-        // CF editor dirty-check — same pattern, applied to the CF
+        // CF editor dirty-check - same pattern, applied to the CF
         // Editor modal (Create / Edit Custom Format). Without this a
         // browser reload while editing a CF silently drops the form.
         const cfDirty = this.showCFEditor
@@ -620,7 +628,7 @@ export function clonarr() {
       // lifetime regardless of how many Alpine roots end up sharing this
       // init function. The window-level flag survives Alpine teardowns
       // and re-mounts (rare today since index.html has a single x-data
-      // root, but defensive — split-root refactors otherwise stack a new
+      // root, but defensive - split-root refactors otherwise stack a new
       // listener per init() call and refresh N times per focus event).
       if (!window._cfSyncRulesVisListenerAttached) {
         window._cfSyncRulesVisListenerAttached = true;
@@ -629,7 +637,7 @@ export function clonarr() {
         });
       }
 
-      // Expanding the sidebar (Ctrl+B or click-toggle) closes the popup —
+      // Expanding the sidebar (Ctrl+B or click-toggle) closes the popup -
       // when the inline subnav becomes visible, the popup is redundant.
       // Also cancel any pending show-timer: if user was hovering an icon
       // and the 150ms delay hadn't elapsed yet, the timer would otherwise
@@ -693,7 +701,7 @@ export function clonarr() {
           if (this.advancedTab === 'group-builder') this.cfgbLoad(appType);
           else if (this.advancedTab === 'scoring') this.loadSandbox(appType);
         }
-        // Media Management — ensure the new app's Quality + Naming
+        // Media Management - ensure the new app's Quality + Naming
         // instance data is loaded whenever we switch app types. Without
         // this, switching Radarr→Sonarr (or vice-versa) on Naming/
         // Quality showed an empty "Currently on instance" card until
@@ -720,11 +728,11 @@ export function clonarr() {
       await this.loadInstances();
       await this.loadTrashStatus();
       // Restore navigation from URL hash (browser back/forward) or localStorage fallback.
-      // Hash takes priority — it carries the exact section+subtab the user was on.
+      // Hash takes priority - it carries the exact section+subtab the user was on.
       window.addEventListener('popstate', () => this.restoreFromHash(location.hash));
       const oldTab = localStorage.getItem('clonarr_tab');
       if (location.hash && this.restoreFromHash(location.hash)) {
-        // hash restored — skip localStorage
+        // hash restored - skip localStorage
       } else {
         const savedSection = localStorage.getItem('clonarr_section');
         const savedAppType = localStorage.getItem('clonarr_appType');
@@ -781,7 +789,7 @@ export function clonarr() {
       this.loadAutoSyncRules();
       // Scoring Sandbox results are NOT loaded here. Loading every app type's
       // full result set at boot meant just opening Clonarr (on any page) pulled
-      // the entire sandbox into reactive memory — fine for a few hundred rows,
+      // the entire sandbox into reactive memory - fine for a few hundred rows,
       // but it ballooned RAM for large sandboxes. They now load lazily the first
       // time the Scoring page is opened (see loadSandbox), guarded to run once
       // per app type.
@@ -807,7 +815,7 @@ export function clonarr() {
       }
       // Assign entire objects to trigger Alpine reactivity
       if (Object.keys(autoCompare).length) this.compareInstanceIds = { ...this.compareInstanceIds, ...autoCompare };
-      // v3 — Quality Definitions and Movie/Episode Naming share one
+      // v3 - Quality Definitions and Movie/Episode Naming share one
       // instance picker (mediaInstanceId) instead of separate qsInstanceId
       // and namingSelectedInstance, so the picker stays put when the
       // user switches between Media Management sub-tabs.
@@ -858,10 +866,10 @@ export function clonarr() {
               this.config.profileSync.localHead = data.localHead || '';
             }
           }
-        } catch (e) { /* network blip — try again next tick */ }
+        } catch (e) { /* network blip - try again next tick */ }
         // Always reload the rules list on the poll tick. Scheduled detection
         // (TRaSH upstream OR Arr drift) populates per-rule pendingChanges +
-        // drift fingerprints on the backend without any frontend signal — and
+        // drift fingerprints on the backend without any frontend signal - and
         // drift updates DriftWatch.LastRun, not ProfileSync.LastRun, so the
         // lastRunChanged check below would miss drift-only detection. An
         // unconditional reload (the rules endpoint is cheap; the heavier
@@ -884,11 +892,11 @@ export function clonarr() {
         }
         // If lastPull changed (scheduled pull completed), reload sync data
         if (this.trashStatus?.lastPull && this.trashStatus.lastPull !== prevPull) {
-          // Show pull diff toast for scheduled pulls (only if diff is fresh — newCommit matches current)
+          // Show pull diff toast for scheduled pulls (only if diff is fresh - newCommit matches current)
           if (this.trashStatus.lastDiff?.summary && this.trashStatus.lastDiff.newCommit === this.trashStatus.commitHash) {
             const diffTime = new Date(this.trashStatus.lastDiff.time).getTime();
             if (Date.now() - diffTime < 60000) { // only if diff is less than 60s old
-              // Preserve newlines — toast-content is pre-line, so the diff's
+              // Preserve newlines - toast-content is pre-line, so the diff's
               // per-app + per-CF lines render as a readable list, not one
               // comma-run. Strip only the markdown bold markers.
               const summary = this.trashStatus.lastDiff.summary.replace(/\*\*/g, '').trim();
@@ -899,7 +907,7 @@ export function clonarr() {
           for (const inst of this.instances) {
             await this.loadSyncHistory(inst.id);
           }
-          // Delay auto-sync event check — auto-sync runs async after pull completes
+          // Delay auto-sync event check - auto-sync runs async after pull completes
           setTimeout(() => this.checkAutoSyncEvents(), 5000);
         }
       }, 30000);
@@ -920,7 +928,7 @@ export function clonarr() {
         if (!r.ok) return;
         this.config = await r.json();
         this.config.pullSchedule = Object.assign({ mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, this.config.pullSchedule || {});
-        // Profile Sync — defaults match the backend migration so a fresh
+        // Profile Sync - defaults match the backend migration so a fresh
         // install with no profileSync block in the API response renders
         // sensibly. Sources subobject is initialised so the checkbox bindings
         // don't have to null-guard.
@@ -932,7 +940,7 @@ export function clonarr() {
           { trashUpstream: true, arrDrift: false },
           this.config.profileSync.sources || {}
         );
-        // Apply delay default — "Wait before applying" stores a single
+        // Apply delay default - "Wait before applying" stores a single
         // integer minute count. Default 1440 (24h) so a fresh switch to
         // delayed mode has a sensible non-zero value.
         if (!this.config.profileSync.applyDelayMinutes) this.config.profileSync.applyDelayMinutes = 1440;
@@ -1046,7 +1054,7 @@ export function clonarr() {
 
     formatPullScheduleClock(hour, minute) {
       // Explicit hour12 flag so display matches the picker's mode. Without it,
-      // Intl.DateTimeFormat picks based on the resolved locale's default cycle —
+      // Intl.DateTimeFormat picks based on the resolved locale's default cycle -
       // for en-US (common default even outside the US, when English sits high
       // in the browser language list) that's 12h, producing AM/PM next to the
       // container TZ label even when the picker's already showing 24h.
@@ -1228,7 +1236,7 @@ export function clonarr() {
 
     // Save Mode + Sources to /api/profile-sync. Detection schedule (interval,
     // specific) flows through saveConfig() → PUT /api/config. The apply delay
-    // (applyDelayMinutes) IS sent here — it lives only on ProfileSync and is
+    // (applyDelayMinutes) IS sent here - it lives only on ProfileSync and is
     // consulted only in "Wait before applying" mode.
     async saveProfileSync() {
       try {
@@ -1283,7 +1291,7 @@ export function clonarr() {
 // HTML helpers used directly from inline @click / x-html expressions
 // (e.g. @click="copyToClipboard(...)", x-html="sanitizeHTML(...)") must
 // remain on window so Alpine evaluates them in scope. clonarr itself no
-// longer goes on window — Alpine resolves it via Alpine.data() lookup.
+// longer goes on window - Alpine resolves it via Alpine.data() lookup.
 Object.assign(window, {
   copyToClipboard,
   genUUID,
@@ -1299,7 +1307,7 @@ Object.assign(window, {
 //     alpine:init listener is registered before Alpine.start() fires it.
 //   - Suspenders: if a future HTML edit reorders the tags, the
 //     `if (window.Alpine)` branch catches the case where Alpine
-//     already loaded — we just register directly.
+//     already loaded - we just register directly.
 // Ctrl/Cmd+B toggles the v3 sidebar collapsed state. Pattern lifted from
 // VS Code / Linear / Notion. Skips when a typeable element is focused so we
 // don't steal "select to bold" inside text inputs.
@@ -1320,7 +1328,7 @@ function registerSidebarToggleShortcut() {
 }
 
 // `/` focuses the first visible page-search input on the current section.
-// Industry standard (Slack, GitHub, Discord, Gmail, YouTube) — does NOT
+// Industry standard (Slack, GitHub, Discord, Gmail, YouTube) - does NOT
 // hijack browser Ctrl+F, which stays available for in-page find. Skips
 // when a typeable element is already focused so it doesn't intercept the
 // literal slash a user is trying to type into something else.
@@ -1355,7 +1363,7 @@ function registerClonarr() {
   registerSkipLinkHandler();
   registerSidebarToggleShortcut();
   registerSearchShortcut();
-  // x-tt="'tooltip text'" — viewport-aware custom tooltip directive.
+  // x-tt="'tooltip text'" - viewport-aware custom tooltip directive.
   // Replaces native title="" for elements where the OS tooltip would overflow
   // the viewport (right-edge buttons, long messages). Wires hover, focus, and
   // shared Escape handling to showTooltip / hideTooltip on the root clonarr scope.
@@ -1410,7 +1418,7 @@ function registerClonarr() {
       // releasing ownership. Otherwise the tooltip element lingers in
       // the DOM when the host gets ripped out by an x-if / x-for change
       // mid-hover (e.g. clicking a button that empties the surrounding
-      // template — the host vanishes before mouseleave fires).
+      // template - the host vanishes before mouseleave fires).
       if (activeTooltipOwner === tooltipOwner) {
         if (activeTooltipData && activeTooltipData.hideTooltip) {
           activeTooltipData.hideTooltip();

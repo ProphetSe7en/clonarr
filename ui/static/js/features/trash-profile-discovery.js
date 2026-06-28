@@ -330,35 +330,6 @@ export default {
     // visual noise. A card with fewer pills correctly signals fewer
     // differentiators.
 
-    // tpdAudioPillText returns the user-outcome audio label across three
-    // states the backend describer now reports:
-    //   scored → "Lossless audio"      (group default-on, user gets it by default)
-    //   optIn  → "Lossless available"  (group bundled but default-off, user opts in)
-    //   else   → "Lossy audio"
-    // Template uses different pill classes (.aud for lossless = subtle
-    // green, neutral for lossy / available) so the three states don't
-    // visually compete. "Lossless available" sits with the neutral
-    // styling - it advertises capability without claiming the outcome.
-    tpdAudioPillText(d) {
-      if (d.axes?.audio?.scored) return 'Lossless audio';
-      if (d.axes?.audio?.optIn)  return 'Lossless available';
-      return 'Lossy audio';
-    },
-
-    // tpdHDRPillText returns the SHORT HDR pill label - full opt-in
-    // enumeration goes in the Highlights bullet list, not on the pill
-    // (where long strings break the visual rhythm). Just "HDR" when no
-    // variants are available; "HDR · DV available" when at least one
-    // Dolby Vision opt-in exists (DV being the most "brag-worthy"
-    // optional, more than HDR10+ for most users).
-    tpdHDRPillText(d) {
-      const hdr = d.axes?.hdr;
-      if (!hdr?.scored) return '';
-      if (hdr.optIns && hdr.optIns.some(o => o.startsWith('DV'))) {
-        return 'HDR · DV available';
-      }
-      return 'HDR';
-    },
 
     // tpdSourceLabel reduces the raw items[] source list (which may have 6+
     // entries including HDTV / DVD / fallbacks that nobody cares about) to a
@@ -373,18 +344,12 @@ export default {
     // and "+ WEB" suffix added whenever WEB sources are also accepted, so
     // a Remux profile that also accepts WEB-DL reads as "Bluray Remux + WEB"
     // - matches how users think about the profile.
-    // tpdSourceLabel shows the source/quality RANGE the profile accepts, best
-    // tier -> worst tier, as its own axis (kept separate from the resolution
-    // pill so the two aren't blended). The backend source list is interleaved
-    // by resolution-then-source, so we rank against an explicit best->worst
-    // tier order rather than trusting list position. Single-tier profiles show
-    // just the one label.
-    // Pure source-type tiers, best -> worst. Resolution lives on its own pill,
-    // so source labels carry NO UHD/HD qualifier - that keeps the range
-    // consistent ("Remux → WEB" regardless of resolution class) and avoids the
-    // odd "UHD Remux vs Bluray Remux" mismatch. WEB-DL + WEBRip collapse to
-    // "WEB". Shared by the source pill AND the source facet filter so both
-    // agree on what tiers a profile has.
+    // _tpdSourceTiers reduces the raw source list to canonical tier labels
+    // (Remux / Bluray / WEB / HDTV / DVD / SDTV), collapsing WEB-DL + WEBRip
+    // into "WEB" and dropping UHD/HD qualifiers (resolution is its own pill).
+    // The order here is just a stable layout order, with no arrows between
+    // them the pills read as a set ("what the profile accepts"), not a
+    // ranking. Shared by the source fact-pills AND the source facet filter.
     _tpdSourceTiers(d) {
       const set = new Set(d.axes?.sources || []);
       const tiers = [
@@ -396,14 +361,6 @@ export default {
         { label: 'SDTV',   keys: ['SDTV'] },
       ];
       return tiers.filter(t => t.keys.some(k => set.has(k))).map(t => t.label);
-    },
-
-    tpdSourceLabel(d) {
-      const present = this._tpdSourceTiers(d);
-      if (present.length === 0) return 'Mixed sources';
-      const best = present[0];
-      const worst = present[present.length - 1];
-      return best === worst ? best : best + ' → ' + worst;
     },
 
     // --- Grouped, data-driven facet options --------------------------------
@@ -420,9 +377,10 @@ export default {
       const raw = d.axes?.resolution || '';
       return ['2160p', '1080p', '720p', '576p', '480p'].filter(r => raw.includes(r));
     },
-    // Display label for a resolution facet ("4K / UHD" for 2160p, else token).
+    // Display label for a resolution facet. Plain token (2160p / 1080p / 720p)
+    // so it reads consistently with the other resolution pills.
     tpdResLabel(res) {
-      return res === '2160p' ? '4K / UHD' : res;
+      return res;
     },
     // Resolution facets. advanced=false → common (4K/1080p/720p); advanced=true
     // → the rest (576p/480p). Ordered high→low, data-driven.
@@ -468,22 +426,6 @@ export default {
     },
     tpdAnyFilterActive() {
       return (this.tpdFeatureFilters || []).length > 0 || (this.tpdCategoryFilters || []).length > 0;
-    },
-
-    // tpdResolutionLabel returns just the primary resolution token (1080p /
-    // 2160p / 720p). Strips the verbose fallback chain ("720p, 576p, 480p
-    // fallback") that exposes raw items[] data nobody cares about for
-    // card-level scanning.
-    tpdResolutionLabel(d) {
-      const raw = d.axes?.resolution || '';
-      const m = raw.match(/^(\d+p)/);
-      const ceiling = m ? m[1] : raw;
-      // Show the acceptance floor next to the ceiling so wide-range profiles
-      // (e.g. "Remux 2160p (Alternative)" → down to SDTV) don't read as pure
-      // top-tier. Backend leaves floor empty for single-resolution profiles.
-      const floor = d.axes?.floor || '';
-      if (floor && floor !== ceiling) return ceiling + ' → ' + floor;
-      return ceiling;
     },
 
     // Minimal card mode - true for SQP profiles ([SQP] prefix) and the

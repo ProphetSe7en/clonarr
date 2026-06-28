@@ -79,7 +79,7 @@
                        'is-dragging': qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx,
                        'dnd-merge-hover': qualityStructureDrag.dropMerge === idx
                      }"
-                     :draggable="true"
+                     :draggable="qualityStructureRenaming !== item._id"
                      @dragstart="event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx;"
                      @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
                      @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"

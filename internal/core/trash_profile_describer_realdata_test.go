@@ -93,7 +93,7 @@ func TestDescribeProfile_RealRadarrData(t *testing.T) {
 			if err := json.Unmarshal(data, &p); err != nil {
 				t.Fatalf("parse %s: %v", tc.filename, err)
 			}
-			desc := describeProfile("radarr", &p, groups)
+			desc := describeProfile("radarr", &p, groups, nil)
 
 			// Marshal and print for visual verification
 			pretty, _ := json.MarshalIndent(desc, "", "  ")

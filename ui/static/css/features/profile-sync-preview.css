@@ -1,4 +1,4 @@
-/* Sync Preview overlay — parallel rewrite of profile-detail.
+/* Sync Preview overlay - parallel rewrite of profile-detail.
    All classes prefixed sp- to avoid clashing with existing profile/detail styles.
    Removed when Sync Preview ships and profile-detail.html is retired. */
 
@@ -18,7 +18,7 @@
   display: grid;
   /* Two columns: title block flexes (1fr), action buttons stick to the
      right (auto). Removed the leading auto-column that used to hold
-     the "← Classic editor" link — without that slot the layout was
+     the "← Classic editor" link - without that slot the layout was
      "title auto / buttons 1fr", which made the buttons drift with
      title length. */
   grid-template-columns: 1fr auto;
@@ -85,13 +85,23 @@
   color: var(--text-muted);
   font-size: 12px;
 }
+/* Small "?" help marker next to a basics-strip label; the explanation
+   shows on hover/tap via x-tt. Mirrors the help text Radarr/Sonarr put
+   under the same fields. */
+.sp-basics-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; margin-right: 5px;
+  border: 1px solid var(--border-subtle); border-radius: 50%;
+  font-size: 9px; line-height: 1; color: var(--text-muted);
+  cursor: help; user-select: none; flex-shrink: 0;
+}
 .sp-basics-val {
   color: var(--text-primary);
   font-weight: 500;
 }
 /* Modified-value affordance is the red reset button next to the field
    (presence = "this is modified"). The orange .overridden colour
-   treatment is dropped — reset icon + tooltip ("Reset to <default>")
+   treatment is dropped - reset icon + tooltip ("Reset to <default>")
    communicates both "this changed" and "click to restore" in one
    element, less visual noise than colour + value + extra hint text. */
 .sp-basics-default {
@@ -123,7 +133,7 @@
   flex-shrink: 0;
 }
 .sp-basics-reset:hover { color: var(--accent-red-strong, var(--accent-red)); }
-/* Qualities allowed launcher — "N changes" button shown when the
+/* Qualities allowed launcher - "N changes" button shown when the
    user has modified the Quality items. Uses --app-color so it
    follows the active app theme like the other customization
    indicators (matches .sp-summary-lead / .sp-summary-badge). */
@@ -139,7 +149,7 @@
 }
 .sp-basics-quality-launcher:hover { text-decoration: underline; }
 
-/* Clean state — "Profile default" + small edit pencil. The pencil is
+/* Clean state - "Profile default" + small edit pencil. The pencil is
    the only interactive element; the text itself is read-only. */
 .sp-basics-val-clean {
   display: inline-flex; align-items: center; gap: 6px;
@@ -153,7 +163,7 @@
 }
 .sp-basics-edit-icon:hover { color: var(--accent-blue); background: var(--bg-elevated); }
 
-/* CF score inline editor — replaces .sp-cf-score in editor mode.
+/* CF score inline editor - replaces .sp-cf-score in editor mode.
    Compact number input + adjacent reset-icon (only when overridden).
    Sits in the same right-aligned column as the read-only score so
    row layout doesn't shift when Customize flips. */
@@ -161,7 +171,7 @@
   /* Two-cell inner grid: 20px reserved for the reset button (rendered
      when overridden, empty cell otherwise) + 70px input. With reset
      in its own fixed-width column, toggling override on/off doesn't
-     shift the input field — input stays anchored at the same x. */
+     shift the input field - input stays anchored at the same x. */
   display: grid;
   grid-template-columns: 20px 70px;
   align-items: center;
@@ -191,7 +201,7 @@
 }
 /* ===== Customizations summary strip =====
    Sits between the basics card and the tabs. Two-column layout: status
-   text (clickable when customizations exist — jumps to Diffs) + action
+   text (clickable when customizations exist - jumps to Diffs) + action
    button (Customize this profile / Reset to profile defaults). Card
    styling mirrors .sp-basics so the two read as a stacked pair. */
 .sp-summary {
@@ -212,12 +222,12 @@
   flex: 1 1 auto;
   min-width: 0;
 }
-/* Span variant (Customize OFF) — informational, non-clickable. */
+/* Span variant (Customize OFF) - informational, non-clickable. */
 .sp-summary-clean {
   color: var(--accent-green);
   font-weight: 500;
 }
-/* Button variant (Customize ON) — clickable, jumps to Diffs. */
+/* Button variant (Customize ON) - clickable, jumps to Diffs. */
 button.sp-summary-active {
   background: transparent;
   border: 0;
@@ -236,7 +246,7 @@ button.sp-summary-active:focus-visible {
   border-radius: 3px;
 }
 /* Customizations strip "N customizations" lead text + per-section
-   badges — themed via --app-color so Radarr stays yellow and Sonarr
+   badges - themed via --app-color so Radarr stays yellow and Sonarr
    stays blue. Hardcoded orange used to read as a warning even though
    customizations are intentional. */
 .sp-summary-lead {
@@ -410,7 +420,7 @@ button.sp-summary-active:focus-visible {
   color: var(--text-muted);
 }
 
-/* ===== Body — two-column layout (sub-nav + content) ===== */
+/* ===== Body - two-column layout (sub-nav + content) ===== */
 .sp-body {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -430,7 +440,7 @@ button.sp-summary-active:focus-visible {
   max-height: calc(100vh - 100px);
   overflow-y: auto;
 }
-/* Sidebar layout mirrors Custom Formats sidebar — no per-category
+/* Sidebar layout mirrors Custom Formats sidebar - no per-category
    colours, neutral text by default, app-color highlight on active.
    Splits parent row into chevron-button (persists explicit state via
    localStorage) + label-button (jumps to first group in section =
@@ -459,7 +469,7 @@ button.sp-summary-active:focus-visible {
 }
 .sp-sub-nav-section-chevron:hover { color: var(--text-primary); }
 .sp-sub-nav-section-chevron.open { transform: rotate(90deg); }
-/* Label-button — clickable text + count, sets first group in section
+/* Label-button - clickable text + count, sets first group in section
    active. Same visual language as .cf-browse-side-parent-label. */
 .sp-sub-nav-section-label {
   display: flex;
@@ -532,13 +542,13 @@ button.sp-summary-active:focus-visible {
   font-weight: 600;
 }
 .sp-sub-nav-item.active .sp-sub-nav-count { color: var(--app-color); }
-/* Group has 0 active CFs — dim the whole row so the user can skim
+/* Group has 0 active CFs - dim the whole row so the user can skim
    past unused groups. Active-state styling overrides this so the
    currently-viewed group stays readable even if it's empty. */
 .sp-sub-nav-item.inactive { opacity: 0.5; }
 .sp-sub-nav-item.inactive.active { opacity: 1; }
 /* Required CFs sits standalone outside the section structure.
-   Matches "All categories" position from CF Management sidebar — no
+   Matches "All categories" position from CF Management sidebar - no
    chevron, no category tint, picks up app-color on active. */
 .sp-sub-nav-standalone {
   padding: 5px 10px;
@@ -557,11 +567,11 @@ button.sp-summary-active:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* Category colour lookup — wire each canonical cat-* class to its
+/* Category colour lookup - wire each canonical cat-* class to its
    --cat-<id> token so the group's --cat var resolves to the right
    colour for the section header + left-border. Same token set as
    Custom Formats, Classic editor, Profile Builder, Sandbox CF
-   browser — adding a category in backend categories.go propagates
+   browser - adding a category in backend categories.go propagates
    here automatically via tokens.css. */
 .sp-sub-nav-group.cat-audio              { --cat: var(--cat-audio); }
 .sp-sub-nav-group.cat-hdr                { --cat: var(--cat-hdr); }
@@ -636,7 +646,7 @@ button.sp-summary-active:focus-visible {
   margin: 0 0 14px;
   line-height: 1.5;
 }
-/* TRaSH group description — same italic prose treatment as the existing
+/* TRaSH group description - same italic prose treatment as the existing
    classic editor uses for group descriptions, but with looser line-height
    so the multi-line HTML from TRaSH (often with <br> and <a> tags) reads
    comfortably above the compact CF list. */
@@ -696,11 +706,11 @@ button.sp-summary-active:focus-visible {
   cursor: default;
 }
 .sp-action-row .toggle { flex-shrink: 0; }
-/* Single-CF combined row — render the lone CF on the SAME column grid the
+/* Single-CF combined row - render the lone CF on the SAME column grid the
    multi-CF .sp-cf-row (and the Additional CF list) uses: control | name |
    description | score. Every other CF row already renders this way (e.g.
    FLAC inside the multi-CF Audio Formats group); single-CF groups (the HDR
-   formats — DV, DV Boost, HDR, HDR10+ Boost, SDR) were the only ones still
+   formats - DV, DV Boost, HDR, HDR10+ Boost, SDR) were the only ones still
    on the boxed flex action-row, which dropped the description inline inside
    the grey action-row background with no name/description spacing. Grid here
    strips the background and lines the description up in its own column so
@@ -730,7 +740,7 @@ button.sp-summary-active:focus-visible {
   font-family: var(--font-mono, monospace);
 }
 .sp-action-row-combined .sp-cf-score-edit { grid-column: 4; justify-self: end; }
-/* Description column — mirrors .sp-cf-desc prose styling so single-CF rows
+/* Description column - mirrors .sp-cf-desc prose styling so single-CF rows
    read identically to the multi-CF / Additional CF rows. */
 .sp-action-row-combined .sp-cf-desc-inline {
   grid-column: 3;
@@ -792,7 +802,7 @@ button.sp-summary-active:focus-visible {
 .sp-cf-row:hover {
   background: var(--bg-elevated);
 }
-/* Inline description block — same treatment Browse uses on
+/* Inline description block - same treatment Browse uses on
    cf-cell-desc. Body-coloured prose, TRaSH-Guides / JSON links in
    tiny uppercase muted text on a line of their own. */
 .sp-cf-desc {
@@ -820,7 +830,7 @@ button.sp-summary-active:focus-visible {
   margin-right: 12px;
 }
 .sp-cf-desc .cf-desc-links a:hover { color: var(--app-color); text-decoration: underline; }
-/* Rename indicator — sits in the same footer row as the TRaSH/JSON links.
+/* Rename indicator - sits in the same footer row as the TRaSH/JSON links.
    Blue, uppercase to match the link styling, but no underline/hover since
    it's a behaviour flag (includeCustomFormatWhenRenaming), not a link. */
 .sp-cf-desc .cf-desc-links .cf-desc-rename,
@@ -869,7 +879,7 @@ button.sp-summary-active:focus-visible {
 .sp-cf-icon svg { display: block; }
 .sp-cf-row .toggle { justify-self: start; align-self: center; }
 .sp-cf-locked .sp-cf-icon { color: var(--text-muted); }
-/* Phase 2c — lock icon turns into a button when Customize is on so
+/* Phase 2c - lock icon turns into a button when Customize is on so
    the user can opt out of a required CF. Clickable affordance keeps
    the icon glyph but adds hover/focus chrome and a state colour. */
 .sp-cf-icon-clickable {
@@ -888,7 +898,7 @@ button.sp-summary-active:focus-visible {
   outline: 2px solid var(--accent-blue);
   outline-offset: 1px;
 }
-/* Pressed state — required CF currently excluded. Red leans the
+/* Pressed state - required CF currently excluded. Red leans the
    icon visually toward "this is opted out" and matches the strike
    on the CF name. */
 .sp-cf-icon-clickable.sp-cf-icon-excluded { color: var(--accent-red); }
@@ -916,13 +926,13 @@ button.sp-summary-active:focus-visible {
      the Custom Formats Browse view. */
   font-weight: 600;
 }
-/* Hover-tooltip affordance — cursor: help only when a tooltip is
+/* Hover-tooltip affordance - cursor: help only when a tooltip is
    actually wired up (Alpine flips .sp-cf-name-has-tooltip based on
    whether the CF has description / TRaSH links available). */
 .sp-cf-name-has-tooltip { cursor: help; }
 .sp-cf-name-has-tooltip:hover { color: var(--accent-blue); }
 
-/* Sidebar search — lives at the top of each sub-nav (Profile default,
+/* Sidebar search - lives at the top of each sub-nav (Profile default,
    Additional CF, Profile overview). Shared spSearchFilter state filters
    CF rows in the active pane to ones whose name matches. */
 .sp-sidebar-search-wrap {
@@ -978,12 +988,12 @@ button.sp-summary-active:focus-visible {
 /* ===== Profile overview tab =====
    Uses the same .sp-body two-column layout as Profile default (sub-nav
    + main content). Right side stacks cards for the sections the user
-   has selected — "All" shows every card; the other filter views show
+   has selected - "All" shows every card; the other filter views show
    just one. Customizations render INLINE on the rows they apply to
    (struck-through original + new value + small "customized" tag)
    rather than in a separate summary card.
 
-   Sub-nav in this tab is a FLAT list — there are no real categories
+   Sub-nav in this tab is a FLAT list - there are no real categories
    here (every item is a view of the same data), so the cat-color
    border-left + tinted text the Profile default sub-nav uses is
    neutralized. A subtle divider visually separates summary views
@@ -1046,7 +1056,7 @@ button.sp-summary-active:focus-visible {
   font-weight: 400;
 }
 
-/* Notes card — collapsible compact variant. Header acts as the toggle
+/* Notes card - collapsible compact variant. Header acts as the toggle
    and shows a snippet of the notes (or "+ Add notes" CTA) when
    collapsed so the user gets at-a-glance context without expanding. */
 .sp-ov-notes-card { padding: 0; }
@@ -1100,7 +1110,7 @@ button.sp-summary-active:focus-visible {
   font-size: 12px; line-height: 1.45;
   color: var(--text-secondary);
 }
-/* "Show CF Groups" toggle — pinned right in the card title. Shared
+/* "Show CF Groups" toggle - pinned right in the card title. Shared
    spOverviewGroupCFs state across all three CF section cards, persisted
    per-browser via localStorage. */
 .sp-ov-group-toggle {
@@ -1118,7 +1128,7 @@ button.sp-summary-active:focus-visible {
   cursor: pointer;
   margin: 0;
 }
-/* Clickable column header row — sits above the CF list, click cycles
+/* Clickable column header row - sits above the CF list, click cycles
    sort direction for that column. Active column gets app-color tint
    + visible arrow indicator. */
 .sp-ov-cf-header {
@@ -1147,7 +1157,7 @@ button.sp-summary-active:focus-visible {
   font-size: 9px;
 }
 
-/* Basics — horizontal flex-wrap, same pattern as the top header
+/* Basics - horizontal flex-wrap, same pattern as the top header
    strip so the General section reads like an at-a-glance summary
    instead of a vertical 6-row list. Each row becomes an inline
    `label value` cluster; modified items inline their customized
@@ -1180,7 +1190,7 @@ button.sp-summary-active:focus-visible {
   font-style: italic;
 }
 
-/* Enabled CFs — section per source, with optional category color on
+/* Enabled CFs - section per source, with optional category color on
    the section-title's left border so user can tell at a glance which
    block the CFs come from. */
 .sp-ov-cf-section {
@@ -1328,7 +1338,7 @@ button.sp-summary-active:focus-visible {
   color: var(--text-muted);
 }
 /* Updates panel rows have plenty of room (no score column) and the
-   entry text is descriptive — let the full label render and wrap when
+   entry text is descriptive - let the full label render and wrap when
    needed instead of truncating at the default name-column width. */
 .sp-ov-card-updates .sp-ov-cf-row {
   grid-template-columns: 1fr;
@@ -1344,7 +1354,7 @@ button.sp-summary-active:focus-visible {
   font-size: 12px;
   text-align: left;
 }
-/* Customized value (basics or CF score) — themed --app-color so the
+/* Customized value (basics or CF score) - themed --app-color so the
    "modified" highlight follows the active app (yellow Radarr / blue
    Sonarr). Was hardcoded orange which read like a warning even
    though customizations are intentional. */
@@ -1358,7 +1368,7 @@ button.sp-summary-active:focus-visible {
 }
 /* General-section value as a click-to-scroll button when Customize
    is on. Looks like the read-only val (no button chrome) but cursor
-   + hover-underline hints that it's interactive — clicking scrolls
+   + hover-underline hints that it's interactive - clicking scrolls
    to the basics-strip editor at the top of the page where the
    actual inline inputs live. */
 .sp-ov-basics-editlink {
@@ -1377,13 +1387,13 @@ button.sp-summary-active:focus-visible {
 .sp-ov-cf-score.positive { color: var(--accent-green); }
 .sp-ov-cf-score.negative { color: var(--accent-red); }
 .sp-ov-cf-score.zero     { color: var(--text-muted); }
-/* Diffs card — fixed-column grid so reset, label, old-value, arrow,
+/* Diffs card - fixed-column grid so reset, label, old-value, arrow,
    new-value land in the same x-position across rows. Reset-icon at
    column 1 (far left) keeps it in a consistent place regardless of
    value-content length. Old + new values both left-aligned within
    their 100px columns so the start-position aligns ("0", "Original",
    "Remux-2160p" all begin at the same x). No strikethrough on the
-   old value — dimmed colour + opacity is easier to read. */
+   old value - dimmed colour + opacity is easier to read. */
 .sp-ov-card-diffs .sp-ov-diff-row {
   display: grid;
   /* Fixed widths so labels + values align across rows in the same
@@ -1404,7 +1414,7 @@ button.sp-summary-active:focus-visible {
   overflow: visible;
 }
 /* "from <group>" meta on score-override rows lives under the label
-   in a second visual line — moves to grid-column 1 / row 2 so the
+   in a second visual line - moves to grid-column 1 / row 2 so the
    data columns aren't pushed sideways. */
 /* CF-name cell in Diffs rows can hold both the CF name and an inline
    "· from <group>" source label. flex layout so both share one line;
@@ -1499,7 +1509,7 @@ button.sp-summary-active:focus-visible {
   text-align: center;
 }
 
-/* Excluded-CF row in the Diffs view — name gets struck-through too
+/* Excluded-CF row in the Diffs view - name gets struck-through too
    since the row represents "this CF would normally sync but you
    removed it from the active set". */
 .sp-ov-cf-excluded .sp-ov-cf-name {
@@ -1520,7 +1530,7 @@ button.sp-summary-active:focus-visible {
   padding: 8px 0;
 }
 
-/* Quality items — flat wrapping chip list. Groups distinguished by a
+/* Quality items - flat wrapping chip list. Groups distinguished by a
    stronger background + small downward arrow + tooltip listing the
    members. Singles are plain chips. Keeps the section compact even
    for profiles with 15+ qualities. */
@@ -1567,7 +1577,7 @@ button.sp-summary-active:focus-visible {
 }
 
 
-/* Stale-dry-run notice — replaces the Apply button on the dry-run
+/* Stale-dry-run notice - replaces the Apply button on the dry-run
    preview banner when the editor has been edited since the last
    successful dry-run. Same vertical footprint as the button so the
    banner does not jump on transition; muted styling so it reads as

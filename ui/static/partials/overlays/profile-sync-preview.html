@@ -278,7 +278,7 @@
            x-data="{ get _def() { return profileDetail?.detail?.profile?.minFormatScore ?? 0; },
                      get _val() { return pdOverrides?.minFormatScore?.value ?? this._def; },
                      get _mod() { return Number(this._val) !== Number(this._def); } }">
-        <span class="sp-basics-lbl">Min score</span>
+        <span class="sp-basics-help" x-tt="'The lowest total Custom Format score a release can have and still be downloaded. Anything lower is rejected.'">?</span><span class="sp-basics-lbl">Min score</span>
         <template x-if="!pdOverridesEnabled">
           <span class="sp-basics-val" x-text="_val"></span>
         </template>
@@ -305,7 +305,7 @@
            x-data="{ get _def() { return profileDetail?.detail?.profile?.minUpgradeFormatScore ?? 1; },
                      get _val() { return pdOverrides?.minUpgradeFormatScore?.value ?? this._def; },
                      get _mod() { return Number(this._val) !== Number(this._def); } }">
-        <span class="sp-basics-lbl">Min upgrade</span>
+        <span class="sp-basics-help" x-tt="'How much a new release must beat the current Custom Format score before it counts as an upgrade worth grabbing.'">?</span><span class="sp-basics-lbl">Min upgrade</span>
         <template x-if="!pdOverridesEnabled">
           <span class="sp-basics-val" x-text="_val"></span>
         </template>
@@ -329,7 +329,7 @@
            x-data="{ get _def() { return profileDetail?.detail?.profile?.cutoffFormatScore ?? 10000; },
                      get _val() { return pdOverrides?.cutoffFormatScore?.value ?? this._def; },
                      get _mod() { return Number(this._val) !== Number(this._def); } }">
-        <span class="sp-basics-lbl">Cutoff score</span>
+        <span class="sp-basics-help" x-tt="'Once a release reaches the cutoff quality and this Custom Format score, no more upgrades are grabbed.'">?</span><span class="sp-basics-lbl">Cutoff score</span>
         <template x-if="!pdOverridesEnabled">
           <span class="sp-basics-val" x-text="_val"></span>
         </template>
@@ -352,7 +352,7 @@
            x-data="{ get _def() { return !!(profileDetail?.detail?.profile?.upgradeAllowed); },
                      get _val() { return pdOverrides?.upgradeAllowed?.value ?? this._def; },
                      get _mod() { return !!this._val !== !!this._def; } }">
-        <span class="sp-basics-lbl">Upgrades</span>
+        <span class="sp-basics-help" x-tt="'When off, the first acceptable release is kept and never upgraded.'">?</span><span class="sp-basics-lbl">Upgrades</span>
         <template x-if="!pdOverridesEnabled">
           <span class="sp-basics-val" x-text="_val ? 'On' : 'Off'"></span>
         </template>
@@ -379,7 +379,7 @@
                      get _val() { return pdOverrides?.cutoffQuality || this._def; },
                      get _mod() { return this._val !== this._def && this._val !== ''; },
                      get _opts() { const items = qualityStructure?.length ? qualityStructure : (profileDetail?.detail?.profile?.items || []); return items.filter(i => i.allowed).map(i => i.name || i.quality?.name || '').filter(n => n); } }">
-        <span class="sp-basics-lbl">Cutoff quality</span>
+        <span class="sp-basics-help" x-tt="'The quality that is good enough. Once reached (and the cutoff score met), downloading stops.'">?</span><span class="sp-basics-lbl">Cutoff quality</span>
         <template x-if="!pdOverridesEnabled">
           <span class="sp-basics-val" x-text="_val || '—'"></span>
         </template>
