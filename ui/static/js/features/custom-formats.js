@@ -2,7 +2,7 @@ import { sanitizeHTML } from '../utils/csrf.js';
 
 export default {
   state: {
-    // Custom Formats browse — name/category text filter. Single string
+    // Custom Formats browse - name/category text filter. Single string
     // applies across all categories simultaneously; matching categories
     // auto-expand so results are visible without manual clicks.
     cfBrowseFilter: '',
@@ -16,14 +16,14 @@ export default {
     // 'description' view mode. Empty = no row expanded.
     cfBrowseExpandedCF: '',
     // Sidebar category-filter selection. Three formats:
-    //   'all'                 — every category (today's stacked cards)
-    //   'parent:<prefix>'     — filter to every sub-group under a parent
+    //   'all'                 - every category (today's stacked cards)
+    //   'parent:<prefix>'     - filter to every sub-group under a parent
     //                           (e.g. 'parent:Unwanted' = all Unwanted variants)
-    //   '<displayName>'       — filter to one specific sub-group
+    //   '<displayName>'       - filter to one specific sub-group
     // Persisted to localStorage so the choice survives reload.
     cfBrowseActiveCategory: localStorage.getItem('clonarr_cfBrowseCategory') || 'all',
     // Per-parent expand state for the sidebar tree. Independent of
-    // main-pane detailSections — sidebar parents collapse to a single
+    // main-pane detailSections - sidebar parents collapse to a single
     // row while main cards stay individually controllable. Stored as
     // {<parentPrefix>: bool}. Persisted so user's "what's interesting
     // to me" survives reload.
@@ -31,17 +31,17 @@ export default {
       try { return JSON.parse(localStorage.getItem('clonarr_cfBrowseExpanded') || '{}'); }
       catch (_) { return {}; }
     })(),
-    // Clone-flow modal state — set by cloneCFRow when the ⧉ button is
+    // Clone-flow modal state - set by cloneCFRow when the ⧉ button is
     // clicked, cleared by cancelCloneCF / commitCloneCF (backdrop
-    // click is NOT a close path — Cancel button or ESC only, matches
+    // click is NOT a close path - Cancel button or ESC only, matches
     // the modal-no-backdrop-close rule). No API call happens until
     // the user clicks Save in the modal.
     cloneModal: { open: false, sourceCF: null, sourceAppType: '', name: '', saving: false, error: '' },
-    // Add-to-Arr modal state — set by openAddCFToArr when the +Arr
+    // Add-to-Arr modal state - set by openAddCFToArr when the +Arr
     // button is clicked, cleared by cancelAddCFToArr / commitAddCFToArr.
     // Pushes the CF entity to a chosen Arr instance without touching
     // any quality profile. Same modal-no-backdrop-close convention.
-    // Add-CF-to-Arr modal — Custom Formats Browse + Add flow.
+    // Add-CF-to-Arr modal - Custom Formats Browse + Add flow.
     // target='arr'     : push the CF entity to the chosen instance only;
     //                    no profile mutation, current "+" behaviour.
     // target='profile' : add to a sync rule's profile with a score.
@@ -51,7 +51,7 @@ export default {
     //                    for the rule's profile context.
     addCFToArrModal: { open: false, cfName: '', trashId: '', customCFId: '', appType: '', instanceId: '', target: 'arr', ruleId: '', score: 0, saving: false, error: '' },
     // cfEditorActiveTab + cfEditorDescriptionPreview live in state.js
-    // alongside the rest of the cf-editor state — this section only
+    // alongside the rest of the cf-editor state - this section only
     // holds CF browse / clone state.
   },
   methods: {
@@ -175,11 +175,11 @@ export default {
     // collection landing page if the slug can't be derived. Empty for
     // custom CFs (no upstream).
     //
-    // TRaSH-Guides uses inconsistent casing per app — Radarr's page
+    // TRaSH-Guides uses inconsistent casing per app - Radarr's page
     // path is /Radarr/Radarr-collection-of-custom-formats/ (both
     // capitalized) but Sonarr's is /Sonarr/sonarr-collection-of-custom-
     // formats/ (capital dir, lowercase filename). Verified by curl
-    // against trash-guides.info — the wrong case returns 404. The
+    // against trash-guides.info - the wrong case returns 404. The
     // ?h={slug} query param triggers Material's search-highlight on
     // the destination page.
     trashCFGuideUrl(cf, appType) {
@@ -281,7 +281,7 @@ export default {
       try { localStorage.setItem('clonarr_cfBrowseCategory', this.cfBrowseActiveCategory); } catch (_) {}
 
       // Figure out which sidebar parent (if any) the new active filter
-      // belongs to — either directly (parent:X) or via a child's parent.
+      // belongs to - either directly (parent:X) or via a child's parent.
       let targetParent = null;
       if (this.cfBrowseActiveCategory.startsWith('parent:')) {
         targetParent = this.cfBrowseActiveCategory.slice('parent:'.length);
@@ -294,7 +294,7 @@ export default {
           }
         }
       }
-      // Clear the explicit override on the target parent — auto-expand
+      // Clear the explicit override on the target parent - auto-expand
       // (via the active-match check) takes over from here.
       if (targetParent && Object.prototype.hasOwnProperty.call(this.cfBrowseSidebarExpanded, targetParent)) {
         const updated = { ...this.cfBrowseSidebarExpanded };
@@ -314,7 +314,7 @@ export default {
     },
 
     // Toggle a single parent's expansion in the sidebar tree.
-    // Sets explicit to the inverse of what's CURRENTLY VISIBLE — not
+    // Sets explicit to the inverse of what's CURRENTLY VISIBLE - not
     // the inverse of the stored explicit flag. The difference matters
     // when the parent is auto-expanded (via active-filter match) with
     // no explicit value set: a plain "!stored" toggle would flip
@@ -331,7 +331,7 @@ export default {
     },
 
     // True when a parent is currently expanded. Explicit chevron-set
-    // state wins (true OR false — so the user can collapse a parent
+    // state wins (true OR false - so the user can collapse a parent
     // that's also the active filter target). When the user has never
     // touched the chevron on this parent (state is undefined), fall
     // back to auto-expand: open if the parent or any of its children
@@ -380,7 +380,7 @@ export default {
     // need to be visible without manual clicks (cfBrowseFilter branch);
     // otherwise the explicit detailSections flag wins. setCFBrowseCategory
     // sets that flag to true when the sidebar pins a single child
-    // category, so card-auto-expansion-on-sidebar-click still works —
+    // category, so card-auto-expansion-on-sidebar-click still works -
     // but the chevron and "Collapse all" can override it because they
     // also write to detailSections.
     isCFCategoryExpanded(cat) {
@@ -443,7 +443,7 @@ export default {
             shortName = group.name.substring(idx + 1).trim();
           }
         }
-        // No prefix remapping — bracket prefix from TRaSH cf-group JSON is
+        // No prefix remapping - bracket prefix from TRaSH cf-group JSON is
         // the source of truth (mirrors backend's ParseCategoryPrefix). Earlier
         // `Required → Golden Rule` and `SQP → Miscellaneous` remaps were
         // removed: they pre-empted TRaSH's classification choices and broke
@@ -451,7 +451,7 @@ export default {
         // `[Required] Repack/Proper`, `[Required] Anime Versions` are not
         // Golden Rule groups).
         // Display name: use shortName if present, otherwise prefix, otherwise full name
-        const displayName = shortName ? (prefix + ' — ' + shortName) : (prefix || group.name);
+        const displayName = shortName ? (prefix + ' - ' + shortName) : (prefix || group.name);
         // Category class uses the prefix for color matching
         const categoryClass = prefix || 'Other';
 
@@ -478,7 +478,7 @@ export default {
           categories.push({
             category: categoryClass,
             displayName,
-            // Short name (no prefix) — used in sidebar children where
+            // Short name (no prefix) - used in sidebar children where
             // the parent header already conveys the prefix, so we don't
             // want to repeat it. Falls back to displayName when there's
             // no bracket-prefix (e.g. "Other" category).
@@ -513,7 +513,7 @@ export default {
         categories.push({ category: 'Other', displayName: 'Other', groupNum: null, isCustom: false, groups: [{ name: 'Other', shortName: 'Other', cfs: ungrouped }], totalCFs: ungrouped.length });
       }
 
-      // Inject custom CFs — grouped by their user-chosen category
+      // Inject custom CFs - grouped by their user-chosen category
       // field. Each unique category becomes its own card on the page;
       // they all nest under a "Custom" sidebar parent so user-defined
       // buckets don't pollute the TRaSH category tree.
@@ -552,7 +552,7 @@ export default {
           const cfs = byCategory.get(catName);
           cfs.sort((a, b) => a.name.localeCompare(b.name));
           categories.push({
-            // `category` is the SIDEBAR PARENT key — always 'Custom'
+            // `category` is the SIDEBAR PARENT key - always 'Custom'
             // so every user-category collapses under one Custom parent
             // in the sidebar tree (see cfBrowseCategoriesHierarchy).
             category: 'Custom',
@@ -623,7 +623,7 @@ export default {
     },
 
     // Build the visible pill list for a CF row. Uses spec.name as the
-    // pill label — TRaSH (and the Arr UIs) already give every spec a
+    // pill label - TRaSH (and the Arr UIs) already give every spec a
     // human-readable name like "Mono", "Not 3.0ch", "1080p", or
     // "Bluray", which is far more meaningful than regex or impl-type.
     // For structured specs (Resolution / Source / Language) the value
@@ -665,7 +665,7 @@ export default {
           value: valueText,
           required: !!s.required,
           negate: !!s.negate,
-          full: label + (valueText ? ': ' + valueText : '') + (s.required ? ' (required)' : '') + (s.negate ? ' — exclude' : ''),
+          full: label + (valueText ? ': ' + valueText : '') + (s.required ? ' (required)' : '') + (s.negate ? ' - exclude' : ''),
         });
       }
 
@@ -684,7 +684,7 @@ export default {
       'EditionSpecification',
     ]),
 
-    // Hover-tooltip for the +N overflow chip — shows the aggregated
+    // Hover-tooltip for the +N overflow chip - shows the aggregated
     // pill summary (same form the row would render if there was no
     // limit) instead of the raw regex. Full regex detail is in the
     // info popover for users who actually need it.
@@ -733,7 +733,7 @@ export default {
       // Always include the current form's category so the dropdown
       // can select it on edit, even if the catalog hasn't loaded yet
       // OR the user is editing the only CF in that category (catalog
-      // would still surface it, but be defensive — race conditions
+      // would still surface it, but be defensive - race conditions
       // around openCFEditor showed the dropdown falling back to
       // "New category" without this).
       const formCat = (this.cfEditorForm?.category || '').trim();
@@ -751,7 +751,7 @@ export default {
     // === Markdown editor helpers (reusable for cf-groups, profile
     // editor, etc. later). Operate on a target <textarea> element so
     // the same toolbar can drive any markdown input. No external
-    // library — basic wrap/prepend selection mutation. ===
+    // library - basic wrap/prepend selection mutation. ===
 
     // Wrap the textarea's selected text with leading + trailing
     // strings (e.g. "**" + "**" for bold). When nothing is selected,
@@ -850,14 +850,14 @@ export default {
     renderMarkdownPreview(text) {
       if (!text) return '<em style="color:var(--text-muted)">Nothing to preview.</em>';
       let html = String(text);
-      // Code spans — do FIRST so the chars inside aren't re-processed
+      // Code spans - do FIRST so the chars inside aren't re-processed
       html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
       // TRaSH ^^underline^^
       html = html.replace(/\^\^([^^\n]+?)\^\^/g, '<u>$1</u>');
       // Bold + italic
       html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
       html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-      // Links [text](url) — URL portion allows ONE level of balanced
+      // Links [text](url) - URL portion allows ONE level of balanced
       // parens so Wikipedia disambiguators like
       // `(streaming_service)` in
       // `https://en.wikipedia.org/wiki/VRV_(streaming_service)` survive.
@@ -865,7 +865,7 @@ export default {
       // consumed and discarded so it doesn't leak as plain text in the
       // CF editor description preview.
       html = html.replace(/\[([^\]]+)\]\((https?:\/\/(?:[^\s()]|\([^()]*\))+)\)(\{:[^}]*\})?/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-      // Lists — split into blocks, detect "- " or "1. " prefix per line
+      // Lists - split into blocks, detect "- " or "1. " prefix per line
       const blocks = html.split(/\n\n+/).map(block => {
         const lines = block.split('\n');
         if (lines.every(l => /^\s*-\s+/.test(l))) {
@@ -882,7 +882,7 @@ export default {
 
     // Build the SAFE HTML payload for the row's hover tooltip.
     // Description goes through sanitizeHTML at construction time so
-    // this function returns guaranteed-clean output — callers don't
+    // this function returns guaranteed-clean output - callers don't
     // have to remember to sanitize again. TRaSH/JSON link URLs are
     // constructed from helper-emitted strings (no user input), but we
     // still escape via a quick attribute-safe encoder before
@@ -909,12 +909,12 @@ export default {
 
     // Inline description HTML for the CF browse row's description cell.
     // Differs from buildCFInfoHTML (tooltip view) by wrapping pieces in
-    // dedicated classes so per-row CSS can control sizing — links sit
+    // dedicated classes so per-row CSS can control sizing - links sit
     // in a small muted footer instead of inheriting body font-size.
     // Falls back to "No description" when both fields are empty so the
     // cell is never blank.
     cfInlineDescriptionHTML(cf, appType, opts = {}) {
-      // Description resolve chain — row data first, then raw cfBrowseData
+      // Description resolve chain - row data first, then raw cfBrowseData
       // (data.cfs / data.customCFs) as fallback. getCFBrowseGroups carries
       // description forward but only for the path it was loaded under;
       // for some load orders the row gets built before descriptions
@@ -940,13 +940,13 @@ export default {
       } else {
         html += `<span class="cf-desc-empty">No description</span>`;
       }
-      // Meta footer row — TRaSH guide / JSON links plus the rename
+      // Meta footer row - TRaSH guide / JSON links plus the rename
       // indicator, all in the same muted line. The rename chip surfaces
       // includeCustomFormatWhenRenaming so the profile editor shows, right
       // where the links live, which CFs append their name to renamed files.
       // It renders for custom CFs too (they can carry the flag). The Custom
       // Formats tab passes opts.hideRename because it already shows this as a
-      // badge in the CF name cluster — avoids a duplicate.
+      // badge in the CF name cluster - avoids a duplicate.
       const metaBits = [];
       if (!cf?.isCustom) {
         const guideUrl = this.trashCFGuideUrl ? this.trashCFGuideUrl(cf, appType) : '';
@@ -989,7 +989,7 @@ export default {
       // etc. Without this the user gets a confusing 409 collision error
       // on Save when they're just trying to make a second clone of the
       // same source CF. Must include BOTH the TRaSH catalog (cfs) AND
-      // the user's own custom CFs (customCFs) — the previous clone went
+      // the user's own custom CFs (customCFs) - the previous clone went
       // into customCFs, so checking only cfs misses the collision.
       const data = this.cfBrowseData?.[appType] || {};
       const existingNames = new Set([
@@ -1022,7 +1022,7 @@ export default {
     },
 
     // Open the Add-to-Arr modal for the given CF (either a TRaSH CF or
-    // a user custom CF — discriminated by cf.isCustom). Defaults the
+    // a user custom CF - discriminated by cf.isCustom). Defaults the
     // instance picker to the first instance of the active app type
     // alphabetically; user can switch via the dropdown.
     openAddCFToArr(cf, appType) {
@@ -1048,7 +1048,7 @@ export default {
       if (typeof this.loadCFSyncRules === 'function' && !this.cfSyncRulesLoaded?.[appType]) {
         this.loadCFSyncRules(appType);
       }
-      // Same for the rule list — modal opens from Browse, which does
+      // Same for the rule list - modal opens from Browse, which does
       // not necessarily trigger loadAutoSyncRules on its own. Without
       // this the picker would render before autoSyncRules populates
       // and look empty until Alpine reacted to a later refresh.
@@ -1190,7 +1190,7 @@ export default {
       return (row.instances || []).some(i => i?.id === m.instanceId);
     },
 
-    // "Add to Radarr (main)" / "Add to Sonarr 4K" — surfaces the
+    // "Add to Radarr (main)" / "Add to Sonarr 4K" - surfaces the
     // selected instance name in the primary button so the user can see
     // where the CF is going without scanning the dropdown.
     addCFToArrButtonLabel() {
@@ -1225,7 +1225,7 @@ export default {
         if (result.added?.length > 0) {
           this.showToast(`Added "${m.cfName}" to ${instName}.`, 'success', 4000);
         } else if (result.skipped?.length > 0) {
-          this.showToast(`"${m.cfName}" already exists on ${instName} — skipped.`, 'info', 4000);
+          this.showToast(`"${m.cfName}" already exists on ${instName} - skipped.`, 'info', 4000);
         } else if (result.failed?.length > 0) {
           this.addCFToArrModal.error = result.failed[0].error || 'Add failed';
           this.addCFToArrModal.saving = false;
@@ -1495,7 +1495,7 @@ export default {
 
     // True when the name typed in the CF Editor is byte-exact match
     // against a TRaSH-published CF for the same app. Drives the small
-    // "guide" badge next to the Name field. Save is NEVER blocked —
+    // "guide" badge next to the Name field. Save is NEVER blocked -
     // the user owns naming. The badge is informational only; the real
     // cross-usage detection runs at sync-plan time.
     get cfEditorTrashMatch() {
@@ -1533,7 +1533,7 @@ export default {
         }
         const full = (allCFs || []).find(c => c.id === existingCF.trashId);
         if (!full) {
-          this.showToast('Custom CF not found — it may have been deleted', 'error', 8000);
+          this.showToast('Custom CF not found - it may have been deleted', 'error', 8000);
           return;
         }
         this.cfEditorForm = {
@@ -1607,7 +1607,7 @@ export default {
     },
 
     // True when the editor's form differs from its baseline. Returns
-    // false when no baseline was ever captured (defensive — shouldn't
+    // false when no baseline was ever captured (defensive - shouldn't
     // block close in degraded mode).
     cfEditorIsDirty() {
       if (!this._cfEditorBaseline) return false;
@@ -1618,7 +1618,7 @@ export default {
       }
     },
 
-    // Cancel path — prompts before closing when the editor has
+    // Cancel path - prompts before closing when the editor has
     // unsaved changes. Used by the Cancel button + ESC key.
     closeCFEditor() {
       if (!this.cfEditorIsDirty()) {
@@ -1670,7 +1670,7 @@ export default {
           return { name: f.name, value: val, label: f.label, type: f.type, selectOptions: f.selectOptions || [], placeholder: f.placeholder || '' };
         });
       } else {
-        // No schema match — fallback to guessing
+        // No schema match - fallback to guessing
         fields = Object.entries(rawFields).map(([k, v]) => ({
           name: k,
           value: v,
@@ -1812,7 +1812,7 @@ export default {
       // Programmatic assignment does NOT fire @change, so Alpine's
       // `pb.cutoff = $el.value` binding never runs when we auto-pick the
       // first allowed quality on a new profile. The dropdown looks selected
-      // but pb.cutoff stays empty — export produces `cutoff: ""`. Dispatch
+      // but pb.cutoff stays empty - export produces `cutoff: ""`. Dispatch
       // a change event so the binding runs. Safe from looping: x-effect's
       // next pass sees pb.cutoff == targetValue and skips the dispatch.
       if (targetValue !== selectedValue) {
@@ -1822,11 +1822,11 @@ export default {
 
     populateCutoffSelect(el, qualityStructure, profile, selectedValue, qualityOverrides) {
       // Two sources depending on mode:
-      // 1) STRUCTURE-DRIVEN: qualityStructure has entries — user has grouped or
+      // 1) STRUCTURE-DRIVEN: qualityStructure has entries - user has grouped or
       //    reordered via Edit Groups. Use allowed flag on each item.
       // 2) LEGACY FLAT-TOGGLE: qualityStructure is empty; user toggles write to
       //    qualityOverrides map keyed by name. Here we MUST apply the overrides
-      //    on top of profile.items — otherwise a just-toggled-on resolution
+      //    on top of profile.items - otherwise a just-toggled-on resolution
       //    won't appear in the cutoff dropdown until user opens Edit Groups
       //    (which initializes qualityStructure). That was the v2.0.6 bug.
       let items;
@@ -1844,7 +1844,7 @@ export default {
       const options = [];
       // TRaSH default option (first)
       if (trashDefault) {
-        options.push({ value: trashDefault, name: trashDefault + (trashValid ? ' (TRaSH default)' : ' (TRaSH default — not in structure)'), disabled: !trashValid });
+        options.push({ value: trashDefault, name: trashDefault + (trashValid ? ' (TRaSH default)' : ' (TRaSH default - not in structure)'), disabled: !trashValid });
       }
       // All allowed items except TRaSH default (avoid duplicate)
       for (const item of items) {
@@ -1855,15 +1855,15 @@ export default {
       // from Arr, etc.) inject it as a plain option so the dropdown
       // displays it. Without this, el.value never matches any <option>
       // and the browser silently falls back to the first option (TRaSH
-      // default), making it look like the override was lost — even
+      // default), making it look like the override was lost - even
       // though pdOverrides.cutoffQuality still holds the right value
-      // and Save & Sync will persist it correctly. No suffix label —
+      // and Save & Sync will persist it correctly. No suffix label -
       // it's a legitimate user override, treat it like any other.
       if (selectedValue && selectedValue !== '__skip__' && !options.some(o => o.value === selectedValue)) {
         options.push({ value: selectedValue, name: selectedValue });
       }
       // Skip option
-      options.push({ value: '__skip__', name: '— Don\'t sync cutoff —' });
+      options.push({ value: '__skip__', name: '- Don\'t sync cutoff -' });
       // Rebuild options
       el.innerHTML = '';
       for (const opt of options) {
@@ -1939,7 +1939,10 @@ export default {
     },
 
     addCFSpec() {
-      this.cfEditorForm.specifications.push({
+      // Prepend, not append: on a CF with many conditions, adding at the bottom
+      // forces a scroll to the end every time. New condition goes to the top so
+      // it is immediately visible and editable.
+      this.cfEditorForm.specifications.unshift({
         _key: ++this.cfEditorSpecCounter,
         name: '',
         implementation: '',
@@ -1960,7 +1963,7 @@ export default {
       //   1. Per-implementation memory: every time the user leaves an
       //      implementation, snapshot its fields into spec._fieldHistory
       //      keyed by the leaving implementation. Switching back later
-      //      restores the snapshot — covers "I clicked the wrong type,
+      //      restores the snapshot - covers "I clicked the wrong type,
       //      went elsewhere, came back".
       //   2. Same-named compatible carry: when the new implementation has
       //      a field with the same name + type as the old one and the
@@ -1970,7 +1973,7 @@ export default {
       //
       // The snapshot is taken from the PREVIOUSLY active implementation,
       // which we track via spec._lastImpl. spec._fieldHistory persists for
-      // the editor's lifetime — populated either here or by openCFEditor's
+      // the editor's lifetime - populated either here or by openCFEditor's
       // initial seed of the spec's loaded values.
       spec._fieldHistory = spec._fieldHistory || {};
       const prevImpl = spec._lastImpl;
@@ -1990,7 +1993,7 @@ export default {
         for (const f of remembered) rememberedByName[f.name] = f;
       }
       const resolveValue = (newName, newType, fallback) => {
-        // Tier 1: prior visit to this implementation — restore exactly.
+        // Tier 1: prior visit to this implementation - restore exactly.
         const r = rememberedByName[newName];
         if (r && r.type === newType) return r.value;
         // Tier 2: carry from current fields when name + type match.
@@ -2123,7 +2126,7 @@ export default {
           try { const err = await res.json(); errMsg = err.error || errMsg; } catch(_) {}
           this.cfEditorResult = { error: true, message: errMsg };
           // Re-enable the Save button so the user can adjust the name
-          // and retry — the trailing reset below is unreachable after
+          // and retry - the trailing reset below is unreachable after
           // this `return`, so reset locally.
           this.cfEditorSaving = false;
           return;
@@ -2226,10 +2229,10 @@ export default {
 
     // Detect known cross-Arr CF spec incompatibilities. Returns an array of
     // issue objects for display. Only flags objectively-wrong cases or known
-    // canonical-name mismatches — never custom-named CFs (we can't know
+    // canonical-name mismatches - never custom-named CFs (we can't know
     // intent there). Empty result = import looks clean for target.
     _detectCrossArrImportIssues(cfs, targetApp) {
-      // Spec implementations that exist in only one Arr — the other will
+      // Spec implementations that exist in only one Arr - the other will
       // reject them at sync. Verified against TRaSH guide CF coverage.
       const ARR_ONLY_SPECS = {
         radarr: ['ReleaseTypeSpecification'],          // Sonarr-only (Single/Multi-episode/Season pack)
@@ -2238,7 +2241,7 @@ export default {
       // Source enum per Arr. Values verified against the canonical enum
       // definitions in each project (Sonarr: QualitySource.cs, Radarr:
       // QualitySource.cs as of develop). Note: Arr serializes only the
-      // integer — the name is purely a label, so different naming
+      // integer - the name is purely a label, so different naming
       // conventions for the same value are equally valid. Primary-name
       // (index 0) is used in warning messages.
       //
@@ -2276,7 +2279,7 @@ export default {
           7: ['blurayraw'],
         },
       };
-      // Known canonical Source names — only flag mismatch when spec.name
+      // Known canonical Source names - only flag mismatch when spec.name
       // normalizes to one of these (TRaSH uses these). Unknown names =
       // user intent unclear, skip the check entirely.
       const KNOWN_SOURCE = new Set(['webdl','web','webrelease','webrip',
@@ -2284,7 +2287,7 @@ export default {
                                     'dvd','television','tv','tvraw','televisionraw',
                                     'cam','telesync','ts','telecine','tc',
                                     'workprint','unknown']);
-      // IndexerFlag — TRaSH only uses FreeLeech (1, same in both) and
+      // IndexerFlag - TRaSH only uses FreeLeech (1, same in both) and
       // Internal (Radarr=32, Sonarr=8). Cross-import value=32 to Sonarr is
       // out of range and silently broken.
       const KNOWN_INTERNAL_FLAG = { radarr: 32, sonarr: 8 };
@@ -2301,7 +2304,7 @@ export default {
             issues.push({
               severity: 'error',
               cf: cf.name, spec: spec.name || '(unnamed)',
-              message: `${impl} doesn't exist in ${targetApp} — will be rejected at sync`
+              message: `${impl} doesn't exist in ${targetApp} - will be rejected at sync`
             });
             continue;
           }
@@ -2309,7 +2312,7 @@ export default {
           const value = spec.fields?.value;
           if (value === undefined || value === null) continue;
 
-          // Check 2: SourceSpecification — value out of range OR canonical-name mismatch
+          // Check 2: SourceSpecification - value out of range OR canonical-name mismatch
           if (impl === 'SourceSpecification') {
             const validNames = SOURCE_VALUE_NAMES[targetApp]?.[value];
             if (!validNames) {
@@ -2321,13 +2324,13 @@ export default {
             } else {
               const specNorm = normalize(spec.name);
               // Skip when the spec name isn't a known source label (user
-              // named it something arbitrary — intent unclear).
+              // named it something arbitrary - intent unclear).
               if (KNOWN_SOURCE.has(specNorm) && !validNames.includes(specNorm)) {
-                // Name doesn't fit the value in target app — try to find
+                // Name doesn't fit the value in target app - try to find
                 // the value where the spec name IS valid, so we can suggest
                 // it. This is the "you meant value=X" hint that catches
                 // the cross-app silent-mismatch case (e.g. Radarr WEBDL=7
-                // imported to Sonarr where 7=BlurayRaw — suggest 3).
+                // imported to Sonarr where 7=BlurayRaw - suggest 3).
                 let suggestedValue = null;
                 for (const [v, names] of Object.entries(SOURCE_VALUE_NAMES[targetApp] || {})) {
                   if (names.includes(specNorm)) {
@@ -2352,7 +2355,7 @@ export default {
             }
           }
 
-          // Check 3: IndexerFlagSpecification — Internal flag value mismatch
+          // Check 3: IndexerFlagSpecification - Internal flag value mismatch
           if (impl === 'IndexerFlagSpecification') {
             const expectedInternal = KNOWN_INTERNAL_FLAG[targetApp];
             const sourceArr = targetApp === 'radarr' ? 'sonarr' : 'radarr';
@@ -2415,7 +2418,7 @@ export default {
       this.showImportCFModal = true;
     },
 
-    // Filtered view of importCFList — applies the modal's three filters
+    // Filtered view of importCFList - applies the modal's three filters
     // (free-text name match, hide-guide, hide-already-imported) in one
     // pass. Helpers consume this so the visible count + Select All only
     // act on what the user can actually see.
@@ -2456,7 +2459,7 @@ export default {
         const trashCFs = await trashRes.json();
         const trashNames = new Set((trashCFs || []).map(c => c.name));
 
-        // Don't filter TRaSH-name matches out — the user owns their
+        // Don't filter TRaSH-name matches out - the user owns their
         // naming. Decorate them with a flag so the row can render an
         // informational badge instead. Save still works.
         this.importCFList = arrCFs
@@ -2508,11 +2511,11 @@ export default {
             this.importCFResult = { error: true, message: result.error || 'Import failed' };
             return;
           }
-          // Only same-name-as-existing-custom collisions are skipped —
+          // Only same-name-as-existing-custom collisions are skipped -
           // TRaSH-name matches are allowed through (user owns naming).
           const customSkipped = (result.skippedCollisions || []).length;
           const suffix = customSkipped > 0
-            ? ` (${customSkipped} skipped — same name as existing custom CF)`
+            ? ` (${customSkipped} skipped - same name as existing custom CF)`
             : '';
           this.importCFResult = { error: false, message: `Imported ${result.added} CF(s)${suffix}` };
           // Mark imported CFs as existing
