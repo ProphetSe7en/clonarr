@@ -2,12 +2,13 @@
   <!-- ============ IMPORT SYNC RULE MODAL ============ -->
   <!-- Paste or upload a Clonarr sync-rule export. Validates it is a Clonarr
        file, recreates any bundled custom Custom Formats (asking what to do on
-       name collisions), then opens the editor pre-filled to name + Apply & Sync. -->
+       name collisions), then opens the editor pre-filled. You name the profile
+       in the Apply & Sync step that follows. -->
   <div class="modal-overlay" x-show="showImportRuleModal" @keydown.escape.window="closeImportRuleModal()" x-cloak>
     <div class="modal" style="max-width:680px" role="dialog" aria-modal="true" aria-labelledby="modal-title-import-rule" x-trap.noscroll.inert="showImportRuleModal">
       <h2 id="modal-title-import-rule" class="modal-title">Import sync rule</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
-        Paste a Clonarr sync-rule export, or upload the <code>.json</code> file. It opens in the editor so you can name it and Apply &amp; Sync.
+        Paste a Clonarr sync-rule export, or upload the <code>.json</code> file. It opens in the editor so you can review it, then Apply &amp; Sync to name and create the rule.
       </div>
 
       <div style="margin-bottom:12px">
@@ -22,18 +23,28 @@
       <template x-if="importRuleCollisions.length > 0">
         <div style="margin-top:14px;border:1px solid var(--accent-orange);border-radius:6px;padding:10px 12px;background:var(--fill-orange-soft)">
           <div style="font-size:12px;font-weight:600;color:var(--accent-orange);margin-bottom:8px">These custom formats already exist. Choose what to do with each:</div>
+
+          <!-- Apply one choice to every colliding CF at once. -->
+          <div x-show="importRuleCollisions.length > 1"
+               style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--accent-orange)">
+            <span style="font-size:12px;color:var(--text-secondary)">Apply to all:</span>
+            <button class="btn btn-sm" @click="applyAllImportResolutions('skip')">Keep mine</button>
+            <button class="btn btn-sm" @click="applyAllImportResolutions('rename')">Import as copies</button>
+            <button class="btn btn-sm" @click="applyAllImportResolutions('replace')">Replace</button>
+          </div>
+
           <template x-for="c in importRuleCollisions" :key="c.name">
             <div style="margin-bottom:10px">
               <div style="font-size:13px;color:var(--text-primary);font-weight:500" x-text="c.name"></div>
               <div style="display:flex;gap:14px;margin-top:4px">
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                  <input type="radio" :name="'col-'+c.name" value="skip" @change="importRuleResolutions[c.name.toLowerCase()] = 'skip'"> Keep mine
+                  <input type="radio" :name="'col-'+c.name" value="skip" :checked="importRuleResolutions[c.name.toLowerCase()] === 'skip'" @change="importRuleResolutions[c.name.toLowerCase()] = 'skip'"> Keep mine
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                  <input type="radio" :name="'col-'+c.name" value="rename" @change="importRuleResolutions[c.name.toLowerCase()] = 'rename'"> Import as a copy
+                  <input type="radio" :name="'col-'+c.name" value="rename" :checked="importRuleResolutions[c.name.toLowerCase()] === 'rename'" @change="importRuleResolutions[c.name.toLowerCase()] = 'rename'"> Import as a copy
                 </label>
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
-                  <input type="radio" :name="'col-'+c.name" value="replace" @change="importRuleResolutions[c.name.toLowerCase()] = 'replace'"> Replace
+                  <input type="radio" :name="'col-'+c.name" value="replace" :checked="importRuleResolutions[c.name.toLowerCase()] === 'replace'" @change="importRuleResolutions[c.name.toLowerCase()] = 'replace'"> Replace
                 </label>
               </div>
               <div x-show="importRuleResolutions[c.name.toLowerCase()] === 'replace' && (c.usedByRules || []).length > 0"

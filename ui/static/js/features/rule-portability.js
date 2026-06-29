@@ -74,6 +74,15 @@ export default {
       this.showImportRuleModal = false;
     },
 
+    // Set the same collision choice ('skip'|'rename'|'replace') for every
+    // colliding custom CF at once. Replacing the object keeps Alpine reactive so
+    // the per-CF radios (bound with :checked) update to match.
+    applyAllImportResolutions(choice) {
+      const map = {};
+      for (const c of this.importRuleCollisions) map[c.name.toLowerCase()] = choice;
+      this.importRuleResolutions = map;
+    },
+
     // Read an uploaded .json file into the paste box.
     onImportFileChange(event) {
       const file = event.target.files && event.target.files[0];
@@ -150,7 +159,7 @@ export default {
         description: ru.description || '',
       }, this.profileDetail.detail);
       this.pdOverridesEnabled = true;
-      this.showToast('Imported. Review the settings, name it, then Apply & Sync to create the rule.', 'success', 7000);
+      this.showToast('Imported. Review the settings, then Apply & Sync to name and create the rule.', 'success', 7000);
     },
   },
 };
