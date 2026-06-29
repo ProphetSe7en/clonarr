@@ -465,6 +465,14 @@ type Instance struct {
 	Type   string `json:"type"` // "radarr" or "sonarr"
 	URL    string `json:"url"`
 	APIKey string `json:"apiKey"`
+
+	// ExternalAuth enables HTTP Basic Auth on every request to this instance.
+	// Use when the instance sits behind a reverse proxy or uses *arr's own
+	// "Basic" authentication mode — the API key alone is rejected in that case.
+	ExternalAuth bool   `json:"externalAuth,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
+
 	// AutoSyncPaused, when true, skips non-user-initiated sync for this
 	// instance only. AutoSyncAfterPull, the delayed-apply runner, and the
 	// drift detector all silently drop rules belonging to a paused

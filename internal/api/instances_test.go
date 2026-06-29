@@ -162,6 +162,78 @@ func TestHandleUpdateInstanceRejectsWhitespaceRequiredFields(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateInstanceRejectsExternalAuthWithoutPassword(t *testing.T) {
+	app := setupTestApp(t)
+	existing, err := app.Config.AddInstance(core.Instance{
+		Name:   "Old",
+		Type:   "radarr",
+		URL:    "http://old.local:7878",
+		APIKey: "saved-key",
+	})
+	if err != nil {
+		t.Fatalf("seed instance: %v", err)
+	}
+	server := &Server{Core: app}
+	req := httptest.NewRequest(http.MethodPut, "/api/instances/"+existing.ID, instanceJSON(t, map[string]any{
+		"name":         "Radarr HD",
+		"type":         "radarr",
+		"url":          "http://arr.local:7878",
+		"apiKey":       "saved-key",
+		"externalAuth": true,
+		"username":     "user",
+		"password":     "",
+	}))
+	req.SetPathValue("id", existing.ID)
+	w := httptest.NewRecorder()
+
+	server.handleUpdateInstance(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleUpdateInstanceAllowsExternalAuthWithStoredPassword(t *testing.T) {
+	app := setupTestApp(t)
+	existing, err := app.Config.AddInstance(core.Instance{
+		Name:         "Old",
+		Type:         "radarr",
+		URL:          "http://old.local:7878",
+		APIKey:       "saved-key",
+		ExternalAuth: true,
+		Username:     "user",
+		Password:     "saved-pass",
+	})
+	if err != nil {
+		t.Fatalf("seed instance: %v", err)
+	}
+	server := &Server{Core: app}
+	req := httptest.NewRequest(http.MethodPut, "/api/instances/"+existing.ID, instanceJSON(t, map[string]any{
+		"name":         "Radarr HD",
+		"type":         "radarr",
+		"url":          "http://arr.local:7878",
+		"apiKey":       "saved-key",
+		"externalAuth": true,
+		"username":     "user",
+		"password":     "",
+	}))
+	req.SetPathValue("id", existing.ID)
+	w := httptest.NewRecorder()
+
+	server.handleUpdateInstance(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	stored, ok := app.Config.GetInstance(existing.ID)
+	if !ok {
+		t.Fatalf("updated instance %q not found in config", existing.ID)
+	}
+	if stored.Password != "saved-pass" {
+		t.Fatalf("stored password = %q, want preserved %q", stored.Password, "saved-pass")
+	}
+}
+
 func TestHandleTestConnectionRejectsWhitespaceRequiredFields(t *testing.T) {
 	cases := []struct {
 		name string

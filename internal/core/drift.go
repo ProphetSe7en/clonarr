@@ -183,7 +183,7 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context, autoApply bool) ([]Dr
 			return s
 		}
 		s := &arrSnapshot{}
-		client := arr.NewArrClient(inst.URL, inst.APIKey, d.app.HTTPClient)
+		client := NewArrClientFor(inst, d.app.HTTPClient)
 		s.profiles, s.err = client.ListProfiles()
 		if s.err == nil {
 			s.cfs, s.err = client.ListCustomFormats()

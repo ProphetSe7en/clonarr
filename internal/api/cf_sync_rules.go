@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"clonarr/internal/arr"
 	"clonarr/internal/core"
 )
 
@@ -405,7 +404,7 @@ func (s *Server) handleCFSyncRules(w http.ResponseWriter, r *http.Request) {
 		if inst.URL == "" {
 			continue
 		}
-		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+		client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 		arrCFs, err := client.ListCustomFormats()
 		if err != nil {
 			log.Printf("handleCFSyncRules: instance %s (%s) ListCustomFormats failed: %v - skipping Unmanaged enrichment for this instance",

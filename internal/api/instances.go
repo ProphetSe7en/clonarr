@@ -25,10 +25,13 @@ func (s *Server) handleListInstances(w http.ResponseWriter, r *http.Request) {
 	if instances == nil {
 		instances = []core.Instance{}
 	}
-	// Mask API keys (safe: Get() returns deep copy)
+	// Mask secrets (safe: Get() returns deep copy)
 	for i := range instances {
 		if instances[i].APIKey != "" {
 			instances[i].APIKey = maskKey(instances[i].APIKey)
+		}
+		if instances[i].Password != "" {
+			instances[i].Password = maskKey(instances[i].Password)
 		}
 	}
 	writeJSON(w, instances)
@@ -45,6 +48,8 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 	inst.Type = strings.TrimSpace(inst.Type)
 	inst.URL = strings.TrimSpace(inst.URL)
 	inst.APIKey = strings.TrimSpace(inst.APIKey)
+	inst.Username = strings.TrimSpace(inst.Username)
+	inst.Password = strings.TrimSpace(inst.Password)
 
 	if inst.Name == "" || inst.URL == "" || inst.APIKey == "" {
 		writeError(w, 400, "name, url, and apiKey are required")
@@ -54,6 +59,10 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "type must be 'radarr' or 'sonarr'")
 		return
 	}
+	if inst.ExternalAuth && (inst.Username == "" || inst.Password == "") {
+		writeError(w, 400, "username and password are required when external authentication is enabled")
+		return
+	}
 
 	created, err := s.Core.Config.AddInstance(inst)
 	if err != nil {
@@ -61,8 +70,11 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// M2: mask API key in response
+	// Mask secrets in response
 	created.APIKey = maskKey(created.APIKey)
+	if created.Password != "" {
+		created.Password = maskKey(created.Password)
+	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, created)
 }
@@ -84,6 +96,8 @@ func (s *Server) handleUpdateInstance(w http.ResponseWriter, r *http.Request) {
 	inst.Type = strings.TrimSpace(inst.Type)
 	inst.URL = strings.TrimSpace(inst.URL)
 	inst.APIKey = strings.TrimSpace(inst.APIKey)
+	inst.Username = strings.TrimSpace(inst.Username)
+	inst.Password = strings.TrimSpace(inst.Password)
 
 	if inst.Name == "" || inst.URL == "" {
 		writeError(w, 400, "name and url are required")
@@ -93,13 +107,28 @@ func (s *Server) handleUpdateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "type must be 'radarr' or 'sonarr'")
 		return
 	}
+	if inst.ExternalAuth && inst.Username == "" {
+		writeError(w, 400, "username is required when external authentication is enabled")
+		return
+	}
 
-	// M9: If API key is empty or masked, keep the existing one
+	existing, hasExisting := s.Core.Config.GetInstance(id)
+
+	// If API key is empty or masked, keep the existing one
 	if inst.APIKey == "" || isMasked(inst.APIKey) {
-		existing, ok := s.Core.Config.GetInstance(id)
-		if ok {
+		if hasExisting {
 			inst.APIKey = existing.APIKey
 		}
+	}
+	// If password is empty or masked, keep the existing one
+	if inst.Password == "" || isMasked(inst.Password) {
+		if hasExisting {
+			inst.Password = existing.Password
+		}
+	}
+	if inst.ExternalAuth && inst.Password == "" {
+		writeError(w, 400, "password is required when external authentication is enabled")
+		return
 	}
 
 	updated, err := s.Core.Config.UpdateInstance(id, inst)
@@ -108,8 +137,11 @@ func (s *Server) handleUpdateInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// M1: mask API key in response
+	// Mask secrets in response
 	updated.APIKey = maskKey(updated.APIKey)
+	if updated.Password != "" {
+		updated.Password = maskKey(updated.Password)
+	}
 	writeJSON(w, updated)
 }
 
@@ -179,7 +211,7 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	status, err := client.TestConnection()
 	if err != nil {
 		errMsg := err.Error()
@@ -252,8 +284,11 @@ func isNonRoutable(ip net.IP) bool {
 func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var req struct {
-		URL    string `json:"url"`
-		APIKey string `json:"apiKey"`
+		URL          string `json:"url"`
+		APIKey       string `json:"apiKey"`
+		ExternalAuth bool   `json:"externalAuth"`
+		Username     string `json:"username"`
+		Password     string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, 400, "Invalid JSON")
@@ -261,6 +296,8 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	req.URL = strings.TrimSpace(req.URL)
 	req.APIKey = strings.TrimSpace(req.APIKey)
+	req.Username = strings.TrimSpace(req.Username)
+	req.Password = strings.TrimSpace(req.Password)
 	if req.URL == "" || req.APIKey == "" {
 		writeError(w, 400, "url and apiKey are required")
 		return
@@ -273,7 +310,11 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(req.URL, req.APIKey, s.Core.HTTPClient)
+	u, p := "", ""
+	if req.ExternalAuth {
+		u, p = req.Username, req.Password
+	}
+	client := arr.NewArrClient(req.URL, req.APIKey, u, p, s.Core.HTTPClient)
 	status, err := client.TestConnection()
 	if err != nil {
 		errMsg := err.Error()
@@ -302,7 +343,7 @@ func (s *Server) handleInstanceProfiles(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	profiles, err := client.ListProfiles()
 	if err != nil {
 		writeError(w, 502, "Failed to connect to instance")
@@ -317,7 +358,7 @@ func (s *Server) handleQualityDefinitions(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	defs, err := client.ListQualityDefinitions()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch quality definitions: "+err.Error())
@@ -359,7 +400,7 @@ func (s *Server) handleRenameProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	profiles, err := client.ListProfiles()
 	if err != nil {
 		writeError(w, 502, "Failed to list profiles: "+err.Error())
@@ -427,7 +468,7 @@ func (s *Server) handleInstanceProfileExport(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 
 	profiles, err := client.ListProfiles()
 	if err != nil {
@@ -657,7 +698,7 @@ func (s *Server) handleInstanceLanguages(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	languages, err := client.ListLanguages()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch languages")
@@ -689,7 +730,7 @@ func (s *Server) handleInstanceBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 
 	allCFs, err := client.ListCustomFormats()
 	if err != nil {
@@ -779,7 +820,7 @@ func (s *Server) handleInstanceRestore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 
 	// Fetch current state from instance
 	existingCFs, err := client.ListCustomFormats()
@@ -920,7 +961,7 @@ func (s *Server) handleInstanceCFs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	cfs, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, 502, "Failed to connect to instance")
@@ -999,7 +1040,7 @@ func (s *Server) handleAddCFsToInstance(w http.ResponseWriter, r *http.Request) 
 
 	// One ListCustomFormats call up front for collision detection — cheaper
 	// than checking per CF and gives the same answer for the batch.
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	existing, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, 502, "Failed to list existing CFs: "+err.Error())
@@ -1147,7 +1188,7 @@ func (s *Server) handleManageExistingCF(w http.ResponseWriter, r *http.Request) 
 	// it; we just claim ownership in clonarr's records. If it is not
 	// there, the adopt is meaningless - either the user clicked from a
 	// stale list or something deleted the CF on Arr in the meantime.
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	existing, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, 502, "Failed to verify CF on Arr: "+err.Error())
@@ -1210,7 +1251,7 @@ func (s *Server) handleInstanceQualitySizes(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	defs, err := client.ListQualityDefinitions()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch quality sizes: "+err.Error())
@@ -1225,7 +1266,7 @@ func (s *Server) handleGetInstanceNaming(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	naming, err := client.GetNaming()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch naming config: "+err.Error())
@@ -1377,7 +1418,7 @@ func (s *Server) handleSyncQualitySizes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	if err := client.UpdateQualityDefinitions(req.Definitions); err != nil {
 		writeError(w, 502, "Sync failed: "+err.Error())
 		return
@@ -1403,7 +1444,7 @@ func (s *Server) buildQualitySizeDefs(inst core.Instance, qsType string) ([]arr.
 		return nil, fmt.Errorf("no TRaSH quality sizes for type %q", qsType)
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	defs, err := client.ListQualityDefinitions()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch definitions: %w", err)
@@ -1567,7 +1608,7 @@ func (s *Server) AutoSyncQualitySizes() {
 		}
 
 		// Get current instance quality definitions
-		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+		client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 		defs, err := client.ListQualityDefinitions()
 		if err != nil {
 			log.Printf("Auto-sync QS [%s]: failed to fetch definitions: %v", inst.Name, err)
@@ -1795,7 +1836,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 	}
 	comp.TrashProfileName = trashProfile.Name
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, httpClient)
+	client := core.NewArrClientFor(inst, httpClient)
 
 	// Fetch existing CFs from instance
 	arrCFs, err := client.ListCustomFormats()
@@ -2313,7 +2354,7 @@ func (s *Server) handleRemoveProfileCFs(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	profiles, err := client.ListProfiles()
 	if err != nil {
 		writeError(w, 502, "Failed to fetch profiles: "+err.Error())
@@ -2390,7 +2431,7 @@ func (s *Server) handleSyncSingleCF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 
 	// Check if CF already exists in instance
 	arrCFs, err := client.ListCustomFormats()

@@ -1,7 +1,6 @@
 package core
 
 import (
-	"clonarr/internal/arr"
 	"context"
 	"time"
 )
@@ -107,7 +106,7 @@ func runNamingDriftPass(d *DriftRunner, checkDrift, checkUpdate bool) namingDrif
 		if !ok {
 			continue
 		}
-		client := arr.NewArrClient(inst.URL, inst.APIKey, d.app.HTTPClient)
+		client := NewArrClientFor(inst, d.app.HTTPClient)
 		current, err := client.GetNaming()
 		if err != nil {
 			// Unreachable: leave existing drift/update state alone (no false

@@ -101,7 +101,7 @@ func (s *Server) handleCleanupScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 
 	switch req.Action {
 	case "duplicates":
@@ -193,7 +193,7 @@ func (s *Server) handleCleanupApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 
 	// Defense-in-depth: for actions that affect CFs, re-validate the
 	// caller-supplied IDs against the persisted keep list. If a scan was

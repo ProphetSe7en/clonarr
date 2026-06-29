@@ -12,20 +12,24 @@ import (
 
 // ArrClient talks to a Radarr or Sonarr instance's API v3.
 type ArrClient struct {
-	baseURL string
-	apiKey  string
-	client  *http.Client
+	baseURL  string
+	apiKey   string
+	username string
+	password string
+	client   *http.Client
 }
 
-func NewArrClient(url, apiKey string, client *http.Client) *ArrClient {
+func NewArrClient(url, apiKey, username, password string, client *http.Client) *ArrClient {
 	url = strings.TrimRight(url, "/")
 	if !strings.HasPrefix(url, "http") {
 		url = "http://" + url
 	}
 	return &ArrClient{
-		baseURL: url,
-		apiKey:  apiKey,
-		client:  client,
+		baseURL:  url,
+		apiKey:   apiKey,
+		username: username,
+		password: password,
+		client:   client,
 	}
 }
 
@@ -46,6 +50,9 @@ func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error
 		return nil, 0, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("X-Api-Key", c.apiKey)
+	if c.username != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

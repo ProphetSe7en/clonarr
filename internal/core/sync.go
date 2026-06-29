@@ -356,7 +356,7 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 	}
 
 	// Connect to Arr instance
-	client := arr.NewArrClient(instance.URL, instance.APIKey, httpClient)
+	client := NewArrClientFor(instance, httpClient)
 
 	// Fetch existing CFs
 	existingCFs, err := client.ListCustomFormats()
@@ -989,7 +989,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 	}
 
-	client := arr.NewArrClient(instance.URL, instance.APIKey, httpClient)
+	client := NewArrClientFor(instance, httpClient)
 	result := &SyncResult{Errors: []string{}}
 
 	// Track created CF name → Arr ID for score assignment
