@@ -168,6 +168,12 @@ type CF struct {
 	TrashID string
 	Score   int
 	Dim     Dimension
+	// Groups holds explicit release-group name literals this CF matches (e.g.
+	// "TheFarm", "MainFrame"), for a non-tier release-group CF. Each becomes a
+	// group-axis value so a release carrying that group is generated and the CF
+	// gets scored. Empty for tier CFs (handled by tier placeholders) and every
+	// non-group dimension.
+	Groups []string
 }
 
 // QualityCtx is a source + resolution the caller derived from the profile's
@@ -371,6 +377,12 @@ type context struct {
 
 var reTier = regexp.MustCompile(`(?i)^(.+?)\s+tier\s+0*(\d+)$`)
 
+// IsTierCF reports whether a CF name is a release-group TIER (e.g. "WEB Tier
+// 01"), which the generator expresses with tier placeholders rather than a
+// literal group token. The caller uses this to decide whether to mine a literal
+// release-group name from a CF's spec instead.
+func IsTierCF(name string) bool { return reTier.MatchString(name) }
+
 // sourceForLabel maps a tier CF's source label to a release source token and
 // the resolution(s) it implies. Returns ok=false for labels we don't generate
 // yet (language-specific FR/German/Anime tiers).
@@ -476,6 +488,23 @@ func maxTierFor(p pair, labels map[string]int) int {
 // for that source + resolution.
 func buildContexts(groupCFs, resolutionCFs []CF, badGroups []string, o Options) []context {
 	labels := tierLabels(groupCFs) // computed once, reused for every base pair
+	// Named "good" release groups: non-tier group CFs that carry an explicit
+	// group literal (TheFarm, MainFrame, ...). Each is its own group-axis value
+	// so a release with that group is generated and the CF can score it. (Tier
+	// CFs are excluded here; they use the tier placeholders above.)
+	var goodGroups []string
+	seenGood := map[string]bool{}
+	for _, cf := range groupCFs {
+		if reTier.MatchString(cf.Name) {
+			continue
+		}
+		for _, g := range cf.Groups {
+			if g != "" && !seenGood[g] {
+				seenGood[g] = true
+				goodGroups = append(goodGroups, g)
+			}
+		}
+	}
 	var ctxs []context
 	for _, p := range basePairs(labels, resolutionCFs, o) {
 		mx := maxTierFor(p, labels)
@@ -494,6 +523,11 @@ func buildContexts(groupCFs, resolutionCFs []CF, badGroups []string, o Options) 
 		// surface the Calculator needs covered, so they are generated against
 		// every base pair.
 		for _, g := range badGroups {
+			ctxs = append(ctxs, context{source: p.source, resolution: p.resolution, group: g})
+		}
+		// Named good release groups are group-axis values too: one release per
+		// group at this quality, alongside the tier placeholders.
+		for _, g := range goodGroups {
 			ctxs = append(ctxs, context{source: p.source, resolution: p.resolution, group: g})
 		}
 	}

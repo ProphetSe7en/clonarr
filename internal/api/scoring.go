@@ -750,7 +750,16 @@ func (s *Server) handleScoringProfileScores(w http.ResponseWriter, r *http.Reque
 			}
 		}
 		for i := range result.Scores {
-			result.Scores[i].Dim = string(dimOf[result.Scores[i].TrashID])
+			d := dimOf[result.Scores[i].TrashID]
+			if d == "" {
+				// A release-group CF scored directly by the profile but not in
+				// any cf-group (e.g. TheFarm) still belongs on the release-group
+				// axis, so it shows up in the generator's Release Groups picker.
+				if cf := ad.CustomFormats[result.Scores[i].TrashID]; cf != nil && isReleaseGroupCF(cf) {
+					d = titlegen.DimGroup
+				}
+			}
+			result.Scores[i].Dim = string(d)
 		}
 	}
 

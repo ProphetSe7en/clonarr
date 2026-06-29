@@ -76,21 +76,40 @@ func (s *Server) handleScoringGenerateTitles(w http.ResponseWriter, r *http.Requ
 		if sc.Score == 0 {
 			continue
 		}
+		var cfDef *core.TrashCF
+		if ad != nil {
+			cfDef = ad.CustomFormats[sc.TrashID]
+		}
 		dim := dimOf[sc.TrashID]
+		if dim == "" {
+			// A release-group CF that is not a member of any TRaSH cf-group
+			// (e.g. a profile that scores a single group like TheFarm directly)
+			// still generates a group token, so classify it by its spec.
+			if cfDef != nil && isReleaseGroupCF(cfDef) {
+				dim = titlegen.DimGroup
+			}
+		}
 		if dim == "" {
 			continue
 		}
 		if dim == titlegen.DimUnwanted {
-			if ad != nil {
-				if cf := ad.CustomFormats[sc.TrashID]; cf != nil {
-					if u, ok := unwantedDecoration(cf); ok {
-						unwanted = append(unwanted, u)
-					}
+			if cfDef != nil {
+				if u, ok := unwantedDecoration(cfDef); ok {
+					unwanted = append(unwanted, u)
 				}
 			}
 			continue
 		}
-		cfs = append(cfs, titlegen.CF{Name: sc.Name, TrashID: sc.TrashID, Score: sc.Score, Dim: dim})
+		cf := titlegen.CF{Name: sc.Name, TrashID: sc.TrashID, Score: sc.Score, Dim: dim}
+		// Non-tier release-group CFs (TheFarm, MainFrame, ...) carry an explicit
+		// group name; mine a representative literal so the generator emits a
+		// release with that group. Tier CFs keep the tier-placeholder path.
+		if dim == titlegen.DimGroup && cfDef != nil && !titlegen.IsTierCF(sc.Name) {
+			if g := releaseGroupLiteral(cfDef); g != "" {
+				cf.Groups = []string{g}
+			}
+		}
+		cfs = append(cfs, cf)
 	}
 
 	// Parse the picked quality names into source x resolution contexts.
@@ -138,6 +157,35 @@ func (s *Server) handleScoringGenerateTitles(w http.ResponseWriter, r *http.Requ
 		"generatableCFs": len(cfs),
 		"stats":          stats,
 	})
+}
+
+// isReleaseGroupCF reports whether a CF matches by release group (has a
+// non-negated ReleaseGroupSpecification). Used to classify a standalone group
+// CF (e.g. TheFarm) that a profile scores directly without it belonging to a
+// TRaSH release-group cf-group.
+func isReleaseGroupCF(cf *core.TrashCF) bool {
+	for _, sp := range cf.Specifications {
+		if sp.Implementation == "ReleaseGroupSpecification" && !sp.Negate {
+			return true
+		}
+	}
+	return false
+}
+
+// releaseGroupLiteral lifts a representative release-group name from a CF's
+// ReleaseGroupSpecification(s) (e.g. "^(TheFarm)$" -> "TheFarm"), so the
+// generator can emit a title carrying that group and the CF gets scored.
+// Returns "" when no clean literal can be extracted.
+func releaseGroupLiteral(cf *core.TrashCF) string {
+	for _, sp := range cf.Specifications {
+		if sp.Implementation != "ReleaseGroupSpecification" || sp.Negate {
+			continue
+		}
+		if lit, ok := extractLiteral(core.SpecValue(sp.Fields)); ok {
+			return strings.TrimPrefix(lit, "-")
+		}
+	}
+	return ""
 }
 
 // curatedUnwanted holds the few unwanted CFs whose token needs hand-placement
