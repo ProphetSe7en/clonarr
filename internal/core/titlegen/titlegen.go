@@ -649,7 +649,12 @@ func GenerateWithStats(cfs []CF, o Options) ([]string, GenStats) {
 	// services are usually score-0 in TRaSH profiles). Distinct non-zero tokens
 	// are all kept though, even when several share the same score.
 	audio := orEmpty(tokensOf(nonZero(byDim[DimAudio])))
-	hdr := expandHDRCombos(orEmpty(tokensOf(nonZero(byDim[DimHDR]))))
+	// HDR is a pick-one-OR-none axis (SDR = no HDR token), like service/modifier,
+	// not an always-present one like audio/channels. withEmpty keeps the SDR
+	// baseline even when HDR CFs are scored, so the SDR-vs-HDR score delta is
+	// shown AND a resolution that prunes HDR (1080p, unless Allow1080pHDR) still
+	// produces its SDR releases instead of generating nothing.
+	hdr := withEmpty(expandHDRCombos(tokensOf(nonZero(byDim[DimHDR]))))
 	channels := orEmpty(tokensOf(nonZero(byDim[DimChannels])))
 	// Service and modifier (repack/proper) are pick-one-OR-none: each distinct
 	// scoring token, plus the empty option (most releases carry neither).
