@@ -198,8 +198,8 @@ type Unwanted struct {
 
 // Options control the base name and the rare-but-real skip toggles.
 type Options struct {
-	Title   string // default "Movie"
-	Year    string // default "2026"
+	Title   string   // default "Movie"
+	Year    string   // default "2026"
 	VCodecs []string // codec axis; default ["h265"]. Add "h264" only when a codec
 	// CF (x265, x265 (HD), x264, ...) scores them differently, else they'd
 	// collapse to one. The skip rules prune the impossible codec combos.
@@ -332,6 +332,54 @@ func skip(c combo, o Options) bool {
 
 var losslessAudio = map[string]bool{
 	"TrueHD": true, "DTS-HD.MA": true, "DTS-HD.HRA": true, "FLAC": true, "PCM": true,
+}
+
+// trueLossless is the audio tokens that are genuinely lossless, used for the
+// per-release-group lossless/lossy constraints. Distinct from losslessAudio
+// (the stereo-gate set): it includes the lossless Atmos variant (TrueHD ATMOS)
+// and excludes DTS-HD HRA, which is lossy high-res audio. Plain "ATMOS" is
+// left out as ambiguous (it may be lossy DD+ Atmos).
+var trueLossless = map[string]bool{
+	"TrueHD": true, "TrueHD.ATMOS": true, "DTS-HD.MA": true, "FLAC": true, "PCM": true,
+}
+
+// groupRule captures what a specific release group does NOT release, curated
+// from observed releases. The generator uses it to skip impossible combinations
+// (e.g. a WEB-DL from a Bluray-only group, or a lossy track from a lossless-only
+// group) so it never emits release names that group would never produce.
+type groupRule struct {
+	noWeb        bool // group never releases WEB-DL / WEBRip (disc-only)
+	losslessOnly bool // only lossless audio
+	lossyOnly    bool // never lossless audio
+}
+
+// groupConstraints is keyed by lower-cased release-group name.
+var groupConstraints = map[string]groupRule{
+	"mainframe": {noWeb: true, losslessOnly: true},
+	"bhdstudio": {noWeb: true, lossyOnly: true},
+	"hallowed":  {noWeb: true, lossyOnly: true},
+	"thefarm":   {losslessOnly: true},
+	"framestor": {losslessOnly: true},
+}
+
+// groupSkip reports whether a (group, source, audio) combination is one the
+// named release group never produces, so the generator drops the title.
+func groupSkip(group string, c combo) bool {
+	r, ok := groupConstraints[strings.ToLower(group)]
+	if !ok {
+		return false
+	}
+	if r.noWeb && (c.source == "WEB-DL" || c.source == "WEBRip") {
+		return true
+	}
+	// audio "" (unspecified) is left alone either way; only a known token is judged.
+	if r.losslessOnly && c.audio != "" && !trueLossless[c.audio] {
+		return true
+	}
+	if r.lossyOnly && trueLossless[c.audio] {
+		return true
+	}
+	return false
 }
 
 // tokensOf returns the distinct tokens for a dimension (no score-collapse).
@@ -601,7 +649,7 @@ func GenerateWithStats(cfs []CF, o Options) ([]string, GenStats) {
 	// services are usually score-0 in TRaSH profiles). Distinct non-zero tokens
 	// are all kept though, even when several share the same score.
 	audio := orEmpty(tokensOf(nonZero(byDim[DimAudio])))
-	hdr := orEmpty(tokensOf(nonZero(byDim[DimHDR])))
+	hdr := expandHDRCombos(orEmpty(tokensOf(nonZero(byDim[DimHDR]))))
 	channels := orEmpty(tokensOf(nonZero(byDim[DimChannels])))
 	// Service and modifier (repack/proper) are pick-one-OR-none: each distinct
 	// scoring token, plus the empty option (most releases carry neither).
@@ -677,7 +725,7 @@ func GenerateWithStats(cfs []CF, o Options) ([]string, GenStats) {
 							for _, vc := range codecs {
 								for _, ed := range editions {
 									c := combo{resolution: ctx.resolution, source: ctx.source, audio: a, channels: ch, hdr: h, service: sv, modifier: md, vcodec: vc, edition: ed}
-									if skip(c, o) {
+									if skip(c, o) || groupSkip(ctx.group, c) {
 										st.Skipped += len(unwantedAxis) // a skipped base removes all its unwanted variants
 										continue
 									}
@@ -770,6 +818,37 @@ func unwantedTitles(base combo, tags []Unwanted, o Options) []string {
 }
 
 // withEmpty prepends the empty option to a value list (the "no tag" case).
+// expandHDRCombos adds the real Dolby Vision combinations to the HDR axis. A DV
+// release almost always carries an HDR10 (or HDR10+) base layer for fallback, so
+// the common, rewarded DV release is named "DV.HDR" / "DV.HDR10+", not a bare
+// "DV" (bare DV with no fallback is the rarer, usually-penalised case). The raw
+// per-CF tokens treat HDR and DV as mutually exclusive, so without this the
+// generator never produces a DV-with-fallback title and the DV-boost score path
+// is never exercised. Plain "DV", "HDR" and "HDR10+" are kept (all real).
+func expandHDRCombos(tokens []string) []string {
+	has := map[string]bool{}
+	for _, t := range tokens {
+		has[t] = true
+	}
+	if !has["DV"] {
+		return tokens
+	}
+	out := append([]string{}, tokens...)
+	add := func(v string) {
+		if !has[v] {
+			has[v] = true
+			out = append(out, v)
+		}
+	}
+	if has["HDR"] {
+		add("DV.HDR")
+	}
+	if has["HDR10+"] {
+		add("DV.HDR10+")
+	}
+	return out
+}
+
 func withEmpty(v []string) []string {
 	return append([]string{""}, v...)
 }

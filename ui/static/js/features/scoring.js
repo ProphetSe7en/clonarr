@@ -808,22 +808,37 @@ export default {
     // generator; Arr's parse stays the source of truth for what matches.
     // Load the profile's allowed quality items into the picker (once per
     // profile). Default selection: every single quality, plus one representative
-    // member per group (WEBDL preferred over WEBRip, since group members usually
-    // score the same), so the user starts from full coverage and trims down.
+    // member per SOURCE family within a group (disc vs web), so both sides of a
+    // hybrid quality like "Bluray|WEB-2160p" are covered and source-specific
+    // release groups (e.g. Bluray-only MainFrame) generate without manual
+    // expansion. The user trims down whatever they don't want.
     async loadGenQualities(appType) {
       const sb = this.sandbox[appType];
       if (!sb.profileKey) return;
       if (sb.genQualityFor === sb.profileKey && (sb.genQualityItems.length || sb.genScores.length)) return;
       try {
         const data = await this.fetchProfileScores(sb.profileKey, appType);
-        // Quality picker: every single quality + one representative member per
-        // group (WEBDL preferred), so the user starts at full coverage.
         const items = data.qualityItems || [];
         const qsel = {};
         for (const it of items) {
           if (it.members && it.members.length) {
-            const rep = it.members.find(m => /webdl/i.test(m)) || it.members[0];
-            qsel[rep] = true;
+            // One representative per source family. WEBDL and WEBRip collapse to
+            // one "web" pick (prefer WEBDL); Bluray, Remux, HDTV stay distinct,
+            // so a hybrid group selects both its disc and web sides by default.
+            const byFamily = {};
+            for (const m of it.members) {
+              const low = m.toLowerCase();
+              const isWeb = low.includes('web');
+              const isWebdl = low.includes('webdl') || low.includes('web-dl');
+              let fam;
+              if (isWeb) fam = 'web';
+              else if (low.includes('bluray') || low.includes('blu-ray')) fam = 'bluray';
+              else if (low.includes('remux')) fam = 'remux';
+              else if (low.includes('hdtv')) fam = 'hdtv';
+              else fam = low;
+              if (!(fam in byFamily) || (fam === 'web' && isWebdl)) byFamily[fam] = m;
+            }
+            for (const m of Object.values(byFamily)) qsel[m] = true;
           } else {
             qsel[it.name] = true;
           }
