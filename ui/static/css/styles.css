@@ -8,7 +8,7 @@
 @import url('./features/profile-sync-preview.css');
 @import url('./features/cf-detail.css');
 @import url('./features/quality.css');
-@import url('./features/sync-compare.css');
+@import url('./features/sync-compare.css?v=2');
 @import url('./features/builders.css');
 @import url('./features/naming.css');
 @import url('./features/scoring.css');

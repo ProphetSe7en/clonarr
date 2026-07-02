@@ -771,13 +771,19 @@ func driftDetailToPendingChange(d DriftDetail, when string) PendingChange {
 			AffectedID:   d.CFName, // CF name is the stable identifier for drift since trash_id may be unknown
 			AffectedName: d.CFName,
 		}
-	case "quality":
+	case "quality", "group", "quality_order":
+		name := d.CFName
+		if d.Field == "group" {
+			name += fmt.Sprintf(" (Group changed from %v to %v)", d.Current, d.Target)
+		} else if d.Field == "quality_order" {
+			name = "Ordering changed"
+		}
 		return PendingChange{
 			Source:       "drift",
 			DetectedAt:   when,
 			ChangeType:   "qs-modified",
 			AffectedID:   "quality:" + d.CFName,
-			AffectedName: d.CFName,
+			AffectedName: name,
 		}
 	default:
 		return PendingChange{
@@ -985,6 +991,8 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 	// changes that don't flip any allowed flag are a no-op for the user.
 	curAllowed := flattenAllowed(current.Items)
 	tgtAllowed := flattenAllowed(target.Items)
+	curGroups := flattenGroups(current.Items)
+	tgtGroups := flattenGroups(target.Items)
 	seen := make(map[string]bool, len(curAllowed)+len(tgtAllowed))
 	for name, ca := range curAllowed {
 		seen[name] = true
@@ -997,6 +1005,18 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 		}
 		if ca != ta {
 			out = append(out, DriftDetail{Field: "quality", CFName: name, Current: ca, Target: ta})
+		} else {
+			cg := curGroups[name]
+			tg := tgtGroups[name]
+			if cg != tg {
+				if cg == "" {
+					cg = "Ungrouped"
+				}
+				if tg == "" {
+					tg = "Ungrouped"
+				}
+				out = append(out, DriftDetail{Field: "group", CFName: name, Current: cg, Target: tg})
+			}
 		}
 	}
 	for name, ta := range tgtAllowed {
@@ -1004,6 +1024,22 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 			continue
 		}
 		out = append(out, DriftDetail{Field: "quality", CFName: name, Current: false, Target: ta})
+	}
+	faCur := FingerprintArrItems(current.Items, false)
+	faCurRev := FingerprintArrItems(current.Items, true)
+	faTgt := FingerprintArrItems(target.Items, false)
+
+	if faCur != faTgt && faCurRev != faTgt {
+		orderOnly := true
+		for _, d := range out {
+			if d.Field == "quality" || d.Field == "group" {
+				orderOnly = false
+				break
+			}
+		}
+		if orderOnly {
+			out = append(out, DriftDetail{Field: "quality_order", CFName: "structure", Current: "Drifted", Target: "Original"})
+		}
 	}
 
 	return out
@@ -1042,6 +1078,41 @@ func languageName(l *arr.ArrLanguage) string {
 		return l.Name
 	}
 	return fmt.Sprintf("id=%d", l.ID)
+}
+
+// flattenGroups extracts a flat mapping of quality-name → group-name from the
+// items tree, allowing drift detection for group changes that leave allowed state intact.
+func flattenGroups(items []arr.ArrQualityItem) map[string]string {
+	out := make(map[string]string)
+	for _, it := range items {
+		if len(it.Items) > 0 {
+			groupName := it.Name
+			for _, m := range it.Items {
+				name := ""
+				if m.Quality != nil {
+					name = m.Quality.Name
+				} else if m.Name != "" {
+					name = m.Name
+				}
+				if name == "" {
+					continue
+				}
+				out[name] = groupName
+			}
+			continue
+		}
+		name := ""
+		if it.Quality != nil {
+			name = it.Quality.Name
+		} else if it.Name != "" {
+			name = it.Name
+		}
+		if name == "" {
+			continue
+		}
+		out[name] = ""
+	}
+	return out
 }
 
 // flattenAllowed reduces an items tree to a flat quality-name → allowed
@@ -1092,7 +1163,7 @@ func summariseDrift(details []DriftDetail) []string {
 		switch d.Field {
 		case "score":
 			scoreCount++
-		case "quality":
+		case "quality", "group":
 			qualityCount++
 		default:
 			settingsCount++

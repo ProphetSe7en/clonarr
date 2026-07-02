@@ -116,8 +116,9 @@
   /* Match-based colouring on Current ONLY. Guide stays neutral so the
      row reads as "this is what your Arr has now (red = wrong, green =
      OK)" against the guide reference value (no colour signal). */
-  .cmp-settings-table td.current-diff { color: var(--accent-red); font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; text-align: left; }
-  .cmp-settings-table td.current-match { color: var(--accent-green); font-family: ui-monospace, SFMono-Regular, monospace; text-align: left; }
+  .cmp-settings-table td.current-cell { font-family: ui-monospace, SFMono-Regular, monospace; text-align: left; }
+  .cmp-settings-table .current-diff { color: var(--accent-red); font-weight: 600; }
+  .cmp-settings-table .current-match { color: var(--accent-green); }
   .cmp-settings-table td.guide { color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, monospace; text-align: left; }
   .cmp-settings-table td.new-fixed { color: var(--accent-green); font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; }
   .cmp-settings-table td.new-unchanged { color: var(--text-muted-secondary); font-family: ui-monospace, SFMono-Regular, monospace; font-style: italic; }

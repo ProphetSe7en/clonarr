@@ -5287,6 +5287,8 @@ export default {
           return 'Top-level profile settings: language, upgrades allowed, min/cutoff scores.';
         case 'quality':
           return 'Quality items and cutoff. Shows what is enabled in your profile vs what the guide enables.';
+        case 'quality-order':
+          return 'This view compares the top-to-bottom order of your qualities and groups against the TRaSH guide.';
         case 'all-diffs':
           return 'Everything that differs from the guide - grouped by Required → Default on → Optional. Optional CFs only appear here if you have enabled them.';
         case 'wrong':
@@ -5358,7 +5360,22 @@ export default {
       // Walk both data sources (Required formatItems + Group CFs) and
       // tally per the helper-driven classification. Mirrors what the
       // filter renders so sub-nav counts and visible rows agree.
-      let missing = 0, wrong = 0, overview = 0, optional = 0, allActive = 0;
+      let missing = 0, wrong = 0, overview = 0, optional = 0, allActive = 0, qualityOrder = 0;
+      if (cr?.qualityStructure) {
+        const countMismatches = (rows) => {
+          let cnt = 0;
+          for (const r of (rows || [])) {
+            if (!r.match) cnt++;
+            if (r.currentMembers) {
+              for (const m of r.currentMembers) {
+                if (!m.match) cnt++;
+              }
+            }
+          }
+          return cnt;
+        };
+        qualityOrder = countMismatches(cr.qualityStructure.rows) + countMismatches(cr.qualityStructure.disabledRows);
+      }
       for (const fi of (cr?.formatItems || [])) {
         const st = this.cfRowStatus(fi, null);
         if (st === 'na') continue;
@@ -5387,9 +5404,9 @@ export default {
       // the previous semantics. Summary-bar code that wants the old
       // meaning needs updating, not this helper.
       return {
-        overview, optional, missing, wrong, extra, settings, quality,
+        overview, optional, missing, wrong, extra, settings, quality, qualityOrder,
         allDiffs, allActive,
-        diffs: allDiffs + extra + settings + quality, // legacy alias
+        diffs: allDiffs + extra + settings + quality + qualityOrder, // legacy alias
         all: overview + optional, // legacy alias (rough)
       };
     },
@@ -6148,6 +6165,8 @@ export default {
         if (grp.items.length === 0) {
           arr.splice(d.srcGroup, 1);
           if (d.srcGroup < gapIdx) insertAt -= 1;
+        } else if (grp.items.length === 1) {
+          arr.splice(d.srcGroup, 1, { _id: ++this._qsIdCounter, name: grp.items[0], allowed: grp.allowed });
         }
         arr.splice(insertAt, 0, newSingle);
       }
@@ -6205,6 +6224,8 @@ export default {
         if (oldGroup.items.length === 0) {
           arr.splice(d.srcGroup, 1);
           if (d.srcGroup < tIdx) tIdx -= 1;
+        } else if (oldGroup.items.length === 1) {
+          arr.splice(d.srcGroup, 1, { _id: ++this._qsIdCounter, name: oldGroup.items[0], allowed: oldGroup.allowed });
         }
         const tgtItem = arr[tIdx];
         if (!tgtItem) { this.qsResetDrag(); return; }
@@ -6263,6 +6284,8 @@ export default {
         if (oldGroup.items.length === 0) {
           arr.splice(d.srcGroup, 1);
           if (d.srcGroup < realGroupIdx) realGroupIdx -= 1;
+        } else if (oldGroup.items.length === 1) {
+          arr.splice(d.srcGroup, 1, { _id: ++this._qsIdCounter, name: oldGroup.items[0], allowed: oldGroup.allowed });
         }
         if (arr[realGroupIdx] && arr[realGroupIdx].items) {
           arr[realGroupIdx].items.splice(gapIdx, 0, memberName);
@@ -6309,6 +6332,8 @@ export default {
       });
       if (grp.items.length === 0) {
         arr.splice(groupIdx, 1);
+      } else if (grp.items.length === 1) {
+        arr.splice(groupIdx, 1, { _id: ++this._qsIdCounter, name: grp.items[0], allowed: grp.allowed });
       }
     },
 

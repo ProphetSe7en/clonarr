@@ -636,8 +636,11 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			desiredItems = req.QualityStructure
 		}
 		if len(desiredItems) > 0 {
-			filtered := filterArrItemsToDesired(targetProfile.Items, desiredItems)
-			if fingerprintTrashItems(desiredItems) != fingerprintArrItems(filtered) {
+			filtered := FilterArrItemsToDesired(targetProfile.Items, desiredItems)
+			ft := FingerprintTrashItems(desiredItems)
+			fa := FingerprintArrItems(filtered, false)
+			faRev := FingerprintArrItems(filtered, true)
+			if ft != fa && ft != faRev {
 				plan.Summary.QualityChanged = true
 			}
 		}
@@ -756,8 +759,9 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 			// for nested items even though the comparison table shows them
 			// (handleCompareProfile recurses, this loop must too).
 			oldAllowed := make(map[string]bool)
-			var collectOldAllowed func(items []arr.ArrQualityItem)
-			collectOldAllowed = func(items []arr.ArrQualityItem) {
+			oldGroups := make(map[string]string)
+			var collectOldAllowed func(items []arr.ArrQualityItem, groupName string)
+			collectOldAllowed = func(items []arr.ArrQualityItem, groupName string) {
 				for _, item := range items {
 					name := item.Name
 					if name == "" && item.Quality != nil {
@@ -765,13 +769,16 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 					}
 					if name != "" {
 						oldAllowed[name] = item.Allowed
+						if len(item.Items) == 0 {
+							oldGroups[name] = groupName
+						}
 					}
 					if len(item.Items) > 0 {
-						collectOldAllowed(item.Items)
+						collectOldAllowed(item.Items, name)
 					}
 				}
 			}
-			collectOldAllowed(targetProfile.Items)
+			collectOldAllowed(targetProfile.Items, "")
 			// Resolve desired quality items to get Allowed state
 			qualityDefs, err := client.ListQualityDefinitions()
 			if err == nil {
@@ -793,27 +800,53 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 							}
 						}
 					}
-					for _, item := range newItems {
-						name := item.Name
-						if name == "" && item.Quality != nil {
-							name = item.Quality.Name
-						}
-						if name == "" {
-							continue
-						}
-						oldState, exists := oldAllowed[name]
-						if exists && oldState != item.Allowed {
-							suffix := ""
-							if _, isOverride := req.QualityOverrides[name]; isOverride {
-								suffix = " (override)"
+					var collectNewState func(items []arr.ArrQualityItem, groupName string)
+					collectNewState = func(items []arr.ArrQualityItem, groupName string) {
+						for _, item := range items {
+							name := item.Name
+							if name == "" && item.Quality != nil {
+								name = item.Quality.Name
 							}
-							if item.Allowed {
-								plan.QualityPreview = append(plan.QualityPreview, name+": Disabled → Enabled"+suffix)
-							} else {
-								plan.QualityPreview = append(plan.QualityPreview, name+": Enabled → Disabled"+suffix)
+							if name == "" {
+								continue
+							}
+							
+							oldState, exists := oldAllowed[name]
+							if exists && oldState != item.Allowed {
+								suffix := ""
+								if _, isOverride := req.QualityOverrides[name]; isOverride {
+									suffix = " (override)"
+								}
+								if item.Allowed {
+									plan.QualityPreview = append(plan.QualityPreview, name+": Disabled → Enabled"+suffix)
+								} else {
+									plan.QualityPreview = append(plan.QualityPreview, name+": Enabled → Disabled"+suffix)
+								}
+							}
+							
+							if len(item.Items) == 0 {
+								oldGrp, grpExists := oldGroups[name]
+								if grpExists || oldGrp != "" || groupName != "" {
+									if oldGrp != groupName {
+										from := oldGrp
+										if from == "" {
+											from = "ungrouped"
+										}
+										to := groupName
+										if to == "" {
+											to = "ungrouped"
+										}
+										plan.QualityPreview = append(plan.QualityPreview, name+": Group changed from "+from+" to "+to)
+									}
+								}
+							}
+							
+							if len(item.Items) > 0 {
+								collectNewState(item.Items, name)
 							}
 						}
 					}
+					collectNewState(newItems, "")
 				}
 			}
 			// Also handle legacy flat overrides when quality rebuild was skipped
@@ -827,6 +860,10 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 						}
 					}
 				}
+			}
+			
+			if plan.Summary.QualityChanged && len(plan.QualityPreview) == 0 {
+				plan.QualityPreview = append(plan.QualityPreview, "Ordering changed (will be restored to profile configuration)")
 			}
 		}
 	} else {
@@ -1275,7 +1312,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		}
 		var prevItemsFingerprint string
 		if len(desiredItemsSnapshot) > 0 {
-			prevItemsFingerprint = fingerprintArrItems(filterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot))
+			prevItemsFingerprint = FingerprintArrItems(FilterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot), false)
 		}
 		prevCutoffName := cutoffIDToName(targetProfile.Cutoff, targetProfile.Items)
 
@@ -1512,8 +1549,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 				// must record the same change in QualityDetails or the
 				// sync-history rendering diverges from what the user saw.
 				oldAllowed := make(map[string]bool)
-				var collectOldAllowed func(items []arr.ArrQualityItem)
-				collectOldAllowed = func(items []arr.ArrQualityItem) {
+				oldGroups := make(map[string]string)
+				var collectOldAllowed func(items []arr.ArrQualityItem, groupName string)
+				collectOldAllowed = func(items []arr.ArrQualityItem, groupName string) {
 					for _, item := range items {
 						name := item.Name
 						if name == "" && item.Quality != nil {
@@ -1521,13 +1559,16 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 						}
 						if name != "" {
 							oldAllowed[name] = item.Allowed
+							if len(item.Items) == 0 {
+								oldGroups[name] = groupName
+							}
 						}
 						if len(item.Items) > 0 {
-							collectOldAllowed(item.Items)
+							collectOldAllowed(item.Items, name)
 						}
 					}
 				}
-				collectOldAllowed(targetProfile.Items)
+				collectOldAllowed(targetProfile.Items, "")
 
 				// Source: structure override trumps TRaSH items.
 				itemsSource := profile.Items
@@ -1555,27 +1596,53 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 					}
 
 					// Track quality changes (comparing Arr state vs desired final state)
-					for _, item := range newItems {
-						name := item.Name
-						if name == "" && item.Quality != nil {
-							name = item.Quality.Name
-						}
-						if name == "" {
-							continue
-						}
-						oldState, exists := oldAllowed[name]
-						if exists && oldState != item.Allowed {
-							suffix := ""
-							if _, isOverride := req.QualityOverrides[name]; isOverride {
-								suffix = " (override)"
+					var collectNewState func(items []arr.ArrQualityItem, groupName string)
+					collectNewState = func(items []arr.ArrQualityItem, groupName string) {
+						for _, item := range items {
+							name := item.Name
+							if name == "" && item.Quality != nil {
+								name = item.Quality.Name
 							}
-							if item.Allowed {
-								result.QualityDetails = append(result.QualityDetails, name+": Disabled → Enabled"+suffix)
-							} else {
-								result.QualityDetails = append(result.QualityDetails, name+": Enabled → Disabled"+suffix)
+							if name == "" {
+								continue
+							}
+							
+							oldState, exists := oldAllowed[name]
+							if exists && oldState != item.Allowed {
+								suffix := ""
+								if _, isOverride := req.QualityOverrides[name]; isOverride {
+									suffix = " (override)"
+								}
+								if item.Allowed {
+									result.QualityDetails = append(result.QualityDetails, name+": Disabled → Enabled"+suffix)
+								} else {
+									result.QualityDetails = append(result.QualityDetails, name+": Enabled → Disabled"+suffix)
+								}
+							}
+							
+							if len(item.Items) == 0 {
+								oldGrp, grpExists := oldGroups[name]
+								if grpExists || oldGrp != "" || groupName != "" {
+									if oldGrp != groupName {
+										from := oldGrp
+										if from == "" {
+											from = "ungrouped"
+										}
+										to := groupName
+										if to == "" {
+											to = "ungrouped"
+										}
+										result.QualityDetails = append(result.QualityDetails, name+": Group changed from "+from+" to "+to)
+									}
+								}
+							}
+							
+							if len(item.Items) > 0 {
+								collectNewState(item.Items, name)
 							}
 						}
 					}
+					collectNewState(newItems, "")
 					usedQualities := make(map[int]bool)
 					collectUsedQualities(newItems, usedQualities)
 					unused := make([]arr.ArrQualityItem, 0)
@@ -1696,9 +1763,9 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		// extract-from-group. Both snapshots are filtered to the TRaSH-managed
 		// subset so Radarr's unused-tail ordering can't produce false positives.
 		if len(desiredItemsSnapshot) > 0 {
-			postFP := fingerprintArrItems(filterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot))
+			postFP := FingerprintArrItems(FilterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot), false)
 			if postFP != prevItemsFingerprint && !result.QualityUpdated {
-				result.QualityDetails = append(result.QualityDetails, "Quality structure: restored")
+				result.QualityDetails = append(result.QualityDetails, "Ordering changed (will be restored to profile configuration)")
 				result.QualityUpdated = true
 				updated = true
 			}
@@ -2270,6 +2337,7 @@ func fpGroup(name string, allowed bool, members []string) string {
 	for i, m := range members {
 		quoted[i] = strconv.Quote(m)
 	}
+	sort.Strings(quoted)
 	return "G:" + strconv.Quote(name) + "=" + strconv.FormatBool(allowed) + "[" + strings.Join(quoted, ",") + "]"
 }
 
@@ -2277,42 +2345,62 @@ func fpGroup(name string, allowed bool, members []string) string {
 // Arr quality-item tree capturing ordering, group structure, and allowed state.
 // This is what lets the sync detect drift the set-based diff misses: reorders,
 // regroups, and moving a quality in/out of a group with the same allowed state.
-func fingerprintArrItems(items []arr.ArrQualityItem) string {
-	parts := make([]string, 0, len(items))
+func FingerprintArrItems(items []arr.ArrQualityItem, reverseEnabled bool) string {
+	var enabledParts []string
+	var disabledParts []string
 	for _, it := range items {
+		part := ""
 		if len(it.Items) > 0 || (it.Name != "" && it.Quality == nil) {
 			members := make([]string, 0, len(it.Items))
 			for _, sub := range it.Items {
 				members = append(members, arrItemName(sub))
 			}
-			parts = append(parts, fpGroup(it.Name, it.Allowed, members))
+			part = fpGroup(it.Name, it.Allowed, members)
 		} else {
-			parts = append(parts, fpQuality(arrItemName(it), it.Allowed))
+			part = fpQuality(arrItemName(it), it.Allowed)
+		}
+		if it.Allowed {
+			enabledParts = append(enabledParts, part)
+		} else {
+			disabledParts = append(disabledParts, part)
 		}
 	}
-	return strings.Join(parts, "|")
+	if reverseEnabled {
+		for i, j := 0, len(enabledParts)-1; i < j; i, j = i+1, j-1 {
+			enabledParts[i], enabledParts[j] = enabledParts[j], enabledParts[i]
+		}
+	}
+	sort.Strings(disabledParts)
+	return strings.Join(append(enabledParts, disabledParts...), "|")
 }
 
 // fingerprintTrashItems produces the same canonical format as fingerprintArrItems
 // but from a TRaSH-shaped []QualityItem. This lets the plan phase compare desired
-// (TRaSH) against current (Arr) without building an intermediate tree.
-func fingerprintTrashItems(items []QualityItem) string {
-	parts := make([]string, 0, len(items))
+func FingerprintTrashItems(items []QualityItem) string {
+	var enabledParts []string
+	var disabledParts []string
 	for _, it := range items {
+		part := ""
 		if len(it.Items) > 0 {
-			parts = append(parts, fpGroup(it.Name, it.Allowed, it.Items))
+			part = fpGroup(it.Name, it.Allowed, it.Items)
 		} else {
-			parts = append(parts, fpQuality(it.Name, it.Allowed))
+			part = fpQuality(it.Name, it.Allowed)
+		}
+		if it.Allowed {
+			enabledParts = append(enabledParts, part)
+		} else {
+			disabledParts = append(disabledParts, part)
 		}
 	}
-	return strings.Join(parts, "|")
+	sort.Strings(disabledParts)
+	return strings.Join(append(enabledParts, disabledParts...), "|")
 }
 
 // filterArrItemsToDesired returns the subset of Arr items that TRaSH manages:
 // groups (always kept — a stale group surfaces as drift), plus flat qualities
 // whose name appears in the desired set. Drops the "unused" tail so fingerprint
 // comparisons are insensitive to Radarr's API response ordering of unused items.
-func filterArrItemsToDesired(arrItems []arr.ArrQualityItem, desired []QualityItem) []arr.ArrQualityItem {
+func FilterArrItemsToDesired(arrItems []arr.ArrQualityItem, desired []QualityItem) []arr.ArrQualityItem {
 	desiredNames := make(map[string]bool, len(desired)*2)
 	for _, it := range desired {
 		if it.Name != "" {

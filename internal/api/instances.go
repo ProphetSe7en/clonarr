@@ -1656,6 +1656,7 @@ type ProfileComparison struct {
 	// Profile settings and quality comparison
 	SettingsDiffs []SettingDiff     `json:"settingsDiffs,omitempty"`
 	QualityDiffs  []QualityItemDiff `json:"qualityDiffs,omitempty"`
+	QualityStructure *CompareQualityStructure `json:"qualityStructure,omitempty"`
 	// LEGACY (keep for now)
 	OptionalCategories []CompareCategory `json:"optionalCategories"` // optional CF groups categorized
 	Summary            ComparisonSummary `json:"summary"`
@@ -1672,6 +1673,27 @@ type ComparisonSummary struct {
 	QualityDiffs  int `json:"qualityDiffs"`  // quality items that differ
 }
 
+type CompareQualityStructureMember struct {
+	Name  string `json:"name"`
+	Match bool   `json:"match"`
+}
+
+type CompareQualityStructureRow struct {
+	Current        string                          `json:"current"`
+	Guide          string                          `json:"guide"`
+	Match          bool                            `json:"match"`
+	CurrentMembers []CompareQualityStructureMember `json:"currentMembers"`
+	GuideMembers   []CompareQualityStructureMember `json:"guideMembers"`
+}
+
+type CompareQualityStructure struct {
+	HasDrift      bool                         `json:"hasDrift"`
+	CurrentCutoff string                       `json:"currentCutoff"`
+	GuideCutoff   string                       `json:"guideCutoff"`
+	Rows          []CompareQualityStructureRow `json:"rows"`
+	DisabledRows  []CompareQualityStructureRow `json:"disabledRows"`
+}
+
 // SettingDiff describes a profile setting that differs between Arr and TRaSH.
 type SettingDiff struct {
 	Name    string `json:"name"`
@@ -1685,6 +1707,10 @@ type QualityItemDiff struct {
 	Name           string `json:"name"`
 	CurrentAllowed bool   `json:"currentAllowed"`
 	DesiredAllowed bool   `json:"desiredAllowed"`
+	CurrentGroup   string `json:"currentGroup,omitempty"`
+	DesiredGroup   string `json:"desiredGroup,omitempty"`
+	AllowedMatch   bool   `json:"allowedMatch"`
+	GroupMatch     bool   `json:"groupMatch"`
 	Match          bool   `json:"match"`
 }
 
@@ -2192,44 +2218,365 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 	addSetting("Cutoff", arrCutoffName, trashProfile.Cutoff)
 
 	// Compare quality items: TRaSH items vs Arr items
-	// Build Arr quality state: name → allowed
+	// Build Arr quality state: name → allowed, name → group
 	arrQuality := make(map[string]bool)
-	var collectArrQualities func(items []arr.ArrQualityItem)
-	collectArrQualities = func(items []arr.ArrQualityItem) {
+	arrGroup := make(map[string]string)
+	var collectArrQualities func(items []arr.ArrQualityItem, groupName string)
+	collectArrQualities = func(items []arr.ArrQualityItem, groupName string) {
 		for _, item := range items {
+			if len(item.Items) > 0 {
+				collectArrQualities(item.Items, item.Name)
+				name := item.Name
+				if name != "" {
+					arrQuality[strings.ToLower(name)] = item.Allowed
+					arrGroup[strings.ToLower(name)] = ""
+				}
+				continue
+			}
 			name := item.Name
 			if name == "" && item.Quality != nil {
 				name = item.Quality.Name
 			}
 			if name != "" {
 				arrQuality[strings.ToLower(name)] = item.Allowed
-			}
-			if len(item.Items) > 0 {
-				collectArrQualities(item.Items)
+				arrGroup[strings.ToLower(name)] = groupName
 			}
 		}
 	}
-	collectArrQualities(arrProfile.Items)
+	collectArrQualities(arrProfile.Items, "")
 
-	// Compare against TRaSH quality items
-	for _, tItem := range trashProfile.Items {
+	// Similar for TRaSH Profile to get desired groups
+	trashGroup := make(map[string]string)
+	for _, item := range trashProfile.Items {
+		if len(item.Items) > 0 {
+			for _, childStr := range item.Items {
+				if childStr != "" {
+					trashGroup[strings.ToLower(childStr)] = item.Name
+				}
+			}
+		}
+	}
+
+	var allTrashItems []core.QualityItem
+	for _, it := range trashProfile.Items {
+		allTrashItems = append(allTrashItems, it)
+		// For nested string items, they inherit the group's allowed state implicitly in TRaSH
+		for _, childStr := range it.Items {
+			if childStr != "" {
+				allTrashItems = append(allTrashItems, core.QualityItem{
+					Name:    childStr,
+					Allowed: it.Allowed,
+				})
+			}
+		}
+	}
+
+	// Compare against all flattened TRaSH quality items
+	for _, tItem := range allTrashItems {
 		name := tItem.Name
+		if name == "" {
+			continue
+		}
 		desiredAllowed := tItem.Allowed
 		currentAllowed, exists := arrQuality[strings.ToLower(name)]
 		if !exists {
-			// Quality item not found in Arr — skip (may be a group name that maps differently)
+			// Quality item not found in Arr — skip
 			continue
 		}
-		match := currentAllowed == desiredAllowed
+		
+		cGroup := arrGroup[strings.ToLower(name)]
+		dGroup := trashGroup[strings.ToLower(name)]
+		
+		allowedMatch := currentAllowed == desiredAllowed
+		groupMatch := cGroup == dGroup
+		match := allowedMatch && groupMatch
+		
 		comp.QualityDiffs = append(comp.QualityDiffs, QualityItemDiff{
 			Name:           name,
 			CurrentAllowed: currentAllowed,
 			DesiredAllowed: desiredAllowed,
+			CurrentGroup:   cGroup,
+			DesiredGroup:   dGroup,
+			AllowedMatch:   allowedMatch,
+			GroupMatch:     groupMatch,
 			Match:          match,
 		})
 		if !match {
 			comp.Summary.QualityDiffs++
 		}
+	}
+
+	// Compare ordering structure by using the fingerprint method
+	filtered := core.FilterArrItemsToDesired(arrProfile.Items, trashProfile.Items)
+	faCur := core.FingerprintArrItems(filtered, false)
+	faCurRev := core.FingerprintArrItems(filtered, true)
+	ftTgt := core.FingerprintTrashItems(trashProfile.Items)
+	
+	hasDrift := faCur != ftTgt && faCurRev != ftTgt
+	
+	cItemMap := make(map[string]arr.ArrQualityItem)
+	var currentKeys []string
+	var disabledKeys []string
+	for _, it := range filtered {
+		name := it.Name
+		if name == "" && it.Quality != nil {
+			name = it.Quality.Name
+		}
+		if name != "" {
+			cItemMap[name] = it
+			if it.Allowed {
+				currentKeys = append(currentKeys, name)
+			} else {
+				disabledKeys = append(disabledKeys, name)
+			}
+		}
+	}
+	// Sonarr's API always returns quality items worst-to-best. We reverse them
+	// here so the Compare tool presents them best-to-worst, visually aligning
+	// them with the TRaSH guide's best-to-worst format.
+	if inst.Type == "sonarr" {
+		for i, j := 0, len(currentKeys)-1; i < j; i, j = i+1, j-1 {
+			currentKeys[i], currentKeys[j] = currentKeys[j], currentKeys[i]
+		}
+		for i, j := 0, len(disabledKeys)-1; i < j; i, j = i+1, j-1 {
+			disabledKeys[i], disabledKeys[j] = disabledKeys[j], disabledKeys[i]
+		}
+	}
+	
+	gItemMap := make(map[string]core.QualityItem)
+	var guideKeys []string
+	var guideDisabledKeys []string
+	for _, it := range trashProfile.Items {
+		if it.Name != "" {
+			gItemMap[it.Name] = it
+			if it.Allowed {
+				guideKeys = append(guideKeys, it.Name)
+			} else {
+				guideDisabledKeys = append(guideDisabledKeys, it.Name)
+			}
+		}
+	}
+	
+	guideExpectedEnabled := make(map[string]bool)
+	for _, it := range trashProfile.Items {
+		if it.Allowed && it.Name != "" {
+			guideExpectedEnabled[it.Name] = true
+			for _, sub := range it.Items {
+				guideExpectedEnabled[sub] = true
+			}
+		}
+	}
+
+	buildAlignment := func(cKeys, gKeys []string, isEnabledSection bool) []CompareQualityStructureRow {
+		m := len(cKeys)
+		n := len(gKeys)
+		dp := make([][]int, m+1)
+		for i := range dp {
+			dp[i] = make([]int, n+1)
+		}
+
+		for i := 1; i <= m; i++ {
+			for j := 1; j <= n; j++ {
+				if cKeys[i-1] == gKeys[j-1] {
+					dp[i][j] = dp[i-1][j-1] + 1
+				} else {
+					if dp[i-1][j] > dp[i][j-1] {
+						dp[i][j] = dp[i-1][j]
+					} else {
+						dp[i][j] = dp[i][j-1]
+					}
+				}
+			}
+		}
+
+		var matches [][2]int
+		i, j := m, n
+		for i > 0 && j > 0 {
+			if cKeys[i-1] == gKeys[j-1] {
+				matches = append(matches, [2]int{i - 1, j - 1})
+				i--
+				j--
+			} else if dp[i-1][j] > dp[i][j-1] {
+				i--
+			} else {
+				j--
+			}
+		}
+		for left, right := 0, len(matches)-1; left < right; left, right = left+1, right-1 {
+			matches[left], matches[right] = matches[right], matches[left]
+		}
+
+		maxInt := func(a, b int) int {
+			if a > b {
+				return a
+			}
+			return b
+		}
+
+		var filteredMatches [][2]int
+		for k, mt := range matches {
+			prev := [2]int{-1, -1}
+			if len(filteredMatches) > 0 {
+				prev = filteredMatches[len(filteredMatches)-1]
+			}
+			next := [2]int{len(cKeys), len(gKeys)}
+			if k < len(matches)-1 {
+				next = matches[k+1]
+			}
+
+			isContiguousPrev := mt[0]-prev[0] == 1 && mt[1]-prev[1] == 1
+			isContiguousNext := next[0]-mt[0] == 1 && next[1]-mt[1] == 1
+
+			if isContiguousPrev || isContiguousNext {
+				filteredMatches = append(filteredMatches, mt)
+				continue
+			}
+
+			rowsWith := maxInt(mt[0]-prev[0]-1, mt[1]-prev[1]-1) + 1 + maxInt(next[0]-mt[0]-1, next[1]-mt[1]-1)
+			rowsWithout := maxInt(next[0]-prev[0]-1, next[1]-prev[1]-1)
+
+			if rowsWith < rowsWithout {
+				filteredMatches = append(filteredMatches, mt)
+			}
+		}
+
+		globalCSet := make(map[string]bool)
+		globalGSet := make(map[string]bool)
+		for _, k := range cKeys { globalCSet[k] = true }
+		for _, k := range gKeys { globalGSet[k] = true }
+
+		localRows := make([]CompareQualityStructureRow, 0)
+		
+		makeRow := func(c, g string, match bool) CompareQualityStructureRow {
+			cMembers := make([]CompareQualityStructureMember, 0)
+			gMembers := make([]CompareQualityStructureMember, 0)
+			
+			if !isEnabledSection {
+				// In disabled section, neutral (match=true) unless Guide expected it to be enabled (match=false -> red)
+				if c != "" && guideExpectedEnabled[c] {
+					match = false
+				} else if c != "" && !guideExpectedEnabled[c] {
+					match = true
+				}
+			}
+
+			if c != "" {
+				if cIt, ok := cItemMap[c]; ok {
+					gSet := make(map[string]bool)
+					if gIt, ok := gItemMap[c]; ok {
+						for _, sub := range gIt.Items {
+							gSet[sub] = true
+						}
+					}
+					for _, sub := range cIt.Items {
+						subName := sub.Name
+						if subName == "" && sub.Quality != nil {
+							subName = sub.Quality.Name
+						}
+						if subName != "" {
+							memMatch := gSet[subName]
+							if !isEnabledSection {
+								if guideExpectedEnabled[subName] {
+									memMatch = false
+								} else {
+									memMatch = true
+								}
+							} else {
+								if !guideExpectedEnabled[subName] {
+									memMatch = false
+								}
+							}
+							cMembers = append(cMembers, CompareQualityStructureMember{
+								Name: subName,
+								Match: memMatch,
+							})
+						}
+					}
+					if inst.Type == "sonarr" {
+						for i, j := 0, len(cMembers)-1; i < j; i, j = i+1, j-1 {
+							cMembers[i], cMembers[j] = cMembers[j], cMembers[i]
+						}
+					}
+				}
+			}
+			if g != "" {
+				if gIt, ok := gItemMap[g]; ok {
+					for _, sub := range gIt.Items {
+						gMembers = append(gMembers, CompareQualityStructureMember{
+							Name: sub,
+							Match: true,
+						})
+					}
+				}
+			}
+			return CompareQualityStructureRow{
+				Current: c, Guide: g, Match: match,
+				CurrentMembers: cMembers, GuideMembers: gMembers,
+			}
+		}
+		
+		processGap := func(cGap, gGap []string) {
+			var cPresent, gPresent []string
+			for _, k := range cGap {
+				if globalGSet[k] {
+					cPresent = append(cPresent, k)
+				}
+			}
+			for _, k := range gGap {
+				if globalCSet[k] {
+					gPresent = append(gPresent, k)
+				}
+			}
+			
+			cIdx, gIdx := 0, 0
+			cPresIdx, gPresIdx := 0, 0
+			
+			for cIdx < len(cGap) || gIdx < len(gGap) {
+				if gIdx < len(gGap) && !globalCSet[gGap[gIdx]] {
+					localRows = append(localRows, makeRow("", gGap[gIdx], false))
+					gIdx++
+					continue
+				}
+				if cIdx < len(cGap) && !globalGSet[cGap[cIdx]] {
+					localRows = append(localRows, makeRow(cGap[cIdx], "", false))
+					cIdx++
+					continue
+				}
+				
+				if cPresIdx < len(cPresent) || gPresIdx < len(gPresent) {
+					c := ""
+					g := ""
+					if cPresIdx < len(cPresent) { c = cPresent[cPresIdx]; cPresIdx++ }
+					if gPresIdx < len(gPresent) { g = gPresent[gPresIdx]; gPresIdx++ }
+					localRows = append(localRows, makeRow(c, g, c != "" && c == g))
+				}
+				
+				if cIdx < len(cGap) && globalGSet[cGap[cIdx]] { cIdx++ }
+				if gIdx < len(gGap) && globalCSet[gGap[gIdx]] { gIdx++ }
+			}
+		}
+
+		lastCur, lastGuide := 0, 0
+		for _, mt := range filteredMatches {
+			processGap(cKeys[lastCur:mt[0]], gKeys[lastGuide:mt[1]])
+			localRows = append(localRows, makeRow(cKeys[mt[0]], gKeys[mt[1]], true))
+			lastCur = mt[0] + 1
+			lastGuide = mt[1] + 1
+		}
+		processGap(cKeys[lastCur:], gKeys[lastGuide:])
+		
+		return localRows
+	}
+
+	rows := buildAlignment(currentKeys, guideKeys, true)
+	disabledRows := buildAlignment(disabledKeys, guideDisabledKeys, false)
+
+	comp.QualityStructure = &CompareQualityStructure{
+		HasDrift:      hasDrift,
+		CurrentCutoff: arrCutoffName,
+		GuideCutoff:   trashProfile.Cutoff,
+		Rows:          rows,
+		DisabledRows:  disabledRows,
 	}
 
 	return comp
