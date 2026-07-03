@@ -53,22 +53,30 @@ func TestDiffArrProfile_StructureChanges(t *testing.T) {
 	
 	if !groupDriftFound { t.Error("expected group drift for C") }
 	
-	// Target2 has only order changes
+	// Target2 has order AND group changes (B and A swapped, C inside Group instead of Ungrouped)
 	target2 := &arr.ArrQualityProfile{
 		Items: []arr.ArrQualityItem{
 			{Name: "B", Allowed: true},
 			{Name: "A", Allowed: true},
-			{Name: "Group", Allowed: true, Items: []arr.ArrQualityItem{{Name: "C", Allowed: true}}},
+			{Name: "Group", Allowed: true, Items: []arr.ArrQualityItem{}},
+			{Name: "C", Allowed: true},
 		},
 	}
 	
 	details2 := diffArrProfile(current, target2, nil, &AutoSyncRule{}, map[string]bool{}, map[string]int{}, nil, nil)
 	
+	groupDriftFound = false
+	orderDriftFound = false
+	t.Logf("details2: %+v", details2)
 	for _, d := range details2 {
+		if d.Field == "group" && d.CFName == "C" && d.Current == "Group" && d.Target == "Ungrouped" {
+			groupDriftFound = true
+		}
 		if d.Field == "quality_order" && d.CFName == "structure" {
 			orderDriftFound = true
 		}
 	}
 	
-	if !orderDriftFound { t.Error("expected order drift") }
+	if !groupDriftFound { t.Error("expected group drift for C in Target2") }
+	if !orderDriftFound { t.Error("expected order drift in Target2") }
 }

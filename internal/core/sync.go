@@ -847,6 +847,16 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 						}
 					}
 					collectNewState(newItems, "")
+					if plan.Summary.QualityChanged {
+						filtered := FilterArrItemsToDesired(targetProfile.Items, desiredItems)
+						drifted := getGroupDriftQualities(filtered, newItems)
+						orderCur := getEnabledOrder(filtered, false, drifted)
+						orderCurRev := getEnabledOrder(filtered, true, drifted)
+						orderTgt := getEnabledOrder(newItems, false, drifted)
+						if orderCur != orderTgt && orderCurRev != orderTgt {
+							plan.QualityPreview = append(plan.QualityPreview, "Ordering changed (will be restored to profile configuration)")
+						}
+					}
 				}
 			}
 			// Also handle legacy flat overrides when quality rebuild was skipped
@@ -860,10 +870,6 @@ func BuildSyncPlan(ad *AppData, instance Instance, req SyncRequest, imported *Im
 						}
 					}
 				}
-			}
-			
-			if plan.Summary.QualityChanged && len(plan.QualityPreview) == 0 {
-				plan.QualityPreview = append(plan.QualityPreview, "Ordering changed (will be restored to profile configuration)")
 			}
 		}
 	} else {
@@ -1310,10 +1316,6 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 		if len(req.QualityStructure) > 0 {
 			desiredItemsSnapshot = req.QualityStructure
 		}
-		var prevItemsFingerprint string
-		if len(desiredItemsSnapshot) > 0 {
-			prevItemsFingerprint = FingerprintArrItems(FilterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot), false)
-		}
 		prevCutoffName := cutoffIDToName(targetProfile.Cutoff, targetProfile.Items)
 
 		// Update profile-level settings (cutoff, min scores, upgrade)
@@ -1643,6 +1645,18 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 						}
 					}
 					collectNewState(newItems, "")
+
+					filteredSnapshot := FilterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot)
+					driftedSnapshot := getGroupDriftQualities(filteredSnapshot, newItems)
+					orderCur := getEnabledOrder(filteredSnapshot, false, driftedSnapshot)
+					orderCurRev := getEnabledOrder(filteredSnapshot, true, driftedSnapshot)
+					orderTgt := getEnabledOrder(newItems, false, driftedSnapshot)
+					if orderCur != orderTgt && orderCurRev != orderTgt {
+						result.QualityDetails = append(result.QualityDetails, "Ordering changed (will be restored to profile configuration)")
+						result.QualityUpdated = true
+						updated = true
+					}
+
 					usedQualities := make(map[int]bool)
 					collectUsedQualities(newItems, usedQualities)
 					unused := make([]arr.ArrQualityItem, 0)
@@ -1759,17 +1773,7 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			}
 		}
 
-		// Catch drift missed by the enable/disable loop above: reorder, regroup,
-		// extract-from-group. Both snapshots are filtered to the TRaSH-managed
-		// subset so Radarr's unused-tail ordering can't produce false positives.
-		if len(desiredItemsSnapshot) > 0 {
-			postFP := FingerprintArrItems(FilterArrItemsToDesired(targetProfile.Items, desiredItemsSnapshot), false)
-			if postFP != prevItemsFingerprint && !result.QualityUpdated {
-				result.QualityDetails = append(result.QualityDetails, "Ordering changed (will be restored to profile configuration)")
-				result.QualityUpdated = true
-				updated = true
-			}
-		}
+		// Extract-from-group drift is already captured above.
 
 		if profileSettingsChanged {
 			updated = true

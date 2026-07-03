@@ -1030,19 +1030,82 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 	faTgt := FingerprintArrItems(target.Items, false)
 
 	if faCur != faTgt && faCurRev != faTgt {
-		orderOnly := true
-		for _, d := range out {
-			if d.Field == "quality" || d.Field == "group" {
-				orderOnly = false
-				break
-			}
-		}
-		if orderOnly {
+		// Fingerprint mismatched, meaning there is some structural drift (group, allowed state, or order).
+		// We only want to report quality_order if the actual linear sequence of enabled items changed.
+		driftedGroups := getGroupDriftQualities(current.Items, target.Items)
+		orderCur := getEnabledOrder(current.Items, false, driftedGroups)
+		orderCurRev := getEnabledOrder(current.Items, true, driftedGroups)
+		orderTgt := getEnabledOrder(target.Items, false, driftedGroups)
+		
+		if orderCur != orderTgt && orderCurRev != orderTgt {
 			out = append(out, DriftDetail{Field: "quality_order", CFName: "structure", Current: "Drifted", Target: "Original"})
 		}
 	}
 
 	return out
+}
+
+func getGroupMapping(items []arr.ArrQualityItem) map[string]string {
+	mapping := make(map[string]string)
+	for _, it := range items {
+		if !it.Allowed {
+			continue
+		}
+		if len(it.Items) > 0 || (it.Name != "" && it.Quality == nil) {
+			for _, child := range it.Items {
+				mapping[arrItemName(child)] = it.Name
+			}
+		} else {
+			mapping[arrItemName(it)] = ""
+		}
+	}
+	return mapping
+}
+
+func getGroupDriftQualities(cur, tgt []arr.ArrQualityItem) map[string]bool {
+	mapCur := getGroupMapping(cur)
+	mapTgt := getGroupMapping(tgt)
+	drifted := make(map[string]bool)
+	for q, cGrp := range mapCur {
+		if tGrp, ok := mapTgt[q]; ok && cGrp != tGrp {
+			drifted[q] = true
+		}
+	}
+	return drifted
+}
+
+func getEnabledOrder(items []arr.ArrQualityItem, reverseEnabled bool, exclude map[string]bool) string {
+	var seq []string
+	
+	processItem := func(it arr.ArrQualityItem) {
+		if !it.Allowed {
+			return
+		}
+		if len(it.Items) > 0 || (it.Name != "" && it.Quality == nil) {
+			for _, child := range it.Items {
+				name := arrItemName(child)
+				if !exclude[name] {
+					seq = append(seq, name)
+				}
+			}
+		} else {
+			name := arrItemName(it)
+			if !exclude[name] {
+				seq = append(seq, name)
+			}
+		}
+	}
+
+	if reverseEnabled {
+		for i := len(items) - 1; i >= 0; i-- {
+			processItem(items[i])
+		}
+	} else {
+		for i := 0; i < len(items); i++ {
+			processItem(items[i])
+		}
+	}
+	return strings.Join(seq, ",")
 }
 
 // qualityIDName resolves a quality-or-group ID to its display name by
