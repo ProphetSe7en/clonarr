@@ -75,7 +75,7 @@ func (s *Server) handleCFDriftDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(*inst, s.Core.HTTPClient)
 	liveCFs, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "list arr custom formats: "+err.Error())

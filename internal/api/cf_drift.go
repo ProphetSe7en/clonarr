@@ -106,7 +106,7 @@ func (s *Server) handleCFDriftApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find the live CF in Arr so we know the id to PUT against.
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(*inst, s.Core.HTTPClient)
 	liveCFs, err := client.ListCustomFormats()
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "list arr custom formats: "+err.Error())

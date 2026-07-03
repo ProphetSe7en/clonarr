@@ -283,7 +283,7 @@ func (s *Server) handleImportCFsFromInstance(w http.ResponseWriter, r *http.Requ
 	defer func() { op.End(endResult) }()
 
 	// Fetch all CFs from instance
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	arrCFs, err := client.ListCustomFormats()
 	if err != nil {
 		endResult = fmt.Sprintf("error: fetch from %s failed: %v", inst.Name, err)
@@ -411,7 +411,7 @@ func (s *Server) handleCFSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch schema from Arr API
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(*inst, s.Core.HTTPClient)
 	data, status, err := client.DoRequest("GET", "/customformat/schema", nil)
 	if err != nil {
 		writeError(w, 502, "Failed to fetch schema: "+err.Error())

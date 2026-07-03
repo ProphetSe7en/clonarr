@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"clonarr/internal/arr"
+	"clonarr/internal/core"
 	"clonarr/internal/core/calculator"
 )
 
@@ -56,7 +56,7 @@ func (s *Server) handleCalcGrabTitles(w http.ResponseWriter, r *http.Request) {
 	if limit > 500 {
 		limit = 500
 	}
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	path := fmt.Sprintf("/history?page=1&pageSize=%d&sortKey=date&sortDirection=descending&eventType=1", limit)
 	data, status, err := client.DoRequest("GET", path, nil)
 	if err != nil {

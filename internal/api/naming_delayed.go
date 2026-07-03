@@ -1,7 +1,6 @@
 package api
 
 import (
-	"clonarr/internal/arr"
 	"clonarr/internal/core"
 	"log"
 	"time"
@@ -56,7 +55,7 @@ func (s *Server) RunNamingDelayed() {
 		if ad == nil && un == nil {
 			continue // no pattern source (guide not loaded + upstream unreachable)
 		}
-		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+		client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 		liveCfg, err := client.GetNaming()
 		if err != nil {
 			continue // unreachable — leave pending state alone, try next tick

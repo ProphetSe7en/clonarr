@@ -283,7 +283,7 @@ func isLanguageCF(name string) bool {
 
 // parseSingleRelease calls the Arr Parse API and enriches CFs with trash_ids.
 func (s *Server) parseSingleRelease(inst core.Instance, title string) (*ScoringParseResult, error) {
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	data, status, err := client.DoRequest("GET", "/parse?title="+url.QueryEscape(title), nil)
 	if err != nil {
 		// Transport-level failure (connection refused, DNS, timeout): the

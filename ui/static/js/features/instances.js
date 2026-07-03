@@ -5,7 +5,7 @@ export default {
     instanceVersion: {},
     showInstanceModal: false,
     editingInstance: null,
-    instanceForm: { name: '', type: 'radarr', url: '', apiKey: '' },
+    instanceForm: { name: '', type: 'radarr', url: '', apiKey: '', externalAuth: false, username: '', password: '' },
     instanceFormErrors: {},
     modalTestResult: null,
     // Prowlarr's data shape (single global config) differs from the
@@ -35,6 +35,9 @@ export default {
         type: (this.instanceForm.type || '').trim(),
         url: (this.instanceForm.url || '').trim(),
         apiKey: (this.instanceForm.apiKey || '').trim(),
+        externalAuth: !!this.instanceForm.externalAuth,
+        username: (this.instanceForm.username || '').trim(),
+        password: (this.instanceForm.password || '').trim(),
       };
     },
 
@@ -63,10 +66,10 @@ export default {
       this.editingInstance = inst;
       this.modalTestResult = null;
       if (inst) {
-        this.instanceForm = { name: inst.name, type: inst.type, url: inst.url, apiKey: '' };
+        this.instanceForm = { name: inst.name, type: inst.type, url: inst.url, apiKey: '', externalAuth: !!inst.externalAuth, username: inst.username || '', password: '' };
       } else {
         const fallbackType = ['radarr','sonarr'].includes(this.activeAppType) ? this.activeAppType : 'radarr';
-        this.instanceForm = { name: '', type: defaultType || fallbackType, url: '', apiKey: '' };
+        this.instanceForm = { name: '', type: defaultType || fallbackType, url: '', apiKey: '', externalAuth: false, username: '', password: '' };
       }
       this.showInstanceModal = true;
     },
@@ -79,14 +82,14 @@ export default {
     startInlineEdit(inst) {
       this.inlineEditingId = inst.id;
       this.editingInstance = inst;
-      this.instanceForm = { name: inst.name, type: inst.type, url: inst.url, apiKey: '' };
+      this.instanceForm = { name: inst.name, type: inst.type, url: inst.url, apiKey: '', externalAuth: !!inst.externalAuth, username: inst.username || '', password: '' };
       this.instanceFormErrors = {};
       this.modalTestResult = null;
     },
     startInlineAdd(type) {
       this.inlineEditingId = 'new-' + type;
       this.editingInstance = null;
-      this.instanceForm = { name: '', type, url: '', apiKey: '' };
+      this.instanceForm = { name: '', type, url: '', apiKey: '', externalAuth: false, username: '', password: '' };
       this.instanceFormErrors = {};
       this.modalTestResult = null;
     },
@@ -148,11 +151,14 @@ export default {
       if (!data.url) this.instanceFormErrors.url = 'URL is required';
       if (!data.name) this.instanceFormErrors.name = 'Name is required';
       if (!this.editingInstance && !data.apiKey) this.instanceFormErrors.apiKey = 'API Key is required';
+      if (data.externalAuth && !this.editingInstance && !data.username) this.instanceFormErrors.username = 'Username is required when external authentication is enabled';
+      if (data.externalAuth && !this.editingInstance && !data.password) this.instanceFormErrors.password = 'Password is required when external authentication is enabled';
       if (Object.keys(this.instanceFormErrors).length > 0) return;
 
       let r;
       if (this.editingInstance) {
         if (!data.apiKey) data.apiKey = this.editingInstance.apiKey;
+        // password left blank → backend preserves existing (mirrors apiKey behaviour)
         r = await fetch(`/api/instances/${this.editingInstance.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -250,7 +256,7 @@ export default {
           r = await fetch('/api/test-connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: formData.url, apiKey: formData.apiKey })
+            body: JSON.stringify({ url: formData.url, apiKey: formData.apiKey, externalAuth: formData.externalAuth, username: formData.username, password: formData.password })
           });
         }
         const data = await r.json();

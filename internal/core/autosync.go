@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"clonarr/internal/arr"
 )
 
 // (App.RunPullAndSync moved to pull.go — canonical Pull-and-sync flow.)
@@ -874,7 +873,7 @@ func (app *App) CleanupStaleRules() {
 	validProfiles := make(map[string]map[int]bool)
 	for _, inst := range cfg.Instances {
 		instNames[inst.ID] = inst.Name
-		client := arr.NewArrClient(inst.URL, inst.APIKey, app.HTTPClient)
+		client := NewArrClientFor(inst, app.HTTPClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)
@@ -1083,7 +1082,7 @@ func (app *App) WaitForInstanceReachable(inst Instance) bool {
 				return false
 			}
 		}
-		client := arr.NewArrClient(inst.URL, inst.APIKey, app.HTTPClient)
+		client := NewArrClientFor(inst, app.HTTPClient)
 		if _, err := client.TestConnection(); err == nil {
 			if i > 0 {
 				log.Printf("Auto-sync: %s reachable on probe %d/%d — proceeding with sync", inst.Name, i+1, len(autoSyncReachabilityDelays))

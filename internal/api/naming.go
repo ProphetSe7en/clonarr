@@ -122,7 +122,7 @@ func extractNamingPatterns(instType string, current arr.ArrNamingConfig) map[str
 // updates the fingerprint. Every actual change also appends a per-field history
 // event {from, to, at, via} for the inline history + restore.
 func (s *Server) applyNamingFields(inst core.Instance, fields map[string]string, schemes map[string]string, replacedBy string) (arr.ArrNamingConfig, map[string]string, error) {
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	current, err := client.GetNaming()
 	if err != nil {
 		return nil, nil, err
@@ -546,7 +546,7 @@ func (s *Server) AutoSyncNaming() {
 		// EITHER reason: the guide changed (update) OR it was edited directly in
 		// Arr so it no longer matches the scheme (drift). Drift correction is
 		// gated on arrDriftOn; guide updates always apply on this path.
-		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+		client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 		liveCfg, err := client.GetNaming()
 		if err != nil {
 			log.Printf("Auto-sync naming [%s]: read failed: %v", inst.Name, err)

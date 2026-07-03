@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"clonarr/internal/arr"
 	"clonarr/internal/core"
 )
 
@@ -541,7 +540,7 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Collision check 1: Arr profile with this name already exists.
-	client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	existing, err := client.ListProfiles()
 	if err != nil {
 		writeError(w, 502, "Failed to query Arr profiles: "+err.Error())

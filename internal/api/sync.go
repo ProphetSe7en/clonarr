@@ -1,7 +1,6 @@
 package api
 
 import (
-	"clonarr/internal/arr"
 	"clonarr/internal/core"
 
 	"encoding/json"
@@ -694,7 +693,7 @@ func (s *Server) handleSyncHistory(w http.ResponseWriter, r *http.Request) {
 	// unreachable — never mutate state on a connection error.
 	inst, ok := s.Core.Config.GetInstance(id)
 	if ok {
-		client := arr.NewArrClient(inst.URL, inst.APIKey, s.Core.HTTPClient)
+		client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 		profiles, err := client.ListProfiles()
 		if err != nil {
 			log.Printf("Cleanup: skipping %s — instance not reachable: %v", inst.Name, err)

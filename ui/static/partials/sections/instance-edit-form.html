@@ -33,6 +33,37 @@
         <div x-show="editingInstance && !instanceForm.apiKey" style="font-size:13px;color:var(--text-muted);margin-top:4px">API key is saved — leave empty to keep it, or enter a new one to replace it.</div>
       </div>
     </div>
+    <div class="setting-row">
+      <div class="setting-label">External Auth</div>
+      <div class="setting-value">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" x-model="instanceForm.externalAuth">
+          Enable external authentication
+        </label>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px">Use this if the instance is behind a reverse proxy or uses Basic authentication. The username and password are sent with every request (UI and API).</div>
+      </div>
+    </div>
+    <template x-if="instanceForm.externalAuth">
+      <div>
+        <div class="setting-row">
+          <div class="setting-label">Username</div>
+          <div class="setting-value">
+            <input class="input" style="width:260px" x-model="instanceForm.username" placeholder="Username" autocomplete="one-time-code"
+                   :aria-invalid="!!instanceFormErrors.username">
+            <div class="field-error" x-show="instanceFormErrors.username" x-text="instanceFormErrors.username"></div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">Password</div>
+          <div class="setting-value">
+            <input class="input" style="width:260px" x-model="instanceForm.password" :placeholder="editingInstance ? 'Leave empty to keep current password' : 'Password'" type="password" autocomplete="one-time-code"
+                   :aria-invalid="!!instanceFormErrors.password">
+            <div class="field-error" x-show="instanceFormErrors.password" x-text="instanceFormErrors.password"></div>
+            <div x-show="editingInstance && !instanceForm.password" style="font-size:13px;color:var(--text-muted);margin-top:4px">Password is saved — leave empty to keep it, or enter a new one to replace it.</div>
+          </div>
+        </div>
+      </div>
+    </template>
     <!-- Test result -->
     <div x-show="modalTestResult !== null" style="margin-top:8px">
       <template x-if="modalTestResult === 'testing'">
