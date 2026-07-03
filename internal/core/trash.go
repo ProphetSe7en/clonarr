@@ -2145,6 +2145,7 @@ type ResolvedCF struct {
 	HasScore        bool   `json:"hasScore"`
 	Description     string `json:"description,omitempty"`
 	IncludeInRename bool   `json:"includeInRename,omitempty"` // Arr's includeCustomFormatWhenRenaming — surfaced as the "rename" indicator in the profile editor
+	JSONSlug        string `json:"jsonSlug,omitempty"`         // disk filename stem, so the profile editor builds the correct TRaSH-Guides JSON link (handles / and language prefixes that name-derivation can't)
 }
 
 // ResolvedCFCategory groups resolved CFs by category.
@@ -2163,6 +2164,7 @@ type ProfileCFGroupEntry struct {
 	Default         bool   `json:"default"`
 	Description     string `json:"description,omitempty"`
 	IncludeInRename bool   `json:"includeInRename,omitempty"` // Arr's includeCustomFormatWhenRenaming — surfaced as the "rename" indicator in the profile editor
+	JSONSlug        string `json:"jsonSlug,omitempty"`         // disk filename stem, so the profile editor's group CFs build the correct TRaSH-Guides JSON link
 }
 
 // ProfileCFGroup is a CF group linked to a profile via quality_profiles.include.
@@ -2258,6 +2260,7 @@ func ProfileCFGroups(ad *AppData, profileTrashID string) (required []ProfileCFGr
 					entry.HasScore = true
 				}
 				entry.Description = cf.Description
+				entry.JSONSlug = cf.JSONSlug
 			}
 
 			pg.CFs = append(pg.CFs, entry)
@@ -2591,6 +2594,7 @@ func ProfileCFCategories(ad *AppData, profileTrashID string) []CFCategory {
 				}
 				entry.Description = cf.Description
 				entry.IncludeInRename = cf.IncludeInRename
+				entry.JSONSlug = cf.JSONSlug
 			}
 
 			cg.CFs = append(cg.CFs, entry)
@@ -2740,6 +2744,7 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 				}
 				entry.Description = cf.Description
 				entry.IncludeInRename = cf.IncludeInRename
+				entry.JSONSlug = cf.JSONSlug
 			}
 
 			cg.CFs = append(cg.CFs, entry)
@@ -2784,6 +2789,7 @@ func ProfileDetailData(ad *AppData, profileTrashID string) *ProfileDetailResult 
 			// 2059). Without this, Required CFs had blank tooltips.
 			rc.Description = cf.Description
 			rc.IncludeInRename = cf.IncludeInRename
+			rc.JSONSlug = cf.JSONSlug
 			if s, ok := cf.TrashScores[scoreCtx]; ok {
 				rc.Score = s
 				rc.HasScore = true
@@ -2929,6 +2935,7 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 
 			if cf, ok := ad.CustomFormats[cfEntry.TrashID]; ok {
 				entry.Description = cf.Description
+				entry.JSONSlug = cf.JSONSlug
 			}
 
 			cg.CFs = append(cg.CFs, entry)
@@ -2965,9 +2972,11 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 			}
 		}
 		description := ""
+		jsonSlug := ""
 		if cf, ok := ad.CustomFormats[tid]; ok {
 			name = cf.Name
 			description = cf.Description
+			jsonSlug = cf.JSONSlug
 		}
 		formatItemNames = append(formatItemNames, ResolvedCF{
 			TrashID:     tid,
@@ -2975,6 +2984,7 @@ func ImportedProfileDetailData(ad *AppData, imported *ImportedProfile) *ProfileD
 			Description: description,
 			Score:       score,
 			HasScore:    true,
+			JSONSlug:    jsonSlug,
 		})
 	}
 	sort.Slice(formatItemNames, func(i, j int) bool {
@@ -3027,6 +3037,7 @@ func ResolveProfileCFs(ad *AppData, profileTrashID string) ([]ResolvedCF, string
 			TrashID:     cfTrashID,
 			Name:        cf.Name,
 			Description: cf.Description,
+			JSONSlug:    cf.JSONSlug,
 		}
 		if score, ok := cf.TrashScores[scoreCtx]; ok {
 			rc.Score = score

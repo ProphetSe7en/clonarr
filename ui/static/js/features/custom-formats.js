@@ -164,8 +164,12 @@ export default {
     // dots, every non-alphanumeric run collapses to one dash, trim
     // leading/trailing dashes.
     _cfSlug(name) {
+      // Fallback only (prefer the backend jsonSlug). Drop "." and "/" WITHOUT a
+      // separator so TRaSH's filename convention is matched: "DV (w/o HDR
+      // fallback)" -> "dv-wo-hdr-fallback", "x265 (no HDR/DV)" -> "x265-no-hdrdv".
+      // Everything else non-alphanumeric collapses to a single "-".
       return (name || '').toLowerCase()
-        .replace(/\./g, '')
+        .replace(/[./]/g, '')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
     },
