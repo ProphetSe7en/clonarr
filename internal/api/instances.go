@@ -2368,204 +2368,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 	}
 
 	buildAlignment := func(cKeys, gKeys []string, isEnabledSection bool) []CompareQualityStructureRow {
-		m := len(cKeys)
-		n := len(gKeys)
-		dp := make([][]int, m+1)
-		for i := range dp {
-			dp[i] = make([]int, n+1)
-		}
-
-		for i := 1; i <= m; i++ {
-			for j := 1; j <= n; j++ {
-				if cKeys[i-1] == gKeys[j-1] {
-					dp[i][j] = dp[i-1][j-1] + 1
-				} else {
-					if dp[i-1][j] > dp[i][j-1] {
-						dp[i][j] = dp[i-1][j]
-					} else {
-						dp[i][j] = dp[i][j-1]
-					}
-				}
-			}
-		}
-
-		var matches [][2]int
-		i, j := m, n
-		for i > 0 && j > 0 {
-			if cKeys[i-1] == gKeys[j-1] {
-				matches = append(matches, [2]int{i - 1, j - 1})
-				i--
-				j--
-			} else if dp[i-1][j] > dp[i][j-1] {
-				i--
-			} else {
-				j--
-			}
-		}
-		for left, right := 0, len(matches)-1; left < right; left, right = left+1, right-1 {
-			matches[left], matches[right] = matches[right], matches[left]
-		}
-
-		maxInt := func(a, b int) int {
-			if a > b {
-				return a
-			}
-			return b
-		}
-
-		var filteredMatches [][2]int
-		for k, mt := range matches {
-			prev := [2]int{-1, -1}
-			if len(filteredMatches) > 0 {
-				prev = filteredMatches[len(filteredMatches)-1]
-			}
-			next := [2]int{len(cKeys), len(gKeys)}
-			if k < len(matches)-1 {
-				next = matches[k+1]
-			}
-
-			isContiguousPrev := mt[0]-prev[0] == 1 && mt[1]-prev[1] == 1
-			isContiguousNext := next[0]-mt[0] == 1 && next[1]-mt[1] == 1
-
-			if isContiguousPrev || isContiguousNext {
-				filteredMatches = append(filteredMatches, mt)
-				continue
-			}
-
-			rowsWith := maxInt(mt[0]-prev[0]-1, mt[1]-prev[1]-1) + 1 + maxInt(next[0]-mt[0]-1, next[1]-mt[1]-1)
-			rowsWithout := maxInt(next[0]-prev[0]-1, next[1]-prev[1]-1)
-
-			if rowsWith < rowsWithout {
-				filteredMatches = append(filteredMatches, mt)
-			}
-		}
-
-		globalCSet := make(map[string]bool)
-		globalGSet := make(map[string]bool)
-		for _, k := range cKeys { globalCSet[k] = true }
-		for _, k := range gKeys { globalGSet[k] = true }
-
-		localRows := make([]CompareQualityStructureRow, 0)
-		
-		makeRow := func(c, g string, match bool) CompareQualityStructureRow {
-			cMembers := make([]CompareQualityStructureMember, 0)
-			gMembers := make([]CompareQualityStructureMember, 0)
-			
-			if !isEnabledSection {
-				// In disabled section, neutral (match=true) unless Guide expected it to be enabled (match=false -> red)
-				if c != "" && guideExpectedEnabled[c] {
-					match = false
-				} else if c != "" && !guideExpectedEnabled[c] {
-					match = true
-				}
-			}
-
-			if c != "" {
-				if cIt, ok := cItemMap[c]; ok {
-					gSet := make(map[string]bool)
-					if gIt, ok := gItemMap[c]; ok {
-						for _, sub := range gIt.Items {
-							gSet[sub] = true
-						}
-					}
-					for _, sub := range cIt.Items {
-						subName := sub.Name
-						if subName == "" && sub.Quality != nil {
-							subName = sub.Quality.Name
-						}
-						if subName != "" {
-							memMatch := gSet[subName]
-							if !isEnabledSection {
-								if guideExpectedEnabled[subName] {
-									memMatch = false
-								} else {
-									memMatch = true
-								}
-							} else {
-								if !guideExpectedEnabled[subName] {
-									memMatch = false
-								}
-							}
-							cMembers = append(cMembers, CompareQualityStructureMember{
-								Name: subName,
-								Match: memMatch,
-							})
-						}
-					}
-					if inst.Type == "sonarr" {
-						for i, j := 0, len(cMembers)-1; i < j; i, j = i+1, j-1 {
-							cMembers[i], cMembers[j] = cMembers[j], cMembers[i]
-						}
-					}
-				}
-			}
-			if g != "" {
-				if gIt, ok := gItemMap[g]; ok {
-					for _, sub := range gIt.Items {
-						gMembers = append(gMembers, CompareQualityStructureMember{
-							Name: sub,
-							Match: true,
-						})
-					}
-				}
-			}
-			return CompareQualityStructureRow{
-				Current: c, Guide: g, Match: match,
-				CurrentMembers: cMembers, GuideMembers: gMembers,
-			}
-		}
-		
-		processGap := func(cGap, gGap []string) {
-			var cPresent, gPresent []string
-			for _, k := range cGap {
-				if globalGSet[k] {
-					cPresent = append(cPresent, k)
-				}
-			}
-			for _, k := range gGap {
-				if globalCSet[k] {
-					gPresent = append(gPresent, k)
-				}
-			}
-			
-			cIdx, gIdx := 0, 0
-			cPresIdx, gPresIdx := 0, 0
-			
-			for cIdx < len(cGap) || gIdx < len(gGap) {
-				if gIdx < len(gGap) && !globalCSet[gGap[gIdx]] {
-					localRows = append(localRows, makeRow("", gGap[gIdx], false))
-					gIdx++
-					continue
-				}
-				if cIdx < len(cGap) && !globalGSet[cGap[cIdx]] {
-					localRows = append(localRows, makeRow(cGap[cIdx], "", false))
-					cIdx++
-					continue
-				}
-				
-				if cPresIdx < len(cPresent) || gPresIdx < len(gPresent) {
-					c := ""
-					g := ""
-					if cPresIdx < len(cPresent) { c = cPresent[cPresIdx]; cPresIdx++ }
-					if gPresIdx < len(gPresent) { g = gPresent[gPresIdx]; gPresIdx++ }
-					localRows = append(localRows, makeRow(c, g, c != "" && c == g))
-				}
-				
-				if cIdx < len(cGap) && globalGSet[cGap[cIdx]] { cIdx++ }
-				if gIdx < len(gGap) && globalCSet[gGap[gIdx]] { gIdx++ }
-			}
-		}
-
-		lastCur, lastGuide := 0, 0
-		for _, mt := range filteredMatches {
-			processGap(cKeys[lastCur:mt[0]], gKeys[lastGuide:mt[1]])
-			localRows = append(localRows, makeRow(cKeys[mt[0]], gKeys[mt[1]], true))
-			lastCur = mt[0] + 1
-			lastGuide = mt[1] + 1
-		}
-		processGap(cKeys[lastCur:], gKeys[lastGuide:])
-		
-		return localRows
+		return BuildAlignment(inst.Type, cKeys, gKeys, isEnabledSection, guideExpectedEnabled, cItemMap, gItemMap)
 	}
 
 	rows := buildAlignment(currentKeys, guideKeys, true)
@@ -2923,4 +2726,205 @@ func (s *Server) handleTrashNaming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, ad.Naming)
+}
+
+func BuildAlignment(instType string, cKeys, gKeys []string, isEnabledSection bool, guideExpectedEnabled map[string]bool, cItemMap map[string]arr.ArrQualityItem, gItemMap map[string]core.QualityItem) []CompareQualityStructureRow {
+	m := len(cKeys)
+	n := len(gKeys)
+	dp := make([][]int, m+1)
+	for i := range dp {
+		dp[i] = make([]int, n+1)
+	}
+
+	for i := 1; i <= m; i++ {
+		for j := 1; j <= n; j++ {
+			if cKeys[i-1] == gKeys[j-1] {
+				dp[i][j] = dp[i-1][j-1] + 1
+			} else {
+				if dp[i-1][j] > dp[i][j-1] {
+					dp[i][j] = dp[i-1][j]
+				} else {
+					dp[i][j] = dp[i][j-1]
+				}
+			}
+		}
+	}
+
+	var matches [][2]int
+	i, j := m, n
+	for i > 0 && j > 0 {
+		if cKeys[i-1] == gKeys[j-1] {
+			matches = append(matches, [2]int{i - 1, j - 1})
+			i--
+			j--
+		} else if dp[i-1][j] > dp[i][j-1] {
+			i--
+		} else {
+			j--
+		}
+	}
+	for left, right := 0, len(matches)-1; left < right; left, right = left+1, right-1 {
+		matches[left], matches[right] = matches[right], matches[left]
+	}
+
+	maxInt := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
+	}
+
+	var filteredMatches [][2]int
+	for k, mt := range matches {
+		prev := [2]int{-1, -1}
+		if len(filteredMatches) > 0 {
+			prev = filteredMatches[len(filteredMatches)-1]
+		}
+		next := [2]int{len(cKeys), len(gKeys)}
+		if k < len(matches)-1 {
+			next = matches[k+1]
+		}
+
+		isContiguousPrev := mt[0]-prev[0] == 1 && mt[1]-prev[1] == 1
+		isContiguousNext := next[0]-mt[0] == 1 && next[1]-mt[1] == 1
+
+		if isContiguousPrev || isContiguousNext {
+			filteredMatches = append(filteredMatches, mt)
+			continue
+		}
+
+		rowsWith := maxInt(mt[0]-prev[0]-1, mt[1]-prev[1]-1) + 1 + maxInt(next[0]-mt[0]-1, next[1]-mt[1]-1)
+		rowsWithout := maxInt(next[0]-prev[0]-1, next[1]-prev[1]-1)
+
+		if rowsWith < rowsWithout {
+			filteredMatches = append(filteredMatches, mt)
+		}
+	}
+
+	globalCSet := make(map[string]bool)
+	globalGSet := make(map[string]bool)
+	for _, k := range cKeys { globalCSet[k] = true }
+	for _, k := range gKeys { globalGSet[k] = true }
+
+	localRows := make([]CompareQualityStructureRow, 0)
+	
+	makeRow := func(c, g string, match bool) CompareQualityStructureRow {
+		cMembers := make([]CompareQualityStructureMember, 0)
+		gMembers := make([]CompareQualityStructureMember, 0)
+		
+		if !isEnabledSection {
+			// In disabled section, neutral (match=true) unless Guide expected it to be enabled (match=false -> red)
+			if c != "" && guideExpectedEnabled[c] {
+				match = false
+			} else if c != "" && !guideExpectedEnabled[c] {
+				match = true
+			}
+		}
+
+		if c != "" {
+			if cIt, ok := cItemMap[c]; ok {
+				gSet := make(map[string]bool)
+				if gIt, ok := gItemMap[c]; ok {
+					for _, sub := range gIt.Items {
+						gSet[sub] = true
+					}
+				}
+				for _, sub := range cIt.Items {
+					subName := sub.Name
+					if subName == "" && sub.Quality != nil {
+						subName = sub.Quality.Name
+					}
+					if subName != "" {
+						memMatch := gSet[subName]
+						if !isEnabledSection {
+							if guideExpectedEnabled[subName] {
+								memMatch = false
+							} else {
+								memMatch = true
+							}
+						} else {
+							if !guideExpectedEnabled[subName] {
+								memMatch = false
+							}
+						}
+						cMembers = append(cMembers, CompareQualityStructureMember{
+							Name: subName,
+							Match: memMatch,
+						})
+					}
+				}
+				if instType == "sonarr" {
+					for i, j := 0, len(cMembers)-1; i < j; i, j = i+1, j-1 {
+						cMembers[i], cMembers[j] = cMembers[j], cMembers[i]
+					}
+				}
+			}
+		}
+		if g != "" {
+			if gIt, ok := gItemMap[g]; ok {
+				for _, sub := range gIt.Items {
+					gMembers = append(gMembers, CompareQualityStructureMember{
+						Name: sub,
+						Match: true,
+					})
+				}
+			}
+		}
+		return CompareQualityStructureRow{
+			Current: c, Guide: g, Match: match,
+			CurrentMembers: cMembers, GuideMembers: gMembers,
+		}
+	}
+	
+	processGap := func(cGap, gGap []string) {
+		var cPresent, gPresent []string
+		for _, k := range cGap {
+			if globalGSet[k] {
+				cPresent = append(cPresent, k)
+			}
+		}
+		for _, k := range gGap {
+			if globalCSet[k] {
+				gPresent = append(gPresent, k)
+			}
+		}
+		
+		cIdx, gIdx := 0, 0
+		cPresIdx, gPresIdx := 0, 0
+		
+		for cIdx < len(cGap) || gIdx < len(gGap) {
+			if gIdx < len(gGap) && !globalCSet[gGap[gIdx]] {
+				localRows = append(localRows, makeRow("", gGap[gIdx], false))
+				gIdx++
+				continue
+			}
+			if cIdx < len(cGap) && !globalGSet[cGap[cIdx]] {
+				localRows = append(localRows, makeRow(cGap[cIdx], "", false))
+				cIdx++
+				continue
+			}
+			
+			if cPresIdx < len(cPresent) || gPresIdx < len(gPresent) {
+				c := ""
+				g := ""
+				if cPresIdx < len(cPresent) { c = cPresent[cPresIdx]; cPresIdx++ }
+				if gPresIdx < len(gPresent) { g = gPresent[gPresIdx]; gPresIdx++ }
+				localRows = append(localRows, makeRow(c, g, c != "" && c == g))
+			}
+			
+			if cIdx < len(cGap) && globalGSet[cGap[cIdx]] { cIdx++ }
+			if gIdx < len(gGap) && globalCSet[gGap[gIdx]] { gIdx++ }
+		}
+	}
+
+	lastCur, lastGuide := 0, 0
+	for _, mt := range filteredMatches {
+		processGap(cKeys[lastCur:mt[0]], gKeys[lastGuide:mt[1]])
+		localRows = append(localRows, makeRow(cKeys[mt[0]], gKeys[mt[1]], true))
+		lastCur = mt[0] + 1
+		lastGuide = mt[1] + 1
+	}
+	processGap(cKeys[lastCur:], gKeys[lastGuide:])
+	
+	return localRows
 }

@@ -774,7 +774,7 @@ func driftDetailToPendingChange(d DriftDetail, when string) PendingChange {
 	case "quality", "group", "quality_order":
 		name := d.CFName
 		if d.Field == "group" {
-			name += fmt.Sprintf(" (Group changed from %v to %v)", d.Current, d.Target)
+			name += fmt.Sprintf(" (Group changed from %v to %v)", d.Target, d.Current)
 		} else if d.Field == "quality_order" {
 			name = "Ordering changed"
 		}
@@ -1163,7 +1163,7 @@ func summariseDrift(details []DriftDetail) []string {
 		switch d.Field {
 		case "score":
 			scoreCount++
-		case "quality", "group":
+		case "quality", "group", "quality_order":
 			qualityCount++
 		default:
 			settingsCount++
