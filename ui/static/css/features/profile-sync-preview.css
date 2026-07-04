@@ -751,8 +751,12 @@ button.sp-summary-active:focus-visible {
 }
 .sp-action-row-combined .sp-cf-desc-inline:empty { display: none; }
 /* Hide-descriptions: drop the description column so the score hugs the
-   name, exactly like .sp-cf-row's hide behaviour. */
-.sp-hide-cf-desc .sp-action-row-combined { grid-template-columns: 22px 220px 100px; }
+   name, exactly like .sp-cf-row's hide behaviour. The name column must be
+   1fr (not a fixed 220px) so it fills the row and the score stays pinned to
+   the far-right edge, aligned with every other CF row. A fixed name column
+   left the columns unstretched and floated the score toward centre (the
+   single-CF HDR groups in All categories). */
+.sp-hide-cf-desc .sp-action-row-combined { grid-template-columns: 22px 1fr 100px; }
 .sp-hide-cf-desc .sp-action-row-combined .sp-cf-score,
 .sp-hide-cf-desc .sp-action-row-combined .sp-cf-score-edit { grid-column: 3; }
 .sp-action-label {
