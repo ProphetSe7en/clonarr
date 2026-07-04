@@ -771,13 +771,19 @@ func driftDetailToPendingChange(d DriftDetail, when string) PendingChange {
 			AffectedID:   d.CFName, // CF name is the stable identifier for drift since trash_id may be unknown
 			AffectedName: d.CFName,
 		}
-	case "quality":
+	case "quality", "group", "quality_order":
+		name := d.CFName
+		if d.Field == "group" {
+			name += fmt.Sprintf(" (Group changed from %v to %v)", d.Target, d.Current)
+		} else if d.Field == "quality_order" {
+			name = "Ordering changed"
+		}
 		return PendingChange{
 			Source:       "drift",
 			DetectedAt:   when,
 			ChangeType:   "qs-modified",
 			AffectedID:   "quality:" + d.CFName,
-			AffectedName: d.CFName,
+			AffectedName: name,
 		}
 	default:
 		return PendingChange{
@@ -985,6 +991,8 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 	// changes that don't flip any allowed flag are a no-op for the user.
 	curAllowed := flattenAllowed(current.Items)
 	tgtAllowed := flattenAllowed(target.Items)
+	curGroups := flattenGroups(current.Items)
+	tgtGroups := flattenGroups(target.Items)
 	seen := make(map[string]bool, len(curAllowed)+len(tgtAllowed))
 	for name, ca := range curAllowed {
 		seen[name] = true
@@ -997,6 +1005,18 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 		}
 		if ca != ta {
 			out = append(out, DriftDetail{Field: "quality", CFName: name, Current: ca, Target: ta})
+		} else {
+			cg := curGroups[name]
+			tg := tgtGroups[name]
+			if cg != tg {
+				if cg == "" {
+					cg = "Ungrouped"
+				}
+				if tg == "" {
+					tg = "Ungrouped"
+				}
+				out = append(out, DriftDetail{Field: "group", CFName: name, Current: cg, Target: tg})
+			}
 		}
 	}
 	for name, ta := range tgtAllowed {
@@ -1005,8 +1025,87 @@ func diffArrProfile(current, target *arr.ArrQualityProfile, cfs []arr.ArrCF, rul
 		}
 		out = append(out, DriftDetail{Field: "quality", CFName: name, Current: false, Target: ta})
 	}
+	faCur := FingerprintArrItems(current.Items, false)
+	faCurRev := FingerprintArrItems(current.Items, true)
+	faTgt := FingerprintArrItems(target.Items, false)
+
+	if faCur != faTgt && faCurRev != faTgt {
+		// Fingerprint mismatched, meaning there is some structural drift (group, allowed state, or order).
+		// We only want to report quality_order if the actual linear sequence of enabled items changed.
+		driftedGroups := getGroupDriftQualities(current.Items, target.Items)
+		orderCur := getEnabledOrder(current.Items, false, driftedGroups)
+		orderCurRev := getEnabledOrder(current.Items, true, driftedGroups)
+		orderTgt := getEnabledOrder(target.Items, false, driftedGroups)
+		
+		if orderCur != orderTgt && orderCurRev != orderTgt {
+			out = append(out, DriftDetail{Field: "quality_order", CFName: "structure", Current: "Drifted", Target: "Original"})
+		}
+	}
 
 	return out
+}
+
+func getGroupMapping(items []arr.ArrQualityItem) map[string]string {
+	mapping := make(map[string]string)
+	for _, it := range items {
+		if !it.Allowed {
+			continue
+		}
+		if len(it.Items) > 0 || (it.Name != "" && it.Quality == nil) {
+			for _, child := range it.Items {
+				mapping[arrItemName(child)] = it.Name
+			}
+		} else {
+			mapping[arrItemName(it)] = ""
+		}
+	}
+	return mapping
+}
+
+func getGroupDriftQualities(cur, tgt []arr.ArrQualityItem) map[string]bool {
+	mapCur := getGroupMapping(cur)
+	mapTgt := getGroupMapping(tgt)
+	drifted := make(map[string]bool)
+	for q, cGrp := range mapCur {
+		if tGrp, ok := mapTgt[q]; ok && cGrp != tGrp {
+			drifted[q] = true
+		}
+	}
+	return drifted
+}
+
+func getEnabledOrder(items []arr.ArrQualityItem, reverseEnabled bool, exclude map[string]bool) string {
+	var seq []string
+	
+	processItem := func(it arr.ArrQualityItem) {
+		if !it.Allowed {
+			return
+		}
+		if len(it.Items) > 0 || (it.Name != "" && it.Quality == nil) {
+			for _, child := range it.Items {
+				name := arrItemName(child)
+				if !exclude[name] {
+					seq = append(seq, name)
+				}
+			}
+		} else {
+			name := arrItemName(it)
+			if !exclude[name] {
+				seq = append(seq, name)
+			}
+		}
+	}
+
+	if reverseEnabled {
+		for i := len(items) - 1; i >= 0; i-- {
+			processItem(items[i])
+		}
+	} else {
+		for i := 0; i < len(items); i++ {
+			processItem(items[i])
+		}
+	}
+	return strings.Join(seq, ",")
 }
 
 // qualityIDName resolves a quality-or-group ID to its display name by
@@ -1042,6 +1141,41 @@ func languageName(l *arr.ArrLanguage) string {
 		return l.Name
 	}
 	return fmt.Sprintf("id=%d", l.ID)
+}
+
+// flattenGroups extracts a flat mapping of quality-name → group-name from the
+// items tree, allowing drift detection for group changes that leave allowed state intact.
+func flattenGroups(items []arr.ArrQualityItem) map[string]string {
+	out := make(map[string]string)
+	for _, it := range items {
+		if len(it.Items) > 0 {
+			groupName := it.Name
+			for _, m := range it.Items {
+				name := ""
+				if m.Quality != nil {
+					name = m.Quality.Name
+				} else if m.Name != "" {
+					name = m.Name
+				}
+				if name == "" {
+					continue
+				}
+				out[name] = groupName
+			}
+			continue
+		}
+		name := ""
+		if it.Quality != nil {
+			name = it.Quality.Name
+		} else if it.Name != "" {
+			name = it.Name
+		}
+		if name == "" {
+			continue
+		}
+		out[name] = ""
+	}
+	return out
 }
 
 // flattenAllowed reduces an items tree to a flat quality-name → allowed
@@ -1092,7 +1226,7 @@ func summariseDrift(details []DriftDetail) []string {
 		switch d.Field {
 		case "score":
 			scoreCount++
-		case "quality":
+		case "quality", "group", "quality_order":
 			qualityCount++
 		default:
 			settingsCount++

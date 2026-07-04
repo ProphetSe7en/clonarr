@@ -828,11 +828,11 @@
                                              Sonarr blue when something is unsynced; green when fully
                                              in sync. -->
                                         <div style="background:var(--bg-card);border:1px solid var(--text-muted-secondary);border-radius:8px;padding:10px 14px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 6px var(--alpha-shadow)"
-                                             :style="{ borderColor: compareAdjustedCounts(cr).allDiffs > 0 || (cr.summary?.extra||0) > 0 || (cr.summary?.settingsDiffs||0) > 0 || (cr.summary?.qualityDiffs||0) > 0 ? 'var(--app-color)' : 'var(--accent-green)' }">
+                                             :style="{ borderColor: compareAdjustedCounts(cr).allDiffs > 0 || (cr.summary?.extra||0) > 0 || (cr.summary?.settingsDiffs||0) > 0 || (cr.summary?.qualityDiffs||0) > 0 || (cr.qualityStructure && cr.qualityStructure.hasDrift) ? 'var(--app-color)' : 'var(--accent-green)' }">
                                           <strong style="color:var(--text-primary);font-size:13px" x-text="ap.name"></strong>
                                           <span style="color:var(--app-color);font-size:12px;font-weight:600">vs</span>
                                           <strong style="color:var(--text-primary);font-size:13px" x-text="cr.trashProfileName"></strong>
-                                          <span x-show="compareAdjustedCounts(cr).allDiffs === 0 && (cr.summary?.extra||0) === 0 && (cr.summary?.settingsDiffs||0) === 0 && (cr.summary?.qualityDiffs||0) === 0"
+                                          <span x-show="compareAdjustedCounts(cr).allDiffs === 0 && (cr.summary?.extra||0) === 0 && (cr.summary?.settingsDiffs||0) === 0 && (cr.summary?.qualityDiffs||0) === 0 && !(cr.qualityStructure && cr.qualityStructure.hasDrift)"
                                                 style="color:var(--accent-green);font-size:13px;font-weight:500;margin-left:8px">&#10003; Profile fully in sync</span>
                                           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
                                             <!-- Edit & Sync — opens the profile editor pre-loaded with
@@ -877,6 +877,12 @@
                                                     @click="compareFilter = 'quality'">
                                               <span class="cmp-side-label">Qualities</span>
                                               <span class="cmp-side-count" x-text="((cr.settingsDiffs || []).filter(s => s.name === 'Cutoff' && !s.match).length + (cr.qualityDiffs || []).filter(q => !q.match).length) || ''"></span>
+                                            </button>
+                                            <button type="button" class="cmp-side-item"
+                                                    :class="{ active: compareFilter === 'quality-order', inactive: compareAdjustedCounts(cr).qualityOrder === 0 }"
+                                                    @click="compareFilter = 'quality-order'">
+                                              <span class="cmp-side-label">Quality Order</span>
+                                              <span class="cmp-side-count" x-text="compareAdjustedCounts(cr).qualityOrder || ''"></span>
                                             </button>
                                             <div class="cmp-side-divider" aria-hidden="true"></div>
                                             <button type="button" class="cmp-side-item"
@@ -968,16 +974,26 @@
                                                   <tbody>
                                                     <template x-for="sd in (cr.settingsDiffs || []).filter(s => s.name === 'Cutoff')" :key="'q-'+sd.name">
                                                       <tr>
-                                                        <td class="name">Cutoff</td>
-                                                        <td :class="sd.match ? 'current-match' : 'current-diff'" x-text="sd.current"></td>
+                                                        <td class="name" x-text="sd.name"></td>
+                                                        <td class="current-cell" :class="sd.match ? 'current-match' : 'current-diff'" x-text="sd.current"></td>
                                                         <td class="guide" x-text="sd.desired"></td>
                                                       </tr>
                                                     </template>
                                                     <template x-for="qd in (cr.qualityDiffs || [])" :key="'qi-'+qd.name">
                                                       <tr>
                                                         <td class="name" x-text="qd.name"></td>
-                                                        <td :class="qd.match ? 'current-match' : 'current-diff'" x-text="qd.currentAllowed ? 'Enabled' : 'Disabled'"></td>
-                                                        <td class="guide" x-text="qd.desiredAllowed ? 'Enabled' : 'Disabled'"></td>
+                                                        <td class="current-cell">
+                                                          <span :class="qd.allowedMatch ? 'current-match' : 'current-diff'" x-text="qd.currentAllowed ? 'Enabled' : 'Disabled'"></span>
+                                                          <template x-if="qd.currentGroup || qd.desiredGroup">
+                                                            <div style="font-size:11px; opacity:0.7;" :class="qd.groupMatch ? 'current-match' : 'current-diff'" x-text="'Group: ' + (qd.currentGroup || 'Ungrouped')"></div>
+                                                          </template>
+                                                        </td>
+                                                        <td class="guide">
+                                                          <span x-text="qd.desiredAllowed ? 'Enabled' : 'Disabled'"></span>
+                                                          <template x-if="qd.currentGroup || qd.desiredGroup">
+                                                            <div style="font-size:11px;opacity:0.7" x-text="'Group: ' + (qd.desiredGroup || 'Ungrouped')"></div>
+                                                          </template>
+                                                        </td>
                                                       </tr>
                                                     </template>
                                                   </tbody>
@@ -985,8 +1001,197 @@
                                               </div>
                                             </template>
 
+                                            <!-- ===== Quality Order ===== -->
+                                            <template x-if="compareFilter === 'quality-order'">
+                                              <div class="card cmp-section cmp-section-settings" style="margin-bottom:10px;overflow:hidden">
+                                                <div class="cmp-section-header">
+                                                  <span class="cmp-section-title">Quality Order</span>
+                                                </div>
+                                                <table class="cmp-settings-table">
+                                                  <thead>
+                                                    <tr>
+                                                      <th class="col-value">Current Order</th>
+                                                      <th class="col-value">Guide Order</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    <template x-if="cr.qualityStructure && cr.qualityStructure.rows">
+                                                      <template x-for="(row, i) in cr.qualityStructure.rows" :key="'qsrow-'+i">
+                                                        <tr>
+                                                          <td class="current-cell" :class="row.match ? 'current-match' : 'current-diff'" style="position: relative;">
+                                                            <div style="display: flex;">
+                                                              <div style="width: 25px; flex-shrink: 0; padding-top: 1px;">
+                                                                <span style="opacity: 0.5; font-size: 11px;" x-text="(i+1)+'.'"></span>
+                                                              </div>
+                                                              <div style="flex-grow: 1;">
+                                                                <div style="display: flex; align-items: center;">
+                                                                  <span x-text="row.current || '-'"></span>
+                                                                  <template x-if="row.current && cr.qualityStructure && row.current === cr.qualityStructure.currentCutoff">
+                                                                    <template x-if="row.current === cr.qualityStructure.guideCutoff">
+                                                                      <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-green); color: var(--accent-green);">Cutoff</span>
+                                                                    </template>
+                                                                  </template>
+                                                                  <template x-if="row.current && cr.qualityStructure && row.current === cr.qualityStructure.currentCutoff">
+                                                                    <template x-if="row.current !== cr.qualityStructure.guideCutoff">
+                                                                      <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-red); color: var(--accent-red);">Cutoff</span>
+                                                                    </template>
+                                                                  </template>
+                                                                </div>
+                                                                <template x-if="row.currentMembers && row.currentMembers.length > 0">
+                                                                  <div style="font-size: 0.9em; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                                                                    <template x-for="(mem, j) in row.currentMembers" :key="mem.name">
+                                                                      <div style="display: flex; align-items: center;">
+                                                                        <span style="color: var(--text-muted); margin-right: 6px; font-family: monospace;" x-text="j === row.currentMembers.length - 1 ? '└─' : '├─'"></span>
+                                                                        <span :style="mem.match ? 'color: var(--accent-green);' : 'color: var(--accent-red);'" x-text="mem.name"></span>
+                                                                        <template x-if="cr.qualityStructure && mem.name === cr.qualityStructure.currentCutoff">
+                                                                          <template x-if="mem.name === cr.qualityStructure.guideCutoff">
+                                                                            <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-green); color: var(--accent-green);">Cutoff</span>
+                                                                          </template>
+                                                                        </template>
+                                                                        <template x-if="cr.qualityStructure && mem.name === cr.qualityStructure.currentCutoff">
+                                                                          <template x-if="mem.name !== cr.qualityStructure.guideCutoff">
+                                                                            <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-red); color: var(--accent-red);">Cutoff</span>
+                                                                          </template>
+                                                                        </template>
+                                                                      </div>
+                                                                    </template>
+                                                                  </div>
+                                                                </template>
+                                                              </div>
+                                                            </div>
+                                                          </td>
+                                                          <td class="guide" :class="row.match ? 'current-match' : ''">
+                                                            <div style="display: flex;">
+                                                              <div style="width: 25px; flex-shrink: 0;"></div>
+                                                              <div style="flex-grow: 1;">
+                                                                <div style="display: flex; align-items: center;">
+                                                                  <span x-text="row.guide || '-'"></span>
+                                                                  <template x-if="row.guide && cr.qualityStructure && row.guide === cr.qualityStructure.guideCutoff">
+                                                                    <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--text-muted); color: var(--text-muted);">Cutoff</span>
+                                                                  </template>
+                                                                </div>
+                                                                <template x-if="row.guideMembers && row.guideMembers.length > 0">
+                                                                  <div style="font-size: 0.9em; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                                                                    <template x-for="(mem, j) in row.guideMembers" :key="mem.name">
+                                                                      <div style="display: flex; align-items: center;">
+                                                                        <span style="color: var(--text-muted); margin-right: 6px; font-family: monospace;" x-text="j === row.guideMembers.length - 1 ? '└─' : '├─'"></span>
+                                                                        <span style="color: var(--text-muted);" x-text="mem.name"></span>
+                                                                        <template x-if="cr.qualityStructure && mem.name === cr.qualityStructure.guideCutoff">
+                                                                          <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--text-muted); color: var(--text-muted);">Cutoff</span>
+                                                                        </template>
+                                                                      </div>
+                                                                    </template>
+                                                                  </div>
+                                                                </template>
+                                                              </div>
+                                                            </div>
+                                                          </td>
+                                                        </tr>
+                                                      </template>
+                                                    </template>
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </template>
+
+                                            
+                                            
+                                            <!-- ===== Disabled Qualities ===== -->
+                                            <template x-if="compareFilter === 'quality-order' && cr.qualityStructure && ((cr.qualityStructure.disabledRows || []).length > 0)">
+                                              <div class="card cmp-section cmp-section-settings" style="margin-bottom:10px;overflow:hidden">
+                                                <div class="cmp-section-header">
+                                                  <span class="cmp-section-title">Disabled Qualities</span>
+                                                </div>
+                                                <table class="cmp-settings-table">
+                                                  <thead>
+                                                    <tr>
+                                                      <th class="col-value">Current</th>
+                                                      <th class="col-value">Guide</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    <template x-if="cr.qualityStructure && cr.qualityStructure.disabledRows">
+                                                      <template x-for="(row, i) in cr.qualityStructure.disabledRows" :key="'qsdis-'+i">
+                                                        <tr>
+                                                          <td class="current-cell" :style="row.match ? 'color: var(--text-secondary);' : 'color: var(--accent-red); font-weight: normal;'" style="position: relative;">
+                                                            <div style="display: flex;">
+                                                              <div style="width: 25px; flex-shrink: 0; padding-top: 1px;">
+                                                                
+                                                              </div>
+                                                              <div style="flex-grow: 1;">
+                                                                <div style="display: flex; align-items: center;">
+                                                                  <span x-text="row.current || '-'"></span>
+                                                                  <template x-if="row.current && cr.qualityStructure && row.current === cr.qualityStructure.currentCutoff">
+                                                                    <template x-if="row.current === cr.qualityStructure.guideCutoff">
+                                                                      <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-green); color: var(--accent-green);">Cutoff</span>
+                                                                    </template>
+                                                                  </template>
+                                                                  <template x-if="row.current && cr.qualityStructure && row.current === cr.qualityStructure.currentCutoff">
+                                                                    <template x-if="row.current !== cr.qualityStructure.guideCutoff">
+                                                                      <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-red); color: var(--accent-red);">Cutoff</span>
+                                                                    </template>
+                                                                  </template>
+                                                                </div>
+                                                                <template x-if="row.currentMembers && row.currentMembers.length > 0">
+                                                                  <div style="font-size: 1em; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                                                                    <template x-for="(mem, j) in row.currentMembers" :key="mem.name">
+                                                                      <div style="display: flex; align-items: center;">
+                                                                        <span style="color: var(--text-secondary); margin-right: 6px; font-family: monospace;" x-text="j === row.currentMembers.length - 1 ? '└─' : '├─'"></span>
+                                                                        <span :style="mem.match ? 'color: var(--text-secondary);' : 'color: var(--accent-red);'" x-text="mem.name"></span>
+                                                                        <template x-if="cr.qualityStructure && mem.name === cr.qualityStructure.currentCutoff">
+                                                                          <template x-if="mem.name === cr.qualityStructure.guideCutoff">
+                                                                            <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-green); color: var(--accent-green);">Cutoff</span>
+                                                                          </template>
+                                                                        </template>
+                                                                        <template x-if="cr.qualityStructure && mem.name === cr.qualityStructure.currentCutoff">
+                                                                          <template x-if="mem.name !== cr.qualityStructure.guideCutoff">
+                                                                            <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--accent-red); color: var(--accent-red);">Cutoff</span>
+                                                                          </template>
+                                                                        </template>
+                                                                      </div>
+                                                                    </template>
+                                                                  </div>
+                                                                </template>
+                                                              </div>
+                                                            </div>
+                                                          </td>
+                                                          <td class="guide">
+                                                            <div style="display: flex;">
+                                                              <div style="width: 25px; flex-shrink: 0;"></div>
+                                                              <div style="flex-grow: 1;">
+                                                                <div style="display: flex; align-items: center;">
+                                                                  <span x-text="row.guide || '-'"></span>
+                                                                  <template x-if="row.guide && cr.qualityStructure && row.guide === cr.qualityStructure.guideCutoff">
+                                                                    <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--text-muted); color: var(--text-secondary);">Cutoff</span>
+                                                                  </template>
+                                                                </div>
+                                                                <template x-if="row.guideMembers && row.guideMembers.length > 0">
+                                                                  <div style="font-size: 1em; padding-top: 4px; display: flex; flex-direction: column; gap: 2px;">
+                                                                    <template x-for="(mem, j) in row.guideMembers" :key="mem.name">
+                                                                      <div style="display: flex; align-items: center;">
+                                                                        <span style="color: var(--text-secondary); margin-right: 6px; font-family: monospace;" x-text="j === row.guideMembers.length - 1 ? '└─' : '├─'"></span>
+                                                                        <span style="color: var(--text-secondary);" x-text="mem.name"></span>
+                                                                        <template x-if="cr.qualityStructure && mem.name === cr.qualityStructure.guideCutoff">
+                                                                          <span style="margin-left: 8px; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; border: 1px solid var(--text-muted); color: var(--text-secondary);">Cutoff</span>
+                                                                        </template>
+                                                                      </div>
+                                                                    </template>
+                                                                  </div>
+                                                                </template>
+                                                              </div>
+                                                            </div>
+                                                          </td>
+                                                        </tr>
+                                                      </template>
+                                                    </template>
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </template>
+
+                                            
                                             <!-- ===== Required CFs (Format Items) ===== -->
-                                            <template x-if="!['general','quality','extra','optional'].includes(compareFilter) && cmpRequiredVisibleIn(cr, compareFilter)">
+                                            <template x-if="!['general','quality','quality-order','extra','optional'].includes(compareFilter) && cmpRequiredVisibleIn(cr, compareFilter)">
                                               <div class="card cmp-section cmp-section-required" style="margin-bottom:10px;overflow:hidden">
                                                 <div class="cmp-section-header">
                                                   <span class="cmp-section-title">Required CFs (Format Items)</span>
@@ -1031,7 +1236,7 @@
                                                  optional groups, preserving the All Diffs visual
                                                  ordering (Format Items -> Default on -> Optional). -->
                                             <template x-for="g in [...((cr.groups || []).filter(g => g.defaultEnabled)), ...((cr.groups || []).filter(g => !g.defaultEnabled))]" :key="'grp-'+g.name">
-                                              <template x-if="!['general','quality','extra'].includes(compareFilter) && cmpGroupVisibleIn(g, compareFilter)">
+                                              <template x-if="!['general','quality','quality-order','extra'].includes(compareFilter) && cmpGroupVisibleIn(g, compareFilter)">
                                                 <div class="card cmp-section" :class="g.defaultEnabled ? 'cmp-section-default-on' : 'cmp-section-optional'" style="margin-bottom:10px;overflow:hidden">
                                                   <div class="cmp-section-header">
                                                     <span class="cmp-section-title" x-text="g.name"></span>
@@ -1098,7 +1303,7 @@
                                             </template>
 
                                             <!-- ===== Additional CFs ===== -->
-                                            <template x-if="(compareFilter === 'extra' || compareFilter === 'all-diffs' || compareFilter === 'all-active') && (cr.extraCFs || []).length > 0">
+                                            <template x-if="!['quality-order'].includes(compareFilter) && (compareFilter === 'extra' || compareFilter === 'all-diffs' || compareFilter === 'all-active') && (cr.extraCFs || []).length > 0">
                                               <div class="card cmp-section cmp-section-additional" style="margin-bottom:10px;overflow:hidden">
                                                 <div class="cmp-section-header">
                                                   <span class="cmp-section-title">Additional CFs</span>
@@ -1126,7 +1331,7 @@
                                             </template>
 
                                             <!-- Empty-state: nothing visible in current pane. -->
-                                            <template x-if="!['general','quality'].includes(compareFilter) &&
+                                            <template x-if="!['general','quality','quality-order'].includes(compareFilter) &&
                                                             !cmpRequiredVisibleIn(cr, compareFilter) &&
                                                             !(cr.groups || []).some(g => cmpGroupVisibleIn(g, compareFilter)) &&
                                                             !((compareFilter === 'extra' || compareFilter === 'all-diffs' || compareFilter === 'all-active') && (cr.extraCFs || []).length > 0)">

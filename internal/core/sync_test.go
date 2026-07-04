@@ -254,8 +254,8 @@ func TestFingerprintArrItems_FlatOnly(t *testing.T) {
 		arrQ(3, "Bluray-1080p", true),
 		arrQ(4, "WEB 1080p", true),
 	}
-	got := fingerprintArrItems(items)
-	want := `Q:"DVD"=false|Q:"Bluray-1080p"=true|Q:"WEB 1080p"=true`
+	got := FingerprintArrItems(items, false)
+	want := `Q:"Bluray-1080p"=true|Q:"WEB 1080p"=true|Q:"DVD"=false`
 	if got != want {
 		t.Errorf("fingerprint mismatch:\n  got:  %s\n  want: %s", got, want)
 	}
@@ -263,8 +263,8 @@ func TestFingerprintArrItems_FlatOnly(t *testing.T) {
 
 func TestFingerprintArrItems_ReorderChangesFingerprint(t *testing.T) {
 	a := []arr.ArrQualityItem{arrQ(1, "A", true), arrQ(2, "B", true), arrQ(3, "C", false)}
-	b := []arr.ArrQualityItem{arrQ(3, "C", false), arrQ(1, "A", true), arrQ(2, "B", true)}
-	if fingerprintArrItems(a) == fingerprintArrItems(b) {
+	b := []arr.ArrQualityItem{arrQ(3, "C", false), arrQ(2, "B", true), arrQ(1, "A", true)}
+	if FingerprintArrItems(a, false) == FingerprintArrItems(b, false) {
 		t.Error("reorder must produce different fingerprints (set-based diff blindspot)")
 	}
 }
@@ -278,14 +278,14 @@ func TestFingerprintArrItems_WithGroup(t *testing.T) {
 		),
 		arrQ(20, "Remux-1080p", true),
 	}
-	got := fingerprintArrItems(items)
-	want := `Q:"SDTV"=false|G:"WEB 1080p"=true["WEBDL-1080p","WEBRip-1080p"]|Q:"Remux-1080p"=true`
+	got := FingerprintArrItems(items, false)
+	want := `G:"WEB 1080p"=true["WEBDL-1080p","WEBRip-1080p"]|Q:"Remux-1080p"=true|Q:"SDTV"=false`
 	if got != want {
 		t.Errorf("fingerprint mismatch:\n  got:  %s\n  want: %s", got, want)
 	}
 }
 
-func TestFingerprintArrItems_GroupMemberReorderChangesFingerprint(t *testing.T) {
+func TestFingerprintArrItems_GroupMemberReorderDoesNotChangeFingerprint(t *testing.T) {
 	a := []arr.ArrQualityItem{
 		arrG(1000, "WEB 1080p", true,
 			arrQ(10, "WEBDL-1080p", true),
@@ -298,8 +298,8 @@ func TestFingerprintArrItems_GroupMemberReorderChangesFingerprint(t *testing.T) 
 			arrQ(10, "WEBDL-1080p", true),
 		),
 	}
-	if fingerprintArrItems(a) == fingerprintArrItems(b) {
-		t.Error("group member reorder must produce different fingerprints")
+	if FingerprintArrItems(a, false) != FingerprintArrItems(b, false) {
+		t.Error("group member reorder must produce identical fingerprints because they are sorted")
 	}
 }
 
@@ -312,8 +312,8 @@ func TestFingerprintArrItems_DelimiterInjectionSafe(t *testing.T) {
 	b := []arr.ArrQualityItem{
 		arrG(1000, "foo", true, arrQ(10, "bar", true)),
 	}
-	if fingerprintArrItems(a) == fingerprintArrItems(b) {
-		t.Errorf("delimiter injection collision:\n  a: %s\n  b: %s", fingerprintArrItems(a), fingerprintArrItems(b))
+	if FingerprintArrItems(a, false) == FingerprintArrItems(b, false) {
+		t.Errorf("delimiter injection collision:\n  a: %s\n  b: %s", FingerprintArrItems(a, false), FingerprintArrItems(b, false))
 	}
 }
 
@@ -334,7 +334,7 @@ func TestFingerprintArrItems_ExtractFromGroupChangesFingerprint(t *testing.T) {
 			arrQ(11, "WEBRip-1080p", true),
 		),
 	}
-	if fingerprintArrItems(a) == fingerprintArrItems(b) {
+	if FingerprintArrItems(a, false) == FingerprintArrItems(b, false) {
 		t.Error("extracting a quality from a group with same allowed-state must produce different fingerprints (set-based diff blindspot)")
 	}
 }
@@ -355,8 +355,8 @@ func TestFingerprintTrashItems_MatchesArrFingerprint(t *testing.T) {
 		),
 		arrQ(20, "Remux-1080p", true),
 	}
-	if fingerprintTrashItems(trash) != fingerprintArrItems(arr) {
-		t.Errorf("representations diverged:\n  trash: %s\n  arr:   %s", fingerprintTrashItems(trash), fingerprintArrItems(arr))
+	if FingerprintTrashItems(trash) != FingerprintArrItems(arr, false) {
+		t.Errorf("representations diverged:\n  trash: %s\n  arr:   %s", FingerprintTrashItems(trash), FingerprintArrItems(arr, false))
 	}
 }
 
@@ -376,13 +376,13 @@ func TestFilterArrItemsToDesired_DropsUnusedTail(t *testing.T) {
 		{Name: "WEBDL-1080p", Allowed: true},
 		{Name: "WEB 1080p", Allowed: true, Items: []string{"WEBRip-1080p"}},
 	}
-	filtered := filterArrItemsToDesired(arr, desired)
+	filtered := FilterArrItemsToDesired(arr, desired)
 	if len(filtered) != 2 {
 		t.Fatalf("expected 2 filtered items (WEBDL + group), got %d", len(filtered))
 	}
-	if fingerprintArrItems(filtered) != fingerprintTrashItems(desired) {
+	if FingerprintArrItems(filtered, false) != FingerprintTrashItems(desired) {
 		t.Errorf("after filtering, fingerprints should match:\n  got:  %s\n  want: %s",
-			fingerprintArrItems(filtered), fingerprintTrashItems(desired))
+			FingerprintArrItems(filtered, false), FingerprintTrashItems(desired))
 	}
 }
 

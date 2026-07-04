@@ -216,6 +216,8 @@ func formatDriftDetail(d DriftDetail) string {
 		return fmt.Sprintf("%s score: %v → %v", d.CFName, d.Current, d.Target)
 	case "quality":
 		return fmt.Sprintf("Quality %s allowed: %v → %v", d.CFName, d.Current, d.Target)
+	case "group":
+		return fmt.Sprintf("Quality %s group: %v → %v", d.CFName, d.Current, d.Target)
 	case "upgradeAllowed":
 		return fmt.Sprintf("Upgrade allowed: %v → %v", d.Current, d.Target)
 	case "cutoff":
