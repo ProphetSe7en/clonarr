@@ -82,7 +82,7 @@
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'history' }"
            :href="navHref('profiles', { profileTab: 'history' })">History</a>
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'compare' }"
-           :href="navHref('profiles', { profileTab: 'compare' })">Compare</a>
+           :href="navHref('profiles', { profileTab: 'compare' })">Import &amp; Compare</a>
       </div>
 
       <!-- Custom Formats -->
@@ -453,7 +453,7 @@
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'history' }"
            :href="navHref('profiles', { profileTab: 'history' })" @click="sidebarSubnavPopup = ''">History</a>
         <a class="sidebar-subnav-popup-item" :class="{ active: getProfileTab(activeAppType) === 'compare' }"
-           :href="navHref('profiles', { profileTab: 'compare' })" @click="sidebarSubnavPopup = ''">Compare</a>
+           :href="navHref('profiles', { profileTab: 'compare' })" @click="sidebarSubnavPopup = ''">Import &amp; Compare</a>
       </div>
     </template>
     <template x-if="sidebarSubnavPopup === 'custom-formats'">

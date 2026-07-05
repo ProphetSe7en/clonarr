@@ -674,8 +674,8 @@
 
         <!-- ===== Compare tab ===== -->
         <div class="page" x-show="getProfileTab(activeAppType) === 'compare'">
-          <div style="font-size:18px;font-weight:600;margin-bottom:4px">Compare Profiles</div>
-          <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Compare your <span x-text="activeAppLabel"></span> profiles against TRaSH-Guides. Spot what's matching, what has the wrong score, and what's missing. Sync individual fixes, or sync everything at once.</div>
+          <div style="font-size:18px;font-weight:600;margin-bottom:4px">Import and Compare Profiles</div>
+          <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Bring the <span x-text="activeAppLabel"></span> profiles you already have into Clonarr, and compare them against TRaSH-Guides. See what matches, what has the wrong score, and what is missing, then adopt a profile as a managed sync rule or sync individual fixes. This is the place for profiles you made outside Clonarr, including custom ones.</div>
           <!-- Info strip themed via --app-color so the whole note (border,
                background, "Note:" label) follows Radarr yellow / Sonarr
                blue. Hardcoded orange used to read as a warning even
@@ -683,7 +683,7 @@
                a soft tinted background that doesn't compete with the
                body content. -->
           <div style="font-size:12px;color:var(--text-primary);margin-bottom:16px;line-height:1.6;padding:10px 14px;border-radius:6px;background:var(--app-glow);border:1px solid var(--app-color);border-left:3px solid var(--app-color)">
-            <strong style="color:var(--app-color)">Note:</strong> Compare works best on profiles Clonarr synced itself. For profiles created by other tools, a custom format with score 0 looks identical to one that was never added. The "in use" markers for those profiles may be inaccurate.
+            <strong style="color:var(--app-color)">Note:</strong> Comparison is most accurate for profiles Clonarr synced itself. For profiles made by other tools, a custom format scored 0 can look the same as one that was never added, so the difference view and "in use" markers may not be exact. Adopting the profile still brings its custom formats across.
           </div>
 
           <!-- Compact selector bar: instance + Arr profile + TRaSH profile on one row -->
