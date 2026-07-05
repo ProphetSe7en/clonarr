@@ -224,6 +224,22 @@
 }
 .sidebar-nav-item.active .sidebar-nav-icon { color: var(--app-color); }
 .sidebar-nav-label { flex: 1; }
+/* Pin toggle: locks a section's sub-nav open so its pages stay visible while
+   working elsewhere (issue #70). Hidden until the nav row is hovered so it
+   doesn't clutter the sidebar; always shown once pinned, and rotated to signal
+   the locked-open state. */
+.sidebar-pin {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  padding: 2px; border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s, color 0.12s, transform 0.15s;
+}
+.sidebar-nav-item:hover .sidebar-pin { opacity: 0.55; }
+.sidebar-pin:hover { opacity: 1; color: var(--app-color); }
+.sidebar-pin.pinned { opacity: 1; color: var(--app-color); transform: rotate(180deg); }
 
 .sidebar.collapsed .sidebar-nav-item {
   justify-content: center;

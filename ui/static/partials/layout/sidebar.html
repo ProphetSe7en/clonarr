@@ -35,7 +35,7 @@
     <div class="sidebar-app-switcher">
       <div class="sidebar-app-pill">
         <button type="button" class="sidebar-app-btn"
-                :class="{ active: activeAppType !== 'sonarr' }"
+                :class="{ active: activeAppType !== 'sonarr' && !isGlobalSection() }"
                 @click="switchAppType('radarr')"
                 x-tt="'Switch to Radarr'">
           <img class="sidebar-app-logo" src="icons/radarrNew.png?v={{.Version}}" alt="">
@@ -43,7 +43,7 @@
           <span class="sidebar-app-num" x-show="!sidebarCollapsed" x-text="instancesOfType('radarr').length"></span>
         </button>
         <button type="button" class="sidebar-app-btn"
-                :class="{ active: activeAppType === 'sonarr' }"
+                :class="{ active: activeAppType === 'sonarr' && !isGlobalSection() }"
                 @click="switchAppType('sonarr')"
                 x-tt="'Switch to Sonarr'">
           <img class="sidebar-app-logo" src="icons/sonarr.png?v={{.Version}}" alt="">
@@ -71,10 +71,11 @@
          @mouseleave="scheduleHideSidebarSubnav()">
         <span class="sidebar-nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></span>
         <span class="sidebar-nav-label" x-show="!sidebarCollapsed">Profiles</span>
+        <span class="sidebar-pin" x-show="!sidebarCollapsed" :class="{ pinned: isSidebarSectionPinned('profiles') }" @click.stop.prevent="toggleSidebarSectionPin('profiles')" x-tt="isSidebarSectionPinned('profiles') ? 'Unpin this section (its pages collapse when you leave it)' : 'Pin this section so its pages stay visible while you work elsewhere'"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </a>
 
       <!-- Sub-nav under Profiles, only when sidebar expanded -->
-      <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'profiles'">
+      <div class="sidebar-subnav" x-show="!sidebarCollapsed && (currentSection === 'profiles' || isSidebarSectionPinned('profiles'))">
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'trash-profiles' }"
            :href="navHref('profiles', { profileTab: 'trash-profiles' })">Add Profiles</a>
         <a class="sidebar-subnav-item" :class="{ active: getProfileTab(activeAppType) === 'sync-rules' }"
@@ -93,10 +94,11 @@
          @mouseleave="scheduleHideSidebarSubnav()">
         <span class="sidebar-nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></span>
         <span class="sidebar-nav-label" x-show="!sidebarCollapsed">Custom Formats</span>
+        <span class="sidebar-pin" x-show="!sidebarCollapsed" :class="{ pinned: isSidebarSectionPinned('custom-formats') }" @click.stop.prevent="toggleSidebarSectionPin('custom-formats')" x-tt="isSidebarSectionPinned('custom-formats') ? 'Unpin this section (its pages collapse when you leave it)' : 'Pin this section so its pages stay visible while you work elsewhere'"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </a>
 
       <!-- Sub-nav under Custom Formats, only when sidebar expanded -->
-      <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'custom-formats'">
+      <div class="sidebar-subnav" x-show="!sidebarCollapsed && (currentSection === 'custom-formats' || isSidebarSectionPinned('custom-formats'))">
         <a class="sidebar-subnav-item" :class="{ active: getCustomFormatsTab(activeAppType) === 'browse' }"
            :href="navHref('custom-formats', { customFormatsTab: 'browse' })">Browse</a>
         <a class="sidebar-subnav-item" :class="{ active: getCustomFormatsTab(activeAppType) === 'in-use' }"
@@ -115,10 +117,11 @@
          @mouseleave="scheduleHideSidebarSubnav()">
         <span class="sidebar-nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16"/><path d="M17 4v16"/><path d="M2 9h5"/><path d="M2 14h5"/><path d="M17 9h5"/><path d="M17 14h5"/></svg></span>
         <span class="sidebar-nav-label" x-show="!sidebarCollapsed">Media Management</span>
+        <span class="sidebar-pin" x-show="!sidebarCollapsed" :class="{ pinned: isSidebarSectionPinned('media-management') }" @click.stop.prevent="toggleSidebarSectionPin('media-management')" x-tt="isSidebarSectionPinned('media-management') ? 'Unpin this section (its pages collapse when you leave it)' : 'Pin this section so its pages stay visible while you work elsewhere'"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </a>
 
       <!-- Sub-nav under Media Management, only when sidebar expanded -->
-      <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'media-management'">
+      <div class="sidebar-subnav" x-show="!sidebarCollapsed && (currentSection === 'media-management' || isSidebarSectionPinned('media-management'))">
         <a class="sidebar-subnav-item" :class="{ active: getMediaTab(activeAppType) === 'quality' }"
            :href="navHref('media-management', { mediaTab: 'quality' })">Quality Definitions</a>
         <a class="sidebar-subnav-item" :class="{ active: getMediaTab(activeAppType) === 'naming' }"
@@ -138,10 +141,11 @@
          @mouseleave="scheduleHideSidebarSubnav()">
         <span class="sidebar-nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
         <span class="sidebar-nav-label" x-show="!sidebarCollapsed">Maintenance</span>
+        <span class="sidebar-pin" x-show="!sidebarCollapsed" :class="{ pinned: isSidebarSectionPinned('maintenance') }" @click.stop.prevent="toggleSidebarSectionPin('maintenance')" x-tt="isSidebarSectionPinned('maintenance') ? 'Unpin this section (its pages collapse when you leave it)' : 'Pin this section so its pages stay visible while you work elsewhere'"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </a>
 
       <!-- Sub-nav under Maintenance, only when sidebar expanded -->
-      <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'maintenance'">
+      <div class="sidebar-subnav" x-show="!sidebarCollapsed && (currentSection === 'maintenance' || isSidebarSectionPinned('maintenance'))">
         <a class="sidebar-subnav-item" :class="{ active: getMaintenanceTab(activeAppType) === 'backup' }"
            :href="navHref('maintenance', { maintenanceTab: 'backup' })">Backup &amp; Restore</a>
         <a class="sidebar-subnav-item" :class="{ active: getMaintenanceTab(activeAppType) === 'cleanup' }"
@@ -157,10 +161,11 @@
          @mouseleave="scheduleHideSidebarSubnav()">
         <span class="sidebar-nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg></span>
         <span class="sidebar-nav-label" x-show="!sidebarCollapsed">Advanced</span>
+        <span class="sidebar-pin" x-show="!sidebarCollapsed" :class="{ pinned: isSidebarSectionPinned('advanced') }" @click.stop.prevent="toggleSidebarSectionPin('advanced')" x-tt="isSidebarSectionPinned('advanced') ? 'Unpin this section (its pages collapse when you leave it)' : 'Pin this section so its pages stay visible while you work elsewhere'"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
       </a>
 
       <!-- Sub-nav under Advanced when sidebar expanded -->
-      <div class="sidebar-subnav" x-show="!sidebarCollapsed && currentSection === 'advanced'">
+      <div class="sidebar-subnav" x-show="!sidebarCollapsed && (currentSection === 'advanced' || isSidebarSectionPinned('advanced'))">
         <a class="sidebar-subnav-item" :class="{ active: advancedTab === 'builder' }"
            :href="navHref('advanced', { advancedTab: 'builder' })">Profile Builder</a>
         <a class="sidebar-subnav-item" :class="{ active: advancedTab === 'scoring' }"

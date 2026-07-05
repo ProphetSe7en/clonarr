@@ -120,6 +120,21 @@ export default {
       localStorage.setItem('clonarr-sidebar-collapsed', this.sidebarCollapsed ? '1' : '0');
     },
 
+    // Pin/unpin a section's sub-nav in the expanded sidebar. A pinned section
+    // keeps its sub-nav visible even when another section is active, so the user
+    // can jump straight to any sub-page (e.g. Profiles -> Maintenance/Cleanup)
+    // without first navigating into that section. Default is nothing pinned, so
+    // the sidebar behaves exactly as before until a user opts in.
+    isSidebarSectionPinned(section) {
+      return !!this.pinnedSidebarSections[section];
+    },
+    toggleSidebarSectionPin(section) {
+      const next = { ...this.pinnedSidebarSections };
+      if (next[section]) delete next[section]; else next[section] = true;
+      this.pinnedSidebarSections = next;
+      localStorage.setItem('clonarr-sidebar-pinned', JSON.stringify(this.pinnedSidebarSections));
+    },
+
     // --- Hash routing (back/forward, bookmarks, copyable nav links) ---
     // Hash format: #appType/section[/subtab] — e.g. #radarr/profiles/compare, #settings/prowlarr, #about
     buildNavHash() {

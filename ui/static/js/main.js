@@ -476,6 +476,7 @@ export function clonarr() {
           this.sidebarCollapsed = true;
         } else {
           this.sidebarCollapsed = localStorage.getItem('clonarr-sidebar-collapsed') === '1';
+          try { this.pinnedSidebarSections = JSON.parse(localStorage.getItem('clonarr-sidebar-pinned') || '{}') || {}; } catch (_) { this.pinnedSidebarSections = {}; }
         }
       };
       narrowMQ.addEventListener('change', (e) => applyNarrow(e.matches));
