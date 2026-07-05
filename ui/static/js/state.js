@@ -199,6 +199,9 @@ export default function baseState() {
 
     // Profile detail
     profileDetail: null,
+    // True while a browser-history entry is pushed for the open profile editor,
+    // so Back/Forward can close it. Managed by the profileDetail watcher.
+    _editorNavPushed: false,
     detailSections: { core: true },
     groupExpanded: {},
     cfDescExpanded: {},

@@ -533,7 +533,11 @@ export function clonarr() {
         const href = anchor.getAttribute('href') || '';
         if (!/^#(radarr|sonarr|settings|about)(\/|$)/.test(href)) return;
         if (!this.profileDetail) return;
-        if (typeof this.profileDetailIsDirty !== 'function' || !this.profileDetailIsDirty()) return;
+        // Any nav-anchor click while the editor is open closes it and then
+        // navigates. closeProfileEditor runs the unsaved-changes guard (prompt
+        // when dirty, close immediately when clean), so a stray click on a
+        // different Profiles sub-tab no longer leaves the editor floating over
+        // the newly selected tab, and dirty edits are never dropped silently.
         event.preventDefault();
         this.closeProfileEditor(() => {
           location.hash = href;
@@ -570,6 +574,21 @@ export function clonarr() {
         // triggered from a sidebar anchor (Settings, About, etc.), so a
         // state-watcher is the robust way to dismiss it.
         this.sidebarSubnavPopup = '';
+      });
+      // Profile editor back-button support: give the editor a browser-history
+      // entry so Back / Forward (and mouse side buttons) close it with the
+      // same unsaved-changes guard as every other close, landing on the tab it
+      // was opened from (no overshoot). Pushing on open and clearing the flag
+      // on close is centralised here, so every close path (Close button, nav
+      // click, app switch, section change) keeps the flag correct. The actual
+      // Back handling lives in the popstate listener below.
+      this.$watch('profileDetail', (val) => {
+        if (val && !this._editorNavPushed) {
+          history.pushState({ clonarrEditor: true }, '');
+          this._editorNavPushed = true;
+        } else if (!val) {
+          this._editorNavPushed = false;
+        }
       });
       // Navigation into the Sync Rules tab triggers the customizations
       // cache load. We don't fire it from every loadAutoSyncRules call
@@ -731,7 +750,25 @@ export function clonarr() {
       await this.loadTrashStatus();
       // Restore navigation from URL hash (browser back/forward) or localStorage fallback.
       // Hash takes priority - it carries the exact section+subtab the user was on.
-      window.addEventListener('popstate', () => this.restoreFromHash(location.hash));
+      window.addEventListener('popstate', (event) => {
+        // Profile editor back-button support: if the editor is open and we just
+        // popped off its history entry (Back / Forward / mouse side buttons),
+        // close the editor here instead of navigating past the tab it was
+        // opened from. Same unsaved-changes guard as every other close, and no
+        // "one step too far" overshoot.
+        if (this.profileDetail && this._editorNavPushed && !(event.state && event.state.clonarrEditor)) {
+          if (typeof this.profileDetailIsDirty === 'function' && this.profileDetailIsDirty()) {
+            // Back already popped the editor entry; re-push it so a "Stay"
+            // keeps history consistent, then prompt. Discard leaves via back().
+            history.pushState({ clonarrEditor: true }, '');
+            this.closeProfileEditor(() => history.back());
+            return;
+          }
+          this.closeProfileEditor();
+          return;
+        }
+        this.restoreFromHash(location.hash);
+      });
       const oldTab = localStorage.getItem('clonarr_tab');
       if (location.hash && this.restoreFromHash(location.hash)) {
         // hash restored - skip localStorage

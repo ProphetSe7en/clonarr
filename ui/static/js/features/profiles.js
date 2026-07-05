@@ -5635,6 +5635,16 @@ export default {
     // not dirty) - caller passes a function that performs whatever
     // destination action they wanted (route change, app switch,
     // open-other-rule, etc.).
+    // Explicit Close button. Route through the pushed history entry (via Back)
+    // when present so the editor's browser-history entry is consumed and no
+    // stale "one Back press does nothing" entry is left behind; the popstate
+    // handler then runs the same close + unsaved-changes guard. Falls back to a
+    // direct close if no history entry was pushed.
+    dismissProfileEditor() {
+      if (this._editorNavPushed) { history.back(); return; }
+      this.closeProfileEditor();
+    },
+
     closeProfileEditor(done) {
       const finish = () => {
         this._clearProfileBaseline();
