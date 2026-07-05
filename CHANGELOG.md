@@ -1,5 +1,49 @@
 # Changelog
 
+## v3.4.0
+
+This release adds a Release Title Generator that builds test releases straight from a profile, portable sync-rule import and export so you can move a rule between Clonarr installs, support for Sonarr and Radarr behind HTTP Basic Auth, and drift detection for quality ordering and grouping. The Scoring Sandbox is faster and clearer, and profile browsing gets a redesign.
+
+### Highlights
+
+- **Release Title Generator**: generate candidate release titles from a profile's Custom Formats in the Scoring Sandbox, so you can see what matches and how it scores without pasting titles. (Inspired by btTeddy.)
+- **Portable sync rules**: export a sync rule as one file and import it on another Clonarr, custom formats and all.
+- **Score against your Clonarr rules**: the Scoring Sandbox scores releases against your own sync rules, so every Custom Format is recognised correctly.
+- **Faster Sandbox**: large lists parse in parallel with one progress-and-cancel step, and offline instances are handled gracefully.
+- **HTTP Basic Auth**: connect to a Sonarr or Radarr behind HTTP Basic Auth (for example a reverse proxy). Thanks @arjunrn (#73).
+- **More drift detection**: clonarr now notices when quality ordering or grouping changed in your Arr, and names what changed. Thanks @MaKTaiL (#74).
+- **Redesigned profile browsing**: cards show the resolutions, sources, audio, and HDR a profile accepts, with a tighter filter row.
+
+### New: Release Title Generator
+
+In the Scoring Sandbox you can generate release titles directly from a profile instead of pasting real releases. Clonarr builds realistic candidate titles from the profile's Custom Formats, runs them through your Arr, and shows which formats matched and the resulting score, so you can confirm a profile scores the way you expect before syncing. (Inspired by btTeddy's release-name work.)
+
+### New: Portable sync-rule import and export
+
+Export any sync rule as a self-contained Clonarr file capturing the base profile, score overrides, notes, and full custom Custom Format definitions. Import it on another Clonarr and it rebuilds the rule exactly, with Skip, Rename, or Replace options when a custom format name already exists.
+
+### New: HTTP Basic Auth for instances
+
+Connect Clonarr to a Sonarr or Radarr protected by HTTP Basic Auth, such as one behind a reverse proxy that adds a username and password. Thanks to @arjunrn (#73).
+
+### New: Drift detection for quality order and groups
+
+Clonarr already watched your Custom Formats and scores for changes made outside Clonarr. It now also notices when quality ordering or quality grouping changed in your Arr, and names exactly what moved. Thanks to @MaKTaiL (#74).
+
+### Improved
+
+- Profile cards show plain fact pills for the resolutions, sources, audio, and HDR a profile accepts, and the Add Profiles filter is rebuilt into two compact rows.
+- Settings and About carry Clonarr's own identity, making clear these are app-wide settings rather than per instance.
+- Profile settings show on-hover help (Min score, Min upgrade, Cutoff score, Upgrades, Cutoff quality). (#71)
+- The Sync Rules change tooltip names the settings a rule changes, including whether upgrades were turned on or off, instead of a generic count. (#68)
+
+### Fixed
+
+- Quality group rename: you can now click into the name and select text instead of starting a drag. (#69)
+- Profile editor: the TRaSH-Guides JSON link now points to the correct file for every Custom Format.
+- Profile editor: with descriptions hidden, the score field for single-format groups lines up with every other row.
+- Collapsed sidebar: the section flyout no longer lands too low at larger interface scales.
+
 ## v3.3.0
 
 You can now run clonarr fully offline from a local TRaSH-Guides folder, keep your naming format in sync automatically, and the TRaSH update notification only fires when something you care about actually changed. The Profile Editor gains a Combined view, the Scoring Sandbox handles large paste lists smoothly, and browsing and managing profiles is clearer end to end.
