@@ -2372,16 +2372,14 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 			}
 		}
 	}
-	// Sonarr's API always returns quality items worst-to-best. We reverse them
-	// here so the Compare tool presents them best-to-worst, visually aligning
+	// Both Sonarr and Radarr APIs return quality items worst-to-best (lowest priority first). 
+	// We reverse them here so the Compare tool presents them best-to-worst, visually aligning 
 	// them with the TRaSH guide's best-to-worst format.
-	if inst.Type == "sonarr" {
-		for i, j := 0, len(currentKeys)-1; i < j; i, j = i+1, j-1 {
-			currentKeys[i], currentKeys[j] = currentKeys[j], currentKeys[i]
-		}
-		for i, j := 0, len(disabledKeys)-1; i < j; i, j = i+1, j-1 {
-			disabledKeys[i], disabledKeys[j] = disabledKeys[j], disabledKeys[i]
-		}
+	for i, j := 0, len(currentKeys)-1; i < j; i, j = i+1, j-1 {
+		currentKeys[i], currentKeys[j] = currentKeys[j], currentKeys[i]
+	}
+	for i, j := 0, len(disabledKeys)-1; i < j; i, j = i+1, j-1 {
+		disabledKeys[i], disabledKeys[j] = disabledKeys[j], disabledKeys[i]
 	}
 	
 	gItemMap := make(map[string]core.QualityItem)
