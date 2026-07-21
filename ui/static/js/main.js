@@ -331,6 +331,27 @@ function registerSkipLinkHandler() {
   });
 }
 
+let cfJsonHandlerRegistered = false;
+function registerCFJSONHandler() {
+  if (cfJsonHandlerRegistered) return;
+  cfJsonHandlerRegistered = true;
+  document.addEventListener('click', (event) => {
+    const jsonBtn = event.target.closest('.cf-desc-json-btn');
+    if (!jsonBtn) return;
+    event.preventDefault();
+    const id = jsonBtn.getAttribute('data-cf-id');
+    if (id && window.Alpine) {
+      const root = document.querySelector('[x-data]');
+      if (root && root._x_dataStack) {
+        const comp = root._x_dataStack[0];
+        if (comp && typeof comp.viewCustomCFJSON === 'function') {
+          comp.viewCustomCFJSON(id);
+        }
+      }
+    }
+  });
+}
+
 export function clonarr() {
   return applyFeatureModules({
     ...baseState(),
@@ -1401,6 +1422,7 @@ function registerClonarr() {
   registerModalTrapDirective(window.Alpine);
   registerTooltipEscapeListener();
   registerSkipLinkHandler();
+  registerCFJSONHandler();
   registerSidebarToggleShortcut();
   registerSearchShortcut();
   // x-tt="'tooltip text'" - viewport-aware custom tooltip directive.

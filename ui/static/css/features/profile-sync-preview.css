@@ -825,15 +825,26 @@ button.sp-summary-active:focus-visible {
   color: var(--text-muted);
   letter-spacing: 0.2px;
 }
-.sp-cf-desc .cf-desc-links a {
+.sp-cf-desc .cf-desc-links a,
+.sp-cf-desc .cf-desc-links .cf-desc-json-btn,
+.sp-ov-cf-desc .cf-desc-links a,
+.sp-ov-cf-desc .cf-desc-links .cf-desc-json-btn {
+  background: none;
+  border: none;
+  padding: 0;
   color: var(--text-muted);
   text-decoration: none;
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 0.3px;
-  margin-right: 12px;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
 }
-.sp-cf-desc .cf-desc-links a:hover { color: var(--app-color); text-decoration: underline; }
+.sp-cf-desc .cf-desc-links a:hover,
+.sp-cf-desc .cf-desc-links .cf-desc-json-btn:hover,
+.sp-ov-cf-desc .cf-desc-links a:hover,
+.sp-ov-cf-desc .cf-desc-links .cf-desc-json-btn:hover { color: var(--app-color); text-decoration: underline; }
 /* Rename indicator - sits in the same footer row as the TRaSH/JSON links.
    Blue, uppercase to match the link styling, but no underline/hover since
    it's a behaviour flag (includeCustomFormatWhenRenaming), not a link. */

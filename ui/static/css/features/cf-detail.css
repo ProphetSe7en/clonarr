@@ -378,14 +378,22 @@
     color: var(--text-muted);
     letter-spacing: 0.2px;
   }
-  .cf-grid .cf-cell-pills .cf-cell-desc .cf-desc-links a {
+  .cf-grid .cf-cell-pills .cf-cell-desc .cf-desc-links a,
+  .cf-grid .cf-cell-pills .cf-cell-desc .cf-desc-links .cf-desc-json-btn {
+    background: none;
+    border: none;
+    padding: 0;
     color: var(--text-muted);
     text-decoration: none;
     text-transform: uppercase;
     font-weight: 600;
     letter-spacing: 0.3px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: inherit;
   }
-  .cf-grid .cf-cell-pills .cf-cell-desc .cf-desc-links a:hover {
+  .cf-grid .cf-cell-pills .cf-cell-desc .cf-desc-links a:hover,
+  .cf-grid .cf-cell-pills .cf-cell-desc .cf-desc-links .cf-desc-json-btn:hover {
     color: var(--app-color);
     text-decoration: underline;
   }
