@@ -398,6 +398,7 @@ export default function baseState() {
     cfEditorSaving: false,
     cfEditorResult: null,        // {error?, message}
     cfExportContent: '',         // TRaSH JSON export text for modal
+    cfExportTitle: '',           // Title for JSON export modal
     cfExportCopied: false,       // clipboard copy feedback
     cfEditorSchema: {},          // cached per app type: [{implementation, fields:[{name,label,type,selectOptions}]}]
     cfEditorSchemaLoading: false,
