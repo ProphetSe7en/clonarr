@@ -11,7 +11,7 @@
 # Volumes:
 #   - /config : Persistent storage for Clonarr's database and configuration
 
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 ARG VERSION=3.4.0
 
