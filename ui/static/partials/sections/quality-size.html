@@ -84,9 +84,9 @@
               <template x-for="qs in getSelectedQS(activeAppType)" :key="qs.quality">
                 <div class="qs-row" :style="qsRowStyle(activeAppType, qs)">
                   <div class="qs-name" x-text="qs.quality"></div>
-                  <div class="qs-col" style="color:var(--text-primary)" x-text="qs.min.toFixed(1)"></div>
-                  <div class="qs-col" style="color:var(--text-primary)" x-text="qs.preferred.toFixed(1)"></div>
-                  <div class="qs-col" style="color:var(--text-muted)" x-text="qs.max.toFixed(1)"></div>
+                  <div class="qs-col" style="color:var(--text-primary)" x-text="qsFmtVal(activeAppType, 'min', qs.min)"></div>
+                  <div class="qs-col" style="color:var(--text-primary)" x-text="qsFmtVal(activeAppType, 'preferred', qs.preferred)"></div>
+                  <div class="qs-col" style="color:var(--text-muted)" x-text="qsFmtVal(activeAppType, 'max', qs.max)"></div>
                   <!-- Instance comparison columns: read-only in Sync mode, editable in Custom mode -->
                   <template x-if="mediaInstanceId[activeAppType]">
                     <div style="width:1px;background:var(--bg-muted);margin:0 4px;align-self:stretch"></div>

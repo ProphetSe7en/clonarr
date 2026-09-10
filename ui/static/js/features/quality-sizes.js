@@ -1,3 +1,15 @@
+// Radarr/Sonarr report a max/preferred size that sits at its limit as null and
+// omit the field from the response entirely. null therefore means "Unlimited",
+// never 0 and never "unset". Mirror of QualitySizeLimitsFor in
+// internal/arr/arr.go — keep both in sync. min has no Unlimited end, so its
+// limit is 0.
+const QS_LIMITS = {
+  radarr: { min: 0, preferred: 1999, max: 2000 },
+  sonarr: { min: 0, preferred: 995, max: 1000 },
+};
+
+const QS_FIELDS = { min: 'minSize', preferred: 'preferredSize', max: 'maxSize' };
+
 export default {
   state: {},
   methods: {
@@ -74,19 +86,30 @@ export default {
       return defs.find(d => d.quality?.name === qualityName || d.title === qualityName) || null;
     },
 
+    _qsLimits(appType) {
+      return QS_LIMITS[appType] || QS_LIMITS.radarr;
+    },
+
+    // Renders a size the way the *arr UI does: the limit reads as Unlimited.
+    // Used for both the TRaSH columns and the instance columns so a matching
+    // row does not show "1999.0" next to an unlimited instance value.
+    qsFmtVal(appType, field, value) {
+      const limit = this._qsLimits(appType)[field];
+      if (value == null) return field === 'min' ? '0.0' : '∞';
+      if (field !== 'min' && value >= limit) return '∞';
+      return value.toFixed(1);
+    },
+
     getInstanceQSVal(appType, qualityName, field) {
       const def = this._findInstanceDef(appType, qualityName);
       if (!def) return '-';
-      const map = { min: 'minSize', preferred: 'preferredSize', max: 'maxSize' };
-      const val = def[map[field]] ?? 0;
-      return val.toFixed(1);
+      return this.qsFmtVal(appType, field, def[QS_FIELDS[field]]);
     },
 
     qsCellStyle(appType, trashQS, field) {
       const def = this._findInstanceDef(appType, trashQS.quality);
       if (!def) return 'color:var(--text-muted)';
-      const map = { min: 'minSize', preferred: 'preferredSize', max: 'maxSize' };
-      const current = def[map[field]] ?? 0;
+      const current = this._defFieldVal(appType, def, field);
       const target = this._qsTargetVal(appType, trashQS, field);
       if (Math.abs(current - target) < 0.05) return 'color:var(--accent-green)'; // match
       return 'color:var(--accent-orange)'; // diff
@@ -99,9 +122,10 @@ export default {
       return trashQS[field];
     },
 
-    _defFieldVal(def, field) {
-      const map = { min: 'minSize', preferred: 'preferredSize', max: 'maxSize' };
-      return def[map[field]] ?? 0;
+    // Effective instance value for comparison: a null size is at its limit
+    // ("Unlimited"), so it must resolve to the limit and not to 0.
+    _defFieldVal(appType, def, field) {
+      return def[QS_FIELDS[field]] ?? this._qsLimits(appType)[field];
     },
 
     qsRowStyle(appType, qs) {
@@ -109,7 +133,7 @@ export default {
       const def = this._findInstanceDef(appType, qs.quality);
       if (!def) return '';
       const allMatch = ['min', 'preferred', 'max'].every(f =>
-        Math.abs(this._defFieldVal(def, f) - this._qsTargetVal(appType, qs, f)) < 0.05
+        Math.abs(this._defFieldVal(appType, def, f) - this._qsTargetVal(appType, qs, f)) < 0.05
       );
       return allMatch ? '' : 'background:var(--bg-elevated)';
     },
@@ -124,14 +148,16 @@ export default {
       if (overrides[qualityName]) {
         delete overrides[qualityName];
       } else {
-        // Default to current instance values; fall back to TRaSH when instance value is 0 (not set)
+        // Default to the current instance values. _defFieldVal resolves a null
+        // size to its limit, so switching an Unlimited quality to Custom
+        // prefills the limit instead of 0.
         const def = this._findInstanceDef(appType, qualityName);
         const trashQS = this.getSelectedQS(appType).find(q => q.quality === qualityName);
         if (def) {
           overrides[qualityName] = {
-            min: def.minSize || trashQS?.min || 0,
-            preferred: def.preferredSize || trashQS?.preferred || 0,
-            max: def.maxSize || trashQS?.max || 0
+            min: this._defFieldVal(appType, def, 'min'),
+            preferred: this._defFieldVal(appType, def, 'preferred'),
+            max: this._defFieldVal(appType, def, 'max')
           };
         } else if (trashQS) {
           overrides[qualityName] = { min: trashQS.min, preferred: trashQS.preferred, max: trashQS.max };
@@ -220,7 +246,7 @@ export default {
     },
 
     _qsDiffers(def, appType, qs, field) {
-      return Math.abs(this._defFieldVal(def, field) - this._qsTargetVal(appType, qs, field)) >= 0.05;
+      return Math.abs(this._defFieldVal(appType, def, field) - this._qsTargetVal(appType, qs, field)) >= 0.05;
     },
 
     qsChangeCount(appType) {
