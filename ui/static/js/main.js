@@ -540,7 +540,15 @@ export function clonarr() {
         // the newly selected tab, and dirty edits are never dropped silently.
         event.preventDefault();
         this.closeProfileEditor(() => {
-          location.hash = href;
+          // Replace the editor's history entry rather than stacking the new
+          // route on top of it (replaceState fires no hashchange, so restore
+          // the route directly).
+          if (history.state && history.state.clonarrEditor) {
+            history.replaceState(null, '', href);
+            this.restoreFromHash(href);
+          } else {
+            location.hash = href;
+          }
         });
       }, true);
 
@@ -587,6 +595,13 @@ export function clonarr() {
           history.pushState({ clonarrEditor: true }, '');
           this._editorNavPushed = true;
         } else if (!val) {
+          // Closed without Back (Apply & close, a load error, and so on) while
+          // the editor's entry is still the current one: step back over it so
+          // a later Back press is not spent on a leftover entry. Closes that
+          // navigate replace the entry instead (pushNav, nav-anchor clicks).
+          if (this._editorNavPushed && history.state && history.state.clonarrEditor) {
+            history.back();
+          }
           this._editorNavPushed = false;
         }
       });
@@ -760,10 +775,13 @@ export function clonarr() {
           if (typeof this.profileDetailIsDirty === 'function' && this.profileDetailIsDirty()) {
             // Back already popped the editor entry; re-push it so a "Stay"
             // keeps history consistent, then prompt. Discard leaves via back().
+            // Clear the flag first so the profileDetail watcher does not
+            // step back a second time.
             history.pushState({ clonarrEditor: true }, '');
-            this.closeProfileEditor(() => history.back());
+            this.closeProfileEditor(() => { this._editorNavPushed = false; history.back(); });
             return;
           }
+          this._editorNavPushed = false;
           this.closeProfileEditor();
           return;
         }

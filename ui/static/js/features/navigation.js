@@ -207,7 +207,11 @@ export default {
     pushNav() {
       if (this._navSkipPush) return;
       const hash = this.buildNavHash();
-      if (location.hash !== hash) history.pushState(null, '', hash);
+      if (location.hash === hash) return;
+      // Navigating away from the profile editor: replace its history entry
+      // instead of stacking on top, so Back later never lands on a dead entry.
+      if (history.state && history.state.clonarrEditor) history.replaceState(null, '', hash);
+      else history.pushState(null, '', hash);
     },
 
     restoreFromHash(hash) {
