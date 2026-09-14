@@ -2428,8 +2428,8 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 			}
 		}
 	}
-	// Both Sonarr and Radarr APIs return quality items worst-to-best (lowest priority first). 
-	// We reverse them here so the Compare tool presents them best-to-worst, visually aligning 
+	// Both Sonarr and Radarr APIs return quality items worst-to-best (lowest priority first).
+	// We reverse them here so the Compare tool presents them best-to-worst, visually aligning
 	// them with the TRaSH guide's best-to-worst format.
 	for i, j := 0, len(currentKeys)-1; i < j; i, j = i+1, j-1 {
 		currentKeys[i], currentKeys[j] = currentKeys[j], currentKeys[i]
@@ -2437,7 +2437,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 	for i, j := 0, len(disabledKeys)-1; i < j; i, j = i+1, j-1 {
 		disabledKeys[i], disabledKeys[j] = disabledKeys[j], disabledKeys[i]
 	}
-	
+
 	gItemMap := make(map[string]core.QualityItem)
 	var guideKeys []string
 	var guideDisabledKeys []string
@@ -2463,7 +2463,7 @@ func buildProfileComparison(inst core.Instance, ad *core.AppData, trashProfileID
 	}
 
 	buildAlignment := func(cKeys, gKeys []string, isEnabledSection bool) []CompareQualityStructureRow {
-		return BuildAlignment(inst.Type, cKeys, gKeys, isEnabledSection, guideExpectedEnabled, cItemMap, gItemMap)
+		return BuildAlignment(cKeys, gKeys, isEnabledSection, guideExpectedEnabled, cItemMap, gItemMap)
 	}
 
 	rows := buildAlignment(currentKeys, guideKeys, true)
@@ -2823,7 +2823,7 @@ func (s *Server) handleTrashNaming(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, ad.Naming)
 }
 
-func BuildAlignment(instType string, cKeys, gKeys []string, isEnabledSection bool, guideExpectedEnabled map[string]bool, cItemMap map[string]arr.ArrQualityItem, gItemMap map[string]core.QualityItem) []CompareQualityStructureRow {
+func BuildAlignment(cKeys, gKeys []string, isEnabledSection bool, guideExpectedEnabled map[string]bool, cItemMap map[string]arr.ArrQualityItem, gItemMap map[string]core.QualityItem) []CompareQualityStructureRow {
 	m := len(cKeys)
 	n := len(gKeys)
 	dp := make([][]int, m+1)
@@ -2948,10 +2948,9 @@ func BuildAlignment(instType string, cKeys, gKeys []string, isEnabledSection boo
 						})
 					}
 				}
-				if instType == "sonarr" {
-					for i, j := 0, len(cMembers)-1; i < j; i, j = i+1, j-1 {
-						cMembers[i], cMembers[j] = cMembers[j], cMembers[i]
-					}
+				// Group members come back worst-to-best too, for both apps.
+				for i, j := 0, len(cMembers)-1; i < j; i, j = i+1, j-1 {
+					cMembers[i], cMembers[j] = cMembers[j], cMembers[i]
 				}
 			}
 		}

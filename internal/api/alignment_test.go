@@ -32,7 +32,7 @@ func TestBuildAlignment_MatchesAndGaps(t *testing.T) {
 		"Q1": true, "Q2": true, "Q3": true, "Q4": true, "Q5": true,
 	}
 	
-	rows := BuildAlignment("radarr", cKeys, gKeys, true, guideExpectedEnabled, cItemMap, gItemMap)
+	rows := BuildAlignment(cKeys, gKeys, true, guideExpectedEnabled, cItemMap, gItemMap)
 	
 	// We expect:
 	// Q1 <-> Q1 (Match: true)
@@ -68,7 +68,7 @@ func TestBuildAlignment_DisabledSection(t *testing.T) {
 		"Q2": true,
 	}
 	
-	rows := BuildAlignment("radarr", cKeys, gKeys, false, guideExpectedEnabled, cItemMap, gItemMap)
+	rows := BuildAlignment(cKeys, gKeys, false, guideExpectedEnabled, cItemMap, gItemMap)
 	
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
@@ -82,5 +82,30 @@ func TestBuildAlignment_DisabledSection(t *testing.T) {
 	// Q2 is in disabled section but guide expects it enabled -> Match: false
 	if rows[1].Current != "Q2" || rows[1].Guide != "" || rows[1].Match {
 		t.Errorf("expected Q2 to be false Match, got %v", rows[1].Match)
+	}
+}
+
+// TestBuildAlignment_GroupMembersBestFirst covers group members from the Arr
+// API, which both Radarr and Sonarr return worst-to-best: they are shown
+// best-first to line up with the TRaSH guide's order.
+func TestBuildAlignment_GroupMembersBestFirst(t *testing.T) {
+	cItemMap := map[string]arr.ArrQualityItem{
+		"WEB 1080p": {Name: "WEB 1080p", Items: []arr.ArrQualityItem{
+			{Quality: &arr.ArrQualityRef{Name: "WEBRip-1080p"}},
+			{Quality: &arr.ArrQualityRef{Name: "WEBDL-1080p"}},
+		}},
+	}
+	gItemMap := map[string]core.QualityItem{
+		"WEB 1080p": {Name: "WEB 1080p", Items: []string{"WEBDL-1080p", "WEBRip-1080p"}},
+	}
+	guideExpectedEnabled := map[string]bool{"WEB 1080p": true, "WEBDL-1080p": true, "WEBRip-1080p": true}
+
+	rows := BuildAlignment([]string{"WEB 1080p"}, []string{"WEB 1080p"}, true, guideExpectedEnabled, cItemMap, gItemMap)
+
+	if len(rows) != 1 || len(rows[0].CurrentMembers) != 2 {
+		t.Fatalf("rows = %+v, want one row with two current members", rows)
+	}
+	if got := []string{rows[0].CurrentMembers[0].Name, rows[0].CurrentMembers[1].Name}; got[0] != "WEBDL-1080p" || got[1] != "WEBRip-1080p" {
+		t.Errorf("current members = %v, want [WEBDL-1080p WEBRip-1080p]", got)
 	}
 }
