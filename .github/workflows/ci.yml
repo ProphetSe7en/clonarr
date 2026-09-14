@@ -37,8 +37,8 @@ jobs:
       - name: install govulncheck
         # Pinned: govulncheck@latest may require newer Go than our go.mod
         # declares. Bump together with the go.mod toolchain when Go version
-        # changes. v1.1.4 works with Go 1.25.
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+        # changes. v1.8.0 works with Go 1.27; v1.1.4 crashes on Go 1.27.
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: scan
         run: govulncheck ./...
 
