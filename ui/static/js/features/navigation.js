@@ -464,7 +464,26 @@ export default {
     // navHref already returns a leading-# hash; assign directly to
     // location.hash and the existing hashchange listener restores state.
     autoSyncChipClick() {
-      window.location.hash = this.navHref('profiles', { profileTab: 'history' });
+      this.navigateHash(this.navHref('profiles', { profileTab: 'history' }));
+    },
+
+    // Go to a hash route. With the profile editor open, close it first through
+    // its unsaved-changes guard, then replace the editor's history entry with
+    // the new route instead of stacking on top of it (replaceState fires no
+    // hashchange, so the route is restored directly). Clicking the page that
+    // is already showing only closes the editor; the profileDetail watcher
+    // then steps back over the editor entry.
+    navigateHash(href) {
+      if (!this.profileDetail) { location.hash = href; return; }
+      this.closeProfileEditor(() => {
+        if (href === location.hash) return;
+        if (history.state && history.state.clonarrEditor) {
+          history.replaceState(null, '', href);
+          this.restoreFromHash(href);
+        } else {
+          location.hash = href;
+        }
+      });
     },
   },
 };

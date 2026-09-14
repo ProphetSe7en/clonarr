@@ -6235,7 +6235,9 @@ export default {
         }
       } else if (d.kind === 'member') {
         const oldGroup = arr[d.srcGroup];
-        if (!oldGroup || !oldGroup.items) { this.qsResetDrag(); return; }
+        // Dropping a member onto its own group changes nothing. Reordering
+        // inside a group goes through the member gaps instead.
+        if (!oldGroup || !oldGroup.items || targetIdx === d.srcGroup) { this.qsResetDrag(); return; }
         // Copy of the rows before the member is pulled out, so cancelling the
         // "New Quality Group" dialog below puts the member back in its group.
         const before = arr.map(it => (it.items ? { ...it, items: [...it.items] } : { ...it }));

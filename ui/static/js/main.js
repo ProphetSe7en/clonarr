@@ -539,17 +539,7 @@ export function clonarr() {
         // different Profiles sub-tab no longer leaves the editor floating over
         // the newly selected tab, and dirty edits are never dropped silently.
         event.preventDefault();
-        this.closeProfileEditor(() => {
-          // Replace the editor's history entry rather than stacking the new
-          // route on top of it (replaceState fires no hashchange, so restore
-          // the route directly).
-          if (history.state && history.state.clonarrEditor) {
-            history.replaceState(null, '', href);
-            this.restoreFromHash(href);
-          } else {
-            location.hash = href;
-          }
-        });
+        this.navigateHash(href);
       }, true);
 
       // Issue #52 - browser-level guard for reload / tab close / cross-
@@ -588,8 +578,8 @@ export function clonarr() {
       // same unsaved-changes guard as every other close, landing on the tab it
       // was opened from (no overshoot). Pushing on open and clearing the flag
       // on close is centralised here, so every close path (Close button, nav
-      // click, app switch, section change) keeps the flag correct. The actual
-      // Back handling lives in the popstate listener below.
+      // click, app switch, section change) keeps the flag correct. The popstate
+      // listener below handles Back and clears the flag itself before closing.
       this.$watch('profileDetail', (val) => {
         if (val && !this._editorNavPushed) {
           history.pushState({ clonarrEditor: true }, '');
@@ -766,6 +756,13 @@ export function clonarr() {
       // Restore navigation from URL hash (browser back/forward) or localStorage fallback.
       // Hash takes priority - it carries the exact section+subtab the user was on.
       window.addEventListener('popstate', (event) => {
+        // Landed on an editor entry with no editor open (Forward after Back
+        // closed it, or an entry left over from a reload): it has nothing to
+        // show, so step over it instead of spending a press on it.
+        if (!this.profileDetail && event.state && event.state.clonarrEditor) {
+          history.back();
+          return;
+        }
         // Profile editor back-button support: if the editor is open and we just
         // popped off its history entry (Back / Forward / mouse side buttons),
         // close the editor here instead of navigating past the tab it was
