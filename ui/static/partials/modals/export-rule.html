@@ -2,7 +2,7 @@
   <!-- ============ EXPORT SYNC RULE MODAL ============ -->
   <!-- Portable, self-contained export of one sync rule. Copy to share quickly,
        or download the .json to carry to another Clonarr and Import there. -->
-  <div class="modal-overlay" x-show="showExportRuleModal" @click.self="closeExportRuleModal()" @keydown.escape.window="closeExportRuleModal()" x-cloak>
+  <div class="modal-overlay" x-show="showExportRuleModal" @click.self="closeExportRuleModal()" @keydown.escape.window="if (showExportRuleModal) closeExportRuleModal()" x-cloak>
     <div class="modal" style="max-width:700px" role="dialog" aria-modal="true" aria-labelledby="modal-title-export-rule" x-trap.noscroll.inert="showExportRuleModal">
       <h2 id="modal-title-export-rule" class="modal-title">Export sync rule</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">

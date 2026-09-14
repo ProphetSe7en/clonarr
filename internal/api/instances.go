@@ -2734,7 +2734,7 @@ func (s *Server) handleTrashProfileDetail(w http.ResponseWriter, r *http.Request
 	snap := s.Core.Trash.Snapshot()
 	ad := core.SnapshotAppData(snap, appType)
 	if ad == nil {
-		writeError(w, 404, "TRaSH data is empty. Click Pull in the sidebar to refresh, then reopen this profile.")
+		writeError(w, 404, "TRaSH data is empty. Click Pull (Reload in Local Source mode) to refresh, then reopen this profile.")
 		return
 	}
 
@@ -2746,7 +2746,7 @@ func (s *Server) handleTrashProfileDetail(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if profile == nil {
-		writeError(w, 404, "Profile not currently in TRaSH data. Try Pull in the sidebar. If that doesn't bring it back, the profile may have been renamed or removed upstream.")
+		writeError(w, 404, "Profile not currently in TRaSH data. Try Pull (Reload in Local Source mode). If that doesn't bring it back, the profile may have been renamed or removed upstream.")
 		return
 	}
 
