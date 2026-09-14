@@ -81,7 +81,7 @@
                      }"
                      :draggable="qualityStructureRenaming !== item._id"
                      @dragstart="event.dataTransfer.setData('text/plain', ''); qualityStructureDrag.kind = 'top'; qualityStructureDrag.src = idx;"
-                     @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                     @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) && !(qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx)) qualityStructureDrag.dropMerge = idx"
                      @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
                      @drop.prevent="qsHandleDropOnRow(idx, _target)"
                      @dragend="qsResetDrag()">
@@ -123,8 +123,8 @@
                 <div class="qs-group-members"
                      x-show="item.items && qualityStructureExpanded[item._id]"
                      x-cloak
-                     :class="{ 'dnd-merge-hover': qualityStructureDrag.dropMerge === idx && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) }"
-                     @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx)) qualityStructureDrag.dropMerge = idx"
+                     :class="{ 'dnd-merge-hover': qualityStructureDrag.dropMerge === idx && qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) && !(qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx) }"
+                     @dragover.prevent="if (qualityStructureDrag.kind && !(qualityStructureDrag.kind === 'top' && qualityStructureDrag.src === idx) && !(qualityStructureDrag.kind === 'member' && qualityStructureDrag.srcGroup === idx)) qualityStructureDrag.dropMerge = idx"
                      @dragleave="if (qualityStructureDrag.dropMerge === idx) qualityStructureDrag.dropMerge = null"
                      @drop.prevent.stop="qsHandleDropOnRow(idx, _target)">
                   <template x-for="(m, mIdx) in item.items" :key="'qem-'+item._id+'-'+m+'-'+mIdx">

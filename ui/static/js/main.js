@@ -757,8 +757,8 @@ export function clonarr() {
       // Hash takes priority - it carries the exact section+subtab the user was on.
       window.addEventListener('popstate', (event) => {
         // Landed on an editor entry with no editor open (Forward after Back
-        // closed it, or an entry left over from a reload): it has nothing to
-        // show, so step over it instead of spending a press on it.
+        // closed it): it has nothing to show, so step over it instead of
+        // spending a press on it.
         if (!this.profileDetail && event.state && event.state.clonarrEditor) {
           history.back();
           return;

@@ -461,8 +461,8 @@ export default {
     },
 
     // Click → navigate to Profiles → History so the user can see what ran.
-    // navHref already returns a leading-# hash; assign directly to
-    // location.hash and the existing hashchange listener restores state.
+    // Goes through navigateHash so an open profile editor gets its
+    // unsaved-changes prompt first.
     autoSyncChipClick() {
       this.navigateHash(this.navHref('profiles', { profileTab: 'history' }));
     },
