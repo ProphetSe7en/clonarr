@@ -132,7 +132,7 @@ export default {
       const next = { ...this.pinnedSidebarSections };
       if (next[section]) delete next[section]; else next[section] = true;
       this.pinnedSidebarSections = next;
-      localStorage.setItem('clonarr-sidebar-pinned', JSON.stringify(this.pinnedSidebarSections));
+      try { localStorage.setItem('clonarr-sidebar-pinned', JSON.stringify(this.pinnedSidebarSections)); } catch (_) {}
     },
 
     // --- Hash routing (back/forward, bookmarks, copyable nav links) ---

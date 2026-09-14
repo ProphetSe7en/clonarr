@@ -583,9 +583,12 @@ export default function baseState() {
     // v3 sidebar collapse state - persists per-browser. Default expanded.
     sidebarCollapsed: localStorage.getItem('clonarr-sidebar-collapsed') === '1',
     // Sections the user pinned open in the expanded sidebar: their sub-nav stays
-    // visible even when another section is active. Keyed by section id. Loaded
-    // from localStorage in init().
-    pinnedSidebarSections: {},
+    // visible even when another section is active. Keyed by section id.
+    // Persists per-browser, loaded here so it applies at every window width.
+    pinnedSidebarSections: (() => {
+      try { return JSON.parse(localStorage.getItem('clonarr-sidebar-pinned') || '{}') || {}; }
+      catch (_) { return {}; }
+    })(),
     // v3 content alignment - 'center' (default, balanced) or 'left'
     // (anchored next to the sidebar, shorter mouse travel on widescreen).
     contentAlign: localStorage.getItem('clonarr-content-align') || 'center',
