@@ -26,7 +26,7 @@ func TestQualitySizeLimitsFor_Sonarr(t *testing.T) {
 
 func TestQualitySizeLimitsFor_CaseInsensitive(t *testing.T) {
 	// Instance types are lower-cased in config, but callers should not have to
-	// care — a mixed-case type must not silently fall through to Radarr.
+	// care: a mixed-case type must not silently fall through to Radarr.
 	lim := QualitySizeLimitsFor("Sonarr")
 	if lim.Max != 1000 {
 		t.Errorf("\"Sonarr\" resolved to Max %v, want 1000", lim.Max)
@@ -51,7 +51,7 @@ func TestSizeOrLimit_NilIsTheLimit(t *testing.T) {
 		t.Errorf("SizeOrLimit(nil, 2000) = %v, want 2000", got)
 	}
 	if got := FloatVal(nil); got != 0 {
-		t.Errorf("FloatVal(nil) = %v, want 0 — SizeOrLimit must not share this behaviour", got)
+		t.Errorf("FloatVal(nil) = %v, want 0 (SizeOrLimit must not share this behaviour)", got)
 	}
 }
 
@@ -68,9 +68,8 @@ func TestSizeOrLimit_ValuePassesThrough(t *testing.T) {
 // =============================================================================
 
 func TestSizePtr_AtOrAboveLimitIsNil(t *testing.T) {
-	// The instance stores a value at its limit as null. Writing the number
-	// works, but it reads back as null and the quality then looks drifted on
-	// every following comparison.
+	// A value at its limit is written as null, the same value the
+	// Radarr/Sonarr UI stores for Unlimited.
 	for _, v := range []float64{2000, 2500} {
 		if got := SizePtr(v, 2000); got != nil {
 			t.Errorf("SizePtr(%v, 2000) = %v, want nil", v, *got)
@@ -151,7 +150,7 @@ func TestQualityDefinition_UnlimitedMatchesTrash(t *testing.T) {
 }
 
 func TestQualityDefinition_ExplicitSizesStillCompare(t *testing.T) {
-	// A quality with all three sizes present must keep comparing normally —
+	// A quality with all three sizes present must keep comparing normally:
 	// the nil handling must not mask a real difference.
 	const payload = `{
 		"quality": {"id": 8, "name": "WEBDL-480p", "source": "webdl", "resolution": 480, "modifier": "none"},
@@ -178,13 +177,12 @@ func TestQualityDefinition_ExplicitSizesStillCompare(t *testing.T) {
 }
 
 // =============================================================================
-// Round trip: what we write must read back as a match
+// Round trip: what we write must compare as a match when read back
 // =============================================================================
 
 func TestQualitySize_WriteThenCompareIsStable(t *testing.T) {
 	// Sync writes the TRaSH targets, the instance reports them back, and the
-	// next comparison must be clean. Before the limit handling this loop never
-	// settled: 1999/2000 went out, null came back, drift was reported again.
+	// next comparison must be clean.
 	lim := QualitySizeLimitsFor("radarr")
 	written := ArrQualityDefinition{
 		MinSize:       FloatPtr(17.1),

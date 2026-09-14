@@ -1,7 +1,7 @@
-// Radarr/Sonarr report a max/preferred size that sits at its limit as null and
-// omit the field from the response entirely. null therefore means "Unlimited",
+// Radarr/Sonarr report a max/preferred size set to Unlimited as null and omit
+// the field from the response entirely. null therefore means "Unlimited",
 // never 0 and never "unset". Mirror of QualitySizeLimitsFor in
-// internal/arr/arr.go — keep both in sync. min has no Unlimited end, so its
+// internal/arr/arr.go; keep both in sync. min has no Unlimited end, so its
 // limit is 0.
 const QS_LIMITS = {
   radarr: { min: 0, preferred: 1999, max: 2000 },

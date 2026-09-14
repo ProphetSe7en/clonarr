@@ -1459,9 +1459,9 @@ func (s *Server) handleSyncQualitySizes(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// The UI sends the numeric TRaSH targets (preferred 1999 / max 2000 for
-	// Radarr). Collapse anything at or above the limit back to null, which is
-	// how the instance stores "Unlimited" — otherwise the value we just wrote
-	// reads back as null and the quality shows as out of sync again.
+	// Radarr). Collapse anything at or above the limit to null, which is what
+	// the Radarr/Sonarr UI stores for "Unlimited", so Clonarr writes the same
+	// value the Arr UI would.
 	lim := arr.QualitySizeLimitsFor(inst.Type)
 	for i := range req.Definitions {
 		req.Definitions[i].PreferredSize = arr.NormalizeSize(req.Definitions[i].PreferredSize, lim.Preferred)

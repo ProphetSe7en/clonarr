@@ -268,7 +268,7 @@ func (c *ArrClient) UpdateProfile(profile *ArrQualityProfile) error {
 // Sonarr/Radarr return null for maxSize/preferredSize when set to "Unlimited"
 // (slider all the way right), and omit the field from the JSON response
 // entirely. Using *float64 lets us distinguish null (Unlimited) from 0.0
-// (explicit zero). nil is not "unset" — see QualitySizeLimits for why it must
+// (explicit zero). nil is not "unset": see QualitySizeLimits for why it must
 // be compared against the limit rather than against 0.
 type ArrQualityDefinition struct {
 	ID            int              `json:"id"`
@@ -293,15 +293,16 @@ func FloatPtr(v float64) *float64 {
 }
 
 // QualitySizeLimits holds the max/preferred sizes an instance treats as
-// "Unlimited" — the slider pushed all the way right. Once a value reaches its
-// limit, Radarr/Sonarr store it as null and omit the field when serialising,
-// so a nil size means "at the limit", never "unset" and never 0.
+// "Unlimited" (the slider pushed all the way right). When a size is set to
+// Unlimited in the Radarr/Sonarr UI, the instance stores null and omits the
+// field from the API response, so a nil size means "at the limit", never
+// "unset" and never 0. A number written at the limit through the API is kept
+// as a number; both forms mean the same thing.
 //
 // The values match Radarr >= 5.9.0.9049 and Sonarr >= 4.0.8.2158, which raised
 // the old 400/399 (Radarr) and 400/395 (Sonarr) ceilings. Current TRaSH guide
-// data targets the raised limits — the movie sizes ship preferred 1999 and
-// max 2000 — and Recyclarr resolves them the same way, so Clonarr and
-// Recyclarr write identical values to a shared instance.
+// data targets the raised limits: the movie sizes ship preferred 1999 and
+// max 2000.
 type QualitySizeLimits struct {
 	Max       float64
 	Preferred float64
@@ -330,9 +331,8 @@ func SizeOrLimit(p *float64, limit float64) float64 {
 }
 
 // SizePtr converts a concrete size into the pointer form used in write bodies,
-// collapsing a value at or above limit to nil. Writing the number instead is
-// accepted by the instance but read back as null, so the quality would show as
-// out of sync on every following comparison.
+// collapsing a value at or above limit to nil, the same value the Radarr/Sonarr
+// UI stores for Unlimited.
 func SizePtr(v, limit float64) *float64 {
 	if v >= limit {
 		return nil
