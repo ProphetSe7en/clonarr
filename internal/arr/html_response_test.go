@@ -55,6 +55,16 @@ func TestDoRequestKeepsJSONAndErrorBodies(t *testing.T) {
 	if err != nil || status.AppName != "Sonarr" {
 		t.Fatalf("TestConnection = %+v, %v; want Sonarr, nil", status, err)
 	}
+	// An empty success body labelled text/html (some proxies do this on
+	// PUT/DELETE) is not a web page.
+	emptySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer emptySrv.Close()
+	if _, code, err := NewArrClient(emptySrv.URL, "key", "", "", emptySrv.Client()).DoRequest("DELETE", "/customformat/1", nil); err != nil || code != http.StatusOK {
+		t.Fatalf("DoRequest(empty text/html) = %d, %v; want 200, nil", code, err)
+	}
 	// Non-2xx responses keep returning the body so callers can report the
 	// HTTP status as before.
 	data, code, err := c.DoRequest("GET", "/missing", nil)

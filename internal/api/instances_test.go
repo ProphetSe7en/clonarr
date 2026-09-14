@@ -369,6 +369,38 @@ func TestHandleCreateInstanceRejectsMetadataAddress(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateInstanceMetadataAddress(t *testing.T) {
+	app := setupTestApp(t)
+	existing, err := app.Config.AddInstance(core.Instance{
+		Name:   "Radarr",
+		Type:   "radarr",
+		URL:    "http://10.0.0.5:7878",
+		APIKey: "saved-key",
+	})
+	if err != nil {
+		t.Fatalf("seed instance: %v", err)
+	}
+	server := &Server{Core: app}
+	update := func(url string) int {
+		req := httptest.NewRequest(http.MethodPut, "/api/instances/"+existing.ID, instanceJSON(t, map[string]string{
+			"name": "Radarr",
+			"type": "radarr",
+			"url":  url,
+		}))
+		req.SetPathValue("id", existing.ID)
+		w := httptest.NewRecorder()
+		server.handleUpdateInstance(w, req)
+		return w.Code
+	}
+
+	if code := update("http://169.254.169.254/"); code != http.StatusBadRequest {
+		t.Fatalf("changing URL to a metadata address: status = %d, want %d", code, http.StatusBadRequest)
+	}
+	if code := update("http://10.0.0.5:7878"); code != http.StatusOK {
+		t.Fatalf("saving with the unchanged URL: status = %d, want %d", code, http.StatusOK)
+	}
+}
+
 func TestIsBlockedHost(t *testing.T) {
 	cases := []struct {
 		name        string

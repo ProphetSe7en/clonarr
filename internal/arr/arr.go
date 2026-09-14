@@ -84,11 +84,15 @@ func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error
 // instead of the Radarr/Sonarr API.
 var ErrHTMLResponse = errors.New("got a web page instead of the Radarr/Sonarr API. Check the URL, including any URL base, and any login page in front of the instance")
 
+// isHTMLResponse reports whether a body is an HTML page. An empty body is
+// never a page: a successful PUT or DELETE can return nothing, and some
+// proxies still label that as text/html.
 func isHTMLResponse(contentType string, body []byte) bool {
-	if strings.Contains(strings.ToLower(contentType), "text/html") {
-		return true
+	trimmed := bytes.TrimLeft(body, " \t\r\n\ufeff")
+	if len(trimmed) == 0 {
+		return false
 	}
-	return bytes.HasPrefix(bytes.TrimLeft(body, " \t\r\n\ufeff"), []byte("<"))
+	return trimmed[0] == '<' || strings.Contains(strings.ToLower(contentType), "text/html")
 }
 
 // --- System ---

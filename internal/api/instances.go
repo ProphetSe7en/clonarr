@@ -115,12 +115,17 @@ func (s *Server) handleUpdateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "username is required when external authentication is enabled")
 		return
 	}
-	if blocked, reason := isBlockedHost(inst.URL); blocked {
-		writeError(w, 400, reason)
-		return
-	}
 
 	existing, hasExisting := s.Core.Config.GetInstance(id)
+
+	// Only check the address when it changed, so saving other fields never
+	// waits on a DNS lookup.
+	if !hasExisting || inst.URL != existing.URL {
+		if blocked, reason := isBlockedHost(inst.URL); blocked {
+			writeError(w, 400, reason)
+			return
+		}
+	}
 
 	// If API key is empty or masked, keep the existing one
 	if inst.APIKey == "" || isMasked(inst.APIKey) {
@@ -224,7 +229,7 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errMsg := err.Error()
 		if core.IsConnectionError(err) {
-			errMsg = inst.Name + " is not reachable — check that the instance is running and the URL is correct"
+			errMsg = inst.Name + " is not reachable. Check that the instance is running and the URL is correct"
 		}
 		writeJSON(w, map[string]any{
 			"connected": false,
@@ -245,9 +250,10 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 // the same host (localhost, host networking) or behind a shared network
 // container, so loopback and private addresses are allowed. Only cloud
 // metadata endpoints are refused. This is a guardrail against pointing the
-// stored API key at a metadata service, not a security boundary: the check
-// resolves DNS once, and every /api route already requires login. DNS failures
-// pass through so the connection error explains the real problem.
+// stored API key at a metadata service, not a security boundary: the name is
+// resolved separately from the later connection, and redirects are not
+// checked. DNS failures and slow lookups pass through so the connection error
+// explains the real problem.
 func isBlockedHost(rawURL string) (bool, string) {
 	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
 		rawURL = "http://" + rawURL
@@ -260,13 +266,23 @@ func isBlockedHost(rawURL string) (bool, string) {
 	if host == "" {
 		return true, "URL has no host"
 	}
-	ips, err := net.LookupHost(host)
+	const reason = "This address points at a cloud metadata service, not a Radarr or Sonarr instance"
+	if ip := net.ParseIP(host); ip != nil {
+		if isMetadataIP(ip) {
+			return true, reason
+		}
+		return false, ""
+	}
+	// Bounded so a slow or unreachable DNS server cannot stall Save.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupHost(ctx, host)
 	if err != nil {
 		return false, ""
 	}
 	for _, ipStr := range ips {
 		if ip := net.ParseIP(ipStr); ip != nil && isMetadataIP(ip) {
-			return true, "This address points at a cloud metadata service, not a Radarr or Sonarr instance"
+			return true, reason
 		}
 	}
 	return false, ""
