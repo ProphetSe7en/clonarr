@@ -73,7 +73,7 @@ func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error
 	// default page, a login page in front of the instance, or the web UI
 	// because the URL base is missing. Say so instead of failing later with
 	// "invalid character '<'".
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 && isHTMLResponse(resp.Header.Get("Content-Type"), data) {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 && isHTMLResponse(data) {
 		return nil, resp.StatusCode, ErrHTMLResponse
 	}
 
@@ -84,15 +84,12 @@ func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error
 // instead of the Radarr/Sonarr API.
 var ErrHTMLResponse = errors.New("got a web page instead of the Radarr/Sonarr API. Check the URL, including any URL base, and any login page in front of the instance")
 
-// isHTMLResponse reports whether a body is an HTML page. An empty body is
-// never a page: a successful PUT or DELETE can return nothing, and some
-// proxies still label that as text/html.
-func isHTMLResponse(contentType string, body []byte) bool {
+// isHTMLResponse reports whether a body is an HTML page. It looks at the body
+// only: some proxies label every response text/html, including JSON from the
+// API, and an empty body (a successful PUT or DELETE) is never a page.
+func isHTMLResponse(body []byte) bool {
 	trimmed := bytes.TrimLeft(body, " \t\r\n\ufeff")
-	if len(trimmed) == 0 {
-		return false
-	}
-	return trimmed[0] == '<' || strings.Contains(strings.ToLower(contentType), "text/html")
+	return len(trimmed) > 0 && trimmed[0] == '<'
 }
 
 // --- System ---

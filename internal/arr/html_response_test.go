@@ -55,6 +55,15 @@ func TestDoRequestKeepsJSONAndErrorBodies(t *testing.T) {
 	if err != nil || status.AppName != "Sonarr" {
 		t.Fatalf("TestConnection = %+v, %v; want Sonarr, nil", status, err)
 	}
+	// A JSON body labelled text/html by a proxy is still the API.
+	jsonAsHTML := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`{"appName":"Radarr","version":"6.0.0"}`))
+	}))
+	defer jsonAsHTML.Close()
+	if st, err := NewArrClient(jsonAsHTML.URL, "key", "", "", jsonAsHTML.Client()).TestConnection(); err != nil || st.AppName != "Radarr" {
+		t.Fatalf("TestConnection(JSON labelled text/html) = %+v, %v; want Radarr, nil", st, err)
+	}
 	// An empty success body labelled text/html (some proxies do this on
 	// PUT/DELETE) is not a web page.
 	emptySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

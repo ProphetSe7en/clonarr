@@ -255,7 +255,7 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 // checked. DNS failures and slow lookups pass through so the connection error
 // explains the real problem.
 func isBlockedHost(rawURL string) (bool, string) {
-	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+	if lower := strings.ToLower(rawURL); !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		rawURL = "http://" + rawURL
 	}
 	u, err := url.Parse(rawURL)

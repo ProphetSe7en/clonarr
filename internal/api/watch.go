@@ -120,10 +120,8 @@ func (s *Server) handleProfileSyncCheck(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleDriftCheck runs one drift-detection pass synchronously over every
-// eligible auto-sync rule. Bypasses the Sources gate so the user can
-// trigger a manual check even when ArrDrift is disabled — useful while
-// the scheduled drift path is still being designed and the only way to
-// see drift results today is via this endpoint.
+// eligible auto-sync rule. The endpoint itself ignores the Sources toggles;
+// the sidebar Check passes them in through the query parameters below.
 //
 // Notification dispatch is identical to the scheduled drift run: both
 // manual and scheduled entry points reach the same NotifyDriftDetected /
@@ -131,9 +129,9 @@ func (s *Server) handleProfileSyncCheck(w http.ResponseWriter, r *http.Request) 
 // (OnDriftDetected, OnDriftReconciled) decide whether anything actually
 // sends.
 //
-// Returns the per-rule DriftResult list inline so the caller (frontend
-// "Check drift now" button OR curl during development) gets immediate
-// feedback. The aggregate also persists to DriftWatch.LastResult.
+// Returns the per-rule DriftResult list inline so the caller (the sidebar
+// Check, or curl) gets immediate feedback. The aggregate also persists to
+// DriftWatch.LastResult.
 //
 // Optional query parameters pick what runs, the same split the scheduled
 // watcher uses: drift=0 skips profile, CF and naming drift; namingUpdate=0
@@ -158,8 +156,11 @@ func (s *Server) handleDriftCheck(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	namingError := ""
 	if checkDrift || checkNamingUpdate {
-		_ = s.Core.DriftRunner.RunNamingDrift(checkDrift, checkNamingUpdate)
+		if err := s.Core.DriftRunner.RunNamingDrift(checkDrift, checkNamingUpdate); err != nil {
+			namingError = err.Error()
+		}
 	}
 
 	// Read per-instance CF drift fingerprints persisted by the pass we
@@ -178,7 +179,8 @@ func (s *Server) handleDriftCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	cfDrift := []cfDriftEntry{}
 	for _, inst := range cfg.Instances {
-		if len(inst.CFDriftFingerprints) == 0 {
+		// With drift=0 nothing was re-checked, so saved CF drift is not reported.
+		if !checkDrift || len(inst.CFDriftFingerprints) == 0 {
 			continue
 		}
 		appData := s.Core.Trash.GetAppData(inst.Type)
@@ -230,6 +232,8 @@ func (s *Server) handleDriftCheck(w http.ResponseWriter, r *http.Request) {
 		"checkedAt": time.Now().UTC().Format(time.RFC3339),
 		"results":   results,
 		"cfDrift":   cfDrift,
+		// Empty when the naming pass succeeded or did not run.
+		"namingError": namingError,
 		"summary": map[string]int{
 			"profilesDrifted": profilesDrifted,
 			"cfsDrifted":      len(cfDrift),

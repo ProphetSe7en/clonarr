@@ -6955,8 +6955,8 @@ export default {
       const checkDrift = !!sources.arrDrift;
       if (!trashUpdates && !checkDrift) {
         const which = this.localMode()
-          ? 'Changes made directly in Radarr/Sonarr'
-          : 'TRaSH-Guides updates or Changes made directly in Radarr/Sonarr';
+          ? '"Changes made directly in Radarr/Sonarr"'
+          : '"TRaSH-Guides updates" or "Changes made directly in Radarr/Sonarr"';
         this.showToast(`Nothing to check. Turn on ${which} in Settings → Auto-sync.`, 'info', 6000);
         return;
       }
@@ -6974,6 +6974,11 @@ export default {
         let cfDriftCount = 0;
         let cfDriftNames = [];
         const driftOK = dr.status === 'fulfilled' && dr.value && dr.value.ok;
+        // The naming pass reports its own failure next to the drift results.
+        let namingFailed = !driftOK;
+        if (driftOK) {
+          try { namingFailed = !!(await dr.value.clone().json())?.namingError; } catch (_) {}
+        }
         if (checkDrift) {
           if (!driftOK) {
             driftFailed = true;
@@ -7058,7 +7063,8 @@ export default {
         const cfDriftLine = cfDriftCount > 0
           ? `${cfDriftCount} custom format${cfDriftCount === 1 ? '' : 's'} with Arr drift:\n${cfDriftNames.slice(0, 5).map(n => `• ${n}`).join('\n')}${cfDriftNames.length > 5 ? `\n• +${cfDriftNames.length - 5} more` : ''}`
           : '';
-        const driftChannels = [driftLine, cfDriftLine].filter(Boolean);
+        const namingLine = namingFailed ? 'Naming format check failed' : '';
+        const driftChannels = [driftLine, cfDriftLine, namingLine].filter(Boolean);
         if (trashError) {
           this.showToast([trashError, ...driftChannels].join('\n\n'), 'error', 7000);
           return;
@@ -7068,10 +7074,8 @@ export default {
             this.showToast(driftChannels.join('\n\n'), driftFailed ? 'warning' : 'info', 7000);
           } else if (checkDrift) {
             this.showToast('No Arr drift found. Radarr/Sonarr match your sync rules.', 'success', 3000);
-          } else if (driftOK) {
-            this.showToast('Naming formats checked against your local files. Turn on Changes made directly in Radarr/Sonarr in Settings → Auto-sync to also check for Arr drift.', 'info', 6000);
           } else {
-            this.showToast('Naming check failed', 'error', 4000);
+            this.showToast('Checked naming formats for TRaSH-Guides updates. Turn on "Changes made directly in Radarr/Sonarr" in Settings → Auto-sync to also check for Arr drift.', 'info', 6000);
           }
           return;
         }
