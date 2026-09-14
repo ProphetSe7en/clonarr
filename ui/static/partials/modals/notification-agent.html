@@ -149,7 +149,7 @@
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
             <input type="checkbox" x-model="agentModal.events.onUpstreamAhead" style="accent-color:var(--accent-blue)">
             TRaSH updates available
-            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when Profile Sync detects new TRaSH commits upstream WITHOUT pulling — for users on Notify or Delayed mode who want to know about updates before applying.')" @mouseleave="hideCFTooltip()">ⓘ</span>
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when Auto-sync finds new TRaSH-Guides changes without pulling them. For the Just notify me and Wait before applying modes, so you hear about updates before they are applied.')" @mouseleave="hideCFTooltip()">ⓘ</span>
           </label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
             <input type="checkbox" x-model="agentModal.events.onChangelog" style="accent-color:var(--accent-blue)">
@@ -159,7 +159,7 @@
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
             <input type="checkbox" x-model="agentModal.events.onDriftDetected" style="accent-color:var(--accent-blue)">
             Arr drift detected
-            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when someone edits a synced profile directly in Radarr/Sonarr. Requires Direct edits in Radarr/Sonarr to be enabled in Profile Sync settings.')" @mouseleave="hideCFTooltip()">ⓘ</span>
+            <span class="cf-info" @mouseenter="showCFTooltip($event, 'Sent when someone edits a synced profile directly in Radarr/Sonarr. Requires Changes made directly in Radarr/Sonarr to be turned on in Settings → Auto-sync.')" @mouseleave="hideCFTooltip()">ⓘ</span>
           </label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text-primary)">
             <input type="checkbox" x-model="agentModal.events.onDriftReconciled" style="accent-color:var(--accent-blue)">

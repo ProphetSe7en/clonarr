@@ -60,7 +60,7 @@
                     <button class="v3-inst-action"
                             @click.stop="checkTrashUpdates()"
                             :disabled="checkingUpdates || pulling"
-                            x-tt="'Check for TRaSH-Guides updates and Arr-side drift. No pull, no Arr writes, just detection. Populates Updates and Arr drift pills.'">Check</button>
+                            x-tt="'Check for TRaSH-Guides updates and Arr-side drift, as selected in Settings → Auto-sync. No pull, no Arr writes, just detection. Populates Updates and Arr drift pills.'">Check</button>
                     <button class="v3-inst-action"
                             @click.stop="updateAllForInstance(inst)"
                             :disabled="updatingInstance === inst.id || pulling"

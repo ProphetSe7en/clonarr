@@ -324,7 +324,7 @@
       <div class="sidebar-trash-actions">
         <button class="sidebar-trash-check btn btn-sm"
                 @click="checkTrashUpdates()" :disabled="checkingUpdates || pulling"
-                x-tt="sidebarCollapsed ? 'Check for TRaSH updates and Arr drift' : 'Check for TRaSH-Guides updates and Arr-side drift. Populates Updates and Arr drift pills. No pull, no Arr writes.'">
+                x-tt="sidebarCollapsed ? 'Check for TRaSH updates and Arr drift' : 'Check for TRaSH-Guides updates and Arr-side drift, as selected in Settings → Auto-sync. Populates Updates and Arr drift pills. No pull, no Arr writes.'">
           <span x-show="checkingUpdates" class="spinner"></span>
           <span x-show="!checkingUpdates && !sidebarCollapsed">Check</span>
           <span x-show="!checkingUpdates && sidebarCollapsed" aria-hidden="true">?</span>

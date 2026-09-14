@@ -395,7 +395,7 @@
                     <button class="v3-inst-action"
                             :disabled="checkingUpdates || pulling || cfApplyAllProgress.running"
                             @click="checkTrashUpdates()"
-                            x-tt="'Check for TRaSH-Guides updates and Arr-side drift. No pull, no Arr writes - just detection.'">Check</button>
+                            x-tt="'Check for TRaSH-Guides updates and Arr-side drift, as selected in Settings → Auto-sync. No pull, no Arr writes, just detection.'">Check</button>
                   </span>
                 </div>
                 <template x-if="cfApplyAllProgress.running && cfApplyAllProgress.label">

@@ -158,7 +158,7 @@ export default {
       } catch (e) {
         if (this._cfgbLoadFor !== appType) return; // superseded
         console.error('cfgbLoad failed:', e);
-        this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull TRaSH in Settings → TRaSH Repo.';
+        this.cfgbLoadError = 'Failed to load TRaSH data: ' + e.message + '. Try Pull in the sidebar.';
         this.cfgbCFs = [];
         this.cfgbGroups = [];
         this.cfgbHasCustom = false;

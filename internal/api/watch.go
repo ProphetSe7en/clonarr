@@ -109,7 +109,7 @@ func (s *Server) handlePutProfileSync(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleProfileSyncCheck(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Core.Config.Get()
 	if cfg.ProfileSync == nil || !cfg.ProfileSync.Sources.TrashUpstream {
-		writeError(w, 400, "TRaSH-upstream source is disabled — enable it in Settings → Profile Sync → Sources")
+		writeError(w, 400, "TRaSH-Guides updates are turned off. Turn them on in Settings → Auto-sync.")
 		return
 	}
 	if err := s.Core.ProfileSyncRunner.RunDetectionOnly(r.Context()); err != nil {

@@ -1315,7 +1315,7 @@ export function clonarr() {
         }
       } catch (e) {
         console.error('saveProfileSync:', e);
-        this.showToast('Could not save Profile Sync settings (network error)', 'error', 6000);
+        this.showToast('Could not save Auto-sync settings (network error)', 'error', 6000);
       }
     },
 

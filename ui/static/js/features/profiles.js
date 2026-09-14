@@ -6943,73 +6943,78 @@ export default {
 
     async checkTrashUpdates() {
       if (this.checkingUpdates) return;
+      // Check runs what Settings > Auto-sync > "What to check for" has turned
+      // on. Local Source mode has no upstream, so the TRaSH-Guides part is
+      // skipped there (its checkbox is hidden in that mode).
+      const sources = this.config?.profileSync?.sources || {};
+      const checkTrash = !!sources.trashUpstream && !this.localMode();
+      const checkDrift = !!sources.arrDrift;
+      if (!checkTrash && !checkDrift) {
+        const which = this.localMode()
+          ? 'Changes made directly in Radarr/Sonarr'
+          : 'TRaSH-Guides updates or Changes made directly in Radarr/Sonarr';
+        this.showToast(`Nothing to check. Turn on ${which} in Settings → Auto-sync.`, 'info', 6000);
+        return;
+      }
       this.checkingUpdates = true;
       try {
-        // Two parallel checks: TRaSH upstream + Arr-side drift. Both endpoints
-        // are detection-only (no Arr writes), so running them concurrently is
-        // safe. Drift bypasses the Sources.ArrDrift gate so a manual press
-        // always runs even when scheduled drift is off - the user's intent
-        // is "I want to know right now".
+        // The two checks run in parallel. Both are detection-only (no Arr
+        // writes), so running them concurrently is safe.
         const [tr, dr] = await Promise.allSettled([
-          fetch('/api/profile-sync/check', { method: 'POST' }),
-          fetch('/api/drift/check', { method: 'POST' }),
+          checkTrash ? fetch('/api/profile-sync/check', { method: 'POST' }) : Promise.resolve(null),
+          checkDrift ? fetch('/api/drift/check', { method: 'POST' }) : Promise.resolve(null),
         ]);
         let driftFailed = false;
         let cfDriftCount = 0;
         let cfDriftNames = [];
-        if (dr.status === 'rejected' || (dr.value && !dr.value.ok)) {
-          driftFailed = true;
-        } else if (dr.value && dr.value.ok) {
-          // Drift response carries both profile drift (`results`) AND
-          // CF drift (`cfDrift`) since the Phase 1 cf-drift work. The
-          // toast surfaces the CF channel as a separate line so the
-          // user sees all three signals (TRaSH update / profile drift /
-          // CF drift) without scanning multiple views.
-          try {
-            const drBody = await dr.value.clone().json();
-            const list = Array.isArray(drBody?.cfDrift) ? drBody.cfDrift : [];
-            cfDriftCount = list.length;
-            cfDriftNames = list.map(e => e.name || e.trashId).filter(Boolean);
-          } catch (_) { /* leave cfDriftCount=0 on parse failure */ }
-        }
-        // Refresh the Sync Rules → Custom Formats sub-tab cache if it
-        // was previously loaded so the row pills update right away
-        // when the user is already viewing the sub-tab.
-        if (this.cfSyncRulesLoaded?.[this.activeAppType]) {
-          this.loadCFSyncRules(this.activeAppType);
-        }
-        const r = tr.status === 'fulfilled' ? tr.value : null;
-        if (!r || !r.ok) {
-          let msg = 'TRaSH check failed';
-          if (r) {
-            try { const data = await r.json(); if (data && data.error) msg = data.error; } catch {}
+        if (checkDrift) {
+          if (dr.status === 'rejected' || (dr.value && !dr.value.ok)) {
+            driftFailed = true;
+          } else if (dr.value && dr.value.ok) {
+            // Drift response carries both profile drift (`results`) AND
+            // CF drift (`cfDrift`) since the Phase 1 cf-drift work. The
+            // toast surfaces the CF channel as a separate line so the
+            // user sees all three signals (TRaSH update / profile drift /
+            // CF drift) without scanning multiple views.
+            try {
+              const drBody = await dr.value.clone().json();
+              const list = Array.isArray(drBody?.cfDrift) ? drBody.cfDrift : [];
+              cfDriftCount = list.length;
+              cfDriftNames = list.map(e => e.name || e.trashId).filter(Boolean);
+            } catch (_) { /* leave cfDriftCount=0 on parse failure */ }
           }
-          this.showToast(msg, 'error', 4000);
-          return;
+          // Refresh the Sync Rules → Custom Formats sub-tab cache if it
+          // was previously loaded so the row pills update right away
+          // when the user is already viewing the sub-tab.
+          if (this.cfSyncRulesLoaded?.[this.activeAppType]) {
+            this.loadCFSyncRules(this.activeAppType);
+          }
         }
-        // Refresh state so any newly-detected pendingChanges show up
-        await this.loadTrashStatus();
-        try {
-          const ps = await fetch('/api/profile-sync');
-          if (ps.ok) {
-            const data = await ps.json();
-            if (this.config.profileSync) {
-              this.config.profileSync.lastRun = data.lastRun || '';
-              this.config.profileSync.upstreamHead = data.upstreamHead || '';
-              this.config.profileSync.localHead = data.localHead || '';
+        if (checkTrash) {
+          const r = tr.status === 'fulfilled' ? tr.value : null;
+          if (!r || !r.ok) {
+            let msg = 'TRaSH check failed';
+            if (r) {
+              try { const data = await r.json(); if (data && data.error) msg = data.error; } catch {}
             }
+            this.showToast(msg, 'error', 4000);
+            return;
           }
-        } catch {}
-        await this.loadAutoSyncRules();
-        // Compose informative toast based on post-check state.
-        const upstream = this.config?.profileSync?.upstreamHead || '';
-        const local = this.config?.profileSync?.localHead || '';
-        // Length-normalised compare (matches backend gate)
-        let upstreamAhead = false;
-        if (upstream && local) {
-          const len = Math.min(upstream.length, local.length);
-          upstreamAhead = upstream.slice(0, len) !== local.slice(0, len);
+          // Refresh state so any newly-detected pendingChanges show up
+          await this.loadTrashStatus();
+          try {
+            const ps = await fetch('/api/profile-sync');
+            if (ps.ok) {
+              const data = await ps.json();
+              if (this.config.profileSync) {
+                this.config.profileSync.lastRun = data.lastRun || '';
+                this.config.profileSync.upstreamHead = data.upstreamHead || '';
+                this.config.profileSync.localHead = data.localHead || '';
+              }
+            }
+          } catch {}
         }
+        await this.loadAutoSyncRules();
         // Resolve rule → human-readable label (Arr profile name preferred,
         // falls back to the rule's tracked profile name).
         const ruleLabel = r => {
@@ -7029,7 +7034,7 @@ export default {
         const rulesByStatus = status => (this.autoSyncRules || []).filter(r =>
           !r.orphanedAt && this.v3RuleStatus(r) === status
         );
-        const rulesWithDrift = rulesByStatus('out-of-sync');
+        const rulesWithDrift = checkDrift ? rulesByStatus('out-of-sync') : [];
         const driftRuleCount = rulesWithDrift.length;
         const driftLine = driftFailed
           ? 'Arr drift check failed'
@@ -7042,28 +7047,38 @@ export default {
         const cfDriftLine = cfDriftCount > 0
           ? `${cfDriftCount} custom format${cfDriftCount === 1 ? '' : 's'} with Arr drift:\n${cfDriftNames.slice(0, 5).map(n => `• ${n}`).join('\n')}${cfDriftNames.length > 5 ? `\n• +${cfDriftNames.length - 5} more` : ''}`
           : '';
+        const driftChannels = [driftLine, cfDriftLine].filter(Boolean);
+        if (!checkTrash) {
+          if (driftChannels.length > 0) {
+            this.showToast(driftChannels.join('\n\n'), driftFailed ? 'warning' : 'info', 7000);
+          } else {
+            this.showToast('No Arr drift found. Radarr/Sonarr match your sync rules', 'success', 3000);
+          }
+          return;
+        }
+        // Length-normalised compare (matches backend gate)
+        const upstream = this.config?.profileSync?.upstreamHead || '';
+        const local = this.config?.profileSync?.localHead || '';
+        let upstreamAhead = false;
+        if (upstream && local) {
+          const len = Math.min(upstream.length, local.length);
+          upstreamAhead = upstream.slice(0, len) !== local.slice(0, len);
+        }
         if (!upstreamAhead) {
-          const channels = [];
-          if (driftRuleCount > 0) channels.push(driftLine);
-          if (cfDriftCount > 0) channels.push(cfDriftLine);
-          if (driftFailed) channels.push(driftLine);
-          if (channels.length > 0) {
-            this.showToast(`TRaSH up to date\n\n${channels.join('\n\n')}`, driftFailed ? 'warning' : 'info', 7000);
+          if (driftChannels.length > 0) {
+            this.showToast(`TRaSH up to date\n\n${driftChannels.join('\n\n')}`, driftFailed ? 'warning' : 'info', 7000);
           } else {
             this.showToast('TRaSH-Guides is up to date - no upstream changes', 'success', 3000);
           }
           return;
         }
+        const tail = driftChannels.length > 0 ? `\n\n${driftChannels.join('\n\n')}` : '';
         // Upstream ahead - same v3RuleStatus filter as drift, so toast
         // tally always matches what the row-level pills actually show.
         // Direct pendingChanges filter would include orphaned rules
         // with stale state that aren't rendered in the table.
         const affectedRules = rulesByStatus('updates');
         if (affectedRules.length === 0) {
-          const extras = [];
-          if (driftLine) extras.push(driftLine);
-          if (cfDriftLine) extras.push(cfDriftLine);
-          const tail = extras.length > 0 ? `\n\n${extras.join('\n\n')}` : '';
           this.showToast(`TRaSH has new commits but none affect your synced profiles${tail}`, 'info', 6000);
           return;
         }
@@ -7087,10 +7102,6 @@ export default {
         // Profile names on their own line for readability - long lists wrap
         // poorly when crammed after the header.
         const updateLine = `Found ${cfLabel} affecting ${updLabel}:\n${namesShort(affectedRules)}`;
-        const extras = [];
-        if (driftLine) extras.push(driftLine);
-        if (cfDriftLine) extras.push(cfDriftLine);
-        const tail = extras.length > 0 ? `\n\n${extras.join('\n\n')}` : '';
         this.showToast(`${updateLine}\n\nUse Update all / Update profile to apply${tail}`, 'info', 7000);
       } catch (e) {
         this.showToast('Check failed (network error)', 'error', 4000);

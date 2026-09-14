@@ -9,7 +9,7 @@ Show Clonarr stats on your [gethomepage](https://gethomepage.dev) dashboard.
 ## What you need
 
 1. Your Clonarr address (e.g. `http://192.168.1.10:6060`)
-2. Your Clonarr **API key** — copy it from **Settings → API**
+2. Your Clonarr **API key**, copied from **Settings → Security**
 
 ## Add to your `services.yaml`
 

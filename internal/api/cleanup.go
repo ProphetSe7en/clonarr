@@ -950,7 +950,7 @@ func scanUnusedByClonarr(app *core.App, client *arr.ArrClient, inst core.Instanc
 	// false positive risk, so refuse the scan with a clear remediation.
 	ad := app.Trash.GetAppData(inst.Type)
 	if ad == nil {
-		return nil, fmt.Errorf("TRaSH guide data is not loaded for %s — Clonarr cannot determine what's managed without it. Check Settings → TRaSH-Guides and ensure the repository pull has completed successfully", inst.Type)
+		return nil, fmt.Errorf("TRaSH-Guides data is not loaded for %s, so Clonarr cannot tell which custom formats it manages. Check Settings → TRaSH-Guides and make sure a pull has finished", inst.Type)
 	}
 
 	cfs, err := client.ListCustomFormats()
