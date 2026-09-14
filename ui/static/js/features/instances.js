@@ -248,17 +248,14 @@ export default {
       this.modalTestResult = 'testing';
       try {
         const formData = this.normalizedInstanceForm();
-        let r;
-        if (this.editingInstance && !formData.apiKey) {
-          // Use saved instance endpoint, which has the real API key.
-          r = await fetch(`/api/instances/${this.editingInstance.id}/test`, { method: 'POST' });
-        } else {
-          r = await fetch('/api/test-connection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: formData.url, apiKey: formData.apiKey, externalAuth: formData.externalAuth, username: formData.username, password: formData.password })
-          });
-        }
+        // Always test what is typed in the form. When editing, a blank API key
+        // or password means "keep the saved one", so send the instance id and
+        // the backend fills those in from the saved instance.
+        const r = await fetch('/api/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instanceId: this.editingInstance?.id || '', url: formData.url, apiKey: formData.apiKey, externalAuth: formData.externalAuth, username: formData.username, password: formData.password })
+        });
         const data = await r.json();
         if (!r.ok) {
           this.modalTestResult = { connected: false, error: data.error || 'Request failed' };

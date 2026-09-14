@@ -264,18 +264,128 @@ func TestHandleTestConnectionRejectsWhitespaceRequiredFields(t *testing.T) {
 	}
 }
 
+// TestHandleTestConnectionUsesStoredSecretsForEditedURL covers testing an
+// edited instance: the form sends the new URL with a blank or masked API key
+// and password, and the test must reach the NEW URL with the SAVED secrets.
+func TestHandleTestConnectionUsesStoredSecretsForEditedURL(t *testing.T) {
+	cases := []struct {
+		name     string
+		apiKey   string
+		password string
+	}{
+		{"blank secrets", "", ""},
+		{"masked secrets", maskKey("saved-api-key-1234"), maskKey("saved-password-5678")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotKey, gotUser, gotPass string
+			arrServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotKey = r.Header.Get("X-Api-Key")
+				gotUser, gotPass, _ = r.BasicAuth()
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"appName":"Radarr","version":"6.0.0"}`))
+			}))
+			defer arrServer.Close()
+
+			app := setupTestApp(t)
+			app.HTTPClient = arrServer.Client()
+			existing, err := app.Config.AddInstance(core.Instance{
+				Name:         "Radarr",
+				Type:         "radarr",
+				URL:          "http://old-address.invalid:7878",
+				APIKey:       "saved-api-key-1234",
+				ExternalAuth: true,
+				Username:     "saved-user",
+				Password:     "saved-password-5678",
+			})
+			if err != nil {
+				t.Fatalf("seed instance: %v", err)
+			}
+			server := &Server{Core: app}
+			req := httptest.NewRequest(http.MethodPost, "/api/test-connection", instanceJSON(t, map[string]any{
+				"instanceId":   existing.ID,
+				"url":          arrServer.URL,
+				"apiKey":       tc.apiKey,
+				"externalAuth": true,
+				"username":     "new-user",
+				"password":     tc.password,
+			}))
+			w := httptest.NewRecorder()
+
+			server.handleTestConnection(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d (body %s)", w.Code, http.StatusOK, w.Body.String())
+			}
+			var resp map[string]any
+			if err := json.NewDecoder(w.Result().Body).Decode(&resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp["connected"] != true {
+				t.Fatalf("connected = %v, want true (error %v)", resp["connected"], resp["error"])
+			}
+			if gotKey != "saved-api-key-1234" {
+				t.Errorf("X-Api-Key = %q, want the saved key", gotKey)
+			}
+			if gotUser != "new-user" || gotPass != "saved-password-5678" {
+				t.Errorf("basic auth = %q/%q, want the form username with the saved password", gotUser, gotPass)
+			}
+		})
+	}
+}
+
+func TestHandleTestConnectionUnknownInstanceStillRequiresAPIKey(t *testing.T) {
+	app := setupTestApp(t)
+	server := &Server{Core: app}
+	req := httptest.NewRequest(http.MethodPost, "/api/test-connection", instanceJSON(t, map[string]string{
+		"instanceId": "does-not-exist",
+		"url":        "http://arr.local:7878",
+		"apiKey":     "",
+	}))
+	w := httptest.NewRecorder()
+
+	server.handleTestConnection(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandleCreateInstanceRejectsMetadataAddress(t *testing.T) {
+	app := setupTestApp(t)
+	server := &Server{Core: app}
+	req := httptest.NewRequest(http.MethodPost, "/api/instances", instanceJSON(t, map[string]string{
+		"name":   "Radarr",
+		"type":   "radarr",
+		"url":    "169.254.169.254",
+		"apiKey": "secret-key",
+	}))
+	w := httptest.NewRecorder()
+
+	server.handleCreateInstance(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 func TestIsBlockedHost(t *testing.T) {
 	cases := []struct {
 		name        string
 		url         string
 		wantBlocked bool
 	}{
-		{"loopback v4", "http://127.0.0.1/", true},
-		{"loopback v6", "http://[::1]/", true},
+		{"loopback v4", "http://127.0.0.1/", false},
+		{"loopback v6", "http://[::1]/", false},
+		{"localhost name", "http://localhost:7878/", false},
+		{"v4-mapped loopback", "http://[::ffff:127.0.0.1]/", false},
+		{"no scheme", "radarr.invalid:7878", false},
 		{"aws metadata", "http://169.254.169.254/", true},
-		{"link-local v4", "http://169.254.1.1/", true},
-		{"unspecified", "http://0.0.0.0/", true},
-		{"v4-mapped loopback", "http://[::ffff:127.0.0.1]/", true},
+		{"metadata without scheme", "169.254.169.254", true},
+		{"v4-mapped metadata", "http://[::ffff:169.254.169.254]/", true},
+		{"ecs task metadata", "http://169.254.170.2/", true},
+		{"aws ipv6 metadata", "http://[fd00:ec2::254]/", true},
+		{"other link-local v4", "http://169.254.1.1/", false},
 		{"public v4", "http://1.1.1.1/", false},
 		{"public v6", "http://[2606:4700:4700::1111]/", false},
 		{"rfc1918", "http://10.0.0.5/", false},

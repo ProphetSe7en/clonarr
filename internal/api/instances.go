@@ -63,6 +63,10 @@ func (s *Server) handleCreateInstance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "username and password are required when external authentication is enabled")
 		return
 	}
+	if blocked, reason := isBlockedHost(inst.URL); blocked {
+		writeError(w, 400, reason)
+		return
+	}
 
 	created, err := s.Core.Config.AddInstance(inst)
 	if err != nil {
@@ -109,6 +113,10 @@ func (s *Server) handleUpdateInstance(w http.ResponseWriter, r *http.Request) {
 	}
 	if inst.ExternalAuth && inst.Username == "" {
 		writeError(w, 400, "username is required when external authentication is enabled")
+		return
+	}
+	if blocked, reason := isBlockedHost(inst.URL); blocked {
+		writeError(w, 400, reason)
 		return
 	}
 
@@ -232,12 +240,18 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// isBlockedHost reports whether rawURL should be rejected at validation time.
-// A host is blocked when it parses, resolves to at least one address, and
-// EVERY resolved address is non-routable. If at least one address is routable
-// the host is allowed — the dialer will pick a usable one. DNS failures pass
-// through so the connection-error path surfaces the real problem.
+// isBlockedHost reports whether an Arr instance URL should be rejected when it
+// is tested or saved. Radarr and Sonarr normally live on the local network, on
+// the same host (localhost, host networking) or behind a shared network
+// container, so loopback and private addresses are allowed. Only cloud
+// metadata endpoints are refused. This is a guardrail against pointing the
+// stored API key at a metadata service, not a security boundary: the check
+// resolves DNS once, and every /api route already requires login. DNS failures
+// pass through so the connection error explains the real problem.
 func isBlockedHost(rawURL string) (bool, string) {
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		rawURL = "http://" + rawURL
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return true, "Invalid URL"
@@ -247,43 +261,45 @@ func isBlockedHost(rawURL string) (bool, string) {
 		return true, "URL has no host"
 	}
 	ips, err := net.LookupHost(host)
-	if err != nil || len(ips) == 0 {
-		return false, "" // allow — DNS failure surfaces as connection error
+	if err != nil {
+		return false, ""
 	}
-	sawAny := false
 	for _, ipStr := range ips {
-		ip := net.ParseIP(ipStr)
-		if ip == nil {
-			continue
-		}
-		if v4 := ip.To4(); v4 != nil { // normalize ::ffff:1.2.3.4
-			ip = v4
-		}
-		sawAny = true
-		if !isNonRoutable(ip) {
-			return false, "" // at least one routable address — allow
+		if ip := net.ParseIP(ipStr); ip != nil && isMetadataIP(ip) {
+			return true, "This address points at a cloud metadata service, not a Radarr or Sonarr instance"
 		}
 	}
-	if !sawAny {
-		return false, "" // unparseable IPs only — let dialer fail
-	}
-	return true, "All resolved addresses are non-routable (loopback, link-local, or cloud-metadata)"
+	return false, ""
 }
 
-func isNonRoutable(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-		return true
-	}
-	if ip.Equal(net.ParseIP("169.254.169.254")) {
-		return true
+// metadataIPs are the well-known cloud instance metadata endpoints: AWS, GCP,
+// Azure and most others on 169.254.169.254, AWS ECS task metadata on
+// 169.254.170.2, and the AWS IPv6 endpoint.
+var metadataIPs = []net.IP{
+	net.ParseIP("169.254.169.254"),
+	net.ParseIP("169.254.170.2"),
+	net.ParseIP("fd00:ec2::254"),
+}
+
+func isMetadataIP(ip net.IP) bool {
+	for _, m := range metadataIPs {
+		if ip.Equal(m) { // Equal also matches the IPv4-mapped IPv6 form
+			return true
+		}
 	}
 	return false
 }
 
-// handleTestConnection tests connectivity without requiring a saved instance.
+// handleTestConnection tests the connection details typed into the instance
+// form, before they are saved. When editing an existing instance the form
+// leaves the API key and password blank to keep the stored ones, so the
+// request carries instanceId and blank or masked secrets are filled in from
+// the saved instance, the same way handleUpdateInstance does on save. Every
+// other field (URL, external auth, username) comes from the form.
 func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	var req struct {
+		InstanceID   string `json:"instanceId"`
 		URL          string `json:"url"`
 		APIKey       string `json:"apiKey"`
 		ExternalAuth bool   `json:"externalAuth"`
@@ -298,6 +314,14 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	req.APIKey = strings.TrimSpace(req.APIKey)
 	req.Username = strings.TrimSpace(req.Username)
 	req.Password = strings.TrimSpace(req.Password)
+	if existing, ok := s.Core.Config.GetInstance(strings.TrimSpace(req.InstanceID)); ok {
+		if req.APIKey == "" || isMasked(req.APIKey) {
+			req.APIKey = existing.APIKey
+		}
+		if req.Password == "" || isMasked(req.Password) {
+			req.Password = existing.Password
+		}
+	}
 	if req.URL == "" || req.APIKey == "" {
 		writeError(w, 400, "url and apiKey are required")
 		return
@@ -319,7 +343,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errMsg := err.Error()
 		if core.IsConnectionError(err) {
-			errMsg = "Instance is not reachable — check that the URL is correct and the instance is running"
+			errMsg = "Instance is not reachable. Check that the URL is correct and the instance is running"
 		}
 		writeJSON(w, map[string]any{
 			"connected": false,

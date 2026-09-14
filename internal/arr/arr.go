@@ -3,6 +3,7 @@ package arr
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -67,8 +68,27 @@ func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("read response: %w", err)
 	}
+	// The Arr API only answers with JSON. A successful response that is an
+	// HTML page means the URL reaches something else: a reverse proxy's
+	// default page, a login page in front of the instance, or the web UI
+	// because the URL base is missing. Say so instead of failing later with
+	// "invalid character '<'".
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 && isHTMLResponse(resp.Header.Get("Content-Type"), data) {
+		return nil, resp.StatusCode, ErrHTMLResponse
+	}
 
 	return data, resp.StatusCode, nil
+}
+
+// ErrHTMLResponse is returned when the instance URL answers with a web page
+// instead of the Radarr/Sonarr API.
+var ErrHTMLResponse = errors.New("got a web page instead of the Radarr/Sonarr API. Check the URL, including any URL base, and any login page in front of the instance")
+
+func isHTMLResponse(contentType string, body []byte) bool {
+	if strings.Contains(strings.ToLower(contentType), "text/html") {
+		return true
+	}
+	return bytes.HasPrefix(bytes.TrimLeft(body, " \t\r\n\ufeff"), []byte("<"))
 }
 
 // --- System ---
