@@ -6943,13 +6943,17 @@ export default {
 
     async checkTrashUpdates() {
       if (this.checkingUpdates) return;
-      // Check runs what Settings > Auto-sync > "What to check for" has turned
-      // on. Local Source mode has no upstream, so the TRaSH-Guides part is
-      // skipped there (its checkbox is hidden in that mode).
+      // Check runs what Settings → Auto-sync → "What to check for" has turned
+      // on, split the same way as the scheduled check: "TRaSH-Guides updates"
+      // covers new guide commits and naming format updates, "Changes made
+      // directly in Radarr/Sonarr" covers profile, custom format and naming
+      // drift. Local Source mode has no upstream, so there only the naming
+      // update part of "TRaSH-Guides updates" runs (its checkbox is hidden).
       const sources = this.config?.profileSync?.sources || {};
-      const checkTrash = !!sources.trashUpstream && !this.localMode();
+      const trashUpdates = !!sources.trashUpstream;
+      const checkTrash = trashUpdates && !this.localMode();
       const checkDrift = !!sources.arrDrift;
-      if (!checkTrash && !checkDrift) {
+      if (!trashUpdates && !checkDrift) {
         const which = this.localMode()
           ? 'Changes made directly in Radarr/Sonarr'
           : 'TRaSH-Guides updates or Changes made directly in Radarr/Sonarr';
@@ -6958,19 +6962,22 @@ export default {
       }
       this.checkingUpdates = true;
       try {
-        // The two checks run in parallel. Both are detection-only (no Arr
-        // writes), so running them concurrently is safe.
+        // The two requests run in parallel. Both are detection-only (no Arr
+        // writes), so running them concurrently is safe. The drift request
+        // also refreshes naming markers, with each half following its toggle.
+        const driftURL = `/api/drift/check?drift=${checkDrift ? 1 : 0}&namingUpdate=${trashUpdates ? 1 : 0}`;
         const [tr, dr] = await Promise.allSettled([
           checkTrash ? fetch('/api/profile-sync/check', { method: 'POST' }) : Promise.resolve(null),
-          checkDrift ? fetch('/api/drift/check', { method: 'POST' }) : Promise.resolve(null),
+          fetch(driftURL, { method: 'POST' }),
         ]);
         let driftFailed = false;
         let cfDriftCount = 0;
         let cfDriftNames = [];
+        const driftOK = dr.status === 'fulfilled' && dr.value && dr.value.ok;
         if (checkDrift) {
-          if (dr.status === 'rejected' || (dr.value && !dr.value.ok)) {
+          if (!driftOK) {
             driftFailed = true;
-          } else if (dr.value && dr.value.ok) {
+          } else {
             // Drift response carries both profile drift (`results`) AND
             // CF drift (`cfDrift`) since the Phase 1 cf-drift work. The
             // toast surfaces the CF channel as a separate line so the
@@ -6990,29 +6997,33 @@ export default {
             this.loadCFSyncRules(this.activeAppType);
           }
         }
+        // Naming markers live on the instances; refresh them after the pass.
+        if (driftOK) await this.loadInstances();
+        // A failed TRaSH-Guides check is reported together with the drift
+        // result instead of hiding it.
+        let trashError = '';
         if (checkTrash) {
           const r = tr.status === 'fulfilled' ? tr.value : null;
           if (!r || !r.ok) {
-            let msg = 'TRaSH check failed';
+            trashError = 'TRaSH check failed';
             if (r) {
-              try { const data = await r.json(); if (data && data.error) msg = data.error; } catch {}
+              try { const data = await r.json(); if (data && data.error) trashError = data.error; } catch {}
             }
-            this.showToast(msg, 'error', 4000);
-            return;
-          }
-          // Refresh state so any newly-detected pendingChanges show up
-          await this.loadTrashStatus();
-          try {
-            const ps = await fetch('/api/profile-sync');
-            if (ps.ok) {
-              const data = await ps.json();
-              if (this.config.profileSync) {
-                this.config.profileSync.lastRun = data.lastRun || '';
-                this.config.profileSync.upstreamHead = data.upstreamHead || '';
-                this.config.profileSync.localHead = data.localHead || '';
+          } else {
+            // Refresh state so any newly-detected pendingChanges show up
+            await this.loadTrashStatus();
+            try {
+              const ps = await fetch('/api/profile-sync');
+              if (ps.ok) {
+                const data = await ps.json();
+                if (this.config.profileSync) {
+                  this.config.profileSync.lastRun = data.lastRun || '';
+                  this.config.profileSync.upstreamHead = data.upstreamHead || '';
+                  this.config.profileSync.localHead = data.localHead || '';
+                }
               }
-            }
-          } catch {}
+            } catch {}
+          }
         }
         await this.loadAutoSyncRules();
         // Resolve rule → human-readable label (Arr profile name preferred,
@@ -7048,11 +7059,19 @@ export default {
           ? `${cfDriftCount} custom format${cfDriftCount === 1 ? '' : 's'} with Arr drift:\n${cfDriftNames.slice(0, 5).map(n => `• ${n}`).join('\n')}${cfDriftNames.length > 5 ? `\n• +${cfDriftNames.length - 5} more` : ''}`
           : '';
         const driftChannels = [driftLine, cfDriftLine].filter(Boolean);
+        if (trashError) {
+          this.showToast([trashError, ...driftChannels].join('\n\n'), 'error', 7000);
+          return;
+        }
         if (!checkTrash) {
           if (driftChannels.length > 0) {
             this.showToast(driftChannels.join('\n\n'), driftFailed ? 'warning' : 'info', 7000);
+          } else if (checkDrift) {
+            this.showToast('No Arr drift found. Radarr/Sonarr match your sync rules.', 'success', 3000);
+          } else if (driftOK) {
+            this.showToast('Naming formats checked against your local files. Turn on Changes made directly in Radarr/Sonarr in Settings → Auto-sync to also check for Arr drift.', 'info', 6000);
           } else {
-            this.showToast('No Arr drift found. Radarr/Sonarr match your sync rules', 'success', 3000);
+            this.showToast('Naming check failed', 'error', 4000);
           }
           return;
         }

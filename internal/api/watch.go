@@ -134,19 +134,33 @@ func (s *Server) handleProfileSyncCheck(w http.ResponseWriter, r *http.Request) 
 // Returns the per-rule DriftResult list inline so the caller (frontend
 // "Check drift now" button OR curl during development) gets immediate
 // feedback. The aggregate also persists to DriftWatch.LastResult.
+//
+// Optional query parameters pick what runs, the same split the scheduled
+// watcher uses: drift=0 skips profile, CF and naming drift; namingUpdate=0
+// skips naming guide-update detection. Both default to on. The sidebar Check
+// passes the Settings > Auto-sync source toggles here, so naming updates follow
+// "TRaSH-Guides updates" and everything else follows "Changes made directly in
+// Radarr/Sonarr". Both halves run in one naming pass so fields that drifted
+// AND have a guide update still get their combined notification.
 func (s *Server) handleDriftCheck(w http.ResponseWriter, r *http.Request) {
 	if s.Core.DriftRunner == nil {
 		writeError(w, 500, "drift runner not initialised")
 		return
 	}
-	results, err := s.Core.DriftRunner.RunOnce(r.Context())
-	if err != nil {
-		writeError(w, 500, "drift check failed: "+err.Error())
-		return
+	checkDrift := r.URL.Query().Get("drift") != "0"
+	checkNamingUpdate := r.URL.Query().Get("namingUpdate") != "0"
+	results := []core.DriftResult{}
+	if checkDrift {
+		var err error
+		results, err = s.Core.DriftRunner.RunOnce(r.Context())
+		if err != nil {
+			writeError(w, 500, "drift check failed: "+err.Error())
+			return
+		}
 	}
-	// Refresh naming drift+update too: the naming pass is no longer bundled into
-	// RunOnce, and this manual Check bypasses the source gate, so check both halves.
-	_ = s.Core.DriftRunner.RunNamingDrift(true, true)
+	if checkDrift || checkNamingUpdate {
+		_ = s.Core.DriftRunner.RunNamingDrift(checkDrift, checkNamingUpdate)
+	}
 
 	// Read per-instance CF drift fingerprints persisted by the pass we
 	// just ran. The frontend renders a per-CF status pill (one entry

@@ -584,8 +584,9 @@ func (d *DriftRunner) runNamingDrift(checkDrift, checkUpdate bool) error {
 }
 
 // RunNamingDriftOnce runs ONLY the naming drift+update pass (not CF/profile drift),
-// for the naming-section "Check" and the universal manual Check — both check naming
-// fully (drift AND update), regardless of the scheduled-source toggles. Serialized
+// for the naming-section "Check", which checks naming fully (drift AND update)
+// regardless of the scheduled-source toggles. The sidebar Check calls
+// RunNamingDrift through /api/drift/check with the toggles instead. Serialized
 // with the same mutex as RunOnce.
 func (d *DriftRunner) RunNamingDriftOnce() error {
 	return d.RunNamingDrift(true, true)
