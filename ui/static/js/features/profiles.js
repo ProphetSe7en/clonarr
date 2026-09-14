@@ -6202,6 +6202,7 @@ export default {
           arr.splice(targetIdx, 1);
         } else {
           const defaultName = `${srcItem.name} | ${tgtItem.name}`;
+          const srcId = srcItem._id, tgtId = tgtItem._id;
           this.inputModal = {
             show: true,
             title: 'New Quality Group',
@@ -6211,17 +6212,23 @@ export default {
             confirmLabel: 'Create',
             onConfirm: (groupName) => {
               if (!groupName) return;
+              // The array is reassigned right after this dialog opens, so `arr`
+              // above is stale by now. Work on the live array and find the two
+              // rows by _id, not by their index at drop time.
+              const live = this._qsArr(target).slice();
+              const srcNow = live.findIndex(it => it._id === srcId);
+              const tgtNow = live.findIndex(it => it._id === tgtId);
+              if (srcNow < 0 || tgtNow < 0) return;
               const newGroup = {
                 _id: ++this._qsIdCounter,
                 name: groupName,
                 allowed: true,
                 items: [srcItem.name, tgtItem.name],
               };
-              const indices = [src, targetIdx].sort((a, b) => b - a);
-              indices.forEach(i => arr.splice(i, 1));
-              const insertAt = Math.min(src, targetIdx);
-              arr.splice(insertAt, 0, newGroup);
+              [srcNow, tgtNow].sort((a, b) => b - a).forEach(i => live.splice(i, 1));
+              live.splice(Math.min(srcNow, tgtNow), 0, newGroup);
               this.qualityStructureExpanded[newGroup._id] = true;
+              this._qsSetArr(target, live);
             },
             onCancel: null,
           };
@@ -6229,6 +6236,9 @@ export default {
       } else if (d.kind === 'member') {
         const oldGroup = arr[d.srcGroup];
         if (!oldGroup || !oldGroup.items) { this.qsResetDrag(); return; }
+        // Copy of the rows before the member is pulled out, so cancelling the
+        // "New Quality Group" dialog below puts the member back in its group.
+        const before = arr.map(it => (it.items ? { ...it, items: [...it.items] } : { ...it }));
         const memberName = oldGroup.items.splice(d.srcMember, 1)[0];
         let tIdx = targetIdx;
         if (oldGroup.items.length === 0) {
@@ -6238,11 +6248,12 @@ export default {
           arr.splice(d.srcGroup, 1, { _id: ++this._qsIdCounter, name: oldGroup.items[0], allowed: oldGroup.allowed });
         }
         const tgtItem = arr[tIdx];
-        if (!tgtItem) { this.qsResetDrag(); return; }
+        if (!tgtItem) { this._qsSetArr(target, before); this.qsResetDrag(); return; }
         if (tgtItem.items) {
           tgtItem.items.push(memberName);
         } else {
           const defaultName = `${memberName} | ${tgtItem.name}`;
+          const tgtId = tgtItem._id;
           this.inputModal = {
             show: true,
             title: 'New Quality Group',
@@ -6251,18 +6262,22 @@ export default {
             placeholder: 'Group name',
             confirmLabel: 'Create',
             onConfirm: (groupName) => {
-              if (!groupName) return;
+              // Same stale-array trap as above: replace the target row in the
+              // live array, found by _id.
+              const live = this._qsArr(target).slice();
+              const tgtNow = live.findIndex(it => it._id === tgtId);
+              if (!groupName || tgtNow < 0) { this._qsSetArr(target, before); return; }
               const newGroup = {
                 _id: ++this._qsIdCounter,
                 name: groupName,
                 allowed: true,
                 items: [memberName, tgtItem.name],
               };
-              arr.splice(tIdx, 1, newGroup);
+              live.splice(tgtNow, 1, newGroup);
               this.qualityStructureExpanded[newGroup._id] = true;
-              this._qsSetArr(target, this._qsArr(target).slice());
+              this._qsSetArr(target, live);
             },
-            onCancel: null,
+            onCancel: () => { this._qsSetArr(target, before); },
           };
         }
       }
