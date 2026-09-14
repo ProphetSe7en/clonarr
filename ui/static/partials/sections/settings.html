@@ -372,13 +372,17 @@
           <div class="setting-row">
             <div class="setting-label">What to check for</div>
             <div class="setting-value" style="flex-direction:column;align-items:flex-start;gap:8px">
-              <label x-show="!localMode()" style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px">
-                <input type="checkbox" x-model="config.profileSync.sources.trashUpstream" @change="saveProfileSync()" style="margin-top:2px">
-                <span>
-                  <span style="font-weight:500">TRaSH-Guides updates</span>
-                  <span style="display:block;font-size:12px;color:var(--text-muted);margin-top:1px">When the guide publishes new custom formats, score changes, naming schemes, or profile updates upstream.</span>
-                </span>
-              </label>
+              <!-- x-show on a wrapper: Alpine clears the inline display when it
+                   shows an element, which would drop the label's display:flex. -->
+              <div x-show="!localMode()">
+                <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px">
+                  <input type="checkbox" x-model="config.profileSync.sources.trashUpstream" @change="saveProfileSync()" style="margin-top:2px">
+                  <span>
+                    <span style="font-weight:500">TRaSH-Guides updates</span>
+                    <span style="display:block;font-size:12px;color:var(--text-muted);margin-top:1px">When the guide publishes new custom formats, score changes, naming schemes, or profile updates upstream.</span>
+                  </span>
+                </label>
+              </div>
               <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:13px">
                 <input type="checkbox" x-model="config.profileSync.sources.arrDrift" @change="saveProfileSync()" style="margin-top:2px">
                 <span>
@@ -652,12 +656,16 @@
               <div style="margin-top:8px" x-show="!securityRegenConfirm">
                 <button class="btn btn-danger" style="font-size:12px" @click="securityRegenConfirm = true">Regenerate API Key</button>
               </div>
-              <div style="margin-top:8px;display:flex;gap:8px" x-show="securityRegenConfirm">
-                <button class="btn btn-danger" @click="regenerateApiKey()" :disabled="securityRegenerating">
-                  <span x-show="!securityRegenerating">Confirm regenerate (old key stops working immediately)</span>
-                  <span x-show="securityRegenerating">Regenerating...</span>
-                </button>
-                <button class="btn btn-secondary" @click="securityRegenConfirm = false">Cancel</button>
+              <!-- x-show on the outer div: Alpine clears the inline display
+                   when it shows an element, which would drop display:flex. -->
+              <div style="margin-top:8px" x-show="securityRegenConfirm">
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-danger" @click="regenerateApiKey()" :disabled="securityRegenerating">
+                    <span x-show="!securityRegenerating">Confirm regenerate (old key stops working immediately)</span>
+                    <span x-show="securityRegenerating">Regenerating...</span>
+                  </button>
+                  <button class="btn btn-secondary" @click="securityRegenConfirm = false">Cancel</button>
+                </div>
               </div>
             </div>
           </div>
