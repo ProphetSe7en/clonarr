@@ -245,8 +245,10 @@ func (c *ArrClient) UpdateProfile(profile *ArrQualityProfile) error {
 
 // ArrQualityDefinition represents a quality size definition.
 // Sonarr/Radarr return null for maxSize/preferredSize when set to "Unlimited"
-// (slider all the way right). Using *float64 lets us distinguish null (Unlimited)
-// from 0.0 (explicit zero). The frontend shows "Unlimited" for nil values.
+// (slider all the way right), and omit the field from the JSON response
+// entirely. Using *float64 lets us distinguish null (Unlimited) from 0.0
+// (explicit zero). nil is not "unset" — see QualitySizeLimits for why it must
+// be compared against the limit rather than against 0.
 type ArrQualityDefinition struct {
 	ID            int              `json:"id"`
 	Quality       ArrQualityRef    `json:"quality"`
@@ -267,6 +269,64 @@ func FloatVal(p *float64) float64 {
 // FloatPtr returns a pointer to a float64 value.
 func FloatPtr(v float64) *float64 {
 	return &v
+}
+
+// QualitySizeLimits holds the max/preferred sizes an instance treats as
+// "Unlimited" — the slider pushed all the way right. Once a value reaches its
+// limit, Radarr/Sonarr store it as null and omit the field when serialising,
+// so a nil size means "at the limit", never "unset" and never 0.
+//
+// The values match Radarr >= 5.9.0.9049 and Sonarr >= 4.0.8.2158, which raised
+// the old 400/399 (Radarr) and 400/395 (Sonarr) ceilings. Current TRaSH guide
+// data targets the raised limits — the movie sizes ship preferred 1999 and
+// max 2000 — and Recyclarr resolves them the same way, so Clonarr and
+// Recyclarr write identical values to a shared instance.
+type QualitySizeLimits struct {
+	Max       float64
+	Preferred float64
+}
+
+// QualitySizeLimitsFor returns the limits for an instance type ("radarr" or
+// "sonarr"). Anything else gets the Radarr limits, matching what the quality
+// size feature assumed before limits were modelled at all.
+func QualitySizeLimitsFor(appType string) QualitySizeLimits {
+	if strings.EqualFold(appType, "sonarr") {
+		return QualitySizeLimits{Max: 1000, Preferred: 995}
+	}
+	return QualitySizeLimits{Max: 2000, Preferred: 1999}
+}
+
+// SizeOrLimit resolves a nullable size for comparison: nil means "Unlimited",
+// which is equivalent to limit. Reaching for FloatVal here instead turns every
+// Unlimited quality into 0.0 and makes it look permanently out of sync against
+// TRaSH, which is the bug this exists to prevent. MinSize has no Unlimited end,
+// so it keeps using FloatVal.
+func SizeOrLimit(p *float64, limit float64) float64 {
+	if p == nil {
+		return limit
+	}
+	return *p
+}
+
+// SizePtr converts a concrete size into the pointer form used in write bodies,
+// collapsing a value at or above limit to nil. Writing the number instead is
+// accepted by the instance but read back as null, so the quality would show as
+// out of sync on every following comparison.
+func SizePtr(v, limit float64) *float64 {
+	if v >= limit {
+		return nil
+	}
+	return &v
+}
+
+// NormalizeSize applies the same collapse to an already-nullable size, leaving
+// nil untouched. Used on definitions that arrive from the UI, which sends the
+// numeric TRaSH targets rather than null.
+func NormalizeSize(p *float64, limit float64) *float64 {
+	if p == nil {
+		return nil
+	}
+	return SizePtr(*p, limit)
 }
 
 type ArrQualityRef struct {

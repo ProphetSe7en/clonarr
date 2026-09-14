@@ -1418,6 +1418,16 @@ func (s *Server) handleSyncQualitySizes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// The UI sends the numeric TRaSH targets (preferred 1999 / max 2000 for
+	// Radarr). Collapse anything at or above the limit back to null, which is
+	// how the instance stores "Unlimited" — otherwise the value we just wrote
+	// reads back as null and the quality shows as out of sync again.
+	lim := arr.QualitySizeLimitsFor(inst.Type)
+	for i := range req.Definitions {
+		req.Definitions[i].PreferredSize = arr.NormalizeSize(req.Definitions[i].PreferredSize, lim.Preferred)
+		req.Definitions[i].MaxSize = arr.NormalizeSize(req.Definitions[i].MaxSize, lim.Max)
+	}
+
 	client := core.NewArrClientFor(inst, s.Core.HTTPClient)
 	if err := client.UpdateQualityDefinitions(req.Definitions); err != nil {
 		writeError(w, 502, "Sync failed: "+err.Error())
@@ -1458,6 +1468,7 @@ func (s *Server) buildQualitySizeDefs(inst core.Instance, qsType string) ([]arr.
 
 	cfg := s.Core.Config.Get()
 	overrides := cfg.QualitySizeOverrides[inst.ID]
+	lim := arr.QualitySizeLimitsFor(inst.Type)
 
 	var updated []arr.ArrQualityDefinition
 	for _, qs := range trashQS.Qualities {
@@ -1470,16 +1481,19 @@ func (s *Server) buildQualitySizeDefs(inst core.Instance, qsType string) ([]arr.
 		if def == nil {
 			continue
 		}
+		// nil max/preferred means the instance slider sits at "Unlimited",
+		// which equals the limit. Comparing it as 0 would report every
+		// Unlimited quality as drifted from TRaSH forever.
 		if math.Abs(arr.FloatVal(def.MinSize)-qs.Min) >= 0.05 ||
-			math.Abs(arr.FloatVal(def.PreferredSize)-qs.Preferred) >= 0.05 ||
-			math.Abs(arr.FloatVal(def.MaxSize)-qs.Max) >= 0.05 {
+			math.Abs(arr.SizeOrLimit(def.PreferredSize, lim.Preferred)-qs.Preferred) >= 0.05 ||
+			math.Abs(arr.SizeOrLimit(def.MaxSize, lim.Max)-qs.Max) >= 0.05 {
 			updated = append(updated, arr.ArrQualityDefinition{
 				ID:            def.ID,
 				Quality:       def.Quality,
 				Title:         def.Title,
 				MinSize:       arr.FloatPtr(qs.Min),
-				PreferredSize: arr.FloatPtr(qs.Preferred),
-				MaxSize:       arr.FloatPtr(qs.Max),
+				PreferredSize: arr.SizePtr(qs.Preferred, lim.Preferred),
+				MaxSize:       arr.SizePtr(qs.Max, lim.Max),
 			})
 		}
 	}
@@ -1625,6 +1639,7 @@ func (s *Server) AutoSyncQualitySizes() {
 
 		// Get overrides (Custom qualities to skip)
 		overrides := cfg.QualitySizeOverrides[instID]
+		lim := arr.QualitySizeLimitsFor(inst.Type)
 
 		var updated []arr.ArrQualityDefinition
 		for _, qs := range trashQS.Qualities {
@@ -1640,16 +1655,17 @@ func (s *Server) AutoSyncQualitySizes() {
 				continue
 			}
 
+			// See buildQualitySizeDefs: nil == "Unlimited" == limit, not 0.
 			if math.Abs(arr.FloatVal(def.MinSize)-qs.Min) >= 0.05 ||
-				math.Abs(arr.FloatVal(def.PreferredSize)-qs.Preferred) >= 0.05 ||
-				math.Abs(arr.FloatVal(def.MaxSize)-qs.Max) >= 0.05 {
+				math.Abs(arr.SizeOrLimit(def.PreferredSize, lim.Preferred)-qs.Preferred) >= 0.05 ||
+				math.Abs(arr.SizeOrLimit(def.MaxSize, lim.Max)-qs.Max) >= 0.05 {
 				updated = append(updated, arr.ArrQualityDefinition{
 					ID:            def.ID,
 					Quality:       def.Quality,
 					Title:         def.Title,
 					MinSize:       arr.FloatPtr(qs.Min),
-					PreferredSize: arr.FloatPtr(qs.Preferred),
-					MaxSize:       arr.FloatPtr(qs.Max),
+					PreferredSize: arr.SizePtr(qs.Preferred, lim.Preferred),
+					MaxSize:       arr.SizePtr(qs.Max, lim.Max),
 				})
 			}
 		}
