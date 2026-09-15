@@ -242,9 +242,8 @@
          toggle), whether or not Customize is on. Customize only unlocks CF
          editing further down; changes here are counted in the summary strip
          even with Customize off, and saving compares values with the profile
-         defaults as before. Each
-         field gets a small red reset-icon when the value differs from
-         the profile's TRaSH default. Reset-icon is the sole "modified"
+         defaults as before. Each field gets a small red reset-icon when the
+         value differs from the profile's TRaSH default. Reset-icon is the sole "modified"
          affordance - drop the orange .overridden color treatment in
          favour of action-affording iconography. -->
     <div class="sp-basics">
@@ -424,30 +423,32 @@
          everywhere; we don't say "Override mode" elsewhere in the UI
          and the inconsistency was confusing. -->
     <div class="sp-summary"
-         x-data="{ get _s() { return pdOverrideSummary(); } }">
-      <!-- The basics row is editable without Customize, so its changes are
-           counted here even when Customize is off. -->
-      <template x-if="!pdOverridesEnabled && _s.total === 0">
+         x-data="{ get _s() { return pdOverrideSummary(); },
+                   get _count() { return pdOverridesEnabled ? this._s.total : this._s.general + this._s.quality; } }">
+      <!-- The basics row is editable without Customize, so its changes
+           (General, Quality) are counted here even when Customize is off.
+           Everything else is only counted with Customize on, as before. -->
+      <template x-if="_count === 0 && !pdOverridesEnabled">
         <span class="sp-summary-status sp-summary-clean">&#10003; All values follow profile defaults</span>
       </template>
-      <template x-if="pdOverridesEnabled || _s.total > 0">
+      <template x-if="pdOverridesEnabled || _count > 0">
         <button class="sp-summary-status sp-summary-active"
                 @click="spActiveTab = 'overview'; spOverviewSection = 'diffs';"
                 x-tt="'Open Profile overview &rarr; Diffs to see exactly what deviates from the profile defaults.'">
-          <span class="sp-summary-lead" x-text="_s.total + ' customization' + (_s.total === 1 ? '' : 's')"></span>
+          <span class="sp-summary-lead" x-text="_count + ' customization' + (_count === 1 ? '' : 's')"></span>
           <template x-if="_s.general > 0">
             <span class="sp-summary-badge" x-text="'General: ' + _s.general"></span>
           </template>
           <template x-if="_s.quality > 0">
             <span class="sp-summary-badge" x-text="'Quality: ' + _s.quality"></span>
           </template>
-          <template x-if="_s.added > 0">
+          <template x-if="pdOverridesEnabled && _s.added > 0">
             <span class="sp-summary-badge" x-text="'Extra CFs: ' + _s.added"></span>
           </template>
-          <template x-if="_s.overridden > 0">
+          <template x-if="pdOverridesEnabled && _s.overridden > 0">
             <span class="sp-summary-badge" x-text="'Custom scores: ' + _s.overridden"></span>
           </template>
-          <template x-if="_s.excludedCFs > 0">
+          <template x-if="pdOverridesEnabled && _s.excludedCFs > 0">
             <span class="sp-summary-badge" x-text="'Excluded CFs: ' + _s.excludedCFs"></span>
           </template>
         </button>
@@ -455,7 +456,7 @@
       <button class="btn btn-sm sp-summary-action"
               style="border-color:var(--accent-red);color:var(--accent-red)"
               @click="$event.currentTarget.blur(); pdOverridesEnabled ? pdConfirmDisable() : spConfirmEnableCustomize()"
-              x-tt="pdOverridesEnabled ? 'Clear all customizations and revert this profile to TRaSH defaults' : 'Override profile defaults for language, scores, quality, and custom formats'"
+              x-tt="pdOverridesEnabled ? 'Clear all customizations and revert this profile to TRaSH defaults' : 'Change custom format scores and add or exclude custom formats beyond the profile defaults'"
               x-text="pdOverridesEnabled ? 'Reset to profile defaults' : 'Customize this profile'"></button>
       <!-- Additional-CF view toggle (Customize-gated): Combined folds additional
            formats into the profile categories; Split keeps the separate tab. -->

@@ -212,13 +212,12 @@ export default function baseState() {
     // main.js. The global tooltip element lives in partials/modals/tooltip.html.
     tt: { show: false, text: '', x: 0, y: 0, flip: false, placement: 'top' },
     selectedOptionalCFs: {},
-    // Profile detail - single global toggle that gates all override editing affordances.
-    // OFF (default): user sees a clean "All values follow profile defaults" summary;
-    // override cards (General, Quality, Overridden Scores, Extra CFs) are hidden;
-    // CF score inputs in Required/Group sections render as read-only colored badges.
-    // ON: all 4 override cards appear; score inputs become editable; Quality Edit button shows.
-    // Auto-enabled by restoreFromSyncHistory when any saved override is detected, so the
-    // toggle always reflects the actual persisted state of the rule (no silent "default" lie).
+    // Profile detail - "Customize this profile" toggle. Gates custom format editing
+    // (score inputs, Additional CF, excluding required CFs, override cards). The basics
+    // row at the top (language, scores, upgrades, cutoff, qualities) is editable either
+    // way and its changes are counted in the summary strip.
+    // Auto-enabled on restore when a CF-level customization is found, so custom format
+    // state that will sync is never hidden behind a locked editor.
     pdOverridesEnabled: false,
     // Free-form notes attached to the current sync rule. Edited via the
     // Notes panel in Sync Preview; persisted to AutoSyncRule.Description.

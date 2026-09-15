@@ -3032,6 +3032,11 @@ export default {
       const additionalCFsSource = (ruleForRestore && Array.isArray(ruleForRestore.selectedCFs))
         ? Object.fromEntries(ruleForRestore.selectedCFs.map(id => [id, true]))
         : (sh.selectedCFs || {});
+      // Set when an Additional CF (outside the profile's groups) is restored,
+      // including from sync history for an orphaned rule. Additional CF is
+      // behind Customize, so it must switch Customize on or those CFs would
+      // sync while hidden.
+      let additionalCFsRestored = false;
       if (additionalCFsSource && Object.keys(additionalCFsSource).length > 0) {
         const inProfileGroups = new Set();
         for (const g of (this.profileDetail?.detail?.trashGroups || [])) {
@@ -3043,6 +3048,7 @@ export default {
           // Don't overwrite a Phase 2c lock or other explicit false.
           if (selWithExtras[tid] === false) continue;
           selWithExtras[tid] = true;
+          additionalCFsRestored = true;
         }
         this.selectedOptionalCFs = selWithExtras;
       }
@@ -3217,9 +3223,10 @@ export default {
       // applyRuleStateToEditor).
       this.pdDescription = (ruleForRestore?.description || ruleData.description || '');
       this.pdNotesExpanded = !!(this.pdDescription || '').trim();
-      // Auto-enable the Profile Detail overrides toggle if ANY override was
-      // restored, so the UI reflects the saved state of the rule (no "All
-      // values follow profile defaults" lie when there are real overrides).
+      // Auto-enable the Profile Detail overrides toggle when a CF-level
+      // customization was restored, so CF state that will sync is never
+      // hidden behind a locked Customize. Settings and quality changes show
+      // in the basics row without it.
       // Also flip on when the rule carries selectedCFs OR excludedCFs -
       // Additional CF opt-ins (Flux/DD+/HDR for profiles whose default
       // scope excludes them) live in selectedCFs, and Phase 2c lock-clicks
@@ -3230,7 +3237,7 @@ export default {
       const hasExcludedCFs = ruleForRestore && Array.isArray(ruleForRestore.excludedCFs) && ruleForRestore.excludedCFs.length > 0;
       // Only CF-level customizations switch Customize on; the basics row is
       // editable without it (see applyRuleStateToEditor).
-      if (cfOverride || hasSelectedCFs || hasExcludedCFs) this.pdOverridesEnabled = true;
+      if (cfOverride || hasSelectedCFs || hasExcludedCFs || additionalCFsRestored) this.pdOverridesEnabled = true;
       // Issue #52 - snapshot the just-restored state as the dirty-check
       // baseline. Anything the user changes after this point is an
       // unsaved edit that warrants a Stay/Discard prompt on navigation.
