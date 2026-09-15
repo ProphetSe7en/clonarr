@@ -347,6 +347,41 @@ func TestAllCFsCategorized_CustomsAlwaysUnderCustomParent(t *testing.T) {
 	}
 }
 
+func TestAllCFsCategorized_CustomCFMetadataPreserved(t *testing.T) {
+	ad := &AppData{
+		CustomFormats: map[string]*TrashCF{},
+		CFGroups:      []*TrashCFGroup{},
+	}
+	customs := []CustomCF{
+		{
+			ID:              "custom:100",
+			Name:            "Multi-Subs",
+			Category:        "Anime",
+			AppType:         "sonarr",
+			Description:     "Prefer releases that contain multiple subtitles.",
+			TrashScores:     map[string]int{"default": 100},
+			IncludeInRename: true,
+		},
+	}
+	got := AllCFsCategorized(ad, customs)
+	if len(got.Categories) != 1 || len(got.Categories[0].Groups) != 1 {
+		t.Fatalf("expected 1 category with 1 group, got %+v", got)
+	}
+	cf := got.Categories[0].Groups[0].CFs[0]
+	if cf.Name != "Multi-Subs" {
+		t.Errorf("expected Name 'Multi-Subs', got %q", cf.Name)
+	}
+	if cf.Description != "Prefer releases that contain multiple subtitles." {
+		t.Errorf("expected Description 'Prefer releases that contain multiple subtitles.', got %q", cf.Description)
+	}
+	if cf.TrashScores["default"] != 100 {
+		t.Errorf("expected TrashScores['default'] = 100, got %v", cf.TrashScores)
+	}
+	if !cf.IncludeInRename {
+		t.Errorf("expected IncludeInRename=true, got false")
+	}
+}
+
 func TestAllCFsCategorized_NoCustomsProducesNoCustomCategory(t *testing.T) {
 	ad := &AppData{
 		CustomFormats: map[string]*TrashCF{},

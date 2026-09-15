@@ -4907,7 +4907,8 @@ export default {
         // that don't appear in any TRaSH/profile group).
         for (const cf of (this.extraCFAllCFs || [])) {
           if (cf.trashId === tid) {
-            return { name: cf.name, category: 'Custom', groupName: '', defaultScore: cf.score ?? 0, description: cf.description || '', isDangling: false };
+            const def = cf.trashScores?.[scoreSet] ?? cf.trashScores?.default ?? cf.score ?? 0;
+            return { name: cf.name, category: 'Custom', groupName: '', defaultScore: def, description: cf.description || '', isDangling: false };
           }
         }
         // Dangling - rule references a CF that no longer exists. Two cases:

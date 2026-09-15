@@ -1711,13 +1711,14 @@ func cleanDescription(raw string) string {
 
 // CategorizedCF is a CF with all score contexts for the CF picker.
 type CategorizedCF struct {
-	TrashID     string         `json:"trashId"`
-	Name        string         `json:"name"`
-	TrashScores map[string]int `json:"trashScores"`
-	Description string         `json:"description,omitempty"`
-	IsCustom    bool           `json:"isCustom,omitempty"`
-	Required    bool           `json:"required,omitempty"`  // from CF group: required=true means must-include
-	CFDefault   *bool          `json:"cfDefault,omitempty"` // from CF group: per-CF default override
+	TrashID         string         `json:"trashId"`
+	Name            string         `json:"name"`
+	TrashScores     map[string]int `json:"trashScores"`
+	Description     string         `json:"description,omitempty"`
+	IsCustom        bool           `json:"isCustom,omitempty"`
+	Required        bool           `json:"required,omitempty"`  // from CF group: required=true means must-include
+	CFDefault       *bool          `json:"cfDefault,omitempty"` // from CF group: per-CF default override
+	IncludeInRename bool           `json:"includeInRename,omitempty"`
 }
 
 // CFPickerGroup is a CF group within a picker category, carrying group metadata + all score contexts.
@@ -1872,9 +1873,12 @@ func AllCFsCategorized(ad *AppData, customCFs []CustomCF) *CFPickerData {
 			cat = "Custom"
 		}
 		customByCat[cat] = append(customByCat[cat], CategorizedCF{
-			TrashID:  ccf.ID,
-			Name:     ccf.Name,
-			IsCustom: true,
+			TrashID:         ccf.ID,
+			Name:            ccf.Name,
+			TrashScores:     ccf.TrashScores,
+			Description:     ccf.Description,
+			IncludeInRename: ccf.IncludeInRename,
+			IsCustom:        true,
 		})
 	}
 	// Stable per-group ordering: "Custom" group first (the implicit
