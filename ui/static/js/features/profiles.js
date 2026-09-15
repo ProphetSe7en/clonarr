@@ -5732,11 +5732,22 @@ export default {
         // they land in _compareArrOnlyExtras and the sync drops them.
       }
 
+      // Read the Arr profile's own quality list (groups, members, order,
+      // on/off) before the editor opens, so nothing the user does in the
+      // editor can be overwritten when it arrives.
+      let arrQualities = null;
+      try {
+        const r = await fetch(`/api/instances/${inst.id}/profile-export/${arrIdNum}`);
+        if (r.ok) arrQualities = (await r.json())?.profile?.qualities || null;
+      } catch (_) { /* handled below */ }
+
       // restoreFromRule=true: Compare → Edit & Sync is editing an existing
       // rule for the Arr profile we ran compare against. Auto-restore loads
       // the rule's saved state; prefillOverridesFromCompare below layers
       // Arr-side drift on top.
       await this.openProfileDetail(inst, trashProfile, true);
+      const openedDetail = this.profileDetail;
+      if (!openedDetail) return;
       // Lock subsequent Save & Sync to the Arr profile we're editing.
       this.profileDetail._arrProfileName = comparison.arrProfileName || this.resolveArrProfileName(inst.id, arrIdNum) || null;
       this.profileDetail._editLockedArrProfileId = arrIdNum;
@@ -5745,22 +5756,48 @@ export default {
       // when the pre-flight already loaded it (covers the rare case where
       // openProfileDetail invalidated the cache during reset).
       await this.loadExtraCFList();
-      // When Compare found the Arr profile's quality grouping or order differs
-      // from the TRaSH profile, fetch the Arr profile's own quality list so the
-      // editor starts from what is really in Arr. Without it the editor showed
-      // TRaSH's grouping and Save & Sync silently replaced the user's groups.
-      let arrQualities = null;
-      if (comparison.qualityStructure?.hasDrift) {
-        try {
-          const r = await fetch(`/api/instances/${inst.id}/profile-export/${arrIdNum}`);
-          if (r.ok) arrQualities = (await r.json())?.profile?.qualities || null;
-        } catch (_) { /* fall back to the TRaSH structure below */ }
+      // The user closed the editor or opened another profile meanwhile.
+      if (this.profileDetail !== openedDetail) return;
+      // Use the Arr structure only when its layout differs from the TRaSH
+      // profile in a way on/off overrides cannot express. Otherwise the rule
+      // keeps following TRaSH's layout, as before.
+      const trashItems = openedDetail.detail?.profile?.items || [];
+      let arrStructure = null;
+      if (Array.isArray(arrQualities) && arrQualities.length > 0) {
+        if (this._arrQualityLayoutDiffers(arrQualities, trashItems)) arrStructure = arrQualities;
+      } else if (comparison.qualityStructure?.hasDrift) {
+        // Without the Arr list the editor would fall back to TRaSH's grouping,
+        // which is what would replace the user's groups on sync.
+        const app = inst.type === 'sonarr' ? 'Sonarr' : 'Radarr';
+        this.showToast(`Could not read the quality groups from ${app}. Check Quality items before you sync, they may show the TRaSH-Guides grouping instead of yours.`, 'warning', 10000);
       }
       // applyRuleStateToEditor already ran via openProfileDetail's auto-restore
       // path if exactly one rule matches (instance + trashProfile). Layer the
       // compare-derived overrides on top so Arr-state-vs-TRaSH-default deltas
       // surface in the editor too.
-      this.prefillOverridesFromCompare(comparison, arrQualities);
+      this.prefillOverridesFromCompare(comparison, arrStructure);
+    },
+
+    // True when the Arr profile's quality layout (best first) differs from the
+    // TRaSH profile's items in a way on/off overrides cannot express: another
+    // order, other groups, or other group members. Differences in on/off state
+    // alone return false. Group member order is ignored, since Arr treats
+    // members as equal. Qualities the TRaSH profile does not list are ignored
+    // while they are off; one that is on counts as a difference, because the
+    // TRaSH layout would turn it off.
+    _arrQualityLayoutDiffers(arrQualities, trashItems) {
+      const trashNames = new Set(trashItems.map(it => it.name));
+      const relevant = [];
+      for (const it of arrQualities) {
+        const isGroup = !!(it.items && it.items.length > 0);
+        if (isGroup || trashNames.has(it.name)) relevant.push(it);
+        else if (it.allowed) return true;
+      }
+      const layout = items => items.map(it =>
+        it.items && it.items.length > 0 ? `${it.name}[${[...it.items].sort().join(',')}]` : it.name);
+      const a = layout(relevant);
+      const t = layout(trashItems);
+      return a.length !== t.length || a.some((key, i) => key !== t[i]);
     },
 
     // Returns 'cancel' | 'continue' | 'import' depending on which button
@@ -5849,8 +5886,8 @@ export default {
     // they can't live in pdOverrides.extraCFs (trash-id-keyed) until those
     // CFs are imported as clonarr custom CFs first.
     // arrQualities: the Arr profile's quality list in editor order (best first,
-    // groups with members), from /profile-export. Passed only when Compare
-    // found structure drift; the editor then starts from that structure.
+    // groups with members), from /profile-export. Passed only when its layout
+    // differs from the TRaSH profile; the editor then starts from it.
     prefillOverridesFromCompare(comparison, arrQualities = null) {
       if (!comparison) return false;
       let anyOverride = false;
@@ -5904,9 +5941,9 @@ export default {
       // Replaces the flat on/off map above with the Arr profile's full quality
       // list, so its groups, order and on/off state carry into the editor
       // exactly. Every Arr quality is kept, including unused ones that are off,
-      // so a sync without edits writes the same order back. This also takes
-      // precedence over a structure saved on an existing rule: Import & Compare
-      // means "start from what is in Arr".
+      // so a sync without edits writes the same order back. It also replaces a
+      // quality structure saved on an existing rule; other rule settings keep
+      // their saved values where Arr matches TRaSH.
       if (Array.isArray(arrQualities) && arrQualities.length > 0) {
         this.qualityStructure = arrQualities.map(it => ({
           _id: ++this._qsIdCounter,
