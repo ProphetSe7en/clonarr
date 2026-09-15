@@ -5745,11 +5745,22 @@ export default {
       // when the pre-flight already loaded it (covers the rare case where
       // openProfileDetail invalidated the cache during reset).
       await this.loadExtraCFList();
+      // When Compare found the Arr profile's quality grouping or order differs
+      // from the TRaSH profile, fetch the Arr profile's own quality list so the
+      // editor starts from what is really in Arr. Without it the editor showed
+      // TRaSH's grouping and Save & Sync silently replaced the user's groups.
+      let arrQualities = null;
+      if (comparison.qualityStructure?.hasDrift) {
+        try {
+          const r = await fetch(`/api/instances/${inst.id}/profile-export/${arrIdNum}`);
+          if (r.ok) arrQualities = (await r.json())?.profile?.qualities || null;
+        } catch (_) { /* fall back to the TRaSH structure below */ }
+      }
       // applyRuleStateToEditor already ran via openProfileDetail's auto-restore
       // path if exactly one rule matches (instance + trashProfile). Layer the
       // compare-derived overrides on top so Arr-state-vs-TRaSH-default deltas
       // surface in the editor too.
-      this.prefillOverridesFromCompare(comparison);
+      this.prefillOverridesFromCompare(comparison, arrQualities);
     },
 
     // Returns 'cancel' | 'continue' | 'import' depending on which button
@@ -5837,7 +5848,10 @@ export default {
     // imported release-group customs) live in this._compareArrOnlyExtras -
     // they can't live in pdOverrides.extraCFs (trash-id-keyed) until those
     // CFs are imported as clonarr custom CFs first.
-    prefillOverridesFromCompare(comparison) {
+    // arrQualities: the Arr profile's quality list in editor order (best first,
+    // groups with members), from /profile-export. Passed only when Compare
+    // found structure drift; the editor then starts from that structure.
+    prefillOverridesFromCompare(comparison, arrQualities = null) {
       if (!comparison) return false;
       let anyOverride = false;
 
@@ -5883,6 +5897,24 @@ export default {
       for (const qd of (comparison.qualityDiffs || [])) {
         if (qd.match) continue;
         this.qualityOverrides[qd.name] = qd.currentAllowed;
+        anyOverride = true;
+      }
+
+      // --- Quality structure from Arr (grouping and order) ---
+      // Replaces the flat on/off map above with the Arr profile's full quality
+      // list, so its groups, order and on/off state carry into the editor
+      // exactly. Every Arr quality is kept, including unused ones that are off,
+      // so a sync without edits writes the same order back. This also takes
+      // precedence over a structure saved on an existing rule: Import & Compare
+      // means "start from what is in Arr".
+      if (Array.isArray(arrQualities) && arrQualities.length > 0) {
+        this.qualityStructure = arrQualities.map(it => ({
+          _id: ++this._qsIdCounter,
+          name: it.name,
+          allowed: !!it.allowed,
+          ...(it.items && it.items.length > 0 ? { items: [...it.items] } : {}),
+        }));
+        this.qualityOverrides = {};
         anyOverride = true;
       }
 
