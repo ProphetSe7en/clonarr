@@ -99,20 +99,6 @@
   color: var(--text-primary);
   font-weight: 500;
 }
-/* Click-to-edit value: looks like plain text, shows a dotted underline and
-   pointer on hover so it reads as editable without looking like a form. */
-.sp-basics-val-edit {
-  background: transparent;
-  border: 0;
-  padding: 0;
-  font-family: inherit;
-  font-size: inherit;
-  cursor: pointer;
-  text-align: left;
-  border-bottom: 1px dotted transparent;
-}
-.sp-basics-val-edit:hover { border-bottom-color: var(--text-muted); }
-.sp-basics-val-edit:focus-visible { outline: 1px solid var(--app-color); outline-offset: 2px; border-radius: 2px; }
 /* Modified-value affordance is the red reset button next to the field
    (presence = "this is modified"). The orange .overridden colour
    treatment is dropped - reset icon + tooltip ("Reset to <default>")
@@ -162,6 +148,7 @@
   font-weight: 500;
 }
 .sp-basics-quality-launcher:hover { text-decoration: underline; }
+.sp-basics-quality-launcher:focus-visible { outline: 1px solid var(--app-color); outline-offset: 2px; border-radius: 2px; }
 
 /* Clean state - "Profile default" + small edit pencil. The pencil is
    the only interactive element; the text itself is read-only. */

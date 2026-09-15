@@ -238,10 +238,11 @@
          naming - "enabled: true" means "follows TRaSH default"). The
          template reads .value and tags the field as overridden when
          .enabled === false. -->
-    <!-- Basics strip - values read as plain text and turn into an inline
-         editor (select / number input / toggle) when clicked, whether or not
-         Customize is on. spBasicsEdit asks first when Customize is off, since
-         any change here customizes the profile. Each
+    <!-- Basics strip - always-editable inline editors (select / number input /
+         toggle), whether or not Customize is on. Customize only unlocks CF
+         editing further down; changes here are counted in the summary strip
+         even with Customize off, and saving compares values with the profile
+         defaults as before. Each
          field gets a small red reset-icon when the value differs from
          the profile's TRaSH default. Reset-icon is the sole "modified"
          affordance - drop the orange .overridden color treatment in
@@ -257,19 +258,10 @@
                      get _val() { return pdOverrides?.language?.value || this._def; },
                      get _mod() { return this._val !== this._def; } }">
         <span class="sp-basics-lbl">Language</span>
-        <template x-if="pdBasicsEditing !== 'language'">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('language')"
-                  :aria-label="'Edit Language, currently ' + _val" x-text="_val"></button>
-        </template>
-        <template x-if="pdBasicsEditing === 'language'">
-          <select class="sp-basics-input"
-                  aria-label="Language"
-                  x-effect="populateSelectField($el, (instanceLanguages[profileDetail?.instance?.id] || [{name:'Original'},{name:'Any'}]).map(l => ({value: l.name, name: l.name})), pdOverrides.language.value)"
-                  x-init="$nextTick(() => $el.focus())"
-                  @change="pdOverrides.language.value = $el.value; pdBasicsEditing = ''"
-                  @keydown.escape.stop="pdBasicsEditing = ''"
-                  @blur="pdBasicsEditing = ''"></select>
-        </template>
+        <select class="sp-basics-input"
+                aria-label="Language"
+                x-effect="populateSelectField($el, (instanceLanguages[profileDetail?.instance?.id] || [{name:'Original'},{name:'Any'}]).map(l => ({value: l.name, name: l.name})), pdOverrides.language.value)"
+                @change="pdOverrides.language.value = $el.value"></select>
         <template x-if="_mod">
           <button class="sp-basics-reset"
                   @click="pdOverrides.language.value = _def"
@@ -285,20 +277,12 @@
                      get _val() { return pdOverrides?.minFormatScore?.value ?? this._def; },
                      get _mod() { return Number(this._val) !== Number(this._def); } }">
         <span class="sp-basics-help" x-tt="'The lowest total Custom Format score a release can have and still be downloaded. Anything lower is rejected.'">?</span><span class="sp-basics-lbl">Min score</span>
-        <template x-if="pdBasicsEditing !== 'minFormatScore'">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('minFormatScore')"
-                  :aria-label="'Edit Min score, currently ' + _val" x-text="_val"></button>
-        </template>
-        <template x-if="pdBasicsEditing === 'minFormatScore'">
-          <input type="number" class="sp-basics-input sp-basics-input-num"
-                 :value="_val"
-                 aria-label="Min score"
-                 x-init="$nextTick(() => { $el.focus(); $el.select(); })"
-                 @change="pdOverrides.minFormatScore.value = Number($el.value)"
-                 @keydown.enter="$el.blur()"
-                 @keydown.escape.stop="pdBasicsEditing = ''"
-                 @blur="pdBasicsEditing = ''">
-        </template>
+        <input type="number" class="sp-basics-input sp-basics-input-num"
+               :value="_val"
+               aria-label="Min score"
+               @change="spBasicsSetNumber('minFormatScore', $el)"
+               @keydown.enter.prevent="$el.blur()"
+               @keydown.escape="$el.value = _val; $el.blur()">
         <template x-if="_mod">
           <button class="sp-basics-reset"
                   @click="pdOverrides.minFormatScore.value = _def"
@@ -317,20 +301,12 @@
                      get _val() { return pdOverrides?.minUpgradeFormatScore?.value ?? this._def; },
                      get _mod() { return Number(this._val) !== Number(this._def); } }">
         <span class="sp-basics-help" x-tt="'How much a new release must beat the current Custom Format score before it counts as an upgrade worth grabbing.'">?</span><span class="sp-basics-lbl">Min upgrade</span>
-        <template x-if="pdBasicsEditing !== 'minUpgradeFormatScore'">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('minUpgradeFormatScore')"
-                  :aria-label="'Edit Min upgrade, currently ' + _val" x-text="_val"></button>
-        </template>
-        <template x-if="pdBasicsEditing === 'minUpgradeFormatScore'">
-          <input type="number" class="sp-basics-input sp-basics-input-num"
-                 :value="_val"
-                 aria-label="Min upgrade score"
-                 x-init="$nextTick(() => { $el.focus(); $el.select(); })"
-                 @change="pdOverrides.minUpgradeFormatScore.value = Number($el.value)"
-                 @keydown.enter="$el.blur()"
-                 @keydown.escape.stop="pdBasicsEditing = ''"
-                 @blur="pdBasicsEditing = ''">
-        </template>
+        <input type="number" class="sp-basics-input sp-basics-input-num"
+               :value="_val"
+               aria-label="Min upgrade score"
+               @change="spBasicsSetNumber('minUpgradeFormatScore', $el)"
+               @keydown.enter.prevent="$el.blur()"
+               @keydown.escape="$el.value = _val; $el.blur()">
         <template x-if="_mod">
           <button class="sp-basics-reset"
                   @click="pdOverrides.minUpgradeFormatScore.value = _def"
@@ -346,20 +322,12 @@
                      get _val() { return pdOverrides?.cutoffFormatScore?.value ?? this._def; },
                      get _mod() { return Number(this._val) !== Number(this._def); } }">
         <span class="sp-basics-help" x-tt="'Once a release reaches the cutoff quality and this Custom Format score, no more upgrades are grabbed.'">?</span><span class="sp-basics-lbl">Cutoff score</span>
-        <template x-if="pdBasicsEditing !== 'cutoffFormatScore'">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('cutoffFormatScore')"
-                  :aria-label="'Edit Cutoff score, currently ' + _val" x-text="_val"></button>
-        </template>
-        <template x-if="pdBasicsEditing === 'cutoffFormatScore'">
-          <input type="number" class="sp-basics-input sp-basics-input-num"
-                 :value="_val"
-                 aria-label="Cutoff score"
-                 x-init="$nextTick(() => { $el.focus(); $el.select(); })"
-                 @change="pdOverrides.cutoffFormatScore.value = Number($el.value)"
-                 @keydown.enter="$el.blur()"
-                 @keydown.escape.stop="pdBasicsEditing = ''"
-                 @blur="pdBasicsEditing = ''">
-        </template>
+        <input type="number" class="sp-basics-input sp-basics-input-num"
+               :value="_val"
+               aria-label="Cutoff score"
+               @change="spBasicsSetNumber('cutoffFormatScore', $el)"
+               @keydown.enter.prevent="$el.blur()"
+               @keydown.escape="$el.value = _val; $el.blur()">
         <template x-if="_mod">
           <button class="sp-basics-reset"
                   @click="pdOverrides.cutoffFormatScore.value = _def"
@@ -374,20 +342,10 @@
                      get _val() { return pdOverrides?.upgradeAllowed?.value ?? this._def; },
                      get _mod() { return !!this._val !== !!this._def; } }">
         <span class="sp-basics-help" x-tt="'When off, the first acceptable release is kept and never upgraded.'">?</span><span class="sp-basics-lbl">Upgrades</span>
-        <template x-if="pdBasicsEditing !== 'upgradeAllowed'">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('upgradeAllowed')"
-                  :aria-label="'Edit Upgrades, currently ' + (_val ? 'On' : 'Off')" x-text="_val ? 'On' : 'Off'"></button>
-        </template>
-        <template x-if="pdBasicsEditing === 'upgradeAllowed'">
-          <label class="toggle toggle-sm sp-basics-toggle" @click.stop @click.outside="pdBasicsEditing = ''">
-            <input type="checkbox" :checked="_val" aria-label="Upgrades allowed"
-                   x-init="$nextTick(() => $el.focus())"
-                   @change="pdOverrides.upgradeAllowed.value = $el.checked"
-                   @keydown.escape.stop="pdBasicsEditing = ''"
-                   @keydown.enter.prevent="pdBasicsEditing = ''">
-            <span class="slider"></span>
-          </label>
-        </template>
+        <label class="toggle toggle-sm sp-basics-toggle" @click.stop>
+          <input type="checkbox" :checked="_val" aria-label="Upgrades allowed" @change="pdOverrides.upgradeAllowed.value = $el.checked">
+          <span class="slider"></span>
+        </label>
         <template x-if="_mod">
           <button class="sp-basics-reset"
                   @click="pdOverrides.upgradeAllowed.value = _def"
@@ -406,21 +364,11 @@
                      get _mod() { return this._val !== this._def && this._val !== ''; },
                      get _opts() { const items = qualityStructure?.length ? qualityStructure : (profileDetail?.detail?.profile?.items || []); return items.filter(i => i.allowed).map(i => i.name || i.quality?.name || '').filter(n => n); } }">
         <span class="sp-basics-help" x-tt="'The quality that is good enough. Once reached (and the cutoff score met), downloading stops.'">?</span><span class="sp-basics-lbl">Cutoff quality</span>
-        <template x-if="pdBasicsEditing !== 'cutoffQuality'">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('cutoffQuality')"
-                  :aria-label="'Edit Cutoff quality, currently ' + (_val || 'not set')" x-text="_val || '-'"></button>
-        </template>
-        <template x-if="pdBasicsEditing === 'cutoffQuality'">
-          <select class="sp-basics-input" aria-label="Cutoff quality"
-                  x-init="$nextTick(() => $el.focus())"
-                  @change="pdOverrides.cutoffQuality = $el.value; pdBasicsEditing = ''"
-                  @keydown.escape.stop="pdBasicsEditing = ''"
-                  @blur="pdBasicsEditing = ''">
-            <template x-for="opt in _opts" :key="opt">
-              <option :value="opt" :selected="opt === _val" x-text="opt"></option>
-            </template>
-          </select>
-        </template>
+        <select class="sp-basics-input" aria-label="Cutoff quality" @change="pdOverrides.cutoffQuality = $el.value">
+          <template x-for="opt in _opts" :key="opt">
+            <option :value="opt" :selected="opt === _val" x-text="opt"></option>
+          </template>
+        </select>
         <template x-if="_mod">
           <button class="sp-basics-reset"
                   @click="pdResetCutoff()"
@@ -430,21 +378,28 @@
       </div>
 
       <!-- Qualities - matches Radarr's terminology. Shows "Profile default"
-           when untouched or "N changes" when modified; both open the
-           Quality Items editor through spBasicsEdit, which asks first when
-           Customize is off. Reuses Profile Builder's existing Quality Items
-           editor (the same modal Classic uses).
+           + an edit icon when untouched, or "N changes" (clickable) when
+           modified; both open the Quality Items editor with or without
+           Customize, and changes count in the summary strip. Reuses Profile
+           Builder's existing
+           Quality Items editor (the same modal Classic uses).
            -->
       <div class="sp-basics-item"
            x-data="{ get _changes() { return pdOverrideSummary().quality; } }">
         <span class="sp-basics-lbl">Qualities</span>
         <template x-if="_changes === 0">
-          <button type="button" class="sp-basics-val sp-basics-val-edit" @click="spBasicsEdit('qualities')"
-                  x-tt="'Open Quality Items editor - drag &amp; drop to reorder, group, or toggle allowed status.'"
-                  aria-label="Edit qualities, currently the profile default">Profile default</button>
+          <span class="sp-basics-val sp-basics-val-clean">
+            <span>Profile default</span>
+            <button class="sp-basics-edit-icon"
+                    @click="qualityEditorTarget = 'edit'; if (!qualityStructure.length) qsInitFromProfile(); pbEnsureQualityIds(); pb.qualityEditorOpen = true;"
+                    x-tt="'Open Quality Items editor - drag &amp; drop to reorder, group, or toggle allowed status.'"
+                    aria-label="Edit qualities">&#9998;</button>
+          </span>
         </template>
         <template x-if="_changes > 0">
-          <button type="button" class="sp-basics-val sp-basics-quality-launcher" @click="spBasicsEdit('qualities')"
+          <button class="sp-basics-val sp-basics-quality-launcher"
+                  :aria-label="'Edit qualities, ' + _changes + ' change' + (_changes === 1 ? '' : 's')"
+                  @click="qualityEditorTarget = 'edit'; if (!qualityStructure.length) qsInitFromProfile(); pbEnsureQualityIds(); pb.qualityEditorOpen = true;"
                   x-tt="'Open Quality Items editor - drag &amp; drop to reorder, group, or toggle allowed status.'"
                   x-text="_changes + ' change' + (_changes === 1 ? '' : 's')"></button>
         </template>
@@ -470,10 +425,12 @@
          and the inconsistency was confusing. -->
     <div class="sp-summary"
          x-data="{ get _s() { return pdOverrideSummary(); } }">
-      <template x-if="!pdOverridesEnabled">
+      <!-- The basics row is editable without Customize, so its changes are
+           counted here even when Customize is off. -->
+      <template x-if="!pdOverridesEnabled && _s.total === 0">
         <span class="sp-summary-status sp-summary-clean">&#10003; All values follow profile defaults</span>
       </template>
-      <template x-if="pdOverridesEnabled">
+      <template x-if="pdOverridesEnabled || _s.total > 0">
         <button class="sp-summary-status sp-summary-active"
                 @click="spActiveTab = 'overview'; spOverviewSection = 'diffs';"
                 x-tt="'Open Profile overview &rarr; Diffs to see exactly what deviates from the profile defaults.'">

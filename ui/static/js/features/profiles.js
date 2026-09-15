@@ -928,18 +928,15 @@ export default {
       } else if (rule.qualityOverrides && Object.keys(rule.qualityOverrides).length > 0) {
         this.qualityOverrides = { ...(this.qualityOverrides || {}), ...rule.qualityOverrides };
       }
-      // Settings overrides → pdOverrides + pdOverridesEnabled flag.
-      let anyOverride = Object.keys(extras).length > 0
-        || (rule.qualityStructure && rule.qualityStructure.length > 0)
-        || (rule.qualityOverrides && Object.keys(rule.qualityOverrides).length > 0);
+      // Settings overrides → pdOverrides.
       if (rule.overrides) {
         const ov = rule.overrides;
-        if (ov.language !== undefined)              { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; anyOverride = true; }
-        if (ov.minFormatScore !== undefined)        { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; anyOverride = true; }
-        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; anyOverride = true; }
-        if (ov.cutoffFormatScore !== undefined)     { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; anyOverride = true; }
-        if (ov.upgradeAllowed !== undefined)        { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; anyOverride = true; }
-        if (ov.cutoffQuality !== undefined)         { this.pdOverrides.cutoffQuality = ov.cutoffQuality; anyOverride = true; }
+        if (ov.language !== undefined)              { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; }
+        if (ov.minFormatScore !== undefined)        { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; }
+        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; }
+        if (ov.cutoffFormatScore !== undefined)     { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; }
+        if (ov.upgradeAllowed !== undefined)        { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; }
+        if (ov.cutoffQuality !== undefined)         { this.pdOverrides.cutoffQuality = ov.cutoffQuality; }
       }
       if (rule.behavior) {
         this.syncForm.behavior = { ...(this.syncForm.behavior || {}), ...rule.behavior };
@@ -952,7 +949,14 @@ export default {
       // reads as "my notes are gone" - first reported bug).
       this.pdDescription = rule.description || '';
       this.pdNotesExpanded = !!(rule.description || '').trim();
-      if (anyOverride || (rule.selectedCFs && rule.selectedCFs.length > 0)) {
+      // Customize unlocks CF editing (scores, extra and excluded CFs). The
+      // basics row (language, scores, upgrades, cutoff, qualities) is
+      // editable without it, so only CF-level customizations switch it on.
+      const cfCustomized = Object.keys(extras).length > 0
+        || Object.keys(this.cfScoreOverrides || {}).length > 0
+        || (rule.selectedCFs && rule.selectedCFs.length > 0)
+        || (rule.excludedCFs && rule.excludedCFs.length > 0);
+      if (cfCustomized) {
         this.pdOverridesEnabled = true;
       }
     },
@@ -3073,17 +3077,18 @@ export default {
       }
       // Restore overrides. ruleData prefers the rule (saved intent) over
       // sync history, so Save-only edits are visible on reopen. Values are
-      // written to pdOverrides; pdOverridesEnabled flips on at the end if
-      // ANY override was found.
-      let anyOverride = false;
+      // written to pdOverrides; pdOverridesEnabled flips on at the end only
+      // for CF-level customizations (scores, extras, excluded CFs), since the
+      // basics row is editable without Customize.
+      let cfOverride = false;
       if (ruleData.overrides) {
         const ov = ruleData.overrides;
-        if (ov.language !== undefined) { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; anyOverride = true; }
-        if (ov.minFormatScore !== undefined) { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; anyOverride = true; }
-        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; anyOverride = true; }
-        if (ov.cutoffFormatScore !== undefined) { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; anyOverride = true; }
-        if (ov.upgradeAllowed !== undefined) { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; anyOverride = true; }
-        if (ov.cutoffQuality !== undefined) { this.pdOverrides.cutoffQuality = ov.cutoffQuality; anyOverride = true; }
+        if (ov.language !== undefined) { this.pdOverrides.language.enabled = false; this.pdOverrides.language.value = ov.language; }
+        if (ov.minFormatScore !== undefined) { this.pdOverrides.minFormatScore.enabled = false; this.pdOverrides.minFormatScore.value = ov.minFormatScore; }
+        if (ov.minUpgradeFormatScore !== undefined) { this.pdOverrides.minUpgradeFormatScore.enabled = false; this.pdOverrides.minUpgradeFormatScore.value = ov.minUpgradeFormatScore; }
+        if (ov.cutoffFormatScore !== undefined) { this.pdOverrides.cutoffFormatScore.enabled = false; this.pdOverrides.cutoffFormatScore.value = ov.cutoffFormatScore; }
+        if (ov.upgradeAllowed !== undefined) { this.pdOverrides.upgradeAllowed.enabled = false; this.pdOverrides.upgradeAllowed.value = ov.upgradeAllowed; }
+        if (ov.cutoffQuality !== undefined) { this.pdOverrides.cutoffQuality = ov.cutoffQuality; }
       }
       // Determine which trashIDs are part of the TRaSH base profile. Used by
       // both the Extra-CF split below AND the Overridden-Scores filter.
@@ -3127,7 +3132,7 @@ export default {
         }
       }
       this.cfScoreOverrides = baseOverrides;
-      if (Object.keys(baseOverrides).length > 0) anyOverride = true;
+      if (Object.keys(baseOverrides).length > 0) cfOverride = true;
 
       // Restore quality overrides - prefer structure override over legacy flat map.
       // qualityOverrideActive is the Quality Items editor modal-open flag and
@@ -3139,7 +3144,6 @@ export default {
           if (it.items && it.items.length > 0) out.items = [...it.items];
           return out;
         });
-        anyOverride = true;
         // If profile-default cutoff is not in the overridden structure, pick first allowed
         const defaultCutoff = this.profileDetail?.detail?.profile?.cutoff || '';
         if (!this.pdOverrides.cutoffQuality && defaultCutoff) {
@@ -3151,12 +3155,11 @@ export default {
         }
       } else if (ruleData.qualityOverrides && Object.keys(ruleData.qualityOverrides).length > 0) {
         this.qualityOverrides = { ...ruleData.qualityOverrides };
-        anyOverride = true;
       }
       // Apply the Extra CFs computed above.
       if (Object.keys(extras).length > 0) {
         this.extraCFs = extras;
-        anyOverride = true;
+        cfOverride = true;
         // Sync Preview's Additional CF picker + Profile overview's
         // Additional CF + Diffs bucket 3 all read selectedOptionalCFs
         // (NOT extraCFs) to decide whether an extra is activated.
@@ -3188,17 +3191,17 @@ export default {
       //
       // Defensive: if profileDetail.detail hasn't loaded yet (async race
       // - shouldn't happen since resyncProfile awaits openProfileDetail,
-      // but cheap to guard), conservatively flip anyOverride=true so the
+      // but cheap to guard), conservatively flip cfOverride=true so the
       // rule's saved-customization state isn't lost. The downstream
       // diff/badge counters will reconcile correctly once detail loads.
       if (Array.isArray(ruleData.excludedCFs) && ruleData.excludedCFs.length > 0) {
         const detail = this.profileDetail?.detail;
         if (!detail) {
-          anyOverride = true;
+          cfOverride = true;
         } else {
           const defaults = this.computeTrashDefaults();
           for (const tid of ruleData.excludedCFs) {
-            if (defaults.has(tid)) { anyOverride = true; break; }
+            if (defaults.has(tid)) { cfOverride = true; break; }
           }
         }
       }
@@ -3225,7 +3228,9 @@ export default {
       // gate in applyRuleStateToEditor (~line 933).
       const hasSelectedCFs = ruleForRestore && Array.isArray(ruleForRestore.selectedCFs) && ruleForRestore.selectedCFs.length > 0;
       const hasExcludedCFs = ruleForRestore && Array.isArray(ruleForRestore.excludedCFs) && ruleForRestore.excludedCFs.length > 0;
-      if (anyOverride || hasSelectedCFs || hasExcludedCFs) this.pdOverridesEnabled = true;
+      // Only CF-level customizations switch Customize on; the basics row is
+      // editable without it (see applyRuleStateToEditor).
+      if (cfOverride || hasSelectedCFs || hasExcludedCFs) this.pdOverridesEnabled = true;
       // Issue #52 - snapshot the just-restored state as the dirty-check
       // baseline. Anything the user changes after this point is an
       // unsaved edit that warrants a Stay/Discard prompt on navigation.
@@ -5476,7 +5481,6 @@ export default {
     // Used by: loadProfileDetail (fresh load), Back-link (leaving the view), pdResetAllOverrides.
     pdResetDetailState() {
       this.pdOverridesEnabled = false;
-      this.pdBasicsEditing = '';
       this.pdDescription = '';
       this.pdDescriptionPreview = false;
       this.pdNotesExpanded = false;
@@ -5544,7 +5548,6 @@ export default {
     // showing the confirm modal first.
     pdDisableOverrides() {
       this.pdOverridesEnabled = false;
-      this.pdBasicsEditing = '';
       // Re-seed pdOverrides from profile defaults so input fields show clean
       // values if the user immediately re-enables the toggle.
       this.pdInitOverrides(this.profileDetail?.detail?.profile || null);
@@ -5893,6 +5896,9 @@ export default {
     prefillOverridesFromCompare(comparison, arrQualities = null) {
       if (!comparison) return false;
       let anyOverride = false;
+      // CF-level differences (scores, extras) switch Customize on; settings
+      // and qualities live in the basics row, which is editable without it.
+      let cfOverride = false;
 
       // --- General settings overrides ---
       for (const sd of (comparison.settingsDiffs || [])) {
@@ -5965,12 +5971,14 @@ export default {
         if (!fi.exists || fi.scoreMatch) continue;
         this.cfScoreOverrides[fi.trashId] = fi.currentScore;
         anyOverride = true;
+        cfOverride = true;
       }
       for (const group of (comparison.groups || [])) {
         for (const cf of group.cfs) {
           if (!cf.exists || cf.scoreMatch) continue;
           this.cfScoreOverrides[cf.trashId] = cf.currentScore;
           anyOverride = true;
+          cfOverride = true;
         }
       }
 
@@ -6039,14 +6047,15 @@ export default {
       this._compareArrOnlyExtras = unresolved;
 
       // Customize-this-profile must flip on whenever the comparison
-      // surfaced any divergence the user can act on - that includes
-      // resolved Additional CFs (TRaSH-guide or freshly-imported
-      // customs) and unresolved Arr-only CFs alike. Without this,
+      // surfaced a CF-level divergence the user can act on: custom scores,
+      // resolved Additional CFs (TRaSH-guide or freshly-imported customs)
+      // and unresolved Arr-only CFs alike. Settings and quality differences
+      // show in the basics row, which is editable without Customize. Without this,
       // the editor opens in non-customize mode and the Additional CFs
       // section stays hidden, so the user thinks the import / extra
       // didn't take. The save engine still emits extras regardless of
       // the toggle, but the editor UI gates visibility on it.
-      if (anyOverride || resolvedExtras || (this._compareArrOnlyExtras && this._compareArrOnlyExtras.length > 0)) {
+      if (cfOverride || resolvedExtras || (this._compareArrOnlyExtras && this._compareArrOnlyExtras.length > 0)) {
         this.pdOverridesEnabled = true;
       }
       return anyOverride;

@@ -220,10 +220,6 @@ export default function baseState() {
     // Auto-enabled by restoreFromSyncHistory when any saved override is detected, so the
     // toggle always reflects the actual persisted state of the rule (no silent "default" lie).
     pdOverridesEnabled: false,
-    // Which field in the profile editor's basics row (Language, scores,
-    // Upgrades, Cutoff quality) is open for editing; '' when none. The row
-    // shows plain values until one is clicked (spBasicsEdit).
-    pdBasicsEditing: '',
     // Free-form notes attached to the current sync rule. Edited via the
     // Notes panel in Sync Preview; persisted to AutoSyncRule.Description.
     // pdDescriptionPreview toggles between the markdown textarea and
