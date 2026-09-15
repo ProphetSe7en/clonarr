@@ -5476,6 +5476,7 @@ export default {
     // Used by: loadProfileDetail (fresh load), Back-link (leaving the view), pdResetAllOverrides.
     pdResetDetailState() {
       this.pdOverridesEnabled = false;
+      this.pdBasicsEditing = '';
       this.pdDescription = '';
       this.pdDescriptionPreview = false;
       this.pdNotesExpanded = false;
@@ -5543,6 +5544,7 @@ export default {
     // showing the confirm modal first.
     pdDisableOverrides() {
       this.pdOverridesEnabled = false;
+      this.pdBasicsEditing = '';
       // Re-seed pdOverrides from profile defaults so input fields show clean
       // values if the user immediately re-enables the toggle.
       this.pdInitOverrides(this.profileDetail?.detail?.profile || null);

@@ -1558,6 +1558,36 @@ export default {
       };
     },
 
+    // Basics row (Language, Min score, Min upgrade, Cutoff score, Upgrades,
+    // Cutoff quality, Qualities): values read as plain text and open an
+    // editor when clicked, without turning on Customize first. A change there
+    // customizes the profile, so with Customize off the user confirms before
+    // anything opens; confirming turns Customize on, Cancel changes nothing.
+    spBasicsEdit(field) {
+      const open = () => {
+        if (field === 'qualities') {
+          this.qualityEditorTarget = 'edit';
+          if (!this.qualityStructure.length) this.qsInitFromProfile();
+          this.pbEnsureQualityIds();
+          this.pb.qualityEditorOpen = true;
+          return;
+        }
+        this.pdBasicsEditing = field;
+      };
+      if (this.pdOverridesEnabled) { open(); return; }
+      this.confirmModal = {
+        show: true,
+        title: 'Customize this profile?',
+        message: 'Changing this setting customizes the profile. It will no longer follow the profile default for this setting, and the change is counted as a customization and shown before you sync.\n\nMake sure you understand what the setting does before changing it.',
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Customize and edit',
+        // Open after the dialog has released focus, so the field's editor
+        // keeps focus instead of closing on an immediate blur.
+        onConfirm: () => { this.pdOverridesEnabled = true; setTimeout(open, 0); },
+        onCancel: () => {},
+      };
+    },
+
     // Persist (or clear) a CF score override from an inline editor. If
     // the new value is empty / NaN / equals the CF's TRaSH default, the
     // override entry is deleted so the rule payload stays clean
