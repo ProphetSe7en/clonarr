@@ -2024,7 +2024,7 @@ export default {
       sb.results = (sb.results || []).map(res => {
         const refreshed = byTitle.get(res.title);
         if (!refreshed) return res;
-        return profileData ? this.applyScoring(refreshed, profileData) : refreshed;
+        return profileData ? this.applyScoring(refreshed, this.sandboxScoringProfile(appType, profileData)) : refreshed;
       });
       // Persist so the localStorage cache holds the fresh records for
       // the next instant-render. Server file already has the title
@@ -2160,6 +2160,8 @@ export default {
       if (sb.compareKey) this.rescoreCompare(appType);
     },
 
+    // The compare column stays the untouched baseline: Score Editor changes
+    // belong to the primary profile, so they are deliberately not layered here.
     async rescoreCompare(appType) {
       const sb = this.sandbox[appType];
       // Compare mode adds/removes a second row per result, changing the row
@@ -2238,7 +2240,12 @@ export default {
     sandboxScoringProfile(appType, profileData) {
       const sb = this.sandbox[appType];
       if (!sb?.editOpen || !sb.editOriginal || !profileData) return profileData;
-      const scores = (profileData.scores || [])
+      // While the editor is open its own snapshot is the base, not the profile
+      // as stored on the server: an imported score config writes its values
+      // straight into editOriginal, so reading the server copy here would drop
+      // them for titles parsed afterwards.
+      const base = sb.editOriginal;
+      const scores = (base.scores || [])
         .filter(s => sb.editToggles[s.trashId || s.name] !== false)
         .map(s => ({ ...s, score: sb.editScores[s.trashId || s.name] ?? s.score }));
       const have = new Set(scores.map(s => s.trashId || s.name));
@@ -2247,7 +2254,7 @@ export default {
           scores.push({ trashId: key, name: sb._addedCFNames?.[key] || key, score: sb.editScores[key] ?? 0 });
         }
       }
-      return { ...profileData, scores, minScore: sb.editMinScore ?? profileData.minScore ?? 0 };
+      return { ...profileData, scores, minScore: sb.editMinScore ?? base.minScore ?? profileData.minScore ?? 0 };
     },
 
     applySandboxEdit(appType) {
