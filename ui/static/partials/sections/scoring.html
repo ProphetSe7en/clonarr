@@ -14,7 +14,7 @@
               </template>
             </select>
             <label style="font-size:12px;color:var(--text-muted);white-space:nowrap;margin-left:12px" x-tt="'Profile whose CF scores are applied to calculate total'">Score against:</label>
-            <select class="input" style="max-width:300px;font-size:12px" x-model="sandbox[activeAppType].profileKey" @change="rescoreSandbox(activeAppType); loadGenQualities(activeAppType)">
+            <select class="input" style="max-width:300px;font-size:12px" x-model="sandbox[activeAppType].profileKey" @change="changeSandboxProfile(activeAppType)">
               <option value="">— Select profile —</option>
               <template x-for="gn in getTrashProfileGroups(activeAppType)" :key="'sg:'+gn">
                 <optgroup :label="'TRaSH — ' + gn">

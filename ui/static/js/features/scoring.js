@@ -1953,7 +1953,7 @@ export default {
       // completed (e.g. user landed on the sandbox tab directly).
       if (sb.profileKey && sb.results.length > 0) {
         try {
-          const profileData = await this.fetchProfileScores(sb.profileKey, appType);
+          const profileData = this.sandboxScoringProfile(appType, await this.fetchProfileScores(sb.profileKey, appType));
           sb.results = sb.results.map(res => this.applyScoring(res, profileData));
         } catch (_) { /* leave results unchanged on scoring fetch failure */ }
       }
@@ -2153,7 +2153,7 @@ export default {
       if (!sb.results?.length || !sb.profileKey) return;
       const cacheKey = appType + ':' + sb.profileKey;
       delete this._profileScoreCache[cacheKey];
-      const profileData = await this.fetchProfileScores(sb.profileKey, appType);
+      const profileData = this.sandboxScoringProfile(appType, await this.fetchProfileScores(sb.profileKey, appType));
       sb.results = sb.results.map(res => this.applyScoring(res, profileData));
       this._sbTouch(appType); // invalidate the virtualized-results memo so new scores render now
       // Re-score compare profile too
@@ -2200,6 +2200,22 @@ export default {
       sb.editOpen = true;
     },
 
+    // Switching the "Score against" profile drops Score Editor changes: they
+    // were made against the previous profile's scores.
+    changeSandboxProfile(appType) {
+      const sb = this.sandbox[appType];
+      sb.editOpen = false;
+      sb.editOriginal = null;
+      sb.editScores = {};
+      sb.editToggles = {};
+      sb.editMinScore = null;
+      sb._addedCFNames = {};
+      sb._addedCFDefaults = {};
+      sb._addedCFDims = {};
+      this.rescoreSandbox(appType);
+      this.loadGenQualities(appType);
+    },
+
     resetSandboxEdit(appType) {
       const sb = this.sandbox[appType];
       sb.editScores = {};
@@ -2214,25 +2230,30 @@ export default {
       this._sandboxEditTimer = setTimeout(() => this.applySandboxEdit(appType), 200);
     },
 
+    // Layer the open Score Editor's changes (turned-off CFs, edited scores,
+    // added CFs) on top of a profile's scores. Every path that scores a title
+    // goes through this, so a title parsed AFTER an edit is scored the same as
+    // one parsed before it. Edits only count while the editor is open, which is
+    // what closing it (toggleSandboxEdit) undoes.
+    sandboxScoringProfile(appType, profileData) {
+      const sb = this.sandbox[appType];
+      if (!sb?.editOpen || !sb.editOriginal || !profileData) return profileData;
+      const scores = (profileData.scores || [])
+        .filter(s => sb.editToggles[s.trashId || s.name] !== false)
+        .map(s => ({ ...s, score: sb.editScores[s.trashId || s.name] ?? s.score }));
+      const have = new Set(scores.map(s => s.trashId || s.name));
+      for (const key of Object.keys(sb.editToggles)) {
+        if (sb.editToggles[key] === 'added' && !have.has(key)) {
+          scores.push({ trashId: key, name: sb._addedCFNames?.[key] || key, score: sb.editScores[key] ?? 0 });
+        }
+      }
+      return { ...profileData, scores, minScore: sb.editMinScore ?? profileData.minScore ?? 0 };
+    },
+
     applySandboxEdit(appType) {
       const sb = this.sandbox[appType];
       if (!sb.editOriginal || !sb.results?.length) return;
-      // Build modified profile data from original + edits
-      const modified = {
-        scores: sb.editOriginal.scores
-          .filter(s => sb.editToggles[s.trashId || s.name] !== false)
-          .map(s => ({
-            ...s,
-            score: sb.editScores[s.trashId || s.name] ?? s.score
-          })),
-        minScore: sb.editMinScore ?? sb.editOriginal.minScore ?? 0
-      };
-      // Add any extra CFs added by user
-      for (const key of Object.keys(sb.editToggles)) {
-        if (sb.editToggles[key] === 'added') {
-          modified.scores.push({ trashId: key, name: sb._addedCFNames?.[key] || key, score: sb.editScores[key] ?? 0 });
-        }
-      }
+      const modified = this.sandboxScoringProfile(appType, sb.editOriginal);
       sb.results = sb.results.map(res => this.applyScoring(res, modified));
       // Invalidate the virtualized-results memo so the new scores show without
       // needing a sort/filter change to bump the cache key. Without this, adding
@@ -2603,7 +2624,7 @@ export default {
       const sb = this.sandbox[appType];
       const profileKey = sb.profileKey;
       if (!profileKey) return result; // matchedCFs may be empty; a TierN release still scores its tier CF
-      const profileData = await this.fetchProfileScores(profileKey, appType);
+      const profileData = this.sandboxScoringProfile(appType, await this.fetchProfileScores(profileKey, appType));
       let scored = this.applyScoring(result, profileData);
       // Also score against compare profile if active
       if (sb.compareKey) {
