@@ -957,6 +957,11 @@ export default {
         const jsonUrl = this.trashCFJsonUrl ? this.trashCFJsonUrl(cf, appType) : '';
         if (guideUrl) metaBits.push(`<a href="${esc(guideUrl)}" target="_blank" rel="noopener noreferrer">TRaSH guide</a>`);
         if (jsonUrl) metaBits.push(`<a href="${esc(jsonUrl)}" target="_blank" rel="noopener noreferrer">JSON</a>`);
+      } else {
+        const tid = cf?.trashId || cf?.id || '';
+        if (tid) {
+          metaBits.push(`<button type="button" class="cf-desc-json-btn" data-cf-id="${esc(tid)}">JSON</button>`);
+        }
       }
       if (!opts.hideRename && cf?.includeInRename) {
         metaBits.push(`<span class="cf-desc-rename" title="Custom Format name is appended to renamed files when this CF matches.">rename</span>`);
@@ -971,15 +976,20 @@ export default {
       const desc = (cf?.description || '').replace(/\^\^([^^\n]+?)\^\^/g, '<u>$1</u>');
       const safeDesc = sanitizeHTML(desc);
       let html = safeDesc;
+      const esc = (u) => String(u).replace(/[<>"'&]/g, c => ({ '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '&':'&amp;' }[c]));
+      const links = [];
       if (!cf?.isCustom) {
         const guideUrl = this.trashCFGuideUrl ? this.trashCFGuideUrl(cf, appType) : '';
         const jsonUrl = this.trashCFJsonUrl ? this.trashCFJsonUrl(cf, appType) : '';
-        const esc = (u) => String(u).replace(/[<>"'&]/g, c => ({ '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;', '&':'&amp;' }[c]));
-        const links = [];
         if (guideUrl) links.push(`<a href="${esc(guideUrl)}" target="_blank" rel="noopener">TRaSH guide</a>`);
         if (jsonUrl) links.push(`<a href="${esc(jsonUrl)}" target="_blank" rel="noopener">JSON</a>`);
-        if (links.length) html += (safeDesc ? '<br><br>' : '') + links.join(' &nbsp;·&nbsp; ');
+      } else {
+        const tid = cf?.trashId || cf?.id || '';
+        if (tid) {
+          links.push(`<button type="button" class="cf-desc-json-btn" data-cf-id="${esc(tid)}">JSON</button>`);
+        }
       }
+      if (links.length) html += (safeDesc ? '<br><br>' : '') + links.join(' &nbsp;·&nbsp; ');
       return html;
     },
 
@@ -2225,6 +2235,75 @@ export default {
         })),
       };
 
+      if (f.description) {
+        trashJSON.description = f.description;
+      }
+
+      this.cfExportTitle = f.name ? `${f.name} — TRaSH JSON` : 'Export TRaSH JSON';
+      this.cfExportContent = JSON.stringify(trashJSON, null, 2);
+      this.cfExportCopied = false;
+    },
+
+    async viewCustomCFJSON(trashId) {
+      if (!trashId) return;
+      const appType = this.activeAppType || 'radarr';
+      let customCF = (this.cfBrowseData?.[appType]?.customCFs || []).find(c => (c.id === trashId || c.trashId === trashId || c.trash_id === trashId));
+      if (!customCF) {
+        for (const cf of (this.extraCFAllCFs || [])) {
+          if ((cf.trashId === trashId || cf.id === trashId) && cf.specifications) {
+            customCF = cf;
+            break;
+          }
+        }
+      }
+      if (!customCF) {
+        try {
+          const res = await fetch(`/api/custom-cfs?appType=${appType}`);
+          if (res.ok) {
+            const list = await res.json();
+            this.cfBrowseData = {
+              ...this.cfBrowseData,
+              [appType]: { ...(this.cfBrowseData?.[appType] || {}), customCFs: list }
+            };
+            customCF = list.find(c => c.id === trashId || c.trashId === trashId);
+          }
+        } catch (e) {
+          console.error('Failed to load custom CF JSON:', e);
+        }
+      }
+      if (!customCF) return;
+
+      const specs = (customCF.specifications || []).map(s => {
+        let fields = {};
+        if (Array.isArray(s.fields)) {
+          fields = Object.fromEntries(s.fields.map(fld => [fld.name, fld.value]));
+        } else if (s.fields && typeof s.fields === 'object') {
+          fields = s.fields;
+        }
+        return {
+          name: s.name || '',
+          implementation: s.implementation || '',
+          negate: !!s.negate,
+          required: !!s.required,
+          fields: fields,
+        };
+      });
+
+      const trashScores = customCF.trashScores || (customCF.score !== undefined ? { default: customCF.score } : {});
+
+      const trashJSON = {
+        trash_id: customCF.trashId || customCF.id || '',
+        trash_scores: trashScores,
+        name: customCF.name || '',
+        includeCustomFormatWhenRenaming: !!customCF.includeInRename,
+        specifications: specs,
+      };
+
+      if (customCF.description) {
+        trashJSON.description = customCF.description;
+      }
+
+      this.cfExportTitle = customCF.name ? `${customCF.name} — Custom Format JSON` : 'Custom Format JSON';
       this.cfExportContent = JSON.stringify(trashJSON, null, 2);
       this.cfExportCopied = false;
     },
