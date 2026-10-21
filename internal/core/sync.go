@@ -217,6 +217,15 @@ type SyncRequest struct {
 	// forgets it leaves a custom: source resolving to nothing, so no sizes are
 	// written: wrong, but in the direction that touches nobody's profile.
 	UserQualitySizeSets []QualitySizeSet `json:"-"`
+	// QualitySizeFallback is sent by a rerun from history: the sizes that sync
+	// recorded writing. Used only when QualitySizeSource no longer names a set
+	// that exists, so a rerun reproduces the numbers instead of quietly
+	// writing none.
+	QualitySizeFallback map[string]QSOverride `json:"qualitySizeFallback,omitempty"`
+	// QualitySizeFallbackName is what to call the set those numbers get stored
+	// as, composed by the caller so the date in it reads in the viewer's own
+	// format rather than the server's.
+	QualitySizeFallbackName string `json:"qualitySizeFallbackName,omitempty"`
 }
 
 // SyncOverrides allows users to override specific profile settings from TRaSH defaults.

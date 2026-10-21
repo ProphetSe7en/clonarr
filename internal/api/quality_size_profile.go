@@ -527,6 +527,68 @@ func (s *Server) handleSaveQualitySizeSet(w http.ResponseWriter, r *http.Request
 // editor's picker shows. Delegates so there is one spelling of these names.
 func qsSetTitle(setType string) string { return core.QualitySizeSetTitle(setType) }
 
+// applyQualitySizeFallback lets a rerun from history reproduce the sizes it
+// recorded, for the case where the set it used has since been deleted. A no-op
+// for every other request, since only a rerun carries a fallback.
+//
+// The numbers are stored as a named set rather than scattered across the rule
+// as per-quality values. Both forms write the same sizes, but a rule pointing
+// at a named set still reads as a choice, and the source picker keeps doing
+// something; a rule with a value on every quality overrides the picker on
+// every row and reads as broken. The name carries the date it came from, so it
+// is obvious where it appeared from, and a repeated rerun reuses the same set
+// rather than stacking copies.
+func (s *Server) applyQualitySizeFallback(req *core.SyncRequest, appType string) {
+	if len(req.QualitySizeFallback) == 0 {
+		return
+	}
+	var guide []*core.TrashQualitySize
+	if ad := s.Core.Trash.GetAppData(appType); ad != nil {
+		guide = ad.QualitySizes
+	}
+	cfg := s.Core.Config.Get()
+	if core.QualitySizeSourceResolves(req.QualitySizeSource, guide, cfg.QualitySizeSets) {
+		return
+	}
+
+	name := strings.TrimSpace(req.QualitySizeFallbackName)
+	if name == "" {
+		name = "Restored sizes"
+	}
+	for _, set := range cfg.QualitySizeSets {
+		if set.AppType == appType && strings.EqualFold(set.Name, name) {
+			req.QualitySizeSource = core.QSSourceCustomPfx + set.ID
+			return
+		}
+	}
+
+	qualities := make([]core.QualitySizeEntry, 0, len(req.QualitySizeFallback))
+	for quality, v := range req.QualitySizeFallback {
+		qualities = append(qualities, core.QualitySizeEntry{
+			Quality: quality, Min: v.Min, Preferred: v.Preferred, Max: v.Max,
+		})
+	}
+	sort.Slice(qualities, func(i, j int) bool { return qualities[i].Quality < qualities[j].Quality })
+
+	stored := core.QualitySizeSet{
+		ID:        core.GenerateID(),
+		Name:      name,
+		AppType:   appType,
+		Qualities: qualities,
+	}
+	if err := s.Core.Config.Update(func(c *core.Config) {
+		c.QualitySizeSets = append(c.QualitySizeSets, stored)
+	}); err != nil {
+		// Leave the source alone rather than half-applying: it resolves to
+		// nothing, so no sizes are written, which is the safe direction.
+		s.Core.DebugLog.Logf(core.LogError, "rerun from history: could not store the restored size set: %v", err)
+		return
+	}
+	req.QualitySizeSource = core.QSSourceCustomPfx + stored.ID
+	s.Core.DebugLog.Logf(core.LogSync,
+		"rerun from history: the size set it used is gone, stored its %d sizes as %q", len(qualities), name)
+}
+
 // qsHistoryLabel names a stored size source for a history entry, resolved now
 // rather than when someone reads it: the set can be deleted in between, and an
 // id tells a reader nothing.

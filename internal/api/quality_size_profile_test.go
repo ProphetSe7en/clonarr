@@ -269,3 +269,78 @@ func TestQSSetDeletionIntentWillNotIntroduceWrites(t *testing.T) {
 		t.Errorf("overrides = %+v, want the deleted set's own value carried", ovs)
 	}
 }
+
+// A rerun from history reuses the source that sync used, which keeps a rule
+// following the set it followed. When that set has been deleted since, the
+// source resolves to nothing and the rerun would write no sizes while
+// reporting success. The numbers the entry recorded are the way out, stored as
+// a named set so the rule still reads as a choice rather than carrying an
+// override on every quality.
+func TestApplyQualitySizeFallbackStoresARestoredSet(t *testing.T) {
+	cfg := core.DefaultConfig()
+	cfg.QualitySizeSets = []core.QualitySizeSet{
+		{ID: "alive", Name: "Still here", AppType: "sonarr"},
+	}
+	s, _ := setupConfigScheduleServer(t, cfg)
+
+	// A source that still resolves is left alone: reusing it is the point.
+	keep := &core.SyncRequest{
+		QualitySizeSource:   "custom:alive",
+		QualitySizeFallback: map[string]core.QSOverride{"SDTV": {Min: 1, Preferred: 2, Max: 3}},
+	}
+	s.applyQualitySizeFallback(keep, "sonarr")
+	if keep.QualitySizeSource != "custom:alive" {
+		t.Errorf("source = %q, want it untouched", keep.QualitySizeSource)
+	}
+	if n := len(s.Core.Config.Get().QualitySizeSets); n != 1 {
+		t.Errorf("sets = %d, want no new one", n)
+	}
+
+	req := &core.SyncRequest{
+		QualitySizeSource:       "custom:deleted-long-ago",
+		QualitySizeFallbackName: "My sizes (restored 21/10/2026)",
+		QualitySizeFallback: map[string]core.QSOverride{
+			"WEBDL-1080p": {Min: 15, Preferred: 995, Max: 1000},
+			"SDTV":        {Min: 2, Preferred: 95, Max: 100},
+		},
+	}
+	s.applyQualitySizeFallback(req, "sonarr")
+
+	sets := s.Core.Config.Get().QualitySizeSets
+	if len(sets) != 2 {
+		t.Fatalf("sets = %d, want the restored one stored: %+v", len(sets), sets)
+	}
+	stored := sets[1]
+	if stored.Name != "My sizes (restored 21/10/2026)" || stored.AppType != "sonarr" {
+		t.Errorf("stored = %+v", stored)
+	}
+	if len(stored.Qualities) != 2 {
+		t.Fatalf("qualities = %d, want 2", len(stored.Qualities))
+	}
+	// Sorted, so the set reads the same every time it is written.
+	if stored.Qualities[0].Quality != "SDTV" || stored.Qualities[1].Quality != "WEBDL-1080p" {
+		t.Errorf("order = %q, %q", stored.Qualities[0].Quality, stored.Qualities[1].Quality)
+	}
+	if req.QualitySizeSource != "custom:"+stored.ID {
+		t.Errorf("source = %q, want the new set", req.QualitySizeSource)
+	}
+	// The rule must not be left with an override on every quality, which is
+	// what made the source picker read as broken.
+	if len(req.QualitySizeOverrides) != 0 {
+		t.Errorf("overrides = %+v, want none", req.QualitySizeOverrides)
+	}
+
+	// Rerunning the same entry reuses the set rather than stacking copies.
+	again := &core.SyncRequest{
+		QualitySizeSource:       "custom:deleted-long-ago",
+		QualitySizeFallbackName: "My sizes (restored 21/10/2026)",
+		QualitySizeFallback:     req.QualitySizeFallback,
+	}
+	s.applyQualitySizeFallback(again, "sonarr")
+	if n := len(s.Core.Config.Get().QualitySizeSets); n != 2 {
+		t.Errorf("sets = %d, want the same two", n)
+	}
+	if again.QualitySizeSource != "custom:"+stored.ID {
+		t.Errorf("source = %q, want the set already stored", again.QualitySizeSource)
+	}
+}

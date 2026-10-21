@@ -204,6 +204,29 @@ func QualitySizeSetTitle(setType string) string {
 	return strings.ToUpper(setType[:1]) + setType[1:]
 }
 
+// QualitySizeSourceResolves reports whether a stored source still names a set
+// that exists. A source that does not resolve writes nothing, which is the
+// quiet failure a rerun from history has to avoid.
+func QualitySizeSourceResolves(source string, guideSets []*TrashQualitySize, userSets []QualitySizeSet) bool {
+	switch {
+	case source == "" || source == QSSourceOff:
+		return true // nothing to resolve, and nothing claimed
+	case strings.HasPrefix(source, QSSourceCustomPfx):
+		id := strings.TrimPrefix(source, QSSourceCustomPfx)
+		for _, set := range userSets {
+			if set.ID == id {
+				return true
+			}
+		}
+		return false
+	case strings.HasPrefix(source, QSSourceSetPfx):
+		return findGuideSetByTrashID(guideSets, strings.TrimPrefix(source, QSSourceSetPfx)) != nil
+	case source == QSSourceGuide:
+		return true
+	}
+	return false
+}
+
 // QualitySizeSourceLabel names a stored source for display. Resolved when the
 // sync runs rather than when someone reads the history, because the set it
 // names can be deleted in between and a raw id tells a reader nothing.

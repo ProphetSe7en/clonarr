@@ -97,6 +97,7 @@ func (s *Server) handleDryRun(w http.ResponseWriter, r *http.Request) {
 	// the request body, and the intent falls back to the rule when the caller
 	// did not send one. See FillQualitySizeIntent.
 	core.FillQualitySizeIntent(&req, s.findRuleFor(req.InstanceID, req.ArrProfileID), s.Core.Config.Get().QualitySizeSets)
+	s.applyQualitySizeFallback(&req, inst.Type)
 	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient, nil)
 	if err != nil {
 		log.Printf("Dry-run error for %s: %v", inst.Name, err)
@@ -199,6 +200,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	lastSyncedCFs := s.Core.GetLastSyncedCFs(req.InstanceID, req.ArrProfileID, req.Behavior)
 	behavior := core.ResolveSyncBehavior(req.Behavior)
 	core.FillQualitySizeIntent(&req, s.findRuleFor(req.InstanceID, req.ArrProfileID), s.Core.Config.Get().QualitySizeSets)
+	s.applyQualitySizeFallback(&req, inst.Type)
 	plan, err := core.BuildSyncPlan(ad, inst, req, imported, customCFs, lastSyncedCFs, s.Core.HTTPClient, op)
 	if err != nil {
 		log.Printf("Apply plan error for %s: %v", inst.Name, err)
