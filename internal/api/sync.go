@@ -437,6 +437,8 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		// written rather than only what the editor happened to send.
 		QualitySizeSource:    req.QualitySizeSource,
 		QualitySizeOverrides: req.QualitySizeOverrides,
+		QualitySizesWritten:  result.QualitySizesWritten,
+		QualitySizeSetName:   s.qsHistoryLabel(inst.Type, req.QualitySizeSource),
 		KeepArrCFIDs:         req.KeepArrCFIDs,
 		CFsCreated:           result.CFsCreated,
 		CFsUpdated:           result.CFsUpdated,

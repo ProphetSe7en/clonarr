@@ -473,6 +473,15 @@ type SyncHistoryEntry struct {
 	// history has to reproduce what was written, not what the rule says now.
 	QualitySizeSource    string                `json:"qualitySizeSource,omitempty"`
 	QualitySizeOverrides map[string]QSOverride `json:"qualitySizeOverrides,omitempty"`
+	// QualitySizesWritten is the size this sync actually put on each quality.
+	// The source above is a pointer, and a pointer is not enough for either of
+	// the two things this snapshot is for: a set the user later deletes
+	// resolves to nothing, so a rerun would write no sizes, and the history
+	// view would have only an id to show. These are the numbers themselves.
+	QualitySizesWritten map[string]QSOverride `json:"qualitySizesWritten,omitempty"`
+	// QualitySizeSetName is what the source was called at the time, since the
+	// set it names may be gone by the time anyone reads this.
+	QualitySizeSetName string `json:"qualitySizeSetName,omitempty"`
 	// KeepArrCFIDs mirrors the rule's pinned-extras list. Snapshotted on
 	// every sync so a rerun from sync history (e.g. when the user has
 	// deleted the rule, or for orphaned profiles) can still preserve the
@@ -977,6 +986,12 @@ func (cs *ConfigStore) Get() Config {
 		// to forget: nothing reads it yet, so sharing the map off a request
 		// body was latent rather than visible. It stops being latent the
 		// moment a rollback writes through a Get() copy.
+		if len(sh.QualitySizesWritten) > 0 {
+			cfg.SyncHistory[i].QualitySizesWritten = make(map[string]QSOverride, len(sh.QualitySizesWritten))
+			for k, v := range sh.QualitySizesWritten {
+				cfg.SyncHistory[i].QualitySizesWritten[k] = v
+			}
+		}
 		if len(sh.QualitySizeOverrides) > 0 {
 			cfg.SyncHistory[i].QualitySizeOverrides = make(map[string]QSOverride, len(sh.QualitySizeOverrides))
 			for k, v := range sh.QualitySizeOverrides {

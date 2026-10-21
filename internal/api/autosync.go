@@ -751,6 +751,8 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 		// Mirrors the rest of this literal: syncReq is the intent that was
 		// written, filled from the rule by FillQualitySizeIntent above.
 		QualitySizeSource:    syncReq.QualitySizeSource,
+		QualitySizesWritten:  result.QualitySizesWritten,
+		QualitySizeSetName:   s.qsHistoryLabel(inst.Type, syncReq.QualitySizeSource),
 		QualitySizeOverrides: syncReq.QualitySizeOverrides,
 		CFsCreated:           result.CFsCreated,
 		CFsUpdated:           result.CFsUpdated,

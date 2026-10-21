@@ -646,6 +646,19 @@
                                     </template>
                                   </div>
                                 </template>
+                                <!-- The size source, named at sync time rather
+                                     than looked up now: the set can have been
+                                     deleted since, and the entry stores only an
+                                     id. The numbers beside it are what actually
+                                     went to the instance. -->
+                                <template x-if="entry.qualitySizeSetName">
+                                  <div style="margin-top:8px">
+                                    <div class="v3-hist-detail-label">Quality Size</div>
+                                    <div class="v3-hist-detail-line">
+                                      From <strong x-text="entry.qualitySizeSetName"></strong><template x-if="Object.keys(entry.qualitySizesWritten || {}).length > 0"><span><span x-text="', ' + Object.keys(entry.qualitySizesWritten).length"></span> qualities set</span></template>
+                                    </div>
+                                  </div>
+                                </template>
                                 <template x-if="entry.changes.settingsDetails?.length > 0">
                                   <div :style="(entry.changes.cfDetails?.length > 0 || entry.changes.scoreDetails?.length > 0 || entry.changes.qualityDetails?.length > 0) ? 'margin-top:8px' : ''">
                                     <div class="v3-hist-detail-label">Settings</div>

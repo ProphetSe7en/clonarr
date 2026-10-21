@@ -524,18 +524,18 @@ func (s *Server) handleSaveQualitySizeSet(w http.ResponseWriter, r *http.Request
 }
 
 // qsSetTitle gives a guide set type a display name, matching what the profile
-// editor's picker shows. Mirrors pdQSSetTitle in the frontend.
-func qsSetTitle(setType string) string {
-	switch setType {
-	case "sqp-streaming":
-		return "SQP Streaming"
-	case "sqp-uhd":
-		return "SQP UHD"
+// editor's picker shows. Delegates so there is one spelling of these names.
+func qsSetTitle(setType string) string { return core.QualitySizeSetTitle(setType) }
+
+// qsHistoryLabel names a stored size source for a history entry, resolved now
+// rather than when someone reads it: the set can be deleted in between, and an
+// id tells a reader nothing.
+func (s *Server) qsHistoryLabel(appType, source string) string {
+	var guide []*core.TrashQualitySize
+	if ad := s.Core.Trash.GetAppData(appType); ad != nil {
+		guide = ad.QualitySizes
 	}
-	if setType == "" {
-		return ""
-	}
-	return strings.ToUpper(setType[:1]) + setType[1:]
+	return core.QualitySizeSourceLabel(source, guide, s.Core.Config.Get().QualitySizeSets)
 }
 
 // qsGuideSetByType finds a guide size set by its type. core resolves sources
