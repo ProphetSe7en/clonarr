@@ -517,3 +517,63 @@ func TestDiffQualitySizesDoesNotInventClears(t *testing.T) {
 		t.Errorf("partial triple: got %v", got)
 	}
 }
+
+// History stores the source as an id, which is not enough to read back: a set
+// the user deletes resolves to nothing afterwards. The name is therefore
+// resolved when the sync runs, and an id that no longer matches anything says
+// so rather than being printed raw.
+func TestQualitySizeSourceLabel(t *testing.T) {
+	guide := []*TrashQualitySize{
+		{TrashID: "series-id", Type: "series"},
+		{TrashID: "sqp-id", Type: "sqp-uhd"},
+	}
+	user := []QualitySizeSet{{ID: "mine", Name: "My sizes", AppType: "sonarr"}}
+
+	cases := []struct {
+		source string
+		want   string
+	}{
+		{"", ""},
+		{QSSourceOff, ""},
+		{QSSourceSetPfx + "series-id", "Series"},
+		{QSSourceSetPfx + "sqp-id", "SQP UHD"},
+		{QSSourceCustomPfx + "mine", "My sizes"},
+		{QSSourceCustomPfx + "deleted", "a set that no longer exists"},
+		{QSSourceSetPfx + "dropped-upstream", "a set that no longer exists"},
+	}
+	for _, c := range cases {
+		if got := QualitySizeSourceLabel(c.source, guide, user); got != c.want {
+			t.Errorf("%q: got %q, want %q", c.source, got, c.want)
+		}
+	}
+}
+
+// The snapshot must hold the numbers, not a pointer, and must stay empty where
+// nothing is written so history cannot claim sizes went to an instance that
+// keeps them in the shared list.
+func TestRecordSizesWrittenHoldsTheNumbers(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	res := &SyncResult{}
+	in := map[string]QualitySizeTriple{
+		"WEBDL-1080p": {Min: f(15), Preferred: f(995), Max: f(1000)},
+		// A half-filled triple is never produced by a set or an override.
+		// Recording half a value would be worse than recording none.
+		"Raw-HD": {Min: f(4)},
+	}
+	if out := recordSizesWritten(res, in); len(out) != 2 {
+		t.Errorf("the map handed on must be untouched, got %d entries", len(out))
+	}
+	if n := len(res.QualitySizesWritten); n != 1 {
+		t.Fatalf("written = %d entries, want only the complete one: %+v", n, res.QualitySizesWritten)
+	}
+	got := res.QualitySizesWritten["WEBDL-1080p"]
+	if got.Min != 15 || got.Preferred != 995 || got.Max != 1000 {
+		t.Errorf("WEBDL-1080p = %+v, want 15/995/1000", got)
+	}
+
+	empty := &SyncResult{}
+	recordSizesWritten(empty, nil)
+	if empty.QualitySizesWritten != nil {
+		t.Error("nothing written means nothing recorded")
+	}
+}

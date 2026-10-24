@@ -84,6 +84,34 @@ func (c *ArrClient) DoRequest(method, path string, body any) ([]byte, int, error
 // instead of the Radarr/Sonarr API.
 var ErrHTMLResponse = errors.New("got a web page instead of the Radarr/Sonarr API. Check the URL, including any URL base, and any login page in front of the instance")
 
+// ErrRedirected is returned when the instance URL answers with a redirect.
+var ErrRedirected = errors.New("the address redirects")
+
+// NewHTTPClient returns the client the Radarr and Sonarr calls use. It differs
+// from a plain http.Client in one way, and that one way matters.
+//
+// Go's default client follows redirects, and on a 301, 302 or 303 it reissues
+// the request as a GET. Against an Arr API that silently turns every write
+// into a read: a create lands on the list endpoint, which answers with an
+// array, so it fails with a confusing message about the wrong JSON type. An
+// update lands on the single-item endpoint, which answers with one format, so
+// it parses cleanly and is counted as written when nothing was written at all.
+// The second half is the dangerous one, because it looks like success.
+//
+// An Arr API never redirects. A redirect means the configured address is not
+// where the API is served, usually an http address on a host that moves you to
+// https, or a missing URL base that a proxy redirects to add. So the only
+// useful answer is to stop and say which address it was pointed at instead.
+func NewHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return fmt.Errorf("%w to %s. Use the address the API is served from",
+				ErrRedirected, req.URL.Redacted())
+		},
+	}
+}
+
 // isHTMLResponse reports whether a body is an HTML page. It looks at the body
 // only: some proxies label every response text/html, including JSON from the
 // API, and an empty body (a successful PUT or DELETE) is never a page.

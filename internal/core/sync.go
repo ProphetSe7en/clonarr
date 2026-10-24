@@ -217,6 +217,15 @@ type SyncRequest struct {
 	// forgets it leaves a custom: source resolving to nothing, so no sizes are
 	// written: wrong, but in the direction that touches nobody's profile.
 	UserQualitySizeSets []QualitySizeSet `json:"-"`
+	// QualitySizeFallback is sent by a rerun from history: the sizes that sync
+	// recorded writing. Used only when QualitySizeSource no longer names a set
+	// that exists, so a rerun reproduces the numbers instead of quietly
+	// writing none.
+	QualitySizeFallback map[string]QSOverride `json:"qualitySizeFallback,omitempty"`
+	// QualitySizeFallbackName is what to call the set those numbers get stored
+	// as, composed by the caller so the date in it reads in the viewer's own
+	// format rather than the server's.
+	QualitySizeFallbackName string `json:"qualitySizeFallbackName,omitempty"`
 }
 
 // SyncOverrides allows users to override specific profile settings from TRaSH defaults.
@@ -1015,7 +1024,14 @@ type SyncResult struct {
 	// per row. nil when no diff was computed (e.g. pre-update GET
 	// failed) - downstream treats nil as "no spec diff to show".
 	CFSpecDiffs    map[string]*CFSpecDiff `json:"cfSpecDiffs,omitempty"`
-	ProfileCreated bool                   `json:"profileCreated,omitempty"`
+	// QualitySizesWritten is the size the sync put on each quality, on the
+	// versions that keep sizes on the profile. Recorded because the rule only
+	// stores a pointer to a set: a set the user deletes later resolves to
+	// nothing, so a rerun from history would write no sizes at all, and the
+	// history view would have only an id to show. Empty on the versions that
+	// keep sizes in the shared list, since nothing is written there.
+	QualitySizesWritten map[string]QSOverride `json:"qualitySizesWritten,omitempty"`
+	ProfileCreated      bool                  `json:"profileCreated,omitempty"`
 	ArrProfileID   int                    `json:"arrProfileId,omitempty"`
 	ArrProfileName string                 `json:"arrProfileName,omitempty"`
 	Errors         []string               `json:"errors"`
@@ -1223,7 +1239,8 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 			delete(selectedCFsMap, id)
 		}
 
-		arrProfile, err := BuildArrProfile(profile, ad, qualityDefs, languages, nameToID, selectedCFsMap, req.ProfileName, cfScoreOverrides, customCFs, req.QualityStructure, profileQualitySizes(req, ad, instance, qualityDefs))
+		arrProfile, err := BuildArrProfile(profile, ad, qualityDefs, languages, nameToID, selectedCFsMap, req.ProfileName, cfScoreOverrides, customCFs, req.QualityStructure,
+			recordSizesWritten(result, profileQualitySizes(req, ad, instance, qualityDefs)))
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("build profile: %v", err))
 			return result, nil
@@ -1636,7 +1653,8 @@ func ExecuteSyncPlan(ad *AppData, instance Instance, req SyncRequest, plan *Sync
 				// something else as well.
 				oldSizes := collectQualitySizes(targetProfile.Items)
 
-				newItems, err := resolveQualityItems(itemsSource, qualityByName, profileQualitySizes(req, ad, instance, qualityDefs))
+				newItems, err := resolveQualityItems(itemsSource, qualityByName,
+					recordSizesWritten(result, profileQualitySizes(req, ad, instance, qualityDefs)))
 				if err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("resolve quality items: %v", err))
 				} else {
@@ -2841,6 +2859,26 @@ func applyQualitySize(item *arr.ArrQualityItem, sizes map[string]QualitySizeTrip
 // collectQualitySizes flattens a profile's items into quality name → sizes.
 // Leaves only: a group row carries no size, so including it would compare a
 // nil against a nil forever.
+// recordSizesWritten snapshots a resolved size map onto the result. Takes the
+// same map the write is about to use, so what history reports and what the
+// instance receives cannot drift apart.
+func recordSizesWritten(result *SyncResult, sizes map[string]QualitySizeTriple) map[string]QualitySizeTriple {
+	if len(sizes) == 0 {
+		return sizes
+	}
+	out := make(map[string]QSOverride, len(sizes))
+	for name, t := range sizes {
+		if t.Min == nil || t.Preferred == nil || t.Max == nil {
+			// A partial triple is never produced by a set or an override, and
+			// recording half a value would be worse than recording none.
+			continue
+		}
+		out[name] = QSOverride{Min: *t.Min, Preferred: *t.Preferred, Max: *t.Max}
+	}
+	result.QualitySizesWritten = out
+	return sizes
+}
+
 func collectQualitySizes(items []arr.ArrQualityItem) map[string]QualitySizeTriple {
 	out := map[string]QualitySizeTriple{}
 	var walk func(its []arr.ArrQualityItem)

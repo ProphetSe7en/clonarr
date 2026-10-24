@@ -2644,6 +2644,16 @@ export default {
         scoreOverrides: (rule && rule.scoreOverrides) || sh.scoreOverrides || null,
         qualityOverrides: (rule && rule.qualityOverrides) || sh.qualityOverrides || null,
         qualityStructure: (rule && rule.qualityStructure) || sh.qualityStructure || null,
+        // Sizes come from the entry, like everything else on this path, so a
+        // rerun reproduces that point in time rather than the rule's current
+        // choice. The source is sent first because reusing it keeps the rule
+        // following the set it followed. qualitySizeFallback is the numbers
+        // the sync recorded, and the backend reaches for them only when that
+        // set no longer exists, which would otherwise write nothing at all.
+        qualitySizeSource: sh.qualitySizeSource || 'off',
+        qualitySizeOverrides: sh.qualitySizeOverrides || {},
+        qualitySizeFallback: sh.qualitySizesWritten || {},
+        qualitySizeFallbackName: this.qsRestoredSetName(sh),
         overrides: (rule && rule.overrides) || sh.overrides || null,
         behavior: (rule && rule.behavior) || sh.behavior || null
       };
@@ -2771,6 +2781,10 @@ export default {
         scoreOverrides: sh.scoreOverrides || null,
         qualityOverrides: sh.qualityOverrides || null,
         qualityStructure: sh.qualityStructure || null,
+        qualitySizeSource: sh.qualitySizeSource || 'off',
+        qualitySizeOverrides: sh.qualitySizeOverrides || {},
+        qualitySizeFallback: sh.qualitySizesWritten || {},
+        qualitySizeFallbackName: this.qsRestoredSetName(sh),
         overrides: sh.overrides || null,
         behavior: sh.behavior || null
       };

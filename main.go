@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"clonarr/internal/api"
+	"clonarr/internal/arr"
 	"clonarr/internal/auth"
 	"clonarr/internal/core"
 	"clonarr/internal/core/calculator"
@@ -119,18 +120,18 @@ func main() {
 	calcStore := calculator.NewStore(filepath.Join(configDir, "calculator-sessions"))
 
 	app := &core.App{
-		Config:            cfgStore,
-		Trash:             trashStore,
-		Profiles:          profilesStore,
-		CustomCFs:         customCFsStore,
-		CFGroups:          cfGroupsStore,
-		Sandbox:           sandboxStore,
-		CalcSessions:      calcStore,
-		DebugLog:          debugLogStore,
-		ActivityLog:       activityLogStore,
-		Version:           Version,
-		DevFeatures:       devFeatures,
-		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
+		Config:        cfgStore,
+		Trash:         trashStore,
+		Profiles:      profilesStore,
+		CustomCFs:     customCFsStore,
+		CFGroups:      cfGroupsStore,
+		Sandbox:       sandboxStore,
+		CalcSessions:  calcStore,
+		DebugLog:      debugLogStore,
+		ActivityLog:   activityLogStore,
+		Version:       Version,
+		DevFeatures:   devFeatures,
+		HTTPClient:    arr.NewHTTPClient(30 * time.Second),
 		NotifyClient:  &http.Client{Timeout: 10 * time.Second},
 		SafeClient:    netsec.NewSafeHTTPClient(10*time.Second, nil),
 		PullUpdateCh:  make(chan string, 1),

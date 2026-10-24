@@ -173,6 +173,21 @@ export default {
       return !!this.profileDetail?._editLockedArrProfileId;
     },
 
+    // The name a rerun from history gives the sizes it restores, when the set
+    // it used has been deleted since. Composed here rather than on the server
+    // so the date reads in the viewer's own format, and keyed on the entry's
+    // own timestamp so rerunning the same entry twice reuses one set instead
+    // of stacking copies.
+    qsRestoredSetName(sh) {
+      const when = sh?.lastSync || sh?.appliedAt;
+      const day = when ? new Date(when).toLocaleDateString() : '';
+      const was = (sh?.qualitySizeSetName || '').trim();
+      if (was && was !== 'a set that no longer exists') {
+        return day ? `${was} (restored ${day})` : `${was} (restored)`;
+      }
+      return day ? `Restored sizes ${day}` : 'Restored sizes';
+    },
+
     pdQSShowTab() {
       return !!this.pdQSPerProfile || !!this.pdQSUnknown;
     },

@@ -661,7 +661,10 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		// intent that was actually written, which is the point of the
 		// snapshot. The scheduler produces most history rows, so leaving
 		// these out made the field empty almost everywhere.
-		QualitySizeSource:    req.QualitySizeSource,
+		QualitySizeSource:   req.QualitySizeSource,
+		QualitySizesWritten: result.QualitySizesWritten,
+		QualitySizeSetName: QualitySizeSourceLabel(
+			req.QualitySizeSource, ad.QualitySizes, app.Config.Get().QualitySizeSets),
 		QualitySizeOverrides: req.QualitySizeOverrides,
 		CFsCreated:           result.CFsCreated,
 		CFsUpdated:           result.CFsUpdated,

@@ -189,6 +189,66 @@ func findGuideSetByType(sets []*TrashQualitySize, qsType string) *TrashQualitySi
 // omitted them, so each of those syncs wrote no sizes while the rule said it
 // should. Reconciling the two in one place means a new entry point cannot
 // silently stop writing sizes.
+// QualitySizeSetTitle gives a guide set type a display name. "series" and
+// "movie" read better with a capital; the sqp sets are known by their own
+// spelling.
+func QualitySizeSetTitle(setType string) string {
+	switch setType {
+	case "sqp-streaming":
+		return "SQP Streaming"
+	case "sqp-uhd":
+		return "SQP UHD"
+	case "":
+		return ""
+	}
+	return strings.ToUpper(setType[:1]) + setType[1:]
+}
+
+// QualitySizeSourceResolves reports whether a stored source still names a set
+// that exists. A source that does not resolve writes nothing, which is the
+// quiet failure a rerun from history has to avoid.
+func QualitySizeSourceResolves(source string, guideSets []*TrashQualitySize, userSets []QualitySizeSet) bool {
+	switch {
+	case source == "" || source == QSSourceOff:
+		return true // nothing to resolve, and nothing claimed
+	case strings.HasPrefix(source, QSSourceCustomPfx):
+		id := strings.TrimPrefix(source, QSSourceCustomPfx)
+		for _, set := range userSets {
+			if set.ID == id {
+				return true
+			}
+		}
+		return false
+	case strings.HasPrefix(source, QSSourceSetPfx):
+		return findGuideSetByTrashID(guideSets, strings.TrimPrefix(source, QSSourceSetPfx)) != nil
+	case source == QSSourceGuide:
+		return true
+	}
+	return false
+}
+
+// QualitySizeSourceLabel names a stored source for display. Resolved when the
+// sync runs rather than when someone reads the history, because the set it
+// names can be deleted in between and a raw id tells a reader nothing.
+func QualitySizeSourceLabel(source string, guideSets []*TrashQualitySize, userSets []QualitySizeSet) string {
+	switch {
+	case source == "" || source == QSSourceOff:
+		return ""
+	case strings.HasPrefix(source, QSSourceCustomPfx):
+		id := strings.TrimPrefix(source, QSSourceCustomPfx)
+		for _, set := range userSets {
+			if set.ID == id {
+				return set.Name
+			}
+		}
+	case strings.HasPrefix(source, QSSourceSetPfx):
+		if set := findGuideSetByTrashID(guideSets, strings.TrimPrefix(source, QSSourceSetPfx)); set != nil {
+			return QualitySizeSetTitle(set.Type)
+		}
+	}
+	return "a set that no longer exists"
+}
+
 func FillQualitySizeIntent(req *SyncRequest, rule *AutoSyncRule, sets []QualitySizeSet) {
 	req.UserQualitySizeSets = sets
 	if req.QualitySizeSource != "" || rule == nil {
