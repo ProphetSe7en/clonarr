@@ -1,5 +1,60 @@
 # Changelog
 
+## v3.5.0
+
+Sonarr v5 moved quality sizes out of Settings and onto each quality profile, which left v5 users unable to sync sizes at all. This release follows that move with a Quality size tab in the profile editor, and carries sizes through Compare, drift detection, sync history and rule export. The profile editor also lets you add your own custom formats and change scores without turning Customize on first, and a long list of reported bugs is fixed.
+
+### Highlights
+
+- **Quality sizes per profile, for Sonarr v5**: pick the TRaSH-Guides series or anime sizes, type your own numbers for single qualities, or save your own set and reuse it on other profiles. Sonarr v4 and Radarr work exactly as before.
+- **Compare reads sizes too**: see how a profile's sizes stand against the guide, and what they would become, before you take the profile over as a sync rule.
+- **A size changed in Sonarr is noticed**: an edit made directly in Sonarr v5 shows up in the drift check like any other change, and is put back if you have that turned on.
+- **Sizes travel with a rule**: exporting a sync rule carries its sizes, and a size set you saved yourself travels with the file.
+- **Custom formats and scores without Customize**: add your own formats and change any format's score with Customize off. That button now does one thing, bring in TRaSH-Guides formats the profile does not normally use.
+- **A wrong address no longer looks like a successful sync**: Clonarr refuses a redirected request and names the address it was sent to. Thanks @pitmanr2003 (#94).
+
+### New: Quality sizes per profile (Sonarr v5)
+
+Sonarr v5 keeps the minimum, preferred and maximum size of every quality on the profile itself instead of in one shared list, so the Quality Definition tab cannot reach them any more. Profiles on a Sonarr v5 instance now get a Quality size tab in the profile editor.
+
+In it you pick where the sizes come from: off, the TRaSH-Guides series sizes, the anime sizes, or a set you saved yourself. Any single quality can be set to Custom with your own three numbers, and the rest keeps following the set. The table shows what is on the instance now beside what Clonarr will write, so you can see every change before you sync.
+
+A set you save yourself can be reused on other profiles and other instances, and Clonarr will not let you delete a set a rule still points at. Delete one anyway and the rules that used it keep the sizes they had.
+
+Sizes are part of the sync like everything else: they show up in the dry run, in the sync summary, and in the sync history, which records the set that was used and the sizes that were written.
+
+Note on naming: this is quality sizes per profile on Sonarr v5, not a guide option. Sonarr v5 is expected to let a profile name a guide size set, and the TRaSH-Guides change that would publish those values is still open, so there is no "guide" source yet. When those values land, it becomes one more entry in the picker.
+
+### New: Custom formats and scores without Customize
+
+Your own custom formats can always be added to a profile, and any format's score can always be changed, with Customize off. "Customize this profile" now covers only the two things it really unlocks: bringing in TRaSH-Guides formats that do not belong to this profile, and excluding formats the profile includes. The editor also remembers whether you turned Customize on, per sync rule.
+
+### Improved
+
+- Compare is renamed Import & Compare, and makes it clearer that you can take an existing Sonarr or Radarr profile over as a sync rule.
+- Sidebar sections can be pinned open, and the app picker no longer highlights on pages that are not tied to one app.
+- The browser Back button closes the profile editor, with a guard if you have unsaved changes.
+- Check for updates now follows your "What to check for" choices, so a default install no longer checks for changes made in your Arr unless you asked for that.
+- A failed naming check is reported instead of passing silently, and an address that answers with a web page is recognised by its body rather than its content type.
+- Saving an instance never stalls on a name that does not resolve.
+
+### Fixed
+
+- Saving an instance replaced everything Clonarr keeps about it, so correcting a URL or renaming an instance reset the list of custom formats Clonarr manages there, the drift fingerprints, and the auto-sync pause flag. A paused instance quietly resumed. Only the fields on the form are written now.
+- Sonarr or Radarr on an address that answers with a redirect: Clonarr followed the redirect, which turns a write into a read. Custom formats were reported as updated without anything being written, and creating one failed with a confusing error about a list where one format was expected. A redirected request is now refused, and the error names the address it was sent to, so Test points you at the right one. Thanks @pitmanr2003 (#94).
+- A format group where you pick one option, such as Golden Rule, lost your pick when you reopened the rule, and the next sync set the format you had picked to 0.
+- The Scoring Sandbox ignored the open Score Editor for titles parsed afterwards, so a format you had just added or rescored did not count. Imported score configs had the same problem. Thanks @TotAnon (#83).
+- Create in the New Quality Group dialog did nothing. Thanks @hifanx (#87).
+- Edit & Sync from Import & Compare replaced the Arr profile's quality groups and order with the guide's. Thanks @hifanx (#87).
+- Pinned sidebar sections were forgotten after a reload. Thanks @Asinin3 (#70).
+- The profile editor needed two Back presses to close.
+- Test checked the saved address instead of the one you had just typed, refused localhost, and gave an unhelpful error when the address returned a web page. Thanks @mtakemoto (#77).
+- Compare reversed the quality order for Radarr and reported quality order drift that was not there. Thanks @MaKTaiL (#76).
+- A quality size with an empty maximum or preferred value read as 0 instead of Unlimited. Thanks @fatSquirrel42 (#88).
+- When Sonarr or Radarr answers with an internal error, Clonarr now says so and keeps the rule enabled instead of turning the rule off and showing a fragment of the raw response.
+- Scores in Profile overview sat left of their column and had lost their green and red colouring.
+- Settings: even indentation for the TRaSH-Guides update rows, and messages point at the settings paths as they are now.
+
 ## v3.4.0
 
 This release adds a Release Title Generator that builds test releases straight from a profile, portable sync-rule import and export so you can move a rule between Clonarr installs, support for Sonarr and Radarr behind HTTP Basic Auth, and drift detection for quality ordering and grouping. The Scoring Sandbox is faster and clearer, and profile browsing gets a redesign.
