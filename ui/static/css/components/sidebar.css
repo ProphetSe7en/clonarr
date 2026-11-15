@@ -27,7 +27,7 @@
      inner overflow-x:auto containers handle their own scrolling. */
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
   grid-template-rows: auto 1fr;
-  min-height: 100vh;
+  min-height: calc(100vh / var(--ui-scale, 1));
   transition: grid-template-columns 0.22s ease;
 }
 [x-data="clonarr"][data-nav-style="sidebar"]:has(.sidebar.collapsed) {
@@ -50,7 +50,7 @@
    topnav mode. */
 [x-data="clonarr"][data-nav-style="topnav"] {
   display: block;
-  min-height: 100vh;
+  min-height: calc(100vh / var(--ui-scale, 1));
 }
 
 .sidebar {
@@ -60,7 +60,7 @@
   overflow: hidden;
   position: sticky;
   top: 0;
-  height: 100vh;
+  height: calc(100vh / var(--ui-scale, 1));
 }
 
 /* Every non-scrollable row gets flex-shrink: 0 so the nav (which has
@@ -403,7 +403,7 @@ a.sidebar-trash-commit:hover { text-decoration: underline; }
   left: calc(var(--sidebar-w) + 8px);
   bottom: 16px;
   width: 420px;
-  max-height: 70vh;
+  max-height: calc(70vh / var(--ui-scale, 1));
   overflow-y: auto;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);

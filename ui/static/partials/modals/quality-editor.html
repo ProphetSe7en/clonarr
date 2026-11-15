@@ -38,7 +38,7 @@
            top-to-bottom column layout while keeping DnD working
            on every cell. -->
       <div :style="{ maxWidth: _qsCols === 3 ? '900px' : _qsCols === 2 ? '700px' : '480px' }"
-           style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:8px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
+           style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:8px;width:100%;max-height:calc(90vh / var(--ui-scale, 1));display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.6)">
         <div style="padding:14px 18px;border-bottom:1px solid var(--bg-muted);display:flex;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0">
             <div style="font-size:15px;font-weight:600;color:var(--text-primary)">Edit Quality Items</div>
