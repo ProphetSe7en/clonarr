@@ -47,6 +47,10 @@ type Config struct {
 	TrustedProxies         string `json:"trustedProxies,omitempty"`         // comma-separated IPs — reverse-proxy deployments
 	TrustedNetworks        string `json:"trustedNetworks,omitempty"`        // comma-separated IPs/CIDRs for local-bypass; empty = Radarr-parity default
 	SessionTTLDays         int    `json:"sessionTtlDays,omitempty"`         // default 30
+	// URLBase is the reverse-proxy sub-path (e.g. "/clonarr"), set from the
+	// Settings UI. Applied at startup. A non-empty URL_BASE env var overrides
+	// it (and locks the UI field), matching the TRUSTED_PROXIES model.
+	URLBase string `json:"urlBase,omitempty"`
 }
 
 // PullSchedule holds the wall-clock pull schedule used when PullInterval is "specific".

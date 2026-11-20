@@ -933,6 +933,29 @@ func init() {
 	dummyHash = h
 }
 
+// ResolveBasePath picks the effective base path at startup. A URL_BASE env
+// var that normalizes to a non-root path wins and locks the setting (the UI
+// can't change it). An empty or "/" env var means "no override", so a
+// deployment that pins URL_BASE=/ (e.g. the TrueNAS app template) still lets
+// the user set the base from the UI. Otherwise the saved config value is
+// used. An invalid env value is an error (fail fast, as before); an invalid
+// saved value is reported via cfgErr and ignored so a bad UI edit can't
+// stop the container from starting.
+func ResolveBasePath(envRaw, cfgRaw string) (base string, locked bool, cfgErr error, err error) {
+	envBase, err := NormalizeBasePath(envRaw)
+	if err != nil {
+		return "", false, nil, err
+	}
+	if envBase != "" {
+		return envBase, true, nil, nil
+	}
+	cfgBase, cerr := NormalizeBasePath(cfgRaw)
+	if cerr != nil {
+		return "", false, cerr, nil
+	}
+	return cfgBase, false, nil, nil
+}
+
 // NormalizeBasePath validates and normalizes a URL_BASE env-var value.
 // Returns the canonical base path (no trailing slash) or "" for root.
 // A leading "/" is required; "/" alone normalizes to "". Trailing slashes
