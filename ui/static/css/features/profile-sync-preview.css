@@ -449,7 +449,7 @@ button.sp-summary-active:focus-visible {
   border-radius: 7px;
   position: sticky;
   top: 80px;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh / var(--ui-scale, 1) - 100px);
   overflow-y: auto;
 }
 /* Sidebar layout mirrors Custom Formats sidebar - no per-category

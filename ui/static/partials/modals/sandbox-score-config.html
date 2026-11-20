@@ -6,14 +6,14 @@
        setup in their own Score Editor without a screenshot. Never writes to a
        profile or to Arr. -->
   <div class="modal-overlay" x-show="sandboxConfigModal.show" @keydown.escape.window="sandboxConfigModal.show = false" x-cloak>
-    <div class="modal" style="max-width:760px;width:92vw" role="dialog" aria-modal="true" aria-labelledby="modal-title-sandbox-config" x-trap.noscroll.inert="sandboxConfigModal.show">
+    <div class="modal" style="max-width:760px;width:calc(92vw / var(--ui-scale, 1))" role="dialog" aria-modal="true" aria-labelledby="modal-title-sandbox-config" x-trap.noscroll.inert="sandboxConfigModal.show">
       <h2 id="modal-title-sandbox-config" class="modal-title" style="display:flex;align-items:center;gap:8px">
         <span>Share / Import score config</span>
         <span style="font-size:11px;color:var(--text-secondary);font-weight:400">(test-only · never changes a profile)</span>
       </h2>
 
       <div style="font-size:13px;color:var(--text-muted);margin:4px 0 6px">Copy this to share your tweaked scores. Anyone can paste it below to load the identical setup in their own Score Editor.</div>
-      <pre id="sandbox-config-pre" style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:10px 12px;margin:0;max-height:30vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;color:var(--text-body);white-space:pre;user-select:text" x-text="sandboxConfigModal.exportText"></pre>
+      <pre id="sandbox-config-pre" style="background:var(--bg-page);border:1px solid var(--border-subtle);border-radius:6px;padding:10px 12px;margin:0;max-height:calc(30vh / var(--ui-scale, 1));overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;color:var(--text-body);white-space:pre;user-select:text" x-text="sandboxConfigModal.exportText"></pre>
       <div style="margin-top:6px;display:flex;justify-content:flex-end">
         <button class="btn btn-sm btn-primary" @click="copySandboxConfigText()"><span x-text="sandboxConfigModal.copied ? '✓ Copied' : 'Copy'"></span></button>
       </div>

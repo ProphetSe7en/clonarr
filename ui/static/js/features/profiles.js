@@ -500,7 +500,32 @@ export default {
     setUIScale(value) {
       this.uiScale = value;
       localStorage.setItem('clonarr-ui-scale', value);
-      if (CSS.supports('zoom', '1')) document.documentElement.style.zoom = value;
+      this.applyUIScale(value);
+    },
+
+    // Zooms <html> to the UI Scale, then sets --ui-scale to how much the
+    // browser actually enlarged viewport units (vh/vw) by doing so. The CSS
+    // divides every vh/vw by it (see base.css). Measuring instead of reusing
+    // the zoom keeps this right if browsers stop enlarging viewport units
+    // under root zoom (CSSWG csswg-drafts#13016): it then measures 1. An
+    // invalid value is ignored by the browser and also measures 1.
+    applyUIScale(value) {
+      if (!CSS.supports('zoom', '1')) return;
+      const root = document.documentElement;
+      root.style.zoom = value;
+      const measureHeight = (sizeBox) => {
+        const box = document.createElement('div');
+        Object.assign(box.style, { position: 'fixed', top: '0', left: '0', width: '0', visibility: 'hidden', pointerEvents: 'none' });
+        sizeBox(box.style);
+        document.body.appendChild(box);
+        const height = box.getBoundingClientRect().height;
+        box.remove();
+        return height;
+      };
+      const windowHeight = measureHeight((s) => { s.bottom = '0'; });
+      const vhHeight = measureHeight((s) => { s.height = '100vh'; });
+      const enlargement = windowHeight > 0 ? Math.round((vhHeight / windowHeight) * 1000) / 1000 : 1;
+      root.style.setProperty('--ui-scale', String(enlargement || 1));
     },
 
     setTheme(value) {
@@ -5106,7 +5131,8 @@ export default {
         // that don't appear in any TRaSH/profile group).
         for (const cf of (this.extraCFAllCFs || [])) {
           if (cf.trashId === tid) {
-            return { name: cf.name, category: 'Custom', groupName: '', defaultScore: cf.score ?? 0, description: cf.description || '', isDangling: false };
+            const def = cf.trashScores?.[scoreSet] ?? cf.trashScores?.default ?? cf.score ?? 0;
+            return { name: cf.name, category: 'Custom', groupName: '', defaultScore: def, description: cf.description || '', isDangling: false };
           }
         }
         // Dangling - rule references a CF that no longer exists. Two cases:

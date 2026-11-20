@@ -19,11 +19,11 @@
   .arr-score-diff .arrow { margin: 0 2px; }
 
   /* Dry-run banner */
-  .dryrun-bar { background: var(--accent-blue-muted); border: 1px solid var(--accent-blue-hover); border-radius: 8px; padding: 12px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; max-height: 40vh; overflow-y: auto; }
+  .dryrun-bar { background: var(--accent-blue-muted); border: 1px solid var(--accent-blue-hover); border-radius: 8px; padding: 12px 20px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; max-height: calc(40vh / var(--ui-scale, 1)); overflow-y: auto; }
   .dryrun-bar .text { flex: 1; font-size: 13px; color: var(--accent-sky); }
   .dryrun-bar .text strong { color: var(--text-primary); }
   /* Sync result */
-  .result-banner { border-radius: 8px; padding: 14px 20px; margin-bottom: 16px; max-height: 40vh; overflow-y: auto; }
+  .result-banner { border-radius: 8px; padding: 14px 20px; margin-bottom: 16px; max-height: calc(40vh / var(--ui-scale, 1)); overflow-y: auto; }
   .result-banner.success { background: var(--accent-green-bg); border: 1px solid var(--accent-green-strong); color: var(--accent-green); }
   .result-banner.error { background: var(--accent-red-bg); border: 1px solid var(--accent-red-strong); color: var(--accent-red); }
   /* Neither a success nor a failure: nothing was written because there was
