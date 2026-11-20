@@ -1382,6 +1382,10 @@ export default {
         || cf?.description
         || '';
 
+      // See commitCloneCF: the row's `category` is the sidebar parent, the
+      // user's own category is on rawCustom.
+      const category = (cf?.rawCustom?.category || '').trim() || 'Custom';
+
       // Close the modal first so the editor takes focus cleanly.
       this.cancelCloneCF();
 
@@ -1395,7 +1399,7 @@ export default {
         id: '',
         name: newName,
         appType,
-        category: 'Custom',
+        category,
         newCategory: '',
         includeInRename,
         specifications: (rawSpecs || []).map(s => this.arrSpecToEditorSpec(s)),
@@ -1464,13 +1468,32 @@ export default {
       const includeInRename = !!(cf?.rawCustom?.includeInRename
         ?? trashSourceCF?.includeCustomFormatWhenRenaming
         ?? cf?.includeCustomFormatWhenRenaming);
+
+      // Category, scores and description are resolved the same way
+      // openCloneInEditor resolves them, so both clone paths produce the
+      // same CF. The row's own `category` cannot be used: it is the sidebar
+      // parent key and is always 'Custom' (see the row built in
+      // loadCFBrowse). The user's category lives on rawCustom. A TRaSH
+      // catalog entry has no user category, so a clone of one starts in the
+      // default 'Custom'.
+      const category = (cf?.rawCustom?.category || '').trim() || 'Custom';
+      const scoresMap = cf?.rawCustom?.trashScores
+        || trashSourceCF?.trash_scores
+        || cf?.trash_scores
+        || {};
+      const description = cf?.rawCustom?.description
+        || trashSourceCF?.description
+        || cf?.description
+        || '';
       const payload = {
         name: newName,
         appType,
-        category: 'Custom',
+        category,
         includeInRename,
         specifications,
         trashId: '',
+        trashScores: scoresMap,
+        description,
       };
 
       try {
