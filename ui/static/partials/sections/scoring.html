@@ -548,7 +548,7 @@
                    container (not the page), and only the rows in view are drawn
                    (see sandboxWindow). table-layout:fixed + a colgroup give every
                    row a predictable width so the fixed row height holds. -->
-              <div style="max-height:65vh;overflow:auto;border:1px solid var(--border-subtle);border-radius:6px"
+              <div style="max-height:calc(65vh / var(--ui-scale, 1));overflow:auto;border:1px solid var(--border-subtle);border-radius:6px"
                    x-init="$nextTick(() => { sandbox[activeAppType]._vH = $el.clientHeight; _sandboxMeasureRow(activeAppType, $el) })"
                    @scroll="sandboxOnScroll(activeAppType, $event)">
               <table style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0">

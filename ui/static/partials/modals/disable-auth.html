@@ -3,7 +3,7 @@
   <div x-show="disableAuthModalOpen" x-cloak class="modal-overlay" style="z-index:10000"
        @keydown.escape.window="disableAuthModalOpen = false; disableAuthError = ''">
     <div @click.outside="disableAuthModalOpen = false; disableAuthError = ''"
-         style="background:var(--bg-card);border:2px solid var(--banner-warn-border);border-radius:10px;padding:24px 28px;width:min(520px,100%);max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px var(--alpha-shadow)"
+         style="background:var(--bg-card);border:2px solid var(--banner-warn-border);border-radius:10px;padding:24px 28px;width:min(520px,100%);max-height:calc(90vh / var(--ui-scale, 1));overflow-y:auto;box-shadow:0 12px 40px var(--alpha-shadow)"
          role="dialog" aria-modal="true" aria-labelledby="modal-title-disable-auth" x-trap.noscroll.inert="disableAuthModalOpen">
       <h2 id="modal-title-disable-auth" style="margin:0 0 10px;font-size:20px;color:var(--accent-red-soft)">⚠️ Disable authentication?</h2>
       <p style="font-size:13px;line-height:1.5;color:var(--text-body);margin:10px 0 8px">
