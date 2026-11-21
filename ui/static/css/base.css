@@ -1,6 +1,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
   html { overflow-y: scroll; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-app); color: var(--text-primary); min-height: 100vh; }
+  /* UI Scale (Settings) sets `zoom` on <html>, and zoom multiplies viewport
+     units too. Every vh/vw in the stylesheets is divided by --ui-scale (how
+     much vh is enlarged, measured by applyUIScale in JS) so window-sized
+     boxes keep fitting the window. */
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-app); color: var(--text-primary); min-height: calc(100vh / var(--ui-scale, 1)); }
   [x-cloak] { display: none !important; }
   .group-desc-html b, .group-desc-html strong { color: var(--accent-orange); font-style: normal; }
 

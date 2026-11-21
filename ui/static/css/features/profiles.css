@@ -882,7 +882,7 @@ button.v3-status:hover { text-decoration: underline; }
   padding: 6px;
   position: sticky;
   top: 10px;
-  max-height: calc(100vh - 80px);
+  max-height: calc(100vh / var(--ui-scale, 1) - 80px);
   overflow-y: auto;
 }
 .cf-sr-side-all .cf-sr-side-label { font-weight: 500; }

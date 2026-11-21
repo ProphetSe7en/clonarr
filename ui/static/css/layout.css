@@ -268,7 +268,7 @@
   }
   @media (max-width: 850px) {
     .topnav-app-name { display: none; }
-    .changelog-dropdown { position: fixed; top: 120px; left: 16px; right: 16px; width: auto; max-height: 60vh; }
+    .changelog-dropdown { position: fixed; top: 120px; left: 16px; right: 16px; width: auto; max-height: calc(60vh / var(--ui-scale, 1)); }
   }
   @media (max-width: 600px) {
     .topnav-logo-name { font-size: 14px; }

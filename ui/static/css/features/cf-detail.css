@@ -140,7 +140,7 @@
     background: var(--bg-elevated);
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh / var(--ui-scale, 1) - 200px);
     overflow-y: auto;
     position: sticky;
     top: 12px;
@@ -814,7 +814,7 @@
   .cat-sqp .detail-section-header, .cat-sqp .pb-cat-header { border-left: 3px solid var(--cat-sqp); }
   .cf-info { display: inline-block; cursor: default; color: var(--text-muted); font-size:13px; margin-left: 4px; }
   .cf-info:hover { color: var(--text-body); }
-  #cf-tooltip-portal { position: fixed; width: 340px; max-width: 90vw; max-height: 80vh; overflow-y: auto; padding: 10px 12px; background: var(--bg-elevated-hover); border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 12px; color: var(--text-body); line-height: 1.5; z-index: 10000; box-shadow: 0 4px 12px var(--alpha-shadow); display: none; word-wrap: break-word; }
+  #cf-tooltip-portal { position: fixed; width: 340px; max-width: calc(90vw / var(--ui-scale, 1)); max-height: calc(80vh / var(--ui-scale, 1)); overflow-y: auto; padding: 10px 12px; background: var(--bg-elevated-hover); border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 12px; color: var(--text-body); line-height: 1.5; z-index: 10000; box-shadow: 0 4px 12px var(--alpha-shadow); display: none; word-wrap: break-word; }
   #cf-tooltip-portal a { color: var(--accent-blue); text-decoration: underline; }
   #cf-tooltip-portal a:hover { color: var(--accent-sky); }
   #cf-tooltip-portal .desc-table { white-space: normal; }
@@ -829,10 +829,11 @@
      forcing one giant scroll.
      ============================================================ */
   .cf-editor-modal {
-    width: min(1100px, 95vw);
+    width: min(1100px, calc(95vw / var(--ui-scale, 1)));
     max-width: none !important;
-    max-height: 90vh;
-    height: 90vh;
+    /* Divide out the UI Scale zoom; see base.css. */
+    max-height: calc(90vh / var(--ui-scale, 1));
+    height: calc(90vh / var(--ui-scale, 1));
     display: flex;
     flex-direction: column;
     padding: 0 !important;
