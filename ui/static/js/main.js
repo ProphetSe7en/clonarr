@@ -1224,6 +1224,7 @@ export function clonarr() {
         if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
+        if (fields && fields.includes('urlBase')) body.urlBase = this.config.urlBase || '';
         // 401 handled centrally by the fetch wrapper.
         const r = await fetch('/api/config', {
           method: 'PUT',
@@ -1236,12 +1237,21 @@ export function clonarr() {
           let msg = 'Could not save settings';
           try { const data = await r.json(); if (data && data.error) msg = data.error; } catch {}
           this.showToast(msg, 'error', 6000);
-          return;
+          return false;
         }
         if (pullScheduleChanged) await this.loadTrashStatus();
+        return true;
       } catch (e) {
         console.error('saveConfig:', e);
         this.showToast('Could not save settings (network error)', 'error', 6000);
+        return false;
+      }
+    },
+
+    // URL Base is applied at startup, so saving only stages it.
+    async saveUrlBase() {
+      if (await this.saveConfig(['urlBase'])) {
+        this.showToast('URL Base saved. Restart Clonarr to apply it.', 'info', 8000);
       }
     },
 

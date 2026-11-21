@@ -15,7 +15,7 @@ export default {
     disableAuthModalOpen: false,
     disableAuthPassword: '',
     disableAuthError: '',
-    authStatus: { configured: false, authenticated: false, username: '', localBypass: false, authentication: '', authenticationRequired: '', trustedNetworksLocked: false, trustedProxiesLocked: false, trustedNetworksEffective: '', trustedProxiesEffective: '', urlBase: '' },
+    authStatus: { configured: false, authenticated: false, username: '', localBypass: false, authentication: '', authenticationRequired: '', trustedNetworksLocked: false, trustedProxiesLocked: false, trustedNetworksEffective: '', trustedProxiesEffective: '', urlBase: '', urlBaseLocked: false },
     authStatusLoadError: false,
     noAuthBannerDismissed: false,
     securitySaveMsg: '',
@@ -56,6 +56,7 @@ export default {
           trustedNetworksEffective: data.trusted_networks_effective || '',
           trustedProxiesEffective: data.trusted_proxies_effective || '',
           urlBase: data.url_base || '',
+          urlBaseLocked: !!data.url_base_locked,
         };
         // When env-locked, reflect the effective value in the disabled input
         // so the user can see what's actually enforced. Only applies if
