@@ -375,6 +375,12 @@ export function clonarr() {
       // factor. Divide every actual-pixel measurement by zoom so the values
       // round-trip back to the same physical position. Defaults to 1 when
       // no zoom is applied.
+      //
+      // Related but separate from applyUIScale() in features/profiles.js,
+      // which compensates the same zoom for viewport units through the
+      // --ui-scale custom property. That one is about how large a vh is,
+      // this one is about where a fixed-position element lands. Neither
+      // replaces the other, so do not drop one as a duplicate of the other.
       const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
       // Collapsed-sidebar triggers (60px wide, anchored at the left edge)
       // would land their centered-above tooltip ~130px to the right of
