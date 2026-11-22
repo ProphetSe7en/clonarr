@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.5.1
+
+A small fix-only release following v3.5.0.
+
+### Fixed
+
+- **Your own custom formats show their description and score when you add them to a profile.** Applying one of your own formats in the profile editor left the description empty and showed no default score, so there was nothing on screen to tell two of them apart. Thanks @MaKTaiL (#92).
+- **Windows stay on screen at the Default and Large UI Scale.** At the two larger scales, anything sized against the browser window grew past it: the custom format editor lost its title and its Save and Cancel buttons, the sidebar lost its Check and Pull footer, and side panels ran off the edge. Thanks @samtheruby (#98).
+- **A cloned custom format keeps its category, description and score.** Every clone landed in Custom, whichever of your own categories the original was in, and cloning straight from the modal also dropped the description and every score, so the two buttons in that modal produced different formats. Both now copy the same thing. Thanks @droemmelbert (#97). A clone of a TRaSH-Guides format still starts in Custom, since a guide format has no category of yours to inherit.
+- **The warning on an exclusive group is shown once.** Profile Builder printed "only score or enable one of them" right under a group description that already ends with that same sentence.
+
 ## v3.5.0
 
 Sonarr v5 moved quality sizes out of Settings and onto each quality profile, which left v5 users unable to sync sizes at all. This release follows that move with a Quality size tab in the profile editor, and carries sizes through Compare, drift detection, sync history and rule export. The profile editor also lets you add your own custom formats and change scores without turning Customize on first, and a long list of reported bugs is fixed.
