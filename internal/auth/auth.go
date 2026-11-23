@@ -970,7 +970,14 @@ func NormalizeBasePath(raw string) (string, error) {
 	if !strings.HasPrefix(s, "/") {
 		return "", fmt.Errorf("URL_BASE must start with '/' (got %q)", raw)
 	}
-	s = strings.TrimRight(s, "/")
+	// Trim trailing slashes and whitespace together: trimming them in
+	// separate passes left "/a /" as "/a " (a trailing space).
+	s = strings.TrimRightFunc(s, func(r rune) bool { return r == '/' || unicode.IsSpace(r) })
+	if s == "" {
+		// Only slashes ("//", "///"): same as "/" (root). Without this the
+		// segment loop below slices s[1:] of an empty string and panics.
+		return "", nil
+	}
 	if strings.Contains(s, "//") {
 		return "", fmt.Errorf("URL_BASE must not contain '//' (got %q)", raw)
 	}

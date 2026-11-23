@@ -1252,9 +1252,10 @@ export function clonarr() {
     // URL Base is applied at startup, so saving only stages it.
     async saveUrlBase() {
       if (await this.saveConfig(['urlBase'])) {
-        // Mirror the server's normalization for accepted values ("/" and
-        // trailing slashes collapse) so field and badge match what's stored.
-        const v = (this.config.urlBase || '').trim().replace(/\/+$/, '');
+        // Mirror the server's normalization for accepted values (trailing
+        // slashes and whitespace are trimmed; "/" and "//" mean root) so the
+        // field and badge match what's stored.
+        const v = (this.config.urlBase || '').trim().replace(/[\/\s]+$/, '');
         this.config.urlBase = v;
         this.savedUrlBase = v;
         this.showToast(v === this.authStatus.urlBase ? 'URL Base saved.' : 'URL Base saved. Restart Clonarr to apply it.', 'info', 8000);
