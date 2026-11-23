@@ -509,6 +509,11 @@ export default {
     // the zoom keeps this right if browsers stop enlarging viewport units
     // under root zoom (CSSWG csswg-drafts#13016): it then measures 1. An
     // invalid value is ignored by the browser and also measures 1.
+    //
+    // Related but separate from the tooltip portal in main.js, which divides
+    // measured rects by the same zoom so a fixed-position element lands where
+    // it was measured. That one is about position, this one is about size.
+    // Neither replaces the other, so do not drop one as a duplicate.
     applyUIScale(value) {
       if (!CSS.supports('zoom', '1')) return;
       const root = document.documentElement;
