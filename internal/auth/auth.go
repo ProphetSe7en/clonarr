@@ -957,11 +957,15 @@ func ResolveBasePath(envRaw, cfgRaw string) (base string, locked bool, cfgErr er
 	return cfgBase, false, nil, nil
 }
 
-// NormalizeBasePath validates and normalizes a URL_BASE env-var value.
-// Returns the canonical base path (no trailing slash) or "" for root.
-// A leading "/" is required; "/" alone normalizes to "". Trailing slashes
-// are stripped. Double-slashes, query/fragment chars, and dot-segments
-// are rejected.
+// NormalizeBasePath validates and normalizes a URL base, from the URL_BASE
+// env var or the Settings field. Returns the canonical base path (no
+// trailing slash) or "" for root. Surrounding whitespace and trailing
+// slashes are trimmed, so "/", "//" and "" all mean root. Otherwise a
+// leading "/" is required, and each segment may only use URL-safe
+// characters (letters, digits, "-", "_", ".", "~"). Anything else would be
+// percent-encoded in browser URLs and never match the session and CSRF
+// cookie Path, which breaks setup and login. Empty segments ("//" inside
+// the path), dot-segments, and query/fragment chars are rejected.
 func NormalizeBasePath(raw string) (string, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" || s == "/" {
@@ -993,8 +997,20 @@ func NormalizeBasePath(raw string) (string, error) {
 		if seg == "" || seg == "." || seg == ".." {
 			return "", fmt.Errorf("URL_BASE has invalid path segment %q", seg)
 		}
+		for _, r := range seg {
+			if !isURLSafeBaseRune(r) {
+				return "", fmt.Errorf("URL_BASE may only contain letters, digits, '-', '_', '.', '~' and '/' (got %q)", raw)
+			}
+		}
 	}
 	return s, nil
+}
+
+// isURLSafeBaseRune reports whether r is an RFC 3986 unreserved character,
+// which browsers never percent-encode in a path.
+func isURLSafeBaseRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+		r == '-' || r == '_' || r == '.' || r == '~'
 }
 
 // ===== Endpoint classification =====

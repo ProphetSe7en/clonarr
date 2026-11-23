@@ -742,7 +742,7 @@
               <template x-if="!authStatus.urlBaseLocked">
                 <span style="display:contents">
                   <input class="input" type="text" placeholder="/clonarr" x-model.trim="config.urlBase" @change="saveUrlBase()" style="width:220px" autocomplete="off">
-                  <span style="font-size:12px;color:var(--text-muted)">Leading slash, no trailing slash. Restart to apply.</span>
+                  <span style="font-size:12px;color:var(--text-muted)">Starts with /. Letters, digits, - _ . ~ only. Restart to apply.</span>
                   <span x-show="savedUrlBase !== authStatus.urlBase" style="font-size:12px;color:var(--accent-orange)">Restart pending</span>
                 </span>
               </template>

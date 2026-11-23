@@ -40,7 +40,7 @@ func TestNormalizeBasePath(t *testing.T) {
 	ok := map[string]string{
 		"": "", "/": "", "//": "", "///": "", " // ": "",
 		"/clonarr": "/clonarr", "/clonarr/": "/clonarr", "/clonarr//": "/clonarr",
-		" /a/b ": "/a/b", "/0 /": "/0", "/clonarr / /": "/clonarr", "/my app": "/my app", "/.well": "/.well", "/a..b": "/a..b",
+		" /a/b ": "/a/b", "/0 /": "/0", "/clonarr / /": "/clonarr", "/a-b_c.d~E9": "/a-b_c.d~E9", "/Clonarr/v2": "/Clonarr/v2", "/.well": "/.well", "/a..b": "/a..b",
 	}
 	for in, want := range ok {
 		got, err := NormalizeBasePath(in)
@@ -48,7 +48,7 @@ func TestNormalizeBasePath(t *testing.T) {
 			t.Errorf("NormalizeBasePath(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	for _, in := range []string{"clonarr", "//a", "/a//b", "/a?x", "/a#x", "/a/./b", "/a/../b", "/..", "/.", "/a\x00", "/a\x7f"} {
+	for _, in := range []string{"clonarr", "//a", "/a//b", "/a?x", "/a#x", "/a/./b", "/a/../b", "/..", "/.", "/a\x00", "/a\x7f", "/my app", "/café", "/a%20b", "/a+b", "/a;b", "/a:b", "/a@b", "/a'b"} {
 		if got, err := NormalizeBasePath(in); err == nil {
 			t.Errorf("NormalizeBasePath(%q) = %q, want error", in, got)
 		}
@@ -59,7 +59,7 @@ func TestNormalizeBasePath(t *testing.T) {
 // never panics, an accepted value is "" or a clean "/seg[/seg...]" path, and
 // normalizing is idempotent.
 func FuzzNormalizeBasePath(f *testing.F) {
-	for _, s := range []string{"", "/", "//", "///", " // ", "/clonarr", "/clonarr/", "/a//b", "/a/../b", "/..", "clonarr", "/a?b", "/\x00", "/0 /", "/a\t/"} {
+	for _, s := range []string{"", "/", "//", "///", " // ", "/clonarr", "/clonarr/", "/a//b", "/a/../b", "/..", "clonarr", "/a?b", "/\x00", "/0 /", "/a\t/", "/my app", "/café"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, in string) {
@@ -74,6 +74,11 @@ func FuzzNormalizeBasePath(f *testing.F) {
 			for _, seg := range strings.Split(out[1:], "/") {
 				if seg == "." || seg == ".." {
 					t.Fatalf("NormalizeBasePath(%q) = %q: dot segment", in, out)
+				}
+				for _, r := range seg {
+					if !isURLSafeBaseRune(r) {
+						t.Fatalf("NormalizeBasePath(%q) = %q: unsafe rune %q", in, out, r)
+					}
 				}
 			}
 		}

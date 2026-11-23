@@ -256,7 +256,7 @@ location /clonarr/ {
 }
 ```
 
-Leading slash required, no trailing slash. Leave it empty for root-path access (default).
+Leading slash required. Letters, digits, `-`, `_`, `.` and `~` only, with `/` between segments. Other characters, such as spaces, would break login cookies, so they're rejected. Leave it empty for root-path access (default).
 
 When a URL base is active, requests to `/` redirect to the base, and `/api/health` answers both at the root and under the base. Healthchecks and "open Web UI" links that don't know the base keep working.
 
