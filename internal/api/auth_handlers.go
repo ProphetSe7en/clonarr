@@ -32,6 +32,9 @@ type AuthHandlers struct {
 	Store    *auth.Store
 	Version  string
 	BasePath string // URL prefix, e.g. "/clonarr" — empty for root
+	// BasePathLocked is true when BasePath came from the URL_BASE env var,
+	// which overrides (and disables) the Settings field.
+	BasePathLocked bool
 }
 
 // ---------- Setup wizard ----------
@@ -360,6 +363,7 @@ func (h *AuthHandlers) handleAuthStatus(w http.ResponseWriter, r *http.Request) 
 		"authentication":          string(cfg.Mode),        // needed for no-auth banner in UI
 		"authentication_required": string(cfg.Requirement), // needed for UI dropdown state
 		"url_base":                h.BasePath,
+		"url_base_locked":         h.BasePathLocked,
 	}
 	if adminEquivalent {
 		resp["username"] = h.Store.Username()
@@ -554,7 +558,7 @@ func requireAuthForAPI(w http.ResponseWriter) {
 //
 // Refuses to start (log.Fatal) on any unsafe combination (unknown enum
 // values) or on malformed auth.json.
-func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string, basePath string, configDir string, mux *http.ServeMux) *auth.Store {
+func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string, basePath string, basePathLocked bool, configDir string, mux *http.ServeMux) *auth.Store {
 	cfg := auth.DefaultConfig()
 	cfg.AuthFilePath = filepath.Join(configDir, "auth.json")
 	cfg.SessionsFilePath = filepath.Join(configDir, "sessions.json")
@@ -683,7 +687,7 @@ func InitAuth(ctx context.Context, configStore *core.ConfigStore, version string
 		}
 	})
 
-	authHandlers := &AuthHandlers{Store: store, Version: version, BasePath: basePath}
+	authHandlers := &AuthHandlers{Store: store, Version: version, BasePath: basePath, BasePathLocked: basePathLocked}
 
 	// Per-IP rate limit on credential-acceptance endpoints. Stops brute-
 	// force on /setup, /login, /api/auth/change-password without an

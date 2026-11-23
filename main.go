@@ -42,26 +42,33 @@ func main() {
 		dataDir = filepath.Join(configDir, "data")
 	}
 
-	basePath, err := auth.NormalizeBasePath(os.Getenv("URL_BASE"))
-	if err != nil {
-		log.Fatalf("URL_BASE invalid: %v", err)
-	}
-	if basePath != "" {
-		log.Printf("URL base: %s (serving from this prefix)", basePath)
-		// URL_BASE almost always means "behind a reverse proxy"; without
-		// TRUSTED_PROXIES set, X-Forwarded-Proto won't be honored, Secure
-		// cookies won't be set on HTTPS, and X-Forwarded-For from the proxy
-		// will be ignored. Warn at startup so misconfigurations are visible
-		// in the container log instead of silently breaking session security.
-		if os.Getenv("TRUSTED_PROXIES") == "" {
-			log.Printf("WARNING: URL_BASE is set but TRUSTED_PROXIES is empty — Clonarr won't trust X-Forwarded-Proto from your reverse proxy. Set TRUSTED_PROXIES to your proxy's IP so HTTPS Secure cookies and client-IP resolution work correctly.")
-		}
-	}
-
 	// Initialize stores
 	cfgStore := core.NewConfigStore(configDir)
 	if err := cfgStore.Load(); err != nil {
 		log.Printf("Warning: could not load config: %v", err)
+	}
+
+	basePath, basePathLocked, cfgBaseErr, err := auth.ResolveBasePath(os.Getenv("URL_BASE"), cfgStore.Get().URLBase)
+	if err != nil {
+		log.Fatalf("URL_BASE invalid: %v", err)
+	}
+	if cfgBaseErr != nil {
+		log.Printf("WARNING: saved URL Base setting is invalid (%v); serving from root", cfgBaseErr)
+	}
+	if basePath != "" {
+		source := "Settings"
+		if basePathLocked {
+			source = "URL_BASE env var"
+		}
+		log.Printf("URL base: %s (from %s, serving from this prefix)", basePath, source)
+		// A URL base almost always means "behind a reverse proxy"; without
+		// TRUSTED_PROXIES set, X-Forwarded-Proto won't be honored, Secure
+		// cookies won't be set on HTTPS, and X-Forwarded-For from the proxy
+		// will be ignored. Warn at startup so misconfigurations are visible
+		// in the container log instead of silently breaking session security.
+		if os.Getenv("TRUSTED_PROXIES") == "" && cfgStore.Get().TrustedProxies == "" {
+			log.Printf("WARNING: URL base is set but no trusted proxies are configured — Clonarr won't trust X-Forwarded-Proto from your reverse proxy. Set Trusted Proxies (Settings or TRUSTED_PROXIES) to your proxy's IP so HTTPS Secure cookies and client-IP resolution work correctly.")
+		}
 	}
 
 	trashStore := core.NewTrashStore(dataDir)
@@ -177,7 +184,7 @@ func main() {
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()
-	server := &api.Server{Core: app}
+	server := &api.Server{Core: app, BasePathLocked: basePathLocked}
 	server.RegisterRoutes(mux)
 
 	// Wire post-pull callback: ProfileSyncRunner.runPullAndSync calls this
@@ -262,7 +269,7 @@ func main() {
 	// dispatches to ProfileSyncRunner.runPullAndSync when Mode=auto.)
 
 	// ==== Authentication =====================================================
-	authStore := api.InitAuth(ctx, cfgStore, Version, basePath, configDir, mux)
+	authStore := api.InitAuth(ctx, cfgStore, Version, basePath, basePathLocked, configDir, mux)
 	server.AuthStore = authStore
 
 	// Static files
@@ -529,17 +536,31 @@ func main() {
 // withBasePath wraps a handler so it is only reachable under base (e.g.
 // "/clonarr"). It:
 //   - 301-redirects the bare base path (no trailing slash) → base/
-//   - 404s anything whose path does not start with base/
+//   - 302-redirects "/" → base/ so links to the root (e.g. a NAS app
+//     "Web UI" button that doesn't know the base) still land on the UI
+//   - serves /api/health at the root as well, so container healthchecks
+//     keep working without knowing the base
+//   - 404s anything else whose path does not start with base/
 //   - strips the prefix before passing to the inner handler, so inner code
 //     continues to work with root-relative paths (/api/..., /login, etc.)
 func withBasePath(base string, inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == base {
+		switch r.URL.Path {
+		case base, "/":
 			target := base + "/"
 			if r.URL.RawQuery != "" {
 				target += "?" + r.URL.RawQuery
 			}
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			code := http.StatusMovedPermanently
+			if r.URL.Path == "/" {
+				// Temporary: the base can change from Settings, and browsers
+				// cache 301s aggressively.
+				code = http.StatusFound
+			}
+			http.Redirect(w, r, target, code)
+			return
+		case "/api/health":
+			inner.ServeHTTP(w, r)
 			return
 		}
 		if !strings.HasPrefix(r.URL.Path, base+"/") {
