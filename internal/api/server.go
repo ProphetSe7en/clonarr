@@ -30,6 +30,10 @@ func (h *IndexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 type Server struct {
 	Core      *core.App
 	AuthStore *auth.Store
+	// BasePathLocked is the startup-resolved URL_BASE lock from
+	// auth.ResolveBasePath. Carried here so handleUpdateConfig enforces the
+	// same rule main.go resolved instead of re-deriving it from the env.
+	BasePathLocked bool
 	// updateConfigMu serializes handleUpdateConfig so the read-modify-write
 	// of AuthStore.Config() → UpdateConfig() cannot lose updates when two
 	// admins save concurrently. Core.Config.Update is already closure-under-

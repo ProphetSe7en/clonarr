@@ -16,6 +16,9 @@ export default {
     disableAuthPassword: '',
     disableAuthError: '',
     authStatus: { configured: false, authenticated: false, username: '', localBypass: false, authentication: '', authenticationRequired: '', trustedNetworksLocked: false, trustedProxiesLocked: false, trustedNetworksEffective: '', trustedProxiesEffective: '', urlBase: '', urlBaseLocked: false },
+    // URL Base as last stored on the server (normalized), separate from the
+    // typed value so a rejected edit can't show "Restart pending".
+    savedUrlBase: '',
     authStatusLoadError: false,
     noAuthBannerDismissed: false,
     securitySaveMsg: '',

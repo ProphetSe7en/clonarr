@@ -208,15 +208,16 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// urlBase: validated + normalized here, applied at next startup. Locked
-	// when a non-root URL_BASE env var is set (same rule as main.go), but a
-	// submission equal to the saved value is accepted as a no-op.
+	// when startup resolved the base from a URL_BASE env var
+	// (s.BasePathLocked), but a submission equal to the saved value is
+	// accepted as a no-op.
 	if req.URLBase != nil {
 		normalized, perr := auth.NormalizeBasePath(*req.URLBase)
 		if perr != nil {
 			writeError(w, 400, fmt.Sprintf("urlBase: %v", strings.Replace(perr.Error(), "URL_BASE", "URL Base", 1)))
 			return
 		}
-		if envBase, _ := auth.NormalizeBasePath(os.Getenv("URL_BASE")); envBase != "" && normalized != s.Core.Config.Get().URLBase {
+		if s.BasePathLocked && normalized != s.Core.Config.Get().URLBase {
 			writeError(w, 403, "urlBase is locked by the URL_BASE environment variable. Edit the container template / docker-compose file and restart the container to change it.")
 			return
 		}

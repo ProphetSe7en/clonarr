@@ -109,8 +109,9 @@ type Config struct {
 	TrustedProxyHostnames []string
 	SessionTTL       time.Duration
 	// BasePath is the URL prefix when Clonarr is mounted at a sub-path
-	// (e.g. "/clonarr"). Empty means serve from root. Set via URL_BASE env
-	// var; never user-editable at runtime. Affects cookie Path, redirect
+	// (e.g. "/clonarr"). Empty means serve from root. Resolved once at
+	// startup by ResolveBasePath, from URL_BASE or the saved config, and
+	// not re-read on a config save. Affects cookie Path, redirect
 	// targets, and form action URLs so browser-visible URLs include the prefix.
 	BasePath         string
 	AuthFilePath     string // default /config/auth.json
@@ -574,8 +575,8 @@ func (s *Store) UpdateConfig(cfg Config) error {
 	cfg.TrustedProxiesLocked = s.cfg.TrustedProxiesLocked
 	cfg.TrustedNetworksRaw = s.cfg.TrustedNetworksRaw
 	cfg.TrustedProxiesRaw = s.cfg.TrustedProxiesRaw
-	// BasePath comes from URL_BASE env at startup and is not UI-editable.
-	// Preserve so a caller that built cfg from scratch can't silently
+	// BasePath is resolved once at startup, from URL_BASE or from the saved
+	// config, and is not re-read on a config save. Preserve so a caller that built cfg from scratch can't silently
 	// reset it to "" and break cookie paths + redirects.
 	cfg.BasePath = s.cfg.BasePath
 	// If locked, also force the parsed values back to the env-derived state

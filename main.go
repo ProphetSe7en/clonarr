@@ -184,7 +184,7 @@ func main() {
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()
-	server := &api.Server{Core: app}
+	server := &api.Server{Core: app, BasePathLocked: basePathLocked}
 	server.RegisterRoutes(mux)
 
 	// Wire post-pull callback: ProfileSyncRunner.runPullAndSync calls this

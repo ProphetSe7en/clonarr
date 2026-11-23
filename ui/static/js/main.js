@@ -983,6 +983,7 @@ export function clonarr() {
         const r = await fetch('/api/config');
         if (!r.ok) return;
         this.config = await r.json();
+        this.savedUrlBase = this.config.urlBase || '';
         this.config.pullSchedule = Object.assign({ mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, this.config.pullSchedule || {});
         // Profile Sync - defaults match the backend migration so a fresh
         // install with no profileSync block in the API response renders
@@ -1251,7 +1252,16 @@ export function clonarr() {
     // URL Base is applied at startup, so saving only stages it.
     async saveUrlBase() {
       if (await this.saveConfig(['urlBase'])) {
-        this.showToast('URL Base saved. Restart Clonarr to apply it.', 'info', 8000);
+        // Mirror the server's normalization for accepted values ("/" and
+        // trailing slashes collapse) so field and badge match what's stored.
+        const v = (this.config.urlBase || '').trim().replace(/\/+$/, '');
+        this.config.urlBase = v;
+        this.savedUrlBase = v;
+        this.showToast(v === this.authStatus.urlBase ? 'URL Base saved.' : 'URL Base saved. Restart Clonarr to apply it.', 'info', 8000);
+      } else {
+        // Rejected: nothing was stored. Revert to the last saved value
+        // (which keeps a saved-but-not-yet-applied base) without a refetch.
+        this.config.urlBase = this.savedUrlBase;
       }
     },
 
