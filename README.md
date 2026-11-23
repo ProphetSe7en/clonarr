@@ -92,7 +92,7 @@ The TRaSH repository is cloned to `/config/data/trash-guides/` and updated autom
 | `PORT` | No | `6060` | Web UI port (inside container) |
 | `CONFIG_DIR` | No | `/config` | Persistent config root. If changed, mount the same path as a volume. |
 | `DATA_DIR` | No | `${CONFIG_DIR}/data` | TRaSH Guides cache/data directory. Usually leave this under `CONFIG_DIR`. |
-| `URL_BASE` | No | *(empty)* | URL path prefix for reverse proxy subpath hosting, such as `/clonarr`. Leave empty for standard root-path access. |
+| `URL_BASE` | No | *(empty)* | URL path prefix for reverse proxy subpath hosting, such as `/clonarr`. Can also be set in **Settings → URL Base**. When set to a path, it overrides and locks the Settings field. Empty or `/` means no override. |
 | `TRUSTED_NETWORKS` | No | *(empty - uses Radarr-parity defaults)* | Lock **Trusted Networks** at host level. Comma-separated IPs/CIDRs (`192.168.0.0/24, 10.0.0.0/24`). When set, the UI field is disabled and cannot be changed via the web interface - only by editing the template and restarting. Useful for defense-in-depth: prevents a UI-takeover attacker from expanding the trust boundary. |
 | `TRUSTED_PROXIES` | No | *(empty)* | Lock **Trusted Proxies** at host level. Comma-separated IPs. Same UI-disabled behavior as `TRUSTED_NETWORKS`. Only needed when Clonarr sits behind a reverse proxy that terminates TLS (SWAG, Authelia, Traefik). |
 
@@ -236,7 +236,9 @@ Clonarr will only trust `X-Forwarded-*` headers when the direct peer IP matches 
 
 #### Subpath hosting (e.g. `https://example.com/clonarr`)
 
-If you want Clonarr at a path prefix instead of a subdomain, set `URL_BASE` on the container to match the prefix your proxy uses, then point the proxy at port 6060.
+If you want Clonarr at a path prefix instead of a subdomain, set **Settings → URL Base** to match the prefix your proxy uses and restart Clonarr. Then point the proxy at port 6060. This works the same way as Radarr/Sonarr's URL Base setting and needs no container changes, so it also works on platforms that pin `URL_BASE` in their app template.
+
+To set it from the container instead (this locks the Settings field):
 
 ```yaml
 environment:
@@ -254,7 +256,9 @@ location /clonarr/ {
 }
 ```
 
-Leading slash required, no trailing slash. Leave `URL_BASE` empty for root-path access (default).
+Leading slash required. Letters, digits, `-`, `_`, `.` and `~` only, with `/` between segments. Other characters, such as spaces, would break login cookies, so they're rejected. Leave it empty for root-path access (default).
+
+When a URL base is active, requests to `/` redirect to the base, and `/api/health` answers both at the root and under the base. Healthchecks and "open Web UI" links that don't know the base keep working.
 
 ### Lost password recovery
 

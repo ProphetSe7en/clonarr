@@ -141,6 +141,7 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		TrustedProxies         *string              `json:"trustedProxies,omitempty"`
 		TrustedNetworks        *string              `json:"trustedNetworks,omitempty"`
 		SessionTTLDays         *int                 `json:"sessionTtlDays,omitempty"`
+		URLBase                *string              `json:"urlBase,omitempty"`
 	}
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		writeError(w, 400, "Invalid JSON")
@@ -205,6 +206,22 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+	// urlBase: validated + normalized here, applied at next startup. Locked
+	// when startup resolved the base from a URL_BASE env var
+	// (s.BasePathLocked), but a submission equal to the saved value is
+	// accepted as a no-op.
+	if req.URLBase != nil {
+		normalized, perr := auth.NormalizeBasePath(*req.URLBase)
+		if perr != nil {
+			writeError(w, 400, fmt.Sprintf("urlBase: %v", strings.Replace(perr.Error(), "URL_BASE", "URL Base", 1)))
+			return
+		}
+		if s.BasePathLocked && normalized != s.Core.Config.Get().URLBase {
+			writeError(w, 403, "urlBase is locked by the URL_BASE environment variable. Edit the container template / docker-compose file and restart the container to change it.")
+			return
+		}
+		*req.URLBase = normalized
 	}
 	// trashSchemaFields is gated by CLONARR_DEV_FEATURES env. When the env
 	// is unset, the UI hides the toggle entirely — this guard catches direct
@@ -336,6 +353,9 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 		if req.TrustedNetworks != nil {
 			cfg.TrustedNetworks = *req.TrustedNetworks
 			authChanged = true
+		}
+		if req.URLBase != nil {
+			cfg.URLBase = *req.URLBase
 		}
 		if req.SessionTTLDays != nil {
 			cfg.SessionTTLDays = *req.SessionTTLDays

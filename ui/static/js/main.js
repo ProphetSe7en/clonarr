@@ -989,6 +989,7 @@ export function clonarr() {
         const r = await fetch('/api/config');
         if (!r.ok) return;
         this.config = await r.json();
+        this.savedUrlBase = this.config.urlBase || '';
         this.config.pullSchedule = Object.assign({ mode: 'daily', time: '03:00', dayOfWeek: 0, dayOfMonth: 1 }, this.config.pullSchedule || {});
         // Profile Sync - defaults match the backend migration so a fresh
         // install with no profileSync block in the API response renders
@@ -1230,6 +1231,7 @@ export function clonarr() {
         if (fields && fields.includes('trashSchemaFields')) body.trashSchemaFields = this.config.trashSchemaFields;
         if (fields && fields.includes('debugLogging')) body.debugLogging = this.config.debugLogging;
         if (fields && fields.includes('prowlarr')) body.prowlarr = this.config.prowlarr;
+        if (fields && fields.includes('urlBase')) body.urlBase = this.config.urlBase || '';
         // 401 handled centrally by the fetch wrapper.
         const r = await fetch('/api/config', {
           method: 'PUT',
@@ -1242,12 +1244,31 @@ export function clonarr() {
           let msg = 'Could not save settings';
           try { const data = await r.json(); if (data && data.error) msg = data.error; } catch {}
           this.showToast(msg, 'error', 6000);
-          return;
+          return false;
         }
         if (pullScheduleChanged) await this.loadTrashStatus();
+        return true;
       } catch (e) {
         console.error('saveConfig:', e);
         this.showToast('Could not save settings (network error)', 'error', 6000);
+        return false;
+      }
+    },
+
+    // URL Base is applied at startup, so saving only stages it.
+    async saveUrlBase() {
+      if (await this.saveConfig(['urlBase'])) {
+        // Mirror the server's normalization for accepted values (trailing
+        // slashes and whitespace are trimmed; "/" and "//" mean root) so the
+        // field and badge match what's stored.
+        const v = (this.config.urlBase || '').trim().replace(/[\/\s]+$/, '');
+        this.config.urlBase = v;
+        this.savedUrlBase = v;
+        this.showToast(v === this.authStatus.urlBase ? 'URL Base saved.' : 'URL Base saved. Restart Clonarr to apply it.', 'info', 8000);
+      } else {
+        // Rejected: nothing was stored. Revert to the last saved value
+        // (which keeps a saved-but-not-yet-applied base) without a refetch.
+        this.config.urlBase = this.savedUrlBase;
       }
     },
 

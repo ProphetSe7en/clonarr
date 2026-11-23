@@ -109,8 +109,9 @@ type Config struct {
 	TrustedProxyHostnames []string
 	SessionTTL       time.Duration
 	// BasePath is the URL prefix when Clonarr is mounted at a sub-path
-	// (e.g. "/clonarr"). Empty means serve from root. Set via URL_BASE env
-	// var; never user-editable at runtime. Affects cookie Path, redirect
+	// (e.g. "/clonarr"). Empty means serve from root. Resolved once at
+	// startup by ResolveBasePath, from URL_BASE or the saved config, and
+	// not re-read on a config save. Affects cookie Path, redirect
 	// targets, and form action URLs so browser-visible URLs include the prefix.
 	BasePath         string
 	AuthFilePath     string // default /config/auth.json
@@ -574,8 +575,8 @@ func (s *Store) UpdateConfig(cfg Config) error {
 	cfg.TrustedProxiesLocked = s.cfg.TrustedProxiesLocked
 	cfg.TrustedNetworksRaw = s.cfg.TrustedNetworksRaw
 	cfg.TrustedProxiesRaw = s.cfg.TrustedProxiesRaw
-	// BasePath comes from URL_BASE env at startup and is not UI-editable.
-	// Preserve so a caller that built cfg from scratch can't silently
+	// BasePath is resolved once at startup, from URL_BASE or from the saved
+	// config, and is not re-read on a config save. Preserve so a caller that built cfg from scratch can't silently
 	// reset it to "" and break cookie paths + redirects.
 	cfg.BasePath = s.cfg.BasePath
 	// If locked, also force the parsed values back to the env-derived state
@@ -933,11 +934,38 @@ func init() {
 	dummyHash = h
 }
 
-// NormalizeBasePath validates and normalizes a URL_BASE env-var value.
-// Returns the canonical base path (no trailing slash) or "" for root.
-// A leading "/" is required; "/" alone normalizes to "". Trailing slashes
-// are stripped. Double-slashes, query/fragment chars, and dot-segments
-// are rejected.
+// ResolveBasePath picks the effective base path at startup. A URL_BASE env
+// var that normalizes to a non-root path wins and locks the setting (the UI
+// can't change it). An empty or "/" env var means "no override", so a
+// deployment that pins URL_BASE=/ (e.g. the TrueNAS app template) still lets
+// the user set the base from the UI. Otherwise the saved config value is
+// used. An invalid env value is an error (fail fast, as before); an invalid
+// saved value is reported via cfgErr and ignored so a bad UI edit can't
+// stop the container from starting.
+func ResolveBasePath(envRaw, cfgRaw string) (base string, locked bool, cfgErr error, err error) {
+	envBase, err := NormalizeBasePath(envRaw)
+	if err != nil {
+		return "", false, nil, err
+	}
+	if envBase != "" {
+		return envBase, true, nil, nil
+	}
+	cfgBase, cerr := NormalizeBasePath(cfgRaw)
+	if cerr != nil {
+		return "", false, cerr, nil
+	}
+	return cfgBase, false, nil, nil
+}
+
+// NormalizeBasePath validates and normalizes a URL base, from the URL_BASE
+// env var or the Settings field. Returns the canonical base path (no
+// trailing slash) or "" for root. Surrounding whitespace and trailing
+// slashes are trimmed, so "/", "//" and "" all mean root. Otherwise a
+// leading "/" is required, and each segment may only use URL-safe
+// characters (letters, digits, "-", "_", ".", "~"). Anything else would be
+// percent-encoded in browser URLs and never match the session and CSRF
+// cookie Path, which breaks setup and login. Empty segments ("//" inside
+// the path), dot-segments, and query/fragment chars are rejected.
 func NormalizeBasePath(raw string) (string, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" || s == "/" {
@@ -946,7 +974,14 @@ func NormalizeBasePath(raw string) (string, error) {
 	if !strings.HasPrefix(s, "/") {
 		return "", fmt.Errorf("URL_BASE must start with '/' (got %q)", raw)
 	}
-	s = strings.TrimRight(s, "/")
+	// Trim trailing slashes and whitespace together: trimming them in
+	// separate passes left "/a /" as "/a " (a trailing space).
+	s = strings.TrimRightFunc(s, func(r rune) bool { return r == '/' || unicode.IsSpace(r) })
+	if s == "" {
+		// Only slashes ("//", "///"): same as "/" (root). Without this the
+		// segment loop below slices s[1:] of an empty string and panics.
+		return "", nil
+	}
 	if strings.Contains(s, "//") {
 		return "", fmt.Errorf("URL_BASE must not contain '//' (got %q)", raw)
 	}
@@ -962,8 +997,20 @@ func NormalizeBasePath(raw string) (string, error) {
 		if seg == "" || seg == "." || seg == ".." {
 			return "", fmt.Errorf("URL_BASE has invalid path segment %q", seg)
 		}
+		for _, r := range seg {
+			if !isURLSafeBaseRune(r) {
+				return "", fmt.Errorf("URL_BASE may only contain letters, digits, '-', '_', '.', '~' and '/' (got %q)", raw)
+			}
+		}
 	}
 	return s, nil
+}
+
+// isURLSafeBaseRune reports whether r is an RFC 3986 unreserved character,
+// which browsers never percent-encode in a path.
+func isURLSafeBaseRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+		r == '-' || r == '_' || r == '.' || r == '~'
 }
 
 // ===== Endpoint classification =====
