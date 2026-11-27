@@ -96,6 +96,32 @@ type TrashQualityProfile struct {
 	Items                 []QualityItem     `json:"items"`
 	FormatItems           map[string]string `json:"formatItems"`
 	FormatItemsOrder      []string          `json:"-"` // original insertion order of FormatItems keys (CF names)
+
+	// TrashQualityDefinition names the guide size set this profile is meant
+	// to use, keyed by set type ("series", "anime") with the set's trash_id
+	// as the value. Sonarr profiles carry it; Radarr profiles do not yet.
+	TrashQualityDefinition map[string]string `json:"trash_quality_definition,omitempty"`
+}
+
+// QualitySizeRef returns the trash_id of the size set the profile names, or
+// "" when it names none. The value is what counts, not the key: the key only
+// repeats the set's type. Should a profile ever name more than one, the
+// lowest key wins so the answer does not change between reads of a Go map.
+func (p *TrashQualityProfile) QualitySizeRef() string {
+	if p == nil || len(p.TrashQualityDefinition) == 0 {
+		return ""
+	}
+	best := ""
+	ref := ""
+	for k, v := range p.TrashQualityDefinition {
+		if v == "" {
+			continue
+		}
+		if ref == "" || k < best {
+			best, ref = k, v
+		}
+	}
+	return ref
 }
 
 // QualityItem is a quality level or group within a profile.

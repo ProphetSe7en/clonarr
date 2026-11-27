@@ -277,6 +277,9 @@ func (d *DriftRunner) runOnceInternal(ctx context.Context, autoApply bool) ([]Dr
 		// every instance, rule and sync-history entry, and calling it per rule
 		// cloned the whole config once per rule per tick.
 		sizeReq := SyncRequest{
+			// The profile's own size set reference, for the guide source.
+			ProfileTrashID:       w.rule.TrashProfileID,
+			ImportedProfileID:    w.rule.ImportedProfileID,
 			QualitySizeSource:    w.rule.QualitySizeSource,
 			QualitySizeOverrides: w.rule.QualitySizeOverrides,
 			UserQualitySizeSets:  cfg.QualitySizeSets,

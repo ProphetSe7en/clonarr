@@ -84,6 +84,11 @@ export default {
         // while it does not exist on the instance yet.
         const trashId = this.profileDetail?.profile?.trashId;
         if (trashId) q.set('trashId', trashId);
+        // An imported or Builder profile follows the app default under the
+        // guide source, the same as sync treats it, even when it remembers
+        // the guide profile it came from.
+        const importedId = this.profileDetail?.detail?.importedRaw?.id;
+        if (importedId) q.set('importedProfileId', importedId);
         const r = await fetch(`/api/profile-quality-sizes?${q}`);
         const stillCurrent = () =>
           `${this.pdQSAppType()}|${this.pdQSPreferredInstanceId()}|${this.pdQSInstanceFixed()}|${this.pdQSArrProfileId()}` === key;
@@ -223,11 +228,34 @@ export default {
       const src = this.pdQSSource;
       if (!src || src === 'off') return 'Off';
       const set = (this.pdQSSets || []).find(s => s.value === src);
-      if (set) return set.origin === 'user' ? set.name : this.pdQSSetTitle(set.name);
+      if (set) return this.pdQSOptionLabel(set);
       // A set that no longer exists: a user set deleted elsewhere, or a guide
       // set the guide dropped. Nothing gets written, so say that rather than
       // show a dead id.
       return 'Not found, nothing is written';
+    },
+
+    // What a picker entry is called. The guide source names the set it
+    // resolves to for this profile, because "follow the guide" alone does not
+    // say which numbers that means.
+    pdQSOptionLabel(set) {
+      if (!set) return '';
+      if (set.origin === 'user') return set.name;
+      if (set.origin === 'follow') return `Follow the guide (${this.pdQSSetTitle(set.name)})`;
+      return this.pdQSSetTitle(set.name);
+    },
+
+    // The hover text for a picker entry.
+    pdQSOptionTip(set) {
+      if (!set) return '';
+      const n = (set.entries || []).length;
+      if (set.origin === 'follow') {
+        const title = this.pdQSSetTitle(set.name);
+        return set.fromProfile
+          ? `Use the size set this TRaSH-Guides profile names, ${title}, ${n} qualities. If the guide points the profile at another set later, this follows it.`
+          : `This profile names no size set, so the guide's default for the app is used, ${title}, ${n} qualities. If the guide names one for this profile later, this follows it.`;
+      }
+      return (set.origin === 'user' ? 'Your own set, ' : 'From TRaSH-Guides, ') + n + ' qualities.';
     },
 
     // The guide names its sets by type. "series" and "movie" read better with
@@ -243,12 +271,15 @@ export default {
       this._pdQSTouched = true;
     },
 
-    // The app's own default set, offered as the one-click action on a rule
-    // sitting at off. Visible and chosen, never written behind the user.
+    // The one-click action on a rule sitting at off: follow the guide, which
+    // is the set this profile names or the app's default when it names none.
+    // The app's default set itself stands in when the backend sent no guide
+    // entry. Visible and chosen, never written behind the user.
     pdQSDefaultSet() {
-      return (this.pdQSSets || []).find(
-        s => s.origin === 'guide' && s.name === this.pdQSDefaultSetType
-      ) || null;
+      const sets = this.pdQSSets || [];
+      return sets.find(s => s.origin === 'follow')
+        || sets.find(s => s.origin === 'guide' && s.name === this.pdQSDefaultSetType)
+        || null;
     },
 
     // --- Rows ---
@@ -389,7 +420,7 @@ export default {
       const set = this.pdQSActiveSet();
       if (!set) return 'Not written';
       if (!this.pdQSEntryFor(row.quality)) return 'Not in this set, left as is';
-      return set.origin === 'user' ? set.name : this.pdQSSetTitle(set.name);
+      return this.pdQSOptionLabel(set);
     },
 
     pdQSCurrentText(row) {

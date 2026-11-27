@@ -440,7 +440,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		QualitySizeSource:    req.QualitySizeSource,
 		QualitySizeOverrides: req.QualitySizeOverrides,
 		QualitySizesWritten:  result.QualitySizesWritten,
-		QualitySizeSetName:   s.qsHistoryLabel(inst.Type, req.QualitySizeSource),
+		QualitySizeSetName:   s.qsHistoryLabel(inst.Type, req),
 		KeepArrCFIDs:         req.KeepArrCFIDs,
 		CFsCreated:           result.CFsCreated,
 		CFsUpdated:           result.CFsUpdated,

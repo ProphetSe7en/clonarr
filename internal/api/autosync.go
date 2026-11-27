@@ -752,7 +752,7 @@ func (s *Server) handleRestoreAutoSyncRule(w http.ResponseWriter, r *http.Reques
 		// written, filled from the rule by FillQualitySizeIntent above.
 		QualitySizeSource:    syncReq.QualitySizeSource,
 		QualitySizesWritten:  result.QualitySizesWritten,
-		QualitySizeSetName:   s.qsHistoryLabel(inst.Type, syncReq.QualitySizeSource),
+		QualitySizeSetName:   s.qsHistoryLabel(inst.Type, syncReq),
 		QualitySizeOverrides: syncReq.QualitySizeOverrides,
 		CFsCreated:           result.CFsCreated,
 		CFsUpdated:           result.CFsUpdated,

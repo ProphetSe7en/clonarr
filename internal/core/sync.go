@@ -2376,11 +2376,10 @@ func profileQualitySizes(req SyncRequest, ad *AppData, instance Instance, qualit
 	if ad != nil {
 		in.GuideSets = ad.QualitySizes
 	}
-	// ProfileRef stays empty until the guide publishes
-	// trash_quality_definition on its profiles, at which point the guide
-	// source resolves a profile's own reference first and the app default
-	// second. Until then the guide source falls back to the app default,
-	// which is what the guide author stated it means.
+	// The guide source resolves the profile's own trash_quality_definition
+	// first and the app default second, which is what the guide author
+	// stated a profile without one means.
+	in.ProfileRef = ProfileQualitySizeRef(ad, req)
 	return ResolveQualitySizes(in)
 }
 

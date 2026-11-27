@@ -2616,7 +2616,7 @@ func (s *Server) handleCompareProfile(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	comp := buildProfileComparison(inst, ad, trashProfileID, arrProfileID, lastSyncedCFs, lastScoreOverrides, s.Core.HTTPClient, s.compareSizeIntentFor(inst, arrProfileID))
+	comp := buildProfileComparison(inst, ad, trashProfileID, arrProfileID, lastSyncedCFs, lastScoreOverrides, s.Core.HTTPClient, s.compareSizeIntentFor(inst, arrProfileID, trashProfileID))
 
 	if comp.Error == "" {
 		s.Core.DebugLog.Logf(core.LogCompare, "%q vs %q on %s | %d matching, %d wrong, %d missing, %d extra",
@@ -2638,7 +2638,11 @@ func (s *Server) handleCompareProfile(w http.ResponseWriter, r *http.Request) {
 // numbers would answer nothing. With no rule at all the default is simply
 // what the guide suggests, which is also what adopting this profile as a rule
 // would start from.
-func (s *Server) compareSizeIntentFor(inst core.Instance, arrProfileID int) compareSizeIntent {
+//
+// trashProfileID is the guide profile being compared against. Its own size set
+// reference names what following the guide means when the rule's choice does
+// not apply: with no rule, or a rule set to Off.
+func (s *Server) compareSizeIntentFor(inst core.Instance, arrProfileID int, trashProfileID string) compareSizeIntent {
 	ad := s.Core.Trash.GetAppData(inst.Type)
 	var guideSets []*core.TrashQualitySize
 	if ad != nil {
@@ -2653,11 +2657,21 @@ func (s *Server) compareSizeIntentFor(inst core.Instance, arrProfileID int) comp
 	}
 	label := ""
 	applied := source != "" && source != core.QSSourceOff
+	profileRef := core.ProfileQualitySizeRef(ad, core.SyncRequest{ProfileTrashID: trashProfileID})
+	if applied {
+		// What the next sync writes, which follows the rule's own profile.
+		profileRef = s.qsRuleProfileRef(ad, rule)
+	}
 	if !applied {
-		// Fall back to the app's default set for the Guide column.
-		if set := qsGuideSetByType(guideSets, core.DefaultQualitySizeSetType(inst.Type)); set != nil {
+		// Fall back to what following the guide would write: the set the
+		// rule's profile names, or the app's default set.
+		if set, fromProfile := core.GuideQualitySizeSet(guideSets, inst.Type, profileRef); set != nil {
 			source = core.QSSourceSetPfx + set.TrashID
-			label = qsSetTitle(set.Type) + ", the guide's default"
+			if fromProfile {
+				label = qsSetTitle(set.Type) + ", the set this guide profile names"
+			} else {
+				label = qsSetTitle(set.Type) + ", the guide's default"
+			}
 			if rule != nil {
 				label += " (this rule is set to Off, so it is not applied)"
 			} else {
@@ -2665,7 +2679,7 @@ func (s *Server) compareSizeIntentFor(inst core.Instance, arrProfileID int) comp
 			}
 		}
 	} else {
-		label = s.qsSourceLabel(inst.Type, source)
+		label = s.qsSourceLabel(inst.Type, source, profileRef)
 	}
 	if source == "" {
 		return compareSizeIntent{}
@@ -2677,18 +2691,26 @@ func (s *Server) compareSizeIntentFor(inst core.Instance, arrProfileID int) comp
 	}
 	return compareSizeIntent{
 		Want: core.ResolveQualitySizes(core.QualitySizeResolveInput{
-			Source:    source,
-			Overrides: overrides,
-			AppType:   inst.Type,
-			GuideSets: guideSets,
-			UserSets:  cfg.QualitySizeSets,
+			Source:     source,
+			Overrides:  overrides,
+			AppType:    inst.Type,
+			GuideSets:  guideSets,
+			UserSets:   cfg.QualitySizeSets,
+			ProfileRef: profileRef,
 		}),
 		Label: label,
 	}
 }
 
 // qsSourceLabel names a stored source string for display.
-func (s *Server) qsSourceLabel(appType, source string) string {
+func (s *Server) qsSourceLabel(appType, source, profileRef string) string {
+	if source == core.QSSourceGuide {
+		var guide []*core.TrashQualitySize
+		if ad := s.Core.Trash.GetAppData(appType); ad != nil {
+			guide = ad.QualitySizes
+		}
+		return core.QualitySizeSourceLabel(source, appType, profileRef, guide, nil)
+	}
 	for _, set := range s.qsAvailableSets(appType) {
 		if set.Value == source {
 			if set.Origin == "user" {

@@ -118,6 +118,10 @@ func (s *Server) handleProfileQualitySizes(w http.ResponseWriter, r *http.Reques
 	// The guide profile being browsed, when there is one. Only used to mark
 	// which qualities it allows while no profile exists on the instance yet.
 	trashID := r.URL.Query().Get("trashId")
+	// Set when the editor holds an imported or Builder profile. Such a
+	// profile may still carry the guide profile it came from as trashId, but
+	// sync does not treat it as that guide profile, so neither does this.
+	importedID := r.URL.Query().Get("importedProfileId")
 	// True when the editor is bound to a saved rule, which belongs to one
 	// instance. Browsing a guide profile, or picking a target in the sync step
 	// without saving, decides nothing yet.
@@ -146,11 +150,22 @@ func (s *Server) handleProfileQualitySizes(w http.ResponseWriter, r *http.Reques
 		candidates = candidates[:1]
 	}
 
+	// The guide profile behind this editor, for the guide source. The
+	// profile open in the editor wins, because that is what Apply & Sync
+	// sends and so what the next sync resolves; a saved rule's own profile
+	// stands in below only when the editor named none. Answered before the
+	// instance is asked, so the picker still names what following the guide
+	// means while it cannot be reached. An imported profile has no reference
+	// and follows the app default.
+	appData := s.Core.Trash.GetAppData(appType)
+	editorNamedProfile := trashID != "" || importedID != ""
+	profileRef := core.ProfileQualitySizeRef(appData, core.SyncRequest{ProfileTrashID: trashID, ImportedProfileID: importedID})
+
 	resp := map[string]any{
 		"perProfileSizes": false,
 		"source":          "",
 		"overrides":       map[string]core.QSOverride{},
-		"sets":            s.qsAvailableSets(appType),
+		"sets":            s.qsPickerSets(appData, appType, profileRef),
 		"defaultSetType":  core.DefaultQualitySizeSetType(appType),
 		"rows":            []qsProfileRow{},
 	}
@@ -237,7 +252,8 @@ func (s *Server) handleProfileQualitySizes(w http.ResponseWriter, r *http.Reques
 	// The rule's stored intent, when there is a rule yet.
 	var ruleSource string
 	var ruleOverrides map[string]core.QSOverride
-	if rule := s.findRuleFor(target.ID, arrProfileID); rule != nil {
+	rule := s.findRuleFor(target.ID, arrProfileID)
+	if rule != nil {
 		ruleSource = rule.QualitySizeSource
 		ruleOverrides = rule.QualitySizeOverrides
 	}
@@ -247,15 +263,20 @@ func (s *Server) handleProfileQualitySizes(w http.ResponseWriter, r *http.Reques
 	}
 
 	var guideSets []*core.TrashQualitySize
-	if ad := s.Core.Trash.GetAppData(target.Type); ad != nil {
-		guideSets = ad.QualitySizes
+	if appData != nil {
+		guideSets = appData.QualitySizes
+	}
+	if rule != nil && !editorNamedProfile {
+		profileRef = s.qsRuleProfileRef(appData, rule)
+		resp["sets"] = s.qsPickerSets(appData, appType, profileRef)
 	}
 	sizes := core.ResolveQualitySizes(core.QualitySizeResolveInput{
-		Source:    ruleSource,
-		Overrides: ruleOverrides,
-		AppType:   target.Type,
-		GuideSets: guideSets,
-		UserSets:  cfg.QualitySizeSets,
+		Source:     ruleSource,
+		Overrides:  ruleOverrides,
+		AppType:    target.Type,
+		GuideSets:  guideSets,
+		UserSets:   cfg.QualitySizeSets,
+		ProfileRef: profileRef,
 	})
 
 	// The instance's blank-profile template has every quality switched off, so
@@ -264,7 +285,7 @@ func (s *Server) handleProfileQualitySizes(w http.ResponseWriter, r *http.Reques
 	// allowed" about a profile that does allow some.
 	var allowedNames map[string]bool
 	if arrProfileID == 0 {
-		allowedNames = guideAllowedQualities(s.Core.Trash.GetAppData(target.Type), trashID)
+		allowedNames = guideAllowedQualities(appData, trashID)
 	}
 
 	resp["rows"] = buildQSProfileRows(items, sizes, ruleOverrides, allowedNames)
@@ -384,6 +405,40 @@ type qsSetOption struct {
 	// only. Reported so the picker can say a set cannot be deleted before
 	// asking the user to confirm deleting it.
 	UsedBy []string `json:"usedBy,omitempty"`
+	// FromProfile is set on the guide-source entry when the profile names
+	// its own set, and false when the app default stands in for it.
+	FromProfile bool `json:"fromProfile,omitempty"`
+}
+
+// qsFollowGuideOption is the picker entry for the guide source. It carries
+// the rows of the set it resolves to for this profile, so the tab shows the
+// numbers that will be written, and FromProfile says whether the profile
+// named that set or the app default stands in for it.
+func qsFollowGuideOption(guideSets []*core.TrashQualitySize, appType, profileRef string) (qsSetOption, bool) {
+	set, fromProfile := core.GuideQualitySizeSet(guideSets, appType, profileRef)
+	if set == nil {
+		return qsSetOption{}, false
+	}
+	return qsSetOption{
+		Value:       core.QSSourceGuide,
+		Name:        set.Type,
+		Origin:      "follow",
+		Entries:     set.Qualities,
+		FromProfile: fromProfile,
+	}, true
+}
+
+// qsPickerSets is the source picker's list: the guide source first, then
+// every named set.
+func (s *Server) qsPickerSets(ad *core.AppData, appType, profileRef string) []qsSetOption {
+	sets := s.qsAvailableSets(appType)
+	if ad == nil {
+		return sets
+	}
+	if follow, ok := qsFollowGuideOption(ad.QualitySizes, appType, profileRef); ok {
+		return append([]qsSetOption{follow}, sets...)
+	}
+	return sets
 }
 
 func (s *Server) qsAvailableSets(appType string) []qsSetOption {
@@ -592,24 +647,26 @@ func (s *Server) applyQualitySizeFallback(req *core.SyncRequest, appType string)
 // qsHistoryLabel names a stored size source for a history entry, resolved now
 // rather than when someone reads it: the set can be deleted in between, and an
 // id tells a reader nothing.
-func (s *Server) qsHistoryLabel(appType, source string) string {
+func (s *Server) qsHistoryLabel(appType string, req core.SyncRequest) string {
 	var guide []*core.TrashQualitySize
-	if ad := s.Core.Trash.GetAppData(appType); ad != nil {
+	ad := s.Core.Trash.GetAppData(appType)
+	if ad != nil {
 		guide = ad.QualitySizes
 	}
-	return core.QualitySizeSourceLabel(source, guide, s.Core.Config.Get().QualitySizeSets)
+	return core.QualitySizeSourceLabel(req.QualitySizeSource, appType, core.ProfileQualitySizeRef(ad, req),
+		guide, s.Core.Config.Get().QualitySizeSets)
 }
 
-// qsGuideSetByType finds a guide size set by its type. core resolves sources
-// by trash_id; this is the one place that needs the lookup the other way, to
-// name and resolve the app's default set for a profile with no rule.
-func qsGuideSetByType(sets []*core.TrashQualitySize, setType string) *core.TrashQualitySize {
-	for _, set := range sets {
-		if set != nil && strings.EqualFold(set.Type, setType) {
-			return set
-		}
+// qsRuleProfileRef is the size set reference of the guide profile a rule
+// syncs, or "" when the rule is missing or syncs an imported profile.
+func (s *Server) qsRuleProfileRef(ad *core.AppData, rule *core.AutoSyncRule) string {
+	if rule == nil {
+		return ""
 	}
-	return nil
+	return core.ProfileQualitySizeRef(ad, core.SyncRequest{
+		ProfileTrashID:    rule.TrashProfileID,
+		ImportedProfileID: rule.ImportedProfileID,
+	})
 }
 
 // qsSetUsedBy names the instances whose rules point at this user set. A set a

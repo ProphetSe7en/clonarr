@@ -542,7 +542,7 @@ func TestQualitySizeSourceLabel(t *testing.T) {
 		{QSSourceSetPfx + "dropped-upstream", "a set that no longer exists"},
 	}
 	for _, c := range cases {
-		if got := QualitySizeSourceLabel(c.source, guide, user); got != c.want {
+		if got := QualitySizeSourceLabel(c.source, "sonarr", "", guide, user); got != c.want {
 			t.Errorf("%q: got %q, want %q", c.source, got, c.want)
 		}
 	}
@@ -575,5 +575,126 @@ func TestRecordSizesWrittenHoldsTheNumbers(t *testing.T) {
 	recordSizesWritten(empty, nil)
 	if empty.QualitySizesWritten != nil {
 		t.Error("nothing written means nothing recorded")
+	}
+}
+
+// --- The guide source: a profile's own trash_quality_definition ---
+
+// The field as the guide publishes it on a Sonarr profile, parsed from JSON so
+// a renamed tag fails here rather than silently resolving every profile to the
+// app default.
+func TestTrashQualityDefinitionParses(t *testing.T) {
+	var p TrashQualityProfile
+	raw := `{"trash_id":"p1","name":"Anime","trash_quality_definition":{"anime":"387e6278d8e06083d813358762e0ac63"}}`
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.QualitySizeRef(); got != "387e6278d8e06083d813358762e0ac63" {
+		t.Errorf("QualitySizeRef = %q", got)
+	}
+	var none TrashQualityProfile
+	if err := json.Unmarshal([]byte(`{"trash_id":"p2"}`), &none); err != nil {
+		t.Fatal(err)
+	}
+	if got := none.QualitySizeRef(); got != "" {
+		t.Errorf("profile without the field: QualitySizeRef = %q, want empty", got)
+	}
+	var nilProfile *TrashQualityProfile
+	if nilProfile.QualitySizeRef() != "" {
+		t.Error("nil profile must answer empty")
+	}
+}
+
+func guideRefAppData() *AppData {
+	return &AppData{
+		QualitySizes: testGuideSets(),
+		Profiles: []*TrashQualityProfile{
+			{TrashID: "anime-profile", TrashQualityDefinition: map[string]string{"anime": "387e6278d8e06083d813358762e0ac63"}},
+			{TrashID: "series-profile", TrashQualityDefinition: map[string]string{"series": "bef99584217af744e404ed44a33af589"}},
+			{TrashID: "no-ref-profile"},
+			{TrashID: "stale-ref-profile", TrashQualityDefinition: map[string]string{"anime": "removed-upstream"}},
+		},
+	}
+}
+
+// The whole chain the sync engine uses: an anime profile following the guide
+// gets the anime numbers, and every profile that names nothing usable gets the
+// app default rather than nothing.
+func TestProfileQualitySizesFollowsTheProfilesOwnSet(t *testing.T) {
+	ad := guideRefAppData()
+	inst := Instance{Type: "sonarr"}
+	defs := sizeDefs(false, "WEBDL-1080p")
+	cases := []struct {
+		name string
+		req  SyncRequest
+		want float64
+	}{
+		{"anime profile", SyncRequest{ProfileTrashID: "anime-profile"}, 50.4},
+		{"series profile", SyncRequest{ProfileTrashID: "series-profile"}, 15},
+		{"profile without the field", SyncRequest{ProfileTrashID: "no-ref-profile"}, 15},
+		{"reference the guide dropped", SyncRequest{ProfileTrashID: "stale-ref-profile"}, 15},
+		{"unknown profile", SyncRequest{ProfileTrashID: "gone"}, 15},
+		// An imported profile is not the guide profile, even when the request
+		// also carries that profile's trash id.
+		{"imported profile", SyncRequest{ProfileTrashID: "anime-profile", ImportedProfileID: "imp"}, 15},
+	}
+	for _, c := range cases {
+		c.req.QualitySizeSource = QSSourceGuide
+		got := profileQualitySizes(c.req, ad, inst, defs)
+		if got == nil || got["WEBDL-1080p"].Min == nil {
+			t.Fatalf("%s: want sizes, got %v", c.name, got)
+		}
+		if *got["WEBDL-1080p"].Min != c.want {
+			t.Errorf("%s: WEBDL-1080p min = %v, want %v", c.name, *got["WEBDL-1080p"].Min, c.want)
+		}
+	}
+}
+
+// Only the guide source reads the reference. A rule at Off still writes
+// nothing, and a named set or the user's own set still beats the profile's.
+func TestProfileQualitySizesReferenceDoesNotLeakIntoOtherSources(t *testing.T) {
+	ad := guideRefAppData()
+	inst := Instance{Type: "sonarr"}
+	defs := sizeDefs(false, "WEBDL-1080p")
+	for _, src := range []string{"", QSSourceOff} {
+		if got := profileQualitySizes(SyncRequest{ProfileTrashID: "anime-profile", QualitySizeSource: src}, ad, inst, defs); got != nil {
+			t.Errorf("source %q on an anime profile: want nil, got %v", src, got)
+		}
+	}
+	got := profileQualitySizes(SyncRequest{
+		ProfileTrashID:    "anime-profile",
+		QualitySizeSource: QSSourceSetPfx + "bef99584217af744e404ed44a33af589",
+	}, ad, inst, defs)
+	if got == nil || *got["WEBDL-1080p"].Min != 15 {
+		t.Errorf("named series set on an anime profile: got %v, want the series numbers", got)
+	}
+	user := []QualitySizeSet{{ID: "mine", AppType: "sonarr", Qualities: []QualitySizeEntry{{Quality: "WEBDL-1080p", Min: 7, Preferred: 8, Max: 9}}}}
+	got = profileQualitySizes(SyncRequest{
+		ProfileTrashID:      "anime-profile",
+		QualitySizeSource:   QSSourceCustomPfx + "mine",
+		UserQualitySizeSets: user,
+	}, ad, inst, defs)
+	if got == nil || *got["WEBDL-1080p"].Min != 7 {
+		t.Errorf("user set on an anime profile: got %v, want the user's numbers", got)
+	}
+}
+
+func TestQualitySizeSourceLabelForTheGuideSource(t *testing.T) {
+	guide := testGuideSets()
+	cases := []struct {
+		app, ref, want string
+	}{
+		{"sonarr", "387e6278d8e06083d813358762e0ac63", "Follow the guide (Anime)"},
+		{"sonarr", "bef99584217af744e404ed44a33af589", "Follow the guide (Series)"},
+		{"sonarr", "", "Follow the guide (Series, the guide's default)"},
+		{"sonarr", "removed-upstream", "Follow the guide (Series, the guide's default)"},
+		// No movie set in the fixture: the source still names itself rather
+		// than claiming a set that no longer exists.
+		{"radarr", "", "Follow the guide"},
+	}
+	for _, c := range cases {
+		if got := QualitySizeSourceLabel(QSSourceGuide, c.app, c.ref, guide, nil); got != c.want {
+			t.Errorf("%s ref %q: got %q, want %q", c.app, c.ref, got, c.want)
+		}
 	}
 }

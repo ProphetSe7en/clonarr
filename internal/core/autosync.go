@@ -664,7 +664,8 @@ func (app *App) runAutoSyncRule(rule AutoSyncRule, currentCommit string, parent 
 		QualitySizeSource:   req.QualitySizeSource,
 		QualitySizesWritten: result.QualitySizesWritten,
 		QualitySizeSetName: QualitySizeSourceLabel(
-			req.QualitySizeSource, ad.QualitySizes, app.Config.Get().QualitySizeSets),
+			req.QualitySizeSource, inst.Type, ProfileQualitySizeRef(ad, req),
+			ad.QualitySizes, app.Config.Get().QualitySizeSets),
 		QualitySizeOverrides: req.QualitySizeOverrides,
 		CFsCreated:           result.CFsCreated,
 		CFsUpdated:           result.CFsUpdated,

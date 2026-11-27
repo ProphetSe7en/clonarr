@@ -110,19 +110,7 @@ func ResolveQualitySizes(in QualitySizeResolveInput) map[string]QualitySizeTripl
 			addSizeEntries(set.Qualities, out)
 		}
 	case src == QSSourceGuide:
-		// The profile's own reference, and the app's default when it carries
-		// none. A reference that resolves to nothing falls back to the
-		// default rather than to silence: a profile pointing at a set the
-		// guide has since removed is a guide-side problem, and leaving the
-		// user with no sizes at all would be a worse answer than the default.
-		var set *TrashQualitySize
-		if in.ProfileRef != "" {
-			set = findGuideSetByTrashID(in.GuideSets, in.ProfileRef)
-		}
-		if set == nil {
-			set = findGuideSetByType(in.GuideSets, DefaultQualitySizeSetType(in.AppType))
-		}
-		if set != nil {
+		if set, _ := GuideQualitySizeSet(in.GuideSets, in.AppType, in.ProfileRef); set != nil {
 			addSizeEntries(set.Qualities, out)
 		}
 	default:
@@ -141,6 +129,33 @@ func ResolveQualitySizes(in QualitySizeResolveInput) map[string]QualitySizeTripl
 		return nil
 	}
 	return out
+}
+
+// GuideQualitySizeSet is the set the guide source resolves to: the one the
+// profile names, and the app's default when it names none. fromProfile
+// reports which of the two it was, so a label can say whether the profile
+// chose it.
+//
+// A reference that resolves to nothing falls back to the default rather than
+// to silence: a profile pointing at a set the guide has since removed is a
+// guide-side problem, and leaving the user with no sizes at all would be a
+// worse answer than the default.
+func GuideQualitySizeSet(guideSets []*TrashQualitySize, appType, profileRef string) (set *TrashQualitySize, fromProfile bool) {
+	if set = findGuideSetByTrashID(guideSets, profileRef); set != nil {
+		return set, true
+	}
+	return findGuideSetByType(guideSets, DefaultQualitySizeSetType(appType)), false
+}
+
+// ProfileQualitySizeRef is the size set reference for the profile a sync
+// request targets, or "" when there is none. An imported or Builder profile
+// is not a guide profile even when the request also carries a trash id, so it
+// gets no reference and follows the app default.
+func ProfileQualitySizeRef(ad *AppData, req SyncRequest) string {
+	if ad == nil || req.ImportedProfileID != "" || req.ProfileTrashID == "" {
+		return ""
+	}
+	return findProfile(ad, req.ProfileTrashID).QualitySizeRef()
 }
 
 func addSizeEntries(entries []QualitySizeEntry, out map[string]QualitySizeTriple) {
@@ -167,7 +182,7 @@ func findGuideSetByType(sets []*TrashQualitySize, qsType string) *TrashQualitySi
 		return nil
 	}
 	for _, s := range sets {
-		if s != nil && s.Type == qsType {
+		if s != nil && strings.EqualFold(s.Type, qsType) {
 			return s
 		}
 	}
@@ -230,10 +245,22 @@ func QualitySizeSourceResolves(source string, guideSets []*TrashQualitySize, use
 // QualitySizeSourceLabel names a stored source for display. Resolved when the
 // sync runs rather than when someone reads the history, because the set it
 // names can be deleted in between and a raw id tells a reader nothing.
-func QualitySizeSourceLabel(source string, guideSets []*TrashQualitySize, userSets []QualitySizeSet) string {
+//
+// profileRef is the profile's own size set reference, used only to name what
+// the guide source resolved to.
+func QualitySizeSourceLabel(source, appType, profileRef string, guideSets []*TrashQualitySize, userSets []QualitySizeSet) string {
 	switch {
 	case source == "" || source == QSSourceOff:
 		return ""
+	case source == QSSourceGuide:
+		set, fromProfile := GuideQualitySizeSet(guideSets, appType, profileRef)
+		if set == nil {
+			return "Follow the guide"
+		}
+		if fromProfile {
+			return "Follow the guide (" + QualitySizeSetTitle(set.Type) + ")"
+		}
+		return "Follow the guide (" + QualitySizeSetTitle(set.Type) + ", the guide's default)"
 	case strings.HasPrefix(source, QSSourceCustomPfx):
 		id := strings.TrimPrefix(source, QSSourceCustomPfx)
 		for _, set := range userSets {

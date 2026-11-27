@@ -431,8 +431,8 @@
         <template x-if="(!pdQSSource || pdQSSource === 'off') && pdQSDefaultSet()">
           <button class="qs-mode-btn"
                   @click="pdQSSetSource(pdQSDefaultSet().value)"
-                  x-tt="'Use the guide\'s ' + pdQSSetTitle(pdQSDefaultSet().name) + ' sizes for this profile.'"
-                  x-text="'Use ' + pdQSSetTitle(pdQSDefaultSet().name)"></button>
+                  x-tt="pdQSOptionTip(pdQSDefaultSet())"
+                  x-text="pdQSDefaultSet().origin === 'follow' ? pdQSOptionLabel(pdQSDefaultSet()) : 'Use ' + pdQSSetTitle(pdQSDefaultSet().name)"></button>
         </template>
         <template x-if="pdQSSource && pdQSSource !== 'off'">
           <button class="sp-basics-reset"
@@ -1881,8 +1881,8 @@
                     <button class="qs-type-btn"
                             :class="{ active: pdQSSource === set.value }"
                             @click="pdQSSetSource(set.value)"
-                            x-tt="(set.origin === 'user' ? 'Your own set, ' : 'From TRaSH-Guides, ') + (set.entries || []).length + ' qualities.'">
-                      <span x-text="set.origin === 'user' ? set.name : pdQSSetTitle(set.name)"></span>
+                            x-tt="pdQSOptionTip(set)">
+                      <span x-text="pdQSOptionLabel(set)"></span>
                       <template x-if="set.origin === 'guide' && set.name === pdQSDefaultSetType">
                         <span style="color:var(--text-muted);font-weight:400"> · default</span>
                       </template>
